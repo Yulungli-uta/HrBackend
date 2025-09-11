@@ -65,6 +65,7 @@ appsettings.*.json
 appsettings.*.yml
 appsettings.*.yaml
 appsettings.*.xml
+appsettings.json
 
 # Secrets de usuario (no versionar nunca)
 secrets.json
