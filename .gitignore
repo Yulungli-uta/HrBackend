@@ -1,0 +1,106 @@
+﻿# Ignorar archivos de compilación y ejecución
+bin/
+obj/
+/publish/
+
+# Archivos de usuario específicos del IDE
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.cache
+*.nupkg
+
+# Resultados de pruebas
+TestResults/
+*.trx
+*.coverage
+.coverage
+
+# Archivos de regeneración de MSBuild
+*.tlog
+*.lastbuildstate
+
+# Archivos de Visual Studio
+.vs/
+*.swp
+*.swo
+*~
+
+# Archivos de ReSharper
+_ReSharper*/
+*.ReSharper
+*.DotSettings.user
+
+# Rider IDE
+.idea/
+*.sln.iml
+
+# NuGet
+packages/
+.nuget/
+NuGet.exe
+*.nupkg
+
+# Azure Functions
+AzureFunctions/
+
+# Archivos de publicación
+publish/
+app.publish/
+
+# Archivos de logs y temporales
+*.log
+*.tmp
+*.temp
+[Tt]emp/
+
+# Archivos de datos de aplicaciones
+appdata/
+*.mdf
+*.ldf
+
+# Archivos de configuración específicos del entorno
+appsettings.*.json
+appsettings.*.yml
+appsettings.*.yaml
+appsettings.*.xml
+
+# Secrets de usuario (no versionar nunca)
+secrets.json
+appsecrets.json
+
+# Archivos de Azure
+.azure/
+
+# Docker
+.dockerignore
+Dockerfile
+docker-compose.yml
+docker-compose.override.yml
+
+# Archivos de macOS
+.DS_Store
+
+# Archivos de Windows
+Thumbs.db
+
+# Extensiones de backup
+*.backup
+*.bak
+
+# Archivos de SQL Server
+*.mdf
+*.ldf
+
+# Entity Framework Core Migrations
+/Migrations/*.Designer.cs
+/Migrations/*.sql
+
+# SonarQube
+.sonarqube/
+
+# Coverage tools
+coverage.xml
+coverage.json
+lcov.info
