@@ -1,0 +1,11 @@
+﻿namespace WsUtaSystem.Models
+{
+    public class Degree
+    {
+        public int DegreeId { get; set; }
+        public string Description { get; set; } = null!;
+        public bool IsActive { get; set; } = true;
+        public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
+    }
+}

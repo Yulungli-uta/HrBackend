@@ -6,4 +6,9 @@ namespace WsUtaSystem.Application.Services;
 public class VacationsService : Service<Vacations, int>, IVacationsService
 {
     public VacationsService(IVacationsRepository repo) : base(repo) { }
+
+    public Task<IEnumerable<Vacations>> GetByEmployeeId(int EmployeeId, CancellationToken ct)
+    {
+        throw new NotImplementedException();
+    }
 }
