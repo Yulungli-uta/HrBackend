@@ -30,6 +30,15 @@ public class VacationsController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<VacationsDto>(e));
     }
 
+    /// <summary>Obtiene un registro por EmployeeId.</summary>
+    /// <param name="id">Identificador</param>
+    [HttpGet("employee/{employeeId:int}")]
+    public async Task<IActionResult> GetByEmployeeId([FromRoute] int employeeId, CancellationToken ct)
+    {
+        var e = await _svc.GetByEmployeeId(employeeId, ct);
+        return e is null ? NotFound() : Ok(_mapper.Map<VacationsDto>(e));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] VacationsCreateDto dto, CancellationToken ct)

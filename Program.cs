@@ -214,6 +214,16 @@ builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IJobServi
 builder.Services.AddScoped<ITimeService, TimeService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IvwEmployeeDetailsRepository, WsUtaSystem.Infrastructure.Repositories.VwEmployeeDetailsRepository>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IvwEmployeeDetailsService, WsUtaSystem.Application.Services.VwEmployeeDetailsService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IHolidayRepository, WsUtaSystem.Infrastructure.Repositories.HolidayRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimePlanningRepository, WsUtaSystem.Infrastructure.Repositories.TimePlanningRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimePlanningEmployeeRepository, WsUtaSystem.Infrastructure.Repositories.TimePlanningEmployeeRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimePlanningExecutionRepository, WsUtaSystem.Infrastructure.Repositories.TimePlanningExecutionRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IHolidayService, WsUtaSystem.Application.Services.HolidayService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimePlanningService, WsUtaSystem.Application.Services.TimePlanningService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimePlanningEmployeeService, WsUtaSystem.Application.Services.TimePlanningEmployeeService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimePlanningExecutionService, WsUtaSystem.Application.Services.TimePlanningExecutionService>();
+
+
 var app = builder.Build();
 
 app.UseCors(corsName);

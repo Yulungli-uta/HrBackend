@@ -21,8 +21,8 @@ namespace WsUtaSystem.Infrastructure.Repositories
         public async Task<IEnumerable<Job>> SearchJobsByTitleAsync(string title, CancellationToken ct)
         {
             return await _db.Set<Job>()
-                .Where(j => j.Title.Contains(title))
-                .OrderByDescending(j => j.CreatedDate)
+                //.Where(j => j..Title.Contains(title))
+                //.OrderByDescending(j => j.CreatedDate)
                 .ToListAsync(ct);
         }
 

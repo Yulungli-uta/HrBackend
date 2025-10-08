@@ -12,5 +12,5 @@ public class PermissionsCreateDto
     public string Justification { get; set; }
     public DateTime RequestDate { get; set; }
     public string Status { get; set; }
-    public int VacationId { get; set; }
+    public int? VacationId { get; set; }
 }

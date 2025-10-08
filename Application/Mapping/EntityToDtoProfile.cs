@@ -1,4 +1,5 @@
 using AutoMapper;
+using WsUtaSystem.Models;
 namespace WsUtaSystem.Application.Mapping;
 public class EntityToDtoProfile : Profile
 {
@@ -121,6 +122,18 @@ public class EntityToDtoProfile : Profile
         CreateMap<WsUtaSystem.Models.Job, WsUtaSystem.Application.DTOs.Jobs.JobDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.Job, WsUtaSystem.Application.DTOs.Jobs.CreateJobDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.Job, WsUtaSystem.Application.DTOs.Jobs.UpdateJobDto>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.Holiday, WsUtaSystem.Application.DTOs.Holiday.HolidayCreateDTO>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.Holiday, WsUtaSystem.Application.DTOs.Holiday.HolidayUpdateDTO>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.Holiday, WsUtaSystem.Application.DTOs.Holiday.HolidayResponseDTO>().ReverseMap();
+        CreateMap<TimePlanning, WsUtaSystem.Application.DTOs.TimePlanning.TimePlanningCreateDTO>().ReverseMap();
+        CreateMap<TimePlanning, WsUtaSystem.Application.DTOs.TimePlanning.TimePlanningResponseDTO>().ReverseMap();
+        CreateMap<TimePlanning, WsUtaSystem.Application.DTOs.TimePlanning.TimePlanningUpdateDTO>().ReverseMap();
+        CreateMap<TimePlanningEmployee, WsUtaSystem.Application.DTOs.TimePlanningEmployee.TimePlanningEmployeeCreateDTO>().ReverseMap();
+        CreateMap<TimePlanningEmployee, WsUtaSystem.Application.DTOs.TimePlanningEmployee.TimePlanningEmployeeResponseDTO> ().ReverseMap();
+        CreateMap<TimePlanningEmployee, WsUtaSystem.Application.DTOs.TimePlanningEmployee.TimePlanningEmployeeUpdateDTO>().ReverseMap();
+        CreateMap<TimePlanningExecution, WsUtaSystem.Application.DTOs.TimePlanningExecution.TimePlanningExecutionCreateDTO>().ReverseMap();
+        CreateMap<TimePlanningExecution, WsUtaSystem.Application.DTOs.TimePlanningExecution.TimePlanningExecutionResponseDTO>().ReverseMap();
+        CreateMap<TimePlanningExecution, WsUtaSystem.Application.DTOs.TimePlanningExecution.TimePlanningExecutionUpdateDTO>().ReverseMap();
 
     }
 }

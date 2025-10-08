@@ -64,6 +64,15 @@ public class AppDbContext : DbContext
     public DbSet<VwEmployeeComplete> vwEmployeeComplete { get; set; }
 
     public DbSet<VwEmployeeDetails> vwEmployeeDetails { get; set; }  
+
+    public DbSet<Holiday> Holidays => Set<Holiday>();
+
+    public DbSet<TimePlanning> TimePlanning => Set<TimePlanning>();
+
+    public DbSet<TimePlanningEmployee> TimePlanningEmployee => Set<TimePlanningEmployee>();
+
+    public DbSet<TimePlanningExecution> TimePlanningExecution => Set<TimePlanningExecution>();
+
     protected override void OnModelCreating(ModelBuilder m)
     {
         const string HR = "HR";
@@ -93,7 +102,7 @@ public class AppDbContext : DbContext
             e.ToTable("tbl_Employees", HR);
             e.HasKey(x => x.EmployeeId);
             e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
-            e.Property(x => x.Type).HasColumnName("Type");
+            e.Property(x => x.Type).HasColumnName("EmployeeType");
             e.Property(x => x.DepartmentId).HasColumnName("DepartmentID");
             e.Property(x => x.ImmediateBossId).HasColumnName("ImmediateBossID");
         });
@@ -112,7 +121,7 @@ public class AppDbContext : DbContext
             e.ToTable("tbl_Departments", HR);
             e.HasKey(x => x.DepartmentId);
             e.Property(x => x.DepartmentId).HasColumnName("DepartmentID");
-            e.Property(x => x.FacultyId).HasColumnName("FacultyID");
+            //e.Property(x => x.FacultyId).HasColumnName("FacultyID");
             e.Property(x => x.Name).HasMaxLength(120).IsRequired();
         });
 
@@ -492,6 +501,27 @@ public class AppDbContext : DbContext
             e.ToTable("tbl_Jobs", HR);
             e.HasKey(x => x.JobID);
             e.Property(x => x.JobID).HasColumnName("JobID");            
+        });
+        m.Entity<Holiday>(e => {
+            e.ToTable("tbl_Holidays", HR);
+            e.HasKey(x => x.HolidayID);
+            e.Property(x => x.HolidayID).HasColumnName("HolidayID");
+        });
+        m.Entity<TimePlanning>(e => {
+            e.ToTable("tbl_TimePlanning", HR);
+            e.HasKey(x => x.PlanID);
+            e.Property(x => x.PlanID).HasColumnName("PlanID");
+            e.Property(x => x.RowVersion).IsRowVersion();
+        });
+        m.Entity<TimePlanningEmployee>(e => {
+            e.ToTable("tbl_TimePlanningEmployees", HR);
+            e.HasKey(x => x.PlanEmployeeID);
+            e.Property(x => x.PlanEmployeeID).HasColumnName("PlanEmployeeID");
+        });
+        m.Entity<TimePlanningExecution>(e => {
+            e.ToTable("tbl_TimePlanningExecution", HR);
+            e.HasKey(x => x.ExecutionID);
+            e.Property(x => x.ExecutionID).HasColumnName("ExecutionID");
         });
     }
 }

@@ -4,6 +4,7 @@ public class People {
   public int PersonId { get; set; }
   public string FirstName { get; set; } = null!;
   public string LastName { get; set; } = null!;
+  public int IdentType { get; set; }
   public string IdCard { get; set; } = null!;
   public string Email { get; set; } = null!;
   public string? Phone { get; set; }
