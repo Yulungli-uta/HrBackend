@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Net.Mime;
 using WsUtaSystem.Application.DTOs.FileManagement;
 using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Controllers;
 
 [ApiController]
-[Route("cv/files")]
+[Route("files")]
 public class FileManagementController : ControllerBase
 {
     private readonly IFileManagementService _fileService;
@@ -18,31 +19,36 @@ public class FileManagementController : ControllerBase
     /// <summary>
     /// Sube un archivo al servidor con gestión automática de carpetas por año.
     /// </summary>
-    /// <param name="directoryCode">Código del directorio configurado en DirectoryParameters</param>
-    /// <param name="relativePath">Ruta relativa base (ej: /contracts/)</param>
-    /// <param name="fileName">Nombre del archivo a guardar</param>
-    /// <param name="file">Archivo a subir</param>
+    /// <remarks>
+    /// Enviar como <c>multipart/form-data</c> con los campos:
+    /// <list type="bullet">
+    /// <item><description><c>DirectoryCode</c> (obligatorio)</description></item>
+    /// <item><description><c>RelativePath</c> (opcional)</description></item>
+    /// <item><description><c>FileName</c> (opcional)</description></item>
+    /// <item><description><c>File</c> (obligatorio, <see cref="IFormFile"/>)</description></item>
+    /// </list>
+    /// </remarks>
     /// <returns>Información del archivo subido incluyendo la ruta completa</returns>
     [HttpPost("upload")]
     [Consumes("multipart/form-data")]
+    [Produces(MediaTypeNames.Application.Json)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UploadFile(
-        [FromForm] string directoryCode,
-        [FromForm] string relativePath,
-        [FromForm] string fileName,
-        [FromForm] IFormFile file,
+        [FromForm] FileUploadRequestDto form,
         CancellationToken ct)
     {
-        if (file == null || file.Length == 0)
+        if (form.File is null || form.File.Length == 0)
         {
             return BadRequest(new { success = false, message = "No file uploaded." });
         }
 
         var request = new FileUploadRequestDto
         {
-            DirectoryCode = directoryCode,
-            RelativePath = relativePath,
-            FileName = fileName,
-            File = file
+            DirectoryCode = form.DirectoryCode,
+            RelativePath = form.RelativePath ?? string.Empty,
+            FileName = string.IsNullOrWhiteSpace(form.FileName) ? form.File.FileName : form.FileName!,
+            File = form.File
         };
 
         var result = await _fileService.UploadFileAsync(request, ct);
@@ -62,12 +68,15 @@ public class FileManagementController : ControllerBase
     /// <param name="filePath">Ruta relativa completa del archivo (ej: /contracts/2025/contrato_001.pdf)</param>
     /// <returns>Archivo como stream para descarga</returns>
     [HttpGet("download/{directoryCode}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DownloadFile(
         [FromRoute] string directoryCode,
         [FromQuery] string filePath,
         CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(filePath))
+        if (string.IsNullOrWhiteSpace(filePath))
         {
             return BadRequest(new { success = false, message = "File path is required." });
         }
@@ -89,12 +98,15 @@ public class FileManagementController : ControllerBase
     /// <param name="filePath">Ruta relativa del archivo</param>
     /// <returns>True si el archivo existe, False en caso contrario</returns>
     [HttpGet("exists/{directoryCode}")]
+    [Produces(MediaTypeNames.Application.Json)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> FileExists(
         [FromRoute] string directoryCode,
         [FromQuery] string filePath,
         CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(filePath))
+        if (string.IsNullOrWhiteSpace(filePath))
         {
             return BadRequest(new { success = false, message = "File path is required." });
         }
@@ -104,4 +116,3 @@ public class FileManagementController : ControllerBase
         return Ok(new { exists = result != null });
     }
 }
-

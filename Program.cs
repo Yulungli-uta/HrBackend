@@ -222,6 +222,30 @@ builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IHolidayS
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimePlanningService, WsUtaSystem.Application.Services.TimePlanningService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimePlanningEmployeeService, WsUtaSystem.Application.Services.TimePlanningEmployeeService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimePlanningExecutionService, WsUtaSystem.Application.Services.TimePlanningExecutionService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IActivityService, WsUtaSystem.Application.Services.ActivityService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IAdditionalActivityService, WsUtaSystem.Application.Services.AdditionalActivityService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractTypeService, WsUtaSystem.Application.Services.ContractTypeService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDegreeService, WsUtaSystem.Application.Services.DegreeService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IOccupationalGroupService, WsUtaSystem.Application.Services.OccupationalGroupService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IJobActivityService, WsUtaSystem.Application.Services.JobActivityService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IActivityRepository, WsUtaSystem.Infrastructure.Repositories.ActivityRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IAdditionalActivityRepository, WsUtaSystem.Infrastructure.Repositories.AdditionalActivityRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IContractTypeRepository, WsUtaSystem.Infrastructure.Repositories.ContractTypeRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDegreeRepository, WsUtaSystem.Infrastructure.Repositories.DegreeRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IOccupationalGroupRepository, WsUtaSystem.Infrastructure.Repositories.OccupationalGroupRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IJobActivityRepository, WsUtaSystem.Infrastructure.Repositories.JobActivityRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractRequestService, WsUtaSystem.Application.Services.ContractRequestService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFinancialCertificationService, WsUtaSystem.Application.Services.FinancialCertificationService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IContractRequestRepository, WsUtaSystem.Infrastructure.Repositories.ContractRequestRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IFinancialCertificationRepository, WsUtaSystem.Infrastructure.Repositories.FinancialCertificationRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IParametersRepository, WsUtaSystem.Infrastructure.Repositories.ParametersRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDirectoryParametersRepository, WsUtaSystem.Infrastructure.Repositories.DirectoryParametersRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IParametersService, WsUtaSystem.Application.Services.ParametersService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDirectoryParametersService, WsUtaSystem.Application.Services.DirectoryParametersService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFileManagementService, WsUtaSystem.Application.Services.FileManagementService>();
+
+
+
 
 
 var app = builder.Build();

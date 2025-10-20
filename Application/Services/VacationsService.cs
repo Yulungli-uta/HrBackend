@@ -5,10 +5,15 @@ using WsUtaSystem.Models;
 namespace WsUtaSystem.Application.Services;
 public class VacationsService : Service<Vacations, int>, IVacationsService
 {
-    public VacationsService(IVacationsRepository repo) : base(repo) { }
+    private readonly IVacationsRepository _repository;
+    public VacationsService(IVacationsRepository repo) : base(repo) { 
+        _repository=repo;
 
-    public Task<IEnumerable<Vacations>> GetByEmployeeId(int EmployeeId, CancellationToken ct)
+    }
+
+    public async Task<IEnumerable<Vacations>> GetByEmployeeId(int EmployeeId, CancellationToken ct)
     {
-        throw new NotImplementedException();
+        return await _repository.GetByEmployeeId(EmployeeId, ct);
+        //throw new NotImplementedException();
     }
 }

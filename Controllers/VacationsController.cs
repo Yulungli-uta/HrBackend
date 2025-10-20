@@ -36,7 +36,8 @@ public class VacationsController : ControllerBase
     public async Task<IActionResult> GetByEmployeeId([FromRoute] int employeeId, CancellationToken ct)
     {
         var e = await _svc.GetByEmployeeId(employeeId, ct);
-        return e is null ? NotFound() : Ok(_mapper.Map<VacationsDto>(e));
+        return e is null ? NotFound() : Ok(_mapper.Map<List<VacationsDto>>(e));
+        //return e is null ? NotFound() : Ok(_mapper.Map<VacationsDto>(e));
     }
 
     /// <summary>Crea un nuevo registro.</summary>

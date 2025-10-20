@@ -36,6 +36,7 @@ public class PermissionTypesController : ControllerBase
     {
         var entityObj = _mapper.Map<PermissionTypes>(dto);
         var created = await _svc.CreateAsync(entityObj, ct);
+        //Console.WriteLine($"Created entity: {created} dto: {dto}");
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<PermissionTypesDto>(created));
     }

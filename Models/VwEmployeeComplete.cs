@@ -20,7 +20,7 @@
         public DateTime HireDate { get; set; }
         public bool EmployeeIsActive { get; set; }
         public string? Department { get; set; }
-        public string? Faculty { get; set; }
+        //public string? Faculty { get; set; }
         public string? ImmediateBoss { get; set; }
         public int YearsOfService { get; set; }
         public int? MaritalStatusTypeID { get; set; }

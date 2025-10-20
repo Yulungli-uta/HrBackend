@@ -1,3 +1,4 @@
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -5,10 +6,15 @@ using WsUtaSystem.Models;
 namespace WsUtaSystem.Application.Services;
 public class PermissionsService : Service<Permissions, int>, IPermissionsService
 {
-    public PermissionsService(IPermissionsRepository repo) : base(repo) { }
+    private readonly IPermissionsRepository _repository;
+    public PermissionsService(IPermissionsRepository repo) : base(repo) {
+        _repository=repo;
+    }
 
-    public Task<IEnumerable<Permissions>> GetByEmployeeId(int EmployeeId, CancellationToken ct)
+    public async Task<IEnumerable<Permissions>> GetByEmployeeId(int EmployeeId, CancellationToken ct)
     {
-        throw new NotImplementedException();
+
+        return await _repository.GetByEmployeeId(EmployeeId, ct);
+        //throw new NotImplementedException();
     }
 }

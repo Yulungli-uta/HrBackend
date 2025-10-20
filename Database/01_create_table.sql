@@ -223,7 +223,7 @@ CREATE TABLE HR.tbl_jobs (
     JobID INT IDENTITY(1,1) NOT NULL,
     --Title NVARCHAR(255) NOT NULL,
     Description TEXT NULL,
-	JobTypeID INT NULL,   --REFTYPE.TYPEID
+	JobTypeID INT NULL,   --REFTYPE.TYPEID --
     GroupID INT NULL,
     IsActive BIT NOT NULL DEFAULT(1),
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
@@ -241,7 +241,7 @@ CREATE TABLE HR.tbl_Activities (
 
 CREATE TABLE HR.tbl_JobActivities (
     ActivitiesID INT NOT NULL,    
-    tbl_jobs INT NOT NULL,
+    JobID INT NOT NULL,
     IsActive BIT NOT NULL DEFAULT(1),
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
 	UpdatedAt DATETIME2(0) NULL
@@ -343,8 +343,14 @@ CREATE TABLE HR.tbl_EmployeeSchedules (
 CREATE TABLE HR.tbl_contractRequest (
 	RequestID INT IDENTITY(1,1) NOT NULL,
 	WorkModalityID INT NULL,--modalidad de trabajo CATEGORY WORK_MODALITY hr.reftype.typeid
-	NumberTeacher INT NOT NULL DEFAULT (0), 	 --numero de profesores a requerir 
+	DepartmentID INT NULL,  --Departamento solicitante 
+	NumberOfPeopleToHire INT NOT NULL DEFAULT (0), 	 --numero de personas a requerir 
 	NumberHour DECIMAL(12,2) NOT NULL DEFAULT (0), --numerod e horas 
+	TotalPeopleHired INT NOT NULL DEFAULT (0), --numero total de personas ya contratadas 
+	CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
+	CreatedBy INT NOT NULL, -- persona que solicita 
+	UpdateAt DATETIME2 NULL, 
+	UpdateBy INT NULL,	
 	Status INT NULL --ESTADO Category CONTRACT_REQUEST_STATUS
 );
 
@@ -359,6 +365,10 @@ Create Table Hr.tbl_FinancialCertification(
     -- REMUNERACIÓN
 	rmu_hour DECIMAL(12,2) NULL,                 -- Remuneración por hora
 	rmu_con DECIMAL(12,2) NULL,   
+	CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
+	CreatedBy INT NOT NULL,
+	UpdateAt DATETIME2 NULL, 
+	UpdateBy INT NULL,
 	Status INT NULL 			--ESTADO Category CERTF_FINANCIAL
   );
 

@@ -76,7 +76,7 @@ ALTER TABLE HR.tbl_Degrees ADD CONSTRAINT PK_Degrees PRIMARY KEY (DegreeID);
 ALTER TABLE HR.tbl_Occupational_Groups ADD CONSTRAINT PK_Occupational_Groups PRIMARY KEY (GroupID);
 ALTER TABLE HR.tbl_jobs ADD CONSTRAINT PK_jobs PRIMARY KEY (JobID);
 ALTER TABLE HR.tbl_Activities ADD CONSTRAINT PK_Activities PRIMARY KEY (ActivitiesID);
-ALTER TABLE HR.tbl_JobActivities ADD CONSTRAINT PK_JobActivities PRIMARY KEY (ActivitiesID, tbl_jobs);
+ALTER TABLE HR.tbl_JobActivities ADD CONSTRAINT PK_JobActivities PRIMARY KEY (ActivitiesID, JobID);
 ALTER TABLE HR.tbl_contract_type ADD CONSTRAINT PK_contract_type PRIMARY KEY (ContractTypeID);
 
 -- Tablas de empleados

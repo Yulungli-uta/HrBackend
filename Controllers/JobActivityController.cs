@@ -10,7 +10,7 @@ namespace WsUtaSystem.Controllers;
 
 
 [ApiController]
-[Route("cv/job-activity")]
+[Route("job-activity")]
 public class JobActivityController : ControllerBase
 {
     private readonly IJobActivityService _svc;
