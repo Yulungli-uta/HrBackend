@@ -28,7 +28,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
                     Email = e.Email,
                     EmployeeType = e.EmployeeType,
                     Department = e.Department,
-                    Faculty = e.Faculty,
+                   // Faculty = e.Faculty,
                     BaseSalary = e.BaseSalary,
                     HireDate = e.HireDate,
                     //HasActiveSalary = e.BaseSalary.HasValue && e.BaseSalary > 0
@@ -98,7 +98,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
                     Email = e.Email,
                     EmployeeType = e.EmployeeType,
                     Department = e.Department,
-                    Faculty = e.Faculty,
+                    //Faculty = e.Faculty,
                     BaseSalary = e.BaseSalary,
                     HireDate = e.HireDate
                     //HasActiveSalary = e.BaseSalary.HasValue && e.BaseSalary > 0
@@ -124,7 +124,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
                     Email = e.Email,
                     EmployeeType = e.EmployeeType,
                     Department = e.Department,
-                    Faculty = e.Faculty,
+                    //Faculty = e.Faculty,
                     BaseSalary = e.BaseSalary,
                     HireDate = e.HireDate
                     //HasActiveSalary = e.BaseSalary.HasValue && e.BaseSalary > 0
@@ -137,7 +137,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
             CancellationToken ct = default)
         {
             return await _db.Set<VwEmployeeDetails>()
-                .Where(e => e.Faculty == facultyName)
+                .Where(e => e.Department == facultyName)
                 .OrderBy(e => e.FirstName)
                 .ThenBy(e => e.LastName)
                 .Select(e => new VwEmployeeDetails
@@ -150,7 +150,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
                     Email = e.Email,
                     EmployeeType = e.EmployeeType,
                     Department = e.Department,
-                    Faculty = e.Faculty,
+                    //Faculty = e.Faculty,
                     BaseSalary = e.BaseSalary,
                     HireDate = e.HireDate
                     //HasActiveSalary = e.BaseSalary.HasValue && e.BaseSalary > 0
@@ -176,7 +176,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
                     Email = e.Email,
                     EmployeeType = e.EmployeeType,
                     Department = e.Department,
-                    Faculty = e.Faculty,
+                    //Faculty = e.Faculty,
                     BaseSalary = e.BaseSalary,
                     HireDate = e.HireDate
                     //HasActiveSalary = e.BaseSalary.HasValue && e.BaseSalary > 0
@@ -206,8 +206,8 @@ namespace WsUtaSystem.Infrastructure.Repositories
         public async Task<IEnumerable<string>> GetFacultiesAsync(CancellationToken ct = default)
         {
             return await _db.Set<VwEmployeeDetails>()
-                .Where(e => !string.IsNullOrEmpty(e.Faculty))
-                .Select(e => e.Faculty!)
+                .Where(e => !string.IsNullOrEmpty(e.Department))
+                .Select(e => e.Department!)
                 .Distinct()
                 .OrderBy(f => f)
                 .ToListAsync(ct);

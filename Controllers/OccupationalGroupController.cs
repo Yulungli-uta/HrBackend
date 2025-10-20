@@ -10,7 +10,7 @@ namespace WsUtaSystem.Controllers;
 
 
 [ApiController]
-[Route("cv/occupational-group")]
+[Route("occupational-group")]
 public class OccupationalGroupController : ControllerBase
 {
     private readonly IOccupationalGroupService _svc;

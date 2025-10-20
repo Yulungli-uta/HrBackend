@@ -73,6 +73,17 @@ public class AppDbContext : DbContext
 
     public DbSet<TimePlanningExecution> TimePlanningExecution => Set<TimePlanningExecution>();
 
+    public DbSet<Activity> Activity  => Set<Activity>();
+    public DbSet<AdditionalActivity> AdditionalActivity => Set<AdditionalActivity>();
+    public DbSet<ContractType> ContractType => Set<ContractType>();
+    public DbSet<Degree> Degree => Set<Degree>();
+    public DbSet<OccupationalGroup> OccupationalGroup => Set<OccupationalGroup>();
+    public DbSet<JobActivity> JobActivity => Set<JobActivity>();
+    public DbSet<ContractRequest> ContractRequest => Set<ContractRequest>();    
+    public DbSet<FinancialCertification> FinancialCertification => Set<FinancialCertification>();
+    public DbSet<Parameters> Parameters => Set<Parameters>();
+    public DbSet<DirectoryParameters> DirectoryParameters => Set<DirectoryParameters>();
+
     protected override void OnModelCreating(ModelBuilder m)
     {
         const string HR = "HR";
@@ -102,13 +113,14 @@ public class AppDbContext : DbContext
             e.ToTable("tbl_Employees", HR);
             e.HasKey(x => x.EmployeeId);
             e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
-            e.Property(x => x.Type).HasColumnName("EmployeeType");
+            e.Property(x => x.EmployeeType).HasColumnName("EmployeeType");
             e.Property(x => x.DepartmentId).HasColumnName("DepartmentID");
             e.Property(x => x.ImmediateBossId).HasColumnName("ImmediateBossID");
         });
 
         // Faculties
-        m.Entity<Faculties>(e => {
+        m.Entity<Faculties>(e =>
+        {
             e.ToTable("tbl_Faculties", HR);
             e.HasKey(x => x.FacultyId);
             e.Property(x => x.FacultyId).HasColumnName("FacultyID");
@@ -145,10 +157,12 @@ public class AppDbContext : DbContext
 
         m.Entity<Contracts>(e => {
             e.ToTable("tbl_Contracts", HR);
-            e.HasKey(x => x.ContractId);
-            e.Property(x => x.ContractId).HasColumnName("ContractID");
-            e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
-            e.Property(x => x.JobId).HasColumnName("JobID");
+            e.HasKey(x => x.ContractID);
+            e.Property(x => x.ContractID).HasColumnName("ContractID");
+            e.Property(x => x.PersonID).HasColumnName("PersonID");
+            e.Property(x => x.JobID).HasColumnName("JobID");
+            e.Property(x => x.RegistrationDateAnulCon).HasColumnName("registrationdate_anul_con");
+            e.Property(x => x.WorkOf).HasColumnName("work_of");
             //e.Property(x => x.ContractType).HasMaxLength(50);
         });
 
@@ -181,6 +195,7 @@ public class AppDbContext : DbContext
             //e.Property(x => x.PermissionId).HasColumnName("PermissionID");
             e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
             e.Property(x => x.PermissionTypeId).HasColumnName("PermissionTypeID");
+            e.Property(x => x.HourTaken).HasColumnName("HourTaken");
             e.Property(x => x.Justification);
             e.Property(x => x.Status).HasMaxLength(20);
             e.Property(x => x.VacationId).HasColumnName("VacationID");
@@ -522,6 +537,60 @@ public class AppDbContext : DbContext
             e.ToTable("tbl_TimePlanningExecution", HR);
             e.HasKey(x => x.ExecutionID);
             e.Property(x => x.ExecutionID).HasColumnName("ExecutionID");
+        });
+        m.Entity<Activity>(e => {
+            e.ToTable("tbl_Activities", HR);
+            e.HasKey(x => x.ActivitiesId);
+            e.Property(x => x.ActivitiesId).HasColumnName("ActivitiesID");
+        });
+        m.Entity<AdditionalActivity>(e => {
+            e.ToTable("tbl_AdditionalActivities", HR);
+            e.HasKey(x => new { x.ActivitiesId, x.ContractId });
+            e.Property(x => x.ActivitiesId).HasColumnName("ActivitiesID");
+            e.Property(x => x.ContractId).HasColumnName("ContractID");
+        });
+        m.Entity<JobActivity>(e => {
+            e.ToTable("tbl_JobActivities", HR);
+            e.HasKey(x => new { x.ActivitiesId, x.JobID }); 
+            e.Property(x => x.ActivitiesId).HasColumnName("ActivitiesID");
+            e.Property(x => x.JobID).HasColumnName("JobID");
+        });
+        m.Entity<ContractType>(e => {
+            e.ToTable("tbl_contract_type", HR);
+            e.HasKey(x => x.ContractTypeId);
+            e.Property(x => x.ContractTypeId).HasColumnName("ContractTypeID");
+        });
+        m.Entity<Degree>(e => {
+            e.ToTable("tbl_Degrees", HR);
+            e.HasKey(x => x.DegreeId);
+            e.Property(x => x.DegreeId).HasColumnName("DegreeID");
+        });
+        m.Entity<OccupationalGroup>(e => {
+            e.ToTable("tbl_Occupational_Groups", HR);
+            e.HasKey(x => x.GroupId);
+            e.Property(x => x.GroupId).HasColumnName("GroupID");
+        });
+        m.Entity<ContractRequest>(e => {
+            e.ToTable("tbl_contractRequest", HR);
+            e.HasKey(x => x.RequestId);
+            e.Property(x => x.RequestId).HasColumnName("RequestID");
+        });
+        m.Entity<FinancialCertification>(e => {
+            e.ToTable("tbl_FinancialCertification", HR);
+            e.HasKey(x => x.CertificationId);
+            e.Property(x => x.CertificationId).HasColumnName("CertificationID");
+            e.Property(x => x.RmuCon).HasColumnName("rmu_con");
+            e.Property(x => x.RmuHour).HasColumnName("rmu_hour");
+        });
+        m.Entity<Parameters>(e => {
+            e.ToTable("TBL_PARAMETERS", HR);
+            e.HasKey(x => x.ParameterId);
+            e.Property(x => x.ParameterId).HasColumnName("ParameterID");
+        });
+        m.Entity<DirectoryParameters>(e => {
+            e.ToTable("TBL_DirectoryParameters", HR);
+            e.HasKey(x => x.DirectoryId);
+            e.Property(x => x.DirectoryId).HasColumnName("DirectoryID");
         });
     }
 }

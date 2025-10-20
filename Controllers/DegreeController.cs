@@ -10,7 +10,7 @@ namespace WsUtaSystem.Controllers;
 
 
 [ApiController]
-[Route("cv/degree")]
+[Route("degree")]
 public class DegreeController : ControllerBase
 {
     private readonly IDegreeService _svc;

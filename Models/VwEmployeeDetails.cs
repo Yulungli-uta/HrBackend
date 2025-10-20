@@ -25,7 +25,7 @@ namespace WsUtaSystem.Models
 
         public string? Department { get; set; }
 
-        public string? Faculty { get; set; }
+        //public string? Faculty { get; set; }
 
         [Column(TypeName = "decimal(18,2)")]
         public decimal? BaseSalary { get; set; }

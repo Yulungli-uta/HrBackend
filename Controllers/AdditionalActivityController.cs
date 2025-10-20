@@ -10,7 +10,7 @@ namespace WsUtaSystem.Controllers;
 
 
 [ApiController]
-[Route("cv/additional-activity")]
+[Route("additional-activity")]
 public class AdditionalActivityController : ControllerBase
 {
     private readonly IAdditionalActivityService _svc;

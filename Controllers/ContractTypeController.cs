@@ -10,7 +10,7 @@ namespace WsUtaSystem.Controllers;
 
 
 [ApiController]
-[Route("cv/contract-type")]
+[Route("contract-type")]
 public class ContractTypeController : ControllerBase
 {
     private readonly IContractTypeService _svc;

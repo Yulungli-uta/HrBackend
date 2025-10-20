@@ -134,6 +134,39 @@ public class EntityToDtoProfile : Profile
         CreateMap<TimePlanningExecution, WsUtaSystem.Application.DTOs.TimePlanningExecution.TimePlanningExecutionCreateDTO>().ReverseMap();
         CreateMap<TimePlanningExecution, WsUtaSystem.Application.DTOs.TimePlanningExecution.TimePlanningExecutionResponseDTO>().ReverseMap();
         CreateMap<TimePlanningExecution, WsUtaSystem.Application.DTOs.TimePlanningExecution.TimePlanningExecutionUpdateDTO>().ReverseMap();
+        CreateMap<Activity, WsUtaSystem.Application.DTOs.Activity.ActivityCreateDto>().ReverseMap();
+        CreateMap<Activity, WsUtaSystem.Application.DTOs.Activity.ActivityDto>().ReverseMap();
+        CreateMap<Activity, WsUtaSystem.Application.DTOs.Activity.ActivityUpdateDto>().ReverseMap();
+        CreateMap<AdditionalActivity, WsUtaSystem.Application.DTOs.AdditionalActivity.AdditionalActivityCreateDto>().ReverseMap();
+        CreateMap<AdditionalActivity, WsUtaSystem.Application.DTOs.AdditionalActivity.AdditionalActivityDto>().ReverseMap();
+        CreateMap<AdditionalActivity, WsUtaSystem.Application.DTOs.AdditionalActivity.AdditionalActivityUpdateDto>().ReverseMap();
+        CreateMap<Degree, WsUtaSystem.Application.DTOs.Degree.DegreeCreateDto>().ReverseMap();
+        CreateMap<Degree, WsUtaSystem.Application.DTOs.Degree.DegreeDto>().ReverseMap();
+        CreateMap<Degree, WsUtaSystem.Application.DTOs.Degree.DegreeUpdateDto>().ReverseMap();
+        CreateMap<OccupationalGroup, WsUtaSystem.Application.DTOs.OccupationalGroup.OccupationalGroupCreateDto>().ReverseMap();
+        CreateMap<OccupationalGroup, WsUtaSystem.Application.DTOs.OccupationalGroup.OccupationalGroupDto>().ReverseMap();
+        CreateMap<OccupationalGroup, WsUtaSystem.Application.DTOs.OccupationalGroup.OccupationalGroupUpdateDto>().ReverseMap();
+        CreateMap<ContractType, WsUtaSystem.Application.DTOs.ContractType.ContractTypeCreateDto>().ReverseMap();
+        CreateMap<ContractType, WsUtaSystem.Application.DTOs.ContractType.ContractTypeDto>().ReverseMap();
+        CreateMap<ContractType, WsUtaSystem.Application.DTOs.ContractType.ContractTypeUpdateDto>().ReverseMap();
+        CreateMap<JobActivity, WsUtaSystem.Application.DTOs.JobActivity.JobActivityCreateDto>().ReverseMap();
+        CreateMap<JobActivity, WsUtaSystem.Application.DTOs.JobActivity.JobActivityDto>().ReverseMap();
+        CreateMap<JobActivity, WsUtaSystem.Application.DTOs.JobActivity.JobActivityUpdateDto>().ReverseMap();
+        CreateMap<ContractRequest, WsUtaSystem.Application.DTOs.ContractRequest.ContractRequestCreateDto>().ReverseMap();
+        CreateMap<ContractRequest, WsUtaSystem.Application.DTOs.ContractRequest.ContractRequestDto>().ReverseMap();
+        CreateMap<ContractRequest, WsUtaSystem.Application.DTOs.ContractRequest.ContractRequestUpdateDto>().ReverseMap();
+        CreateMap<FinancialCertification, WsUtaSystem.Application.DTOs.FinancialCertification.FinancialCertificationCreateDto>().ReverseMap();
+        CreateMap<FinancialCertification, WsUtaSystem.Application.DTOs.FinancialCertification.FinancialCertificationDto>().ReverseMap();
+        CreateMap<FinancialCertification, WsUtaSystem.Application.DTOs.FinancialCertification.FinancialCertificationUpdateDto>().ReverseMap();
+        CreateMap<Parameters, WsUtaSystem.Application.DTOs.Parameters.ParametersCreateDto>().ReverseMap();
+        CreateMap<Parameters, WsUtaSystem.Application.DTOs.Parameters.ParametersDto>().ReverseMap();
+        CreateMap<Parameters, WsUtaSystem.Application.DTOs.Parameters.ParametersUpdateDto>().ReverseMap();
+        CreateMap<DirectoryParameters, WsUtaSystem.Application.DTOs.DirectoryParameters.DirectoryParametersCreateDto>().ReverseMap();
+        CreateMap<DirectoryParameters, WsUtaSystem.Application.DTOs.DirectoryParameters.DirectoryParametersDto>().ReverseMap();
+        CreateMap<DirectoryParameters, WsUtaSystem.Application.DTOs.DirectoryParameters.DirectoryParametersUpdateDto>().ReverseMap();
+
+
+
 
     }
 }

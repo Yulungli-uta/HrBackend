@@ -36,7 +36,7 @@ public class PermissionsController : ControllerBase
     public async Task<IActionResult> GetByEmplopyeeId([FromRoute] int employeeId, CancellationToken ct)
     {
         var e = await _svc.GetByEmployeeId(employeeId, ct);
-        return e is null ? NotFound() : Ok(_mapper.Map<PermissionsDto>(e));
+        return e is null ? NotFound() : Ok(_mapper.Map<List<PermissionsDto>>(e));
     }
 
     /// <summary>Crea un nuevo registro.</summary>
@@ -45,6 +45,7 @@ public class PermissionsController : ControllerBase
     {
         var entityObj = _mapper.Map<Permissions>(dto);
         var created = await _svc.CreateAsync(entityObj, ct);
+        Console.WriteLine($"Created entity: {created} dto: {dto}");
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<PermissionsDto>(created));
     }
