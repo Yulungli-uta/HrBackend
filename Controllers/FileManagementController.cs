@@ -115,4 +115,65 @@ public class FileManagementController : ControllerBase
 
         return Ok(new { exists = result != null });
     }
+
+    /// <summary>
+    /// Sube múltiples archivos al servidor con gestión automática de carpetas por año.
+    /// </summary>
+    /// <remarks>
+    /// Enviar como <c>multipart/form-data</c> con los campos:
+    /// <list type="bullet">
+    /// <item><description><c>DirectoryCode</c> (obligatorio)</description></item>
+    /// <item><description><c>RelativePath</c> (opcional)</description></item>
+    /// <item><description><c>Files</c> (obligatorio, múltiples <see cref="IFormFile"/>)</description></item>
+    /// </list>
+    /// </remarks>
+    /// <returns>Lista de resultados de cada archivo subido</returns>
+    [HttpPost("upload-multiple")]
+    [Consumes("multipart/form-data")]
+    [Produces(MediaTypeNames.Application.Json)]
+    [ProducesResponseType(typeof(List<FileUploadResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadMultipleFiles(
+        [FromForm] FileUploadMultipleRequestDto request,
+        CancellationToken ct)
+    {
+        if (request.Files == null || !request.Files.Any())
+        {
+            return BadRequest(new { success = false, message = "No files uploaded." });
+        }
+
+        var results = await _fileService.UploadMultipleFilesAsync(request, ct);
+
+        return Ok(results);
+    }
+
+    /// <summary>
+    /// Elimina un archivo del servidor.
+    /// </summary>
+    /// <param name="directoryCode">Código del directorio configurado en DirectoryParameters</param>
+    /// <param name="filePath">Ruta relativa completa del archivo (ej: /contracts/2025/contrato_001.pdf)</param>
+    /// <returns>Resultado de la operación de eliminación</returns>
+    [HttpDelete("delete/{directoryCode}")]
+    [Produces(MediaTypeNames.Application.Json)]
+    [ProducesResponseType(typeof(FileDeleteResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> DeleteFile(
+        [FromRoute] string directoryCode,
+        [FromQuery] string filePath,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return BadRequest(new { success = false, message = "File path is required." });
+        }
+
+        var result = await _fileService.DeleteFileAsync(directoryCode, filePath, ct);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
 }

@@ -1,15 +1,25 @@
+using Microsoft.Extensions.Options;
 using WsUtaSystem.Application.DTOs.FileManagement;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Configuration;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Application.Services;
 
 public class FileManagementService : IFileManagementService
 {
     private readonly IDirectoryParametersService _directoryService;
+    private readonly IEncryptionService _encryptionService;
+    private readonly FileManagementSettings _settings;
 
-    public FileManagementService(IDirectoryParametersService directoryService)
+    public FileManagementService(
+        IDirectoryParametersService directoryService,
+        IEncryptionService encryptionService,
+        IOptions<FileManagementSettings> settings)
     {
         _directoryService = directoryService;
+        _encryptionService = encryptionService;
+        _settings = settings.Value;
     }
 
     public async Task<FileUploadResponseDto> UploadFileAsync(FileUploadRequestDto request, CancellationToken ct = default)
@@ -75,28 +85,42 @@ public class FileManagementService : IFileManagementService
             var relativePath = request.RelativePath.TrimStart('/').TrimEnd('/');
             var folderPath = Path.Combine(directory.PhysicalPath, relativePath, currentYear.ToString());
 
-            // 6. Verificar y crear carpeta si no existe
-            if (!Directory.Exists(folderPath))
-            {
-                Directory.CreateDirectory(folderPath);
-            }
-
-            // 7. Sanitizar nombre del archivo (prevenir path traversal)
+            // 6. Sanitizar nombre del archivo (prevenir path traversal)
             var sanitizedFileName = Path.GetFileName(request.FileName);
 
-            // 8. Construir ruta completa del archivo
+            // 7. Construir ruta completa del archivo
             var fullPath = Path.Combine(folderPath, sanitizedFileName);
 
-            // 9. Guardar el archivo
-            using (var stream = new FileStream(fullPath, FileMode.Create))
+            // 8. Ejecutar operación con impersonation
+            using (var impersonation = new WindowsImpersonation())
             {
-                await request.File.CopyToAsync(stream, ct);
+                // Desencriptar credenciales
+                var username = _encryptionService.Decrypt(_settings.NetworkCredentials.Username);
+                var password = _encryptionService.Decrypt(_settings.NetworkCredentials.Password);
+                var domain = string.IsNullOrEmpty(_settings.NetworkCredentials.Domain) 
+                    ? null 
+                    : _encryptionService.Decrypt(_settings.NetworkCredentials.Domain);
+
+                // Iniciar impersonation
+                impersonation.Impersonate(username, password, domain);
+
+                // Verificar y crear carpeta si no existe
+                if (!Directory.Exists(folderPath))
+                {
+                    Directory.CreateDirectory(folderPath);
+                }
+
+                // Guardar el archivo
+                using (var stream = new FileStream(fullPath, FileMode.Create))
+                {
+                    await request.File.CopyToAsync(stream, ct);
+                }
             }
 
-            // 10. Construir ruta relativa para retornar
+            // 9. Construir ruta relativa para retornar
             var relativePathResult = $"/{relativePath}/{currentYear}/{sanitizedFileName}";
 
-            // 11. Retornar respuesta exitosa
+            // 10. Retornar respuesta exitosa
             return new FileUploadResponseDto
             {
                 Success = true,
@@ -123,6 +147,43 @@ public class FileManagementService : IFileManagementService
         }
     }
 
+    public async Task<List<FileUploadResponseDto>> UploadMultipleFilesAsync(FileUploadMultipleRequestDto request, CancellationToken ct = default)
+    {
+        var results = new List<FileUploadResponseDto>();
+
+        if (request.Files == null || !request.Files.Any())
+        {
+            results.Add(new FileUploadResponseDto
+            {
+                Success = false,
+                Message = "No files provided.",
+                FullPath = string.Empty,
+                RelativePath = string.Empty,
+                FileName = string.Empty,
+                FileSize = 0,
+                Year = 0
+            });
+            return results;
+        }
+
+        // Procesar cada archivo
+        foreach (var file in request.Files)
+        {
+            var uploadRequest = new FileUploadRequestDto
+            {
+                DirectoryCode = request.DirectoryCode,
+                RelativePath = request.RelativePath,
+                FileName = file.FileName,
+                File = file
+            };
+
+            var result = await UploadFileAsync(uploadRequest, ct);
+            results.Add(result);
+        }
+
+        return results;
+    }
+
     public async Task<(byte[] fileBytes, string contentType, string fileName)?> DownloadFileAsync(string directoryCode, string filePath, CancellationToken ct = default)
     {
         try
@@ -140,16 +201,32 @@ public class FileManagementService : IFileManagementService
             // 3. Construir ruta física completa
             var fullPath = Path.Combine(directory.PhysicalPath, sanitizedPath);
 
-            // 4. Verificar que el archivo existe
-            if (!File.Exists(fullPath))
+            byte[] fileBytes;
+            
+            // 4. Ejecutar operación con impersonation
+            using (var impersonation = new WindowsImpersonation())
             {
-                return null;
+                // Desencriptar credenciales
+                var username = _encryptionService.Decrypt(_settings.NetworkCredentials.Username);
+                var password = _encryptionService.Decrypt(_settings.NetworkCredentials.Password);
+                var domain = string.IsNullOrEmpty(_settings.NetworkCredentials.Domain) 
+                    ? null 
+                    : _encryptionService.Decrypt(_settings.NetworkCredentials.Domain);
+
+                // Iniciar impersonation
+                impersonation.Impersonate(username, password, domain);
+
+                // Verificar que el archivo existe
+                if (!File.Exists(fullPath))
+                {
+                    return null;
+                }
+
+                // Leer el archivo
+                fileBytes = await File.ReadAllBytesAsync(fullPath, ct);
             }
 
-            // 5. Leer el archivo
-            var fileBytes = await File.ReadAllBytesAsync(fullPath, ct);
-
-            // 6. Determinar Content-Type basado en la extensión
+            // 5. Determinar Content-Type basado en la extensión
             var extension = Path.GetExtension(fullPath).ToLower();
             var contentType = extension switch
             {
@@ -166,7 +243,7 @@ public class FileManagementService : IFileManagementService
                 _ => "application/octet-stream"
             };
 
-            // 7. Obtener nombre del archivo
+            // 6. Obtener nombre del archivo
             var fileName = Path.GetFileName(fullPath);
 
             return (fileBytes, contentType, fileName);
@@ -174,6 +251,75 @@ public class FileManagementService : IFileManagementService
         catch
         {
             return null;
+        }
+    }
+
+    public async Task<FileDeleteResponseDto> DeleteFileAsync(string directoryCode, string filePath, CancellationToken ct = default)
+    {
+        try
+        {
+            // 1. Buscar DirectoryParameters por Code
+            var directory = await _directoryService.GetByCodeAsync(directoryCode, ct);
+            if (directory == null)
+            {
+                return new FileDeleteResponseDto
+                {
+                    Success = false,
+                    Message = $"Directory with code '{directoryCode}' not found or inactive.",
+                    FilePath = filePath
+                };
+            }
+
+            // 2. Sanitizar filePath (prevenir path traversal)
+            var sanitizedPath = filePath.TrimStart('/');
+
+            // 3. Construir ruta física completa
+            var fullPath = Path.Combine(directory.PhysicalPath, sanitizedPath);
+
+            // 4. Ejecutar operación con impersonation
+            using (var impersonation = new WindowsImpersonation())
+            {
+                // Desencriptar credenciales
+                var username = _encryptionService.Decrypt(_settings.NetworkCredentials.Username);
+                var password = _encryptionService.Decrypt(_settings.NetworkCredentials.Password);
+                var domain = string.IsNullOrEmpty(_settings.NetworkCredentials.Domain) 
+                    ? null 
+                    : _encryptionService.Decrypt(_settings.NetworkCredentials.Domain);
+
+                // Iniciar impersonation
+                impersonation.Impersonate(username, password, domain);
+
+                // Verificar que el archivo existe
+                if (!File.Exists(fullPath))
+                {
+                    return new FileDeleteResponseDto
+                    {
+                        Success = false,
+                        Message = "File not found.",
+                        FilePath = filePath
+                    };
+                }
+
+                // Eliminar el archivo
+                File.Delete(fullPath);
+            }
+
+            // 5. Retornar respuesta exitosa
+            return new FileDeleteResponseDto
+            {
+                Success = true,
+                Message = "File deleted successfully.",
+                FilePath = filePath
+            };
+        }
+        catch (Exception ex)
+        {
+            return new FileDeleteResponseDto
+            {
+                Success = false,
+                Message = $"Error deleting file: {ex.Message}",
+                FilePath = filePath
+            };
         }
     }
 }
