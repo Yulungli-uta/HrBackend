@@ -1,16 +1,16 @@
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using Microsoft.Win32.SafeHandles;
 
 namespace WsUtaSystem.Infrastructure.Security;
 
 /// <summary>
 /// Clase para ejecutar operaciones con credenciales de Windows específicas
-/// Usa LogonUser API de Windows para impersonation
+/// Usa LogonUser API de Windows con SafeAccessTokenHandle (compatible con .NET 9)
 /// </summary>
-public class WindowsImpersonation : IDisposable
+public sealed class WindowsImpersonation : IDisposable
 {
-    private WindowsImpersonationContext? _impersonationContext;
-    private IntPtr _token = IntPtr.Zero;
+    private SafeAccessTokenHandle? _tokenHandle;
     private bool _disposed = false;
 
     // Constantes de LogonUser API
@@ -27,19 +27,19 @@ public class WindowsImpersonation : IDisposable
         int dwLogonProvider,
         out IntPtr phToken);
 
-    // Importar CloseHandle de kernel32.dll
-    [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
-    private static extern bool CloseHandle(IntPtr handle);
-
     /// <summary>
-    /// Inicia impersonation con las credenciales proporcionadas
+    /// Obtiene un token de acceso para las credenciales proporcionadas
     /// </summary>
     /// <param name="username">Nombre de usuario</param>
     /// <param name="password">Contraseña</param>
     /// <param name="domain">Dominio (opcional)</param>
-    /// <returns>True si el impersonation fue exitoso</returns>
-    public bool Impersonate(string username, string password, string? domain = null)
+    /// <returns>SafeAccessTokenHandle para usar con WindowsIdentity.RunImpersonated</returns>
+    /// <exception cref="PlatformNotSupportedException">Si no se ejecuta en Windows</exception>
+    /// <exception cref="InvalidOperationException">Si la autenticación falla</exception>
+    public SafeAccessTokenHandle GetToken(string username, string password, string? domain = null)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         // Solo funciona en Windows
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
@@ -53,63 +53,84 @@ public class WindowsImpersonation : IDisposable
             password,
             LOGON32_LOGON_NEW_CREDENTIALS,
             LOGON32_PROVIDER_DEFAULT,
-            out _token);
+            out IntPtr token);
 
         if (!loggedOn)
         {
             int errorCode = Marshal.GetLastWin32Error();
-            throw new InvalidOperationException($"LogonUser failed with error code: {errorCode}");
+            throw new InvalidOperationException($"LogonUser failed with error code: {errorCode}. Verify username, password and domain are correct.");
         }
 
-        // Crear identidad de Windows con el token
-        var identity = new WindowsIdentity(_token);
+        // Crear SafeAccessTokenHandle
+        _tokenHandle = new SafeAccessTokenHandle(token);
         
-        // Iniciar impersonation
-        _impersonationContext = identity.Impersonate();
-
-        return true;
+        return _tokenHandle;
     }
 
     /// <summary>
-    /// Finaliza el impersonation y libera recursos
+    /// Ejecuta una acción con las credenciales especificadas usando impersonation
     /// </summary>
-    public void Undo()
+    /// <param name="username">Nombre de usuario</param>
+    /// <param name="password">Contraseña</param>
+    /// <param name="domain">Dominio (opcional)</param>
+    /// <param name="action">Acción a ejecutar con las credenciales</param>
+    public void RunImpersonated(string username, string password, string? domain, Action action)
     {
-        if (_impersonationContext != null)
-        {
-            _impersonationContext.Undo();
-            _impersonationContext.Dispose();
-            _impersonationContext = null;
-        }
+        var token = GetToken(username, password, domain);
+        WindowsIdentity.RunImpersonated(token, action);
+    }
 
-        if (_token != IntPtr.Zero)
-        {
-            CloseHandle(_token);
-            _token = IntPtr.Zero;
-        }
+    /// <summary>
+    /// Ejecuta una función con las credenciales especificadas usando impersonation
+    /// </summary>
+    /// <typeparam name="T">Tipo de retorno</typeparam>
+    /// <param name="username">Nombre de usuario</param>
+    /// <param name="password">Contraseña</param>
+    /// <param name="domain">Dominio (opcional)</param>
+    /// <param name="func">Función a ejecutar con las credenciales</param>
+    /// <returns>Resultado de la función</returns>
+    public T RunImpersonated<T>(string username, string password, string? domain, Func<T> func)
+    {
+        var token = GetToken(username, password, domain);
+        return WindowsIdentity.RunImpersonated(token, func);
+    }
+
+    /// <summary>
+    /// Ejecuta una tarea asíncrona con las credenciales especificadas usando impersonation
+    /// </summary>
+    /// <param name="username">Nombre de usuario</param>
+    /// <param name="password">Contraseña</param>
+    /// <param name="domain">Dominio (opcional)</param>
+    /// <param name="func">Función asíncrona a ejecutar</param>
+    public async Task RunImpersonatedAsync(string username, string password, string? domain, Func<Task> func)
+    {
+        var token = GetToken(username, password, domain);
+        await WindowsIdentity.RunImpersonatedAsync(token, func);
+    }
+
+    /// <summary>
+    /// Ejecuta una tarea asíncrona con resultado usando impersonation
+    /// </summary>
+    /// <typeparam name="T">Tipo de retorno</typeparam>
+    /// <param name="username">Nombre de usuario</param>
+    /// <param name="password">Contraseña</param>
+    /// <param name="domain">Dominio (opcional)</param>
+    /// <param name="func">Función asíncrona a ejecutar</param>
+    /// <returns>Resultado de la función</returns>
+    public async Task<T> RunImpersonatedAsync<T>(string username, string password, string? domain, Func<Task<T>> func)
+    {
+        var token = GetToken(username, password, domain);
+        return await WindowsIdentity.RunImpersonatedAsync(token, func);
     }
 
     public void Dispose()
     {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
         if (!_disposed)
         {
-            if (disposing)
-            {
-                Undo();
-            }
+            _tokenHandle?.Dispose();
+            _tokenHandle = null;
             _disposed = true;
         }
-    }
-
-    ~WindowsImpersonation()
-    {
-        Dispose(false);
     }
 }
 

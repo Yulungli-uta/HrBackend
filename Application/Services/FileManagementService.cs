@@ -30,16 +30,7 @@ public class FileManagementService : IFileManagementService
             var directory = await _directoryService.GetByCodeAsync(request.DirectoryCode, ct);
             if (directory == null)
             {
-                return new FileUploadResponseDto
-                {
-                    Success = false,
-                    Message = $"Directory with code '{request.DirectoryCode}' not found or inactive.",
-                    FullPath = string.Empty,
-                    RelativePath = string.Empty,
-                    FileName = string.Empty,
-                    FileSize = 0,
-                    Year = 0
-                };
+                return CreateErrorResponse("Directory not found", request.FileName);
             }
 
             // 2. Validar extensión del archivo
@@ -49,16 +40,9 @@ public class FileManagementService : IFileManagementService
                 var allowedExtensions = directory.Extension.Split(',').Select(e => e.Trim().ToLower()).ToList();
                 if (!allowedExtensions.Contains(fileExtension))
                 {
-                    return new FileUploadResponseDto
-                    {
-                        Success = false,
-                        Message = $"File extension '{fileExtension}' is not allowed. Allowed extensions: {directory.Extension}",
-                        FullPath = string.Empty,
-                        RelativePath = string.Empty,
-                        FileName = string.Empty,
-                        FileSize = 0,
-                        Year = 0
-                    };
+                    return CreateErrorResponse(
+                        $"File extension '{fileExtension}' is not allowed. Allowed: {directory.Extension}", 
+                        request.FileName);
                 }
             }
 
@@ -66,61 +50,40 @@ public class FileManagementService : IFileManagementService
             var fileSizeInMb = request.File.Length / (1024.0 * 1024.0);
             if (directory.MaxSizeMb.HasValue && fileSizeInMb > directory.MaxSizeMb.Value)
             {
-                return new FileUploadResponseDto
-                {
-                    Success = false,
-                    Message = $"File size ({fileSizeInMb:F2} MB) exceeds maximum allowed size ({directory.MaxSizeMb} MB).",
-                    FullPath = string.Empty,
-                    RelativePath = string.Empty,
-                    FileName = string.Empty,
-                    FileSize = 0,
-                    Year = 0
-                };
+                return CreateErrorResponse(
+                    $"File size ({fileSizeInMb:F2} MB) exceeds maximum ({directory.MaxSizeMb} MB)", 
+                    request.FileName);
             }
 
-            // 4. Obtener año actual
+            // 4. Preparar rutas
             int currentYear = DateTime.Now.Year;
-
-            // 5. Construir ruta de carpeta con año
             var relativePath = request.RelativePath.TrimStart('/').TrimEnd('/');
             var folderPath = Path.Combine(directory.PhysicalPath, relativePath, currentYear.ToString());
-
-            // 6. Sanitizar nombre del archivo (prevenir path traversal)
             var sanitizedFileName = Path.GetFileName(request.FileName);
-
-            // 7. Construir ruta completa del archivo
             var fullPath = Path.Combine(folderPath, sanitizedFileName);
 
-            // 8. Ejecutar operación con impersonation
-            using (var impersonation = new WindowsImpersonation())
+            // 5. Desencriptar credenciales
+            var (username, password, domain) = DecryptCredentials();
+
+            // 6. Ejecutar operación con impersonation (asíncrono)
+            using var impersonation = new WindowsImpersonation();
+            
+            await impersonation.RunImpersonatedAsync(username, password, domain, async () =>
             {
-                // Desencriptar credenciales
-                var username = _encryptionService.Decrypt(_settings.NetworkCredentials.Username);
-                var password = _encryptionService.Decrypt(_settings.NetworkCredentials.Password);
-                var domain = string.IsNullOrEmpty(_settings.NetworkCredentials.Domain) 
-                    ? null 
-                    : _encryptionService.Decrypt(_settings.NetworkCredentials.Domain);
-
-                // Iniciar impersonation
-                impersonation.Impersonate(username, password, domain);
-
-                // Verificar y crear carpeta si no existe
+                // Crear carpeta si no existe
                 if (!Directory.Exists(folderPath))
                 {
                     Directory.CreateDirectory(folderPath);
                 }
 
-                // Guardar el archivo
-                using (var stream = new FileStream(fullPath, FileMode.Create))
-                {
-                    await request.File.CopyToAsync(stream, ct);
-                }
-            }
+                // Guardar archivo
+                using var stream = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
+                await request.File.CopyToAsync(stream, ct);
+            });
 
-            // 9. Construir ruta relativa para retornar
+            // 7. Retornar respuesta exitosa
             var relativePathResult = $"/{relativePath}/{currentYear}/{sanitizedFileName}";
-
-            // 10. Retornar respuesta exitosa
+            
             return new FileUploadResponseDto
             {
                 Success = true,
@@ -132,18 +95,17 @@ public class FileManagementService : IFileManagementService
                 Year = currentYear
             };
         }
+        catch (PlatformNotSupportedException ex)
+        {
+            return CreateErrorResponse($"Platform not supported: {ex.Message}", request.FileName);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return CreateErrorResponse($"Authentication failed: {ex.Message}", request.FileName);
+        }
         catch (Exception ex)
         {
-            return new FileUploadResponseDto
-            {
-                Success = false,
-                Message = $"Error uploading file: {ex.Message}",
-                FullPath = string.Empty,
-                RelativePath = string.Empty,
-                FileName = string.Empty,
-                FileSize = 0,
-                Year = 0
-            };
+            return CreateErrorResponse($"Error uploading file: {ex.Message}", request.FileName);
         }
     }
 
@@ -153,16 +115,7 @@ public class FileManagementService : IFileManagementService
 
         if (request.Files == null || !request.Files.Any())
         {
-            results.Add(new FileUploadResponseDto
-            {
-                Success = false,
-                Message = "No files provided.",
-                FullPath = string.Empty,
-                RelativePath = string.Empty,
-                FileName = string.Empty,
-                FileSize = 0,
-                Year = 0
-            });
+            results.Add(CreateErrorResponse("No files provided", string.Empty));
             return results;
         }
 
@@ -184,7 +137,10 @@ public class FileManagementService : IFileManagementService
         return results;
     }
 
-    public async Task<(byte[] fileBytes, string contentType, string fileName)?> DownloadFileAsync(string directoryCode, string filePath, CancellationToken ct = default)
+    public async Task<(byte[] fileBytes, string contentType, string fileName)?> DownloadFileAsync(
+        string directoryCode, 
+        string filePath, 
+        CancellationToken ct = default)
     {
         try
         {
@@ -195,55 +151,35 @@ public class FileManagementService : IFileManagementService
                 return null;
             }
 
-            // 2. Sanitizar filePath (prevenir path traversal)
+            // 2. Sanitizar y construir ruta
             var sanitizedPath = filePath.TrimStart('/');
-
-            // 3. Construir ruta física completa
             var fullPath = Path.Combine(directory.PhysicalPath, sanitizedPath);
 
-            byte[] fileBytes;
+            // 3. Desencriptar credenciales
+            var (username, password, domain) = DecryptCredentials();
+
+            // 4. Ejecutar operación con impersonation (asíncrono)
+            using var impersonation = new WindowsImpersonation();
             
-            // 4. Ejecutar operación con impersonation
-            using (var impersonation = new WindowsImpersonation())
+            var fileBytes = await impersonation.RunImpersonatedAsync(username, password, domain, async () =>
             {
-                // Desencriptar credenciales
-                var username = _encryptionService.Decrypt(_settings.NetworkCredentials.Username);
-                var password = _encryptionService.Decrypt(_settings.NetworkCredentials.Password);
-                var domain = string.IsNullOrEmpty(_settings.NetworkCredentials.Domain) 
-                    ? null 
-                    : _encryptionService.Decrypt(_settings.NetworkCredentials.Domain);
-
-                // Iniciar impersonation
-                impersonation.Impersonate(username, password, domain);
-
-                // Verificar que el archivo existe
+                // Verificar existencia
                 if (!File.Exists(fullPath))
                 {
-                    return null;
+                    return Array.Empty<byte>();
                 }
 
-                // Leer el archivo
-                fileBytes = await File.ReadAllBytesAsync(fullPath, ct);
+                // Leer archivo
+                return await File.ReadAllBytesAsync(fullPath, ct);
+            });
+
+            if (fileBytes.Length == 0)
+            {
+                return null;
             }
 
-            // 5. Determinar Content-Type basado en la extensión
-            var extension = Path.GetExtension(fullPath).ToLower();
-            var contentType = extension switch
-            {
-                ".pdf" => "application/pdf",
-                ".jpg" or ".jpeg" => "image/jpeg",
-                ".png" => "image/png",
-                ".gif" => "image/gif",
-                ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                ".xls" => "application/vnd.ms-excel",
-                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                ".doc" => "application/msword",
-                ".txt" => "text/plain",
-                ".zip" => "application/zip",
-                _ => "application/octet-stream"
-            };
-
-            // 6. Obtener nombre del archivo
+            // 5. Determinar Content-Type
+            var contentType = GetContentType(fullPath);
             var fileName = Path.GetFileName(fullPath);
 
             return (fileBytes, contentType, fileName);
@@ -254,7 +190,10 @@ public class FileManagementService : IFileManagementService
         }
     }
 
-    public async Task<FileDeleteResponseDto> DeleteFileAsync(string directoryCode, string filePath, CancellationToken ct = default)
+    public async Task<FileDeleteResponseDto> DeleteFileAsync(
+        string directoryCode, 
+        string filePath, 
+        CancellationToken ct = default)
     {
         try
         {
@@ -270,45 +209,61 @@ public class FileManagementService : IFileManagementService
                 };
             }
 
-            // 2. Sanitizar filePath (prevenir path traversal)
+            // 2. Sanitizar y construir ruta
             var sanitizedPath = filePath.TrimStart('/');
-
-            // 3. Construir ruta física completa
             var fullPath = Path.Combine(directory.PhysicalPath, sanitizedPath);
 
-            // 4. Ejecutar operación con impersonation
-            using (var impersonation = new WindowsImpersonation())
+            // 3. Desencriptar credenciales
+            var (username, password, domain) = DecryptCredentials();
+
+            // 4. Ejecutar operación con impersonation (asíncrono)
+            using var impersonation = new WindowsImpersonation();
+            
+            var deleted = await impersonation.RunImpersonatedAsync(username, password, domain, async () =>
             {
-                // Desencriptar credenciales
-                var username = _encryptionService.Decrypt(_settings.NetworkCredentials.Username);
-                var password = _encryptionService.Decrypt(_settings.NetworkCredentials.Password);
-                var domain = string.IsNullOrEmpty(_settings.NetworkCredentials.Domain) 
-                    ? null 
-                    : _encryptionService.Decrypt(_settings.NetworkCredentials.Domain);
-
-                // Iniciar impersonation
-                impersonation.Impersonate(username, password, domain);
-
-                // Verificar que el archivo existe
+                // Verificar existencia
                 if (!File.Exists(fullPath))
                 {
-                    return new FileDeleteResponseDto
-                    {
-                        Success = false,
-                        Message = "File not found.",
-                        FilePath = filePath
-                    };
+                    return false;
                 }
 
-                // Eliminar el archivo
-                File.Delete(fullPath);
+                // Eliminar archivo (usar Task.Run para operación síncrona)
+                await Task.Run(() => File.Delete(fullPath), ct);
+                return true;
+            });
+
+            if (!deleted)
+            {
+                return new FileDeleteResponseDto
+                {
+                    Success = false,
+                    Message = "File not found.",
+                    FilePath = filePath
+                };
             }
 
-            // 5. Retornar respuesta exitosa
             return new FileDeleteResponseDto
             {
                 Success = true,
                 Message = "File deleted successfully.",
+                FilePath = filePath
+            };
+        }
+        catch (PlatformNotSupportedException ex)
+        {
+            return new FileDeleteResponseDto
+            {
+                Success = false,
+                Message = $"Platform not supported: {ex.Message}",
+                FilePath = filePath
+            };
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new FileDeleteResponseDto
+            {
+                Success = false,
+                Message = $"Authentication failed: {ex.Message}",
                 FilePath = filePath
             };
         }
@@ -322,5 +277,66 @@ public class FileManagementService : IFileManagementService
             };
         }
     }
+
+    #region Private Helper Methods
+
+    private (string username, string password, string? domain) DecryptCredentials()
+    {
+        var username = _encryptionService.Decrypt(_settings.NetworkCredentials.Username);
+        var password = _encryptionService.Decrypt(_settings.NetworkCredentials.Password);
+        var domain = string.IsNullOrEmpty(_settings.NetworkCredentials.Domain)
+            ? null
+            : _encryptionService.Decrypt(_settings.NetworkCredentials.Domain);
+
+        return (username, password, domain);
+    }
+
+    private static FileUploadResponseDto CreateErrorResponse(string message, string fileName)
+    {
+        return new FileUploadResponseDto
+        {
+            Success = false,
+            Message = message,
+            FullPath = string.Empty,
+            RelativePath = string.Empty,
+            FileName = fileName,
+            FileSize = 0,
+            Year = 0
+        };
+    }
+
+    private static string GetContentType(string filePath)
+    {
+        var extension = Path.GetExtension(filePath).ToLower();
+        return extension switch
+        {
+            ".pdf" => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".bmp" => "image/bmp",
+            ".webp" => "image/webp",
+            ".svg" => "image/svg+xml",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xls" => "application/vnd.ms-excel",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".doc" => "application/msword",
+            ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".ppt" => "application/vnd.ms-powerpoint",
+            ".txt" => "text/plain",
+            ".csv" => "text/csv",
+            ".json" => "application/json",
+            ".xml" => "application/xml",
+            ".zip" => "application/zip",
+            ".rar" => "application/x-rar-compressed",
+            ".7z" => "application/x-7z-compressed",
+            ".mp4" => "video/mp4",
+            ".mp3" => "audio/mpeg",
+            ".wav" => "audio/wav",
+            _ => "application/octet-stream"
+        };
+    }
+
+    #endregion
 }
 
