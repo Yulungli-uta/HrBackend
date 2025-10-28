@@ -2,24 +2,74 @@
 
 ## 📋 Descripción General
 
-El servicio **FileManagement** permite subir, descargar y eliminar archivos en directorios de red (NAS/SMB) usando **credenciales encriptadas** almacenadas en `appsettings.json`. Las credenciales se encriptan con **AES-256** y se usan mediante **Windows Impersonation** para acceder a recursos de red protegidos.
+El servicio **FileManagement** permite subir, descargar y eliminar archivos en directorios locales o de red (NAS/SMB). Soporta dos modos de operación:
+
+1. **Modo Directo (sin credenciales):** Para puntos de montaje locales o directorios accesibles sin autenticación
+2. **Modo Impersonation (con credenciales):** Para NAS/SMB remotos que requieren autenticación con usuario y contraseña
 
 ---
 
 ## 🔐 Características de Seguridad
 
 - ✅ **Encriptación AES-256** para credenciales
-- ✅ **Windows Impersonation** para acceso a NAS/SMB
+- ✅ **Windows Impersonation** opcional para acceso a NAS/SMB
 - ✅ **Credenciales centralizadas** en appsettings.json
 - ✅ **Clave de encriptación separada** del código
 - ✅ **Prevención de path traversal**
 - ✅ **Validación de extensiones y tamaños**
+- ✅ **Modo configurable** (con/sin autenticación)
 
 ---
 
 ## 🚀 Configuración Paso a Paso
 
-### **Paso 1: Generar Clave de Encriptación**
+### **Escenario 1: Punto de Montaje Local (Sin Credenciales)**
+
+Este es el modo más simple y recomendado cuando tienes un punto de montaje local o un directorio accesible sin autenticación.
+
+#### **Paso 1: Configurar appsettings.json**
+
+```json
+{
+  "FileManagement": {
+    "UseImpersonation": false
+  }
+}
+```
+
+**Características:**
+- ✅ No requiere credenciales
+- ✅ Acceso directo al sistema de archivos
+- ✅ Funciona en Windows y Linux
+- ✅ Mejor rendimiento (sin overhead de autenticación)
+- ✅ Más simple de configurar
+
+#### **Paso 2: Configurar DirectoryParameters**
+
+```sql
+INSERT INTO TBL_DirectoryParameters 
+(Code, PhysicalPath, RelativePath, Description, Extension, MaxSizeMB, Status, CreatedAt, CreatedBy)
+VALUES 
+('LOCAL_DOCS', 
+ '/mnt/nas/documents',  -- Punto de montaje local
+ '/docs', 
+ 'Documentos en punto de montaje', 
+ '.pdf,.docx,.xlsx', 
+ 10, 
+ 1, 
+ GETDATE(), 
+ 1);
+```
+
+**¡Listo!** No necesitas configurar credenciales ni clave de encriptación.
+
+---
+
+### **Escenario 2: NAS Remoto con Credenciales (Impersonation)**
+
+Usa este modo cuando necesitas acceder a un NAS/SMB remoto que requiere autenticación.
+
+#### **Paso 1: Generar Clave de Encriptación**
 
 La clave debe tener **32 caracteres** para AES-256.
 
@@ -35,18 +85,18 @@ MySecretKey123456789012345678
 
 ---
 
-### **Paso 2: Encriptar Credenciales**
+#### **Paso 2: Encriptar Credenciales**
 
 Usar la herramienta `CredentialEncryptor` para encriptar las credenciales del NAS.
 
-#### **Ejecutar la herramienta:**
+**Ejecutar la herramienta:**
 
 ```bash
 cd Tools
 dotnet run -- --key "MySecretKey123456789012345678" --username "nas_user" --password "nas_password123" --domain "WORKGROUP"
 ```
 
-#### **Salida esperada:**
+**Salida esperada:**
 
 ```
 ===========================================
@@ -69,6 +119,7 @@ Domain (encrypted): dGVzdF9lbmNyeXB0ZWRfZG9tYWlu
 ===========================================
 {
   "FileManagement": {
+    "UseImpersonation": true,
     "EncryptionKey": "MySecretKey123456789012345678",
     "NetworkCredentials": {
       "Username": "dGVzdF9lbmNyeXB0ZWRfdXNlcm5hbWU=",
@@ -81,26 +132,19 @@ Domain (encrypted): dGVzdF9lbmNyeXB0ZWRfZG9tYWlu
 
 ---
 
-### **Paso 3: Agregar Configuración a appsettings.json**
+#### **Paso 3: Agregar Configuración a appsettings.json**
 
 Copiar la salida del paso anterior en `appsettings.json`:
 
 ```json
 {
   "FileManagement": {
+    "UseImpersonation": true,
     "EncryptionKey": "MySecretKey123456789012345678",
     "NetworkCredentials": {
       "Username": "dGVzdF9lbmNyeXB0ZWRfdXNlcm5hbWU=",
       "Password": "dGVzdF9lbmNyeXB0ZWRfcGFzc3dvcmQ=",
       "Domain": "dGVzdF9lbmNyeXB0ZWRfZG9tYWlu"
-    }
-  },
-  "ConnectionStrings": {
-    "DefaultConnection": "..."
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information"
     }
   }
 }
@@ -110,7 +154,26 @@ Copiar la salida del paso anterior en `appsettings.json`:
 
 ---
 
-### **Paso 4: Registrar Servicios en Program.cs**
+#### **Paso 4: Configurar DirectoryParameters**
+
+```sql
+INSERT INTO TBL_DirectoryParameters 
+(Code, PhysicalPath, RelativePath, Description, Extension, MaxSizeMB, Status, CreatedAt, CreatedBy)
+VALUES 
+('NAS_CONTRACTS', 
+ '\\\\192.168.1.100\\shared\\contracts',  -- Ruta UNC del NAS
+ '/contracts', 
+ 'Contratos en NAS remoto', 
+ '.pdf,.docx,.xlsx', 
+ 10, 
+ 1, 
+ GETDATE(), 
+ 1);
+```
+
+---
+
+#### **Paso 5: Registrar Servicios en Program.cs**
 
 Agregar las siguientes líneas en `Program.cs`:
 
@@ -128,34 +191,23 @@ builder.Services.AddScoped<IFileManagementService, FileManagementService>();
 
 ---
 
-### **Paso 5: Configurar DirectoryParameters en la Base de Datos**
+## 📊 Comparación de Modos
 
-Insertar un registro en la tabla `TBL_DirectoryParameters`:
-
-```sql
-INSERT INTO TBL_DirectoryParameters 
-(Code, PhysicalPath, RelativePath, Description, Extension, MaxSizeMB, Status, CreatedAt, CreatedBy)
-VALUES 
-('NAS_CONTRACTS', 
- '\\192.168.1.100\shared\contracts', 
- '/contracts', 
- 'Directorio de contratos en NAS', 
- '.pdf,.docx,.xlsx', 
- 10, 
- 1, 
- GETDATE(), 
- 1);
-```
-
-**Campos importantes:**
-- `Code`: Identificador único para usar en la API
-- `PhysicalPath`: Ruta UNC del NAS (ej: `\\server\share` o `D:\Files`)
-- `Extension`: Extensiones permitidas separadas por comas
-- `MaxSizeMB`: Tamaño máximo en MB
+| Característica | Modo Directo | Modo Impersonation |
+|----------------|--------------|-------------------|
+| **UseImpersonation** | `false` | `true` |
+| **Requiere credenciales** | ❌ No | ✅ Sí |
+| **Requiere encriptación** | ❌ No | ✅ Sí |
+| **Plataforma** | Windows/Linux | Solo Windows |
+| **Rendimiento** | ⚡ Rápido | 🐢 Más lento |
+| **Complejidad** | 🟢 Simple | 🟡 Media |
+| **Uso recomendado** | Punto de montaje local | NAS remoto con auth |
 
 ---
 
 ## 📡 Endpoints API
+
+Los endpoints son los mismos para ambos modos:
 
 ### **1. Subir Archivo**
 
@@ -164,26 +216,11 @@ POST /files/upload
 Content-Type: multipart/form-data
 
 FormData:
-  - DirectoryCode: "NAS_CONTRACTS"
-  - RelativePath: "/contracts/"
-  - FileName: "contrato_001.pdf"
+  - DirectoryCode: "LOCAL_DOCS"
+  - RelativePath: "/docs/"
+  - FileName: "documento.pdf"
   - File: [archivo binario]
 ```
-
-**Respuesta:**
-```json
-{
-  "success": true,
-  "message": "File uploaded successfully.",
-  "fullPath": "\\\\192.168.1.100\\shared\\contracts\\contracts\\2025\\contrato_001.pdf",
-  "relativePath": "/contracts/2025/contrato_001.pdf",
-  "fileName": "contrato_001.pdf",
-  "fileSize": 524288,
-  "year": 2025
-}
-```
-
----
 
 ### **2. Subir Múltiples Archivos**
 
@@ -192,176 +229,156 @@ POST /files/upload-multiple
 Content-Type: multipart/form-data
 
 FormData:
-  - DirectoryCode: "NAS_CONTRACTS"
-  - RelativePath: "/contracts/"
-  - Files: [archivo1.pdf, archivo2.pdf, archivo3.pdf]
+  - DirectoryCode: "LOCAL_DOCS"
+  - RelativePath: "/docs/"
+  - Files: [archivo1.pdf, archivo2.pdf]
 ```
-
-**Respuesta:**
-```json
-[
-  {
-    "success": true,
-    "message": "File uploaded successfully.",
-    "fullPath": "\\\\192.168.1.100\\shared\\contracts\\contracts\\2025\\archivo1.pdf",
-    "relativePath": "/contracts/2025/archivo1.pdf",
-    "fileName": "archivo1.pdf",
-    "fileSize": 524288,
-    "year": 2025
-  },
-  {
-    "success": true,
-    "message": "File uploaded successfully.",
-    "fullPath": "\\\\192.168.1.100\\shared\\contracts\\contracts\\2025\\archivo2.pdf",
-    "relativePath": "/contracts/2025/archivo2.pdf",
-    "fileName": "archivo2.pdf",
-    "fileSize": 612352,
-    "year": 2025
-  }
-]
-```
-
----
 
 ### **3. Descargar Archivo**
 
 ```http
-GET /files/download/NAS_CONTRACTS?filePath=/contracts/2025/contrato_001.pdf
+GET /files/download/LOCAL_DOCS?filePath=/docs/2025/documento.pdf
 ```
-
-**Respuesta:**
-- Archivo binario con Content-Type correcto
-
----
 
 ### **4. Eliminar Archivo**
 
 ```http
-DELETE /files/delete/NAS_CONTRACTS?filePath=/contracts/2025/contrato_001.pdf
+DELETE /files/delete/LOCAL_DOCS?filePath=/docs/2025/documento.pdf
 ```
 
-**Respuesta:**
-```json
-{
-  "success": true,
-  "message": "File deleted successfully.",
-  "filePath": "/contracts/2025/contrato_001.pdf"
-}
-```
-
----
-
-### **5. Verificar si Existe Archivo**
+### **5. Verificar Existencia**
 
 ```http
-GET /files/exists/NAS_CONTRACTS?filePath=/contracts/2025/contrato_001.pdf
-```
-
-**Respuesta:**
-```json
-{
-  "exists": true
-}
+GET /files/exists/LOCAL_DOCS?filePath=/docs/2025/documento.pdf
 ```
 
 ---
 
-## 🔧 Funcionamiento Interno
+## 🔧 Cambiar Entre Modos
 
-### **Flujo de Upload con Credenciales:**
+Para cambiar entre modo directo e impersonation, solo necesitas modificar `appsettings.json`:
 
-1. **Cliente** envía archivo + directoryCode + relativePath
-2. **Controller** recibe el request
-3. **Service** busca DirectoryParameters por código
-4. **Service** valida extensión y tamaño
-5. **Service** desencripta credenciales de appsettings
-6. **Service** inicia Windows Impersonation con credenciales del NAS
-7. **Service** crea carpeta del año si no existe (ej: `/contracts/2025/`)
-8. **Service** guarda el archivo en el NAS
-9. **Service** finaliza Impersonation
-10. **Service** retorna resultado con fullPath
+### **De Modo Directo a Impersonation:**
+
+```json
+{
+  "FileManagement": {
+    "UseImpersonation": true,  // ← Cambiar de false a true
+    "EncryptionKey": "MySecretKey123456789012345678",
+    "NetworkCredentials": {
+      "Username": "encrypted_username",
+      "Password": "encrypted_password",
+      "Domain": "encrypted_domain"
+    }
+  }
+}
+```
+
+### **De Impersonation a Modo Directo:**
+
+```json
+{
+  "FileManagement": {
+    "UseImpersonation": false  // ← Cambiar de true a false
+  }
+}
+```
+
+**No necesitas reiniciar la aplicación**, los cambios se aplican automáticamente.
 
 ---
 
 ## 🛡️ Seguridad
 
-### **Credenciales Encriptadas:**
-- Las credenciales **NUNCA** se almacenan en texto plano
-- Se encriptan con AES-256 antes de guardarlas en appsettings
-- La clave de encriptación debe mantenerse **secreta**
+### **Modo Directo:**
+- ✅ Sin credenciales expuestas
+- ✅ Usa permisos del usuario que ejecuta la aplicación
+- ✅ Más seguro si el punto de montaje está bien configurado
 
-### **Windows Impersonation:**
-- Las operaciones de archivos se ejecutan con las credenciales del NAS
-- El impersonation se inicia **solo durante la operación** y se finaliza inmediatamente
-- Si falla la autenticación, la operación se cancela
-
-### **Validaciones:**
-- ✅ Extensión de archivo contra lista permitida
-- ✅ Tamaño de archivo contra límite configurado
-- ✅ Path traversal (sanitización de rutas)
-- ✅ Existencia de directorio configurado
+### **Modo Impersonation:**
+- ✅ Credenciales encriptadas con AES-256
+- ✅ Clave de encriptación separada
+- ✅ Impersonation solo durante operaciones de archivos
+- ✅ Limpieza automática de recursos
 
 ---
 
 ## 🐛 Solución de Problemas
 
 ### **Error: "LogonUser failed with error code: 1326"**
-- **Causa:** Usuario o contraseña incorrectos
+- **Causa:** Usuario o contraseña incorrectos (solo en modo impersonation)
 - **Solución:** Verificar credenciales y volver a encriptar
 
 ### **Error: "Directory with code 'XXX' not found"**
 - **Causa:** No existe el registro en `TBL_DirectoryParameters`
 - **Solución:** Insertar el registro con el código correcto
 
-### **Error: "File extension '.xyz' is not allowed"**
-- **Causa:** La extensión no está en la lista permitida
-- **Solución:** Agregar la extensión en el campo `Extension` de DirectoryParameters
-
-### **Error: "File size exceeds maximum allowed size"**
-- **Causa:** El archivo es más grande que `MaxSizeMB`
-- **Solución:** Aumentar `MaxSizeMB` o reducir el tamaño del archivo
+### **Error: "Access denied"**
+- **Causa:** Permisos insuficientes en el directorio
+- **Solución (Modo Directo):** Dar permisos al usuario que ejecuta la app
+- **Solución (Modo Impersonation):** Verificar permisos del usuario configurado
 
 ### **Error: "PlatformNotSupportedException"**
-- **Causa:** Windows Impersonation solo funciona en Windows
-- **Solución:** Ejecutar en Windows Server o usar alternativas para Linux
+- **Causa:** Intentando usar impersonation en Linux
+- **Solución:** Cambiar `UseImpersonation` a `false`
 
 ---
 
-## 📝 Ejemplo Completo
+## 📝 Ejemplos Completos
 
-### **1. Encriptar credenciales:**
-```bash
-dotnet run --project Tools/CredentialEncryptor.cs -- --key "MyKey12345678901234567890123" --username "admin" --password "P@ssw0rd" --domain "CORP"
-```
+### **Ejemplo 1: Configuración Mínima (Modo Directo)**
 
-### **2. Configurar appsettings.json:**
+**appsettings.json:**
 ```json
 {
   "FileManagement": {
+    "UseImpersonation": false
+  }
+}
+```
+
+**SQL:**
+```sql
+INSERT INTO TBL_DirectoryParameters VALUES 
+('DOCS', '/mnt/nas/docs', '/docs', 'Documentos', '.pdf', 5, 1, GETDATE(), 1, NULL, NULL);
+```
+
+**Listo para usar!**
+
+---
+
+### **Ejemplo 2: Configuración Completa (Modo Impersonation)**
+
+**1. Encriptar:**
+```bash
+dotnet run --project Tools/CredentialEncryptor.cs -- --key "MyKey12345678901234567890123" --username "admin" --password "P@ssw0rd"
+```
+
+**2. appsettings.json:**
+```json
+{
+  "FileManagement": {
+    "UseImpersonation": true,
     "EncryptionKey": "MyKey12345678901234567890123",
     "NetworkCredentials": {
-      "Username": "encrypted_username_here",
-      "Password": "encrypted_password_here",
-      "Domain": "encrypted_domain_here"
+      "Username": "encrypted_value_here",
+      "Password": "encrypted_value_here"
     }
   }
 }
 ```
 
-### **3. Insertar DirectoryParameters:**
+**3. SQL:**
 ```sql
 INSERT INTO TBL_DirectoryParameters VALUES 
-('DOCS', '\\\\nas\documents', '/docs', 'Documentos', '.pdf,.docx', 5, 1, GETDATE(), 1, NULL, NULL);
+('NAS', '\\\\nas\\share', '/files', 'NAS Files', '.pdf,.docx', 10, 1, GETDATE(), 1, NULL, NULL);
 ```
 
-### **4. Subir archivo desde Postman:**
-```
-POST http://localhost:5000/files/upload
-Body: form-data
-  - DirectoryCode: DOCS
-  - RelativePath: /docs/
-  - FileName: documento.pdf
-  - File: [seleccionar archivo]
+**4. Program.cs:**
+```csharp
+builder.Services.Configure<FileManagementSettings>(
+    builder.Configuration.GetSection("FileManagement"));
+builder.Services.AddScoped<IEncryptionService, EncryptionService>();
 ```
 
 ---
@@ -374,5 +391,5 @@ Body: form-data
 
 ---
 
-**Última actualización:** 2025-10-22
+**Última actualización:** 2025-10-28
 
