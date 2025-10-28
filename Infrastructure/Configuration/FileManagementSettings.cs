@@ -6,6 +6,11 @@ namespace WsUtaSystem.Infrastructure.Configuration;
 public class FileManagementSettings
 {
     /// <summary>
+    /// Indica si se debe usar Windows Impersonation para operaciones de archivos.
+    /// true = Usar credenciales (NAS remoto), false = Acceso directo (punto de montaje local)
+    /// </summary>
+    public bool UseImpersonation { get; set; } = false;
+    /// <summary>
     /// Clave de encriptación AES-256 (32 caracteres)
     /// </summary>
     public string EncryptionKey { get; set; } = string.Empty;

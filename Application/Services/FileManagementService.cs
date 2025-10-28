@@ -62,26 +62,25 @@ public class FileManagementService : IFileManagementService
             var sanitizedFileName = Path.GetFileName(request.FileName);
             var fullPath = Path.Combine(folderPath, sanitizedFileName);
 
-            // 5. Desencriptar credenciales
-            var (username, password, domain) = DecryptCredentials();
-
-            // 6. Ejecutar operación con impersonation (asíncrono)
-            using var impersonation = new WindowsImpersonation();
-            
-            await impersonation.RunImpersonatedAsync(username, password, domain, async () =>
+            // 5. Ejecutar operación con o sin impersonation según configuración
+            if (_settings.UseImpersonation)
             {
-                // Crear carpeta si no existe
-                if (!Directory.Exists(folderPath))
+                // CON CREDENCIALES (NAS remoto con autenticación)
+                var (username, password, domain) = DecryptCredentials();
+                using var impersonation = new WindowsImpersonation();
+                
+                await impersonation.RunImpersonatedAsync(username, password, domain, async () =>
                 {
-                    Directory.CreateDirectory(folderPath);
-                }
+                    await SaveFileAsync(folderPath, fullPath, request.File, ct);
+                });
+            }
+            else
+            {
+                // SIN CREDENCIALES (punto de montaje local o acceso directo)
+                await SaveFileAsync(folderPath, fullPath, request.File, ct);
+            }
 
-                // Guardar archivo
-                using var stream = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
-                await request.File.CopyToAsync(stream, ct);
-            });
-
-            // 7. Retornar respuesta exitosa
+            // 6. Retornar respuesta exitosa
             var relativePathResult = $"/{relativePath}/{currentYear}/{sanitizedFileName}";
             
             return new FileUploadResponseDto
@@ -155,30 +154,32 @@ public class FileManagementService : IFileManagementService
             var sanitizedPath = filePath.TrimStart('/');
             var fullPath = Path.Combine(directory.PhysicalPath, sanitizedPath);
 
-            // 3. Desencriptar credenciales
-            var (username, password, domain) = DecryptCredentials();
+            byte[] fileBytes;
 
-            // 4. Ejecutar operación con impersonation (asíncrono)
-            using var impersonation = new WindowsImpersonation();
-            
-            var fileBytes = await impersonation.RunImpersonatedAsync(username, password, domain, async () =>
+            // 3. Ejecutar operación con o sin impersonation según configuración
+            if (_settings.UseImpersonation)
             {
-                // Verificar existencia
-                if (!File.Exists(fullPath))
+                // CON CREDENCIALES (NAS remoto con autenticación)
+                var (username, password, domain) = DecryptCredentials();
+                using var impersonation = new WindowsImpersonation();
+                
+                fileBytes = await impersonation.RunImpersonatedAsync(username, password, domain, async () =>
                 {
-                    return Array.Empty<byte>();
-                }
-
-                // Leer archivo
-                return await File.ReadAllBytesAsync(fullPath, ct);
-            });
+                    return await ReadFileAsync(fullPath, ct);
+                });
+            }
+            else
+            {
+                // SIN CREDENCIALES (punto de montaje local o acceso directo)
+                fileBytes = await ReadFileAsync(fullPath, ct);
+            }
 
             if (fileBytes.Length == 0)
             {
                 return null;
             }
 
-            // 5. Determinar Content-Type
+            // 4. Determinar Content-Type
             var contentType = GetContentType(fullPath);
             var fileName = Path.GetFileName(fullPath);
 
@@ -213,24 +214,25 @@ public class FileManagementService : IFileManagementService
             var sanitizedPath = filePath.TrimStart('/');
             var fullPath = Path.Combine(directory.PhysicalPath, sanitizedPath);
 
-            // 3. Desencriptar credenciales
-            var (username, password, domain) = DecryptCredentials();
+            bool deleted;
 
-            // 4. Ejecutar operación con impersonation (asíncrono)
-            using var impersonation = new WindowsImpersonation();
-            
-            var deleted = await impersonation.RunImpersonatedAsync(username, password, domain, async () =>
+            // 3. Ejecutar operación con o sin impersonation según configuración
+            if (_settings.UseImpersonation)
             {
-                // Verificar existencia
-                if (!File.Exists(fullPath))
+                // CON CREDENCIALES (NAS remoto con autenticación)
+                var (username, password, domain) = DecryptCredentials();
+                using var impersonation = new WindowsImpersonation();
+                
+                deleted = await impersonation.RunImpersonatedAsync(username, password, domain, async () =>
                 {
-                    return false;
-                }
-
-                // Eliminar archivo (usar Task.Run para operación síncrona)
-                await Task.Run(() => File.Delete(fullPath), ct);
-                return true;
-            });
+                    return await DeleteFileInternalAsync(fullPath, ct);
+                });
+            }
+            else
+            {
+                // SIN CREDENCIALES (punto de montaje local o acceso directo)
+                deleted = await DeleteFileInternalAsync(fullPath, ct);
+            }
 
             if (!deleted)
             {
@@ -280,6 +282,56 @@ public class FileManagementService : IFileManagementService
 
     #region Private Helper Methods
 
+    /// <summary>
+    /// Guarda un archivo en el sistema de archivos
+    /// </summary>
+    private static async Task SaveFileAsync(string folderPath, string fullPath, Microsoft.AspNetCore.Http.IFormFile file, CancellationToken ct)
+    {
+        // Crear carpeta si no existe
+        if (!Directory.Exists(folderPath))
+        {
+            Directory.CreateDirectory(folderPath);
+        }
+
+        // Guardar archivo
+        using var stream = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
+        await file.CopyToAsync(stream, ct);
+    }
+
+    /// <summary>
+    /// Lee un archivo del sistema de archivos
+    /// </summary>
+    private static async Task<byte[]> ReadFileAsync(string fullPath, CancellationToken ct)
+    {
+        // Verificar existencia
+        if (!File.Exists(fullPath))
+        {
+            return Array.Empty<byte>();
+        }
+
+        // Leer archivo
+        return await File.ReadAllBytesAsync(fullPath, ct);
+    }
+
+    /// <summary>
+    /// Elimina un archivo del sistema de archivos
+    /// </summary>
+    private static async Task<bool> DeleteFileInternalAsync(string fullPath, CancellationToken ct)
+    {
+        // Verificar existencia
+        if (!File.Exists(fullPath))
+        {
+            return false;
+        }
+
+        // Eliminar archivo (usar Task.Run para operación síncrona)
+        await Task.Run(() => File.Delete(fullPath), ct);
+        return true;
+    }
+
+    /// <summary>
+    /// Desencripta las credenciales de red desde la configuración
+    /// </summary>
     private (string username, string password, string? domain) DecryptCredentials()
     {
         var username = _encryptionService.Decrypt(_settings.NetworkCredentials.Username);
@@ -291,6 +343,9 @@ public class FileManagementService : IFileManagementService
         return (username, password, domain);
     }
 
+    /// <summary>
+    /// Crea una respuesta de error para upload
+    /// </summary>
     private static FileUploadResponseDto CreateErrorResponse(string message, string fileName)
     {
         return new FileUploadResponseDto
@@ -305,6 +360,9 @@ public class FileManagementService : IFileManagementService
         };
     }
 
+    /// <summary>
+    /// Determina el Content-Type basado en la extensión del archivo
+    /// </summary>
     private static string GetContentType(string filePath)
     {
         var extension = Path.GetExtension(filePath).ToLower();
