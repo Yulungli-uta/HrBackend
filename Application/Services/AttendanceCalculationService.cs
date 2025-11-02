@@ -1,5 +1,7 @@
 using Microsoft.Data.SqlClient;
 using WsUtaSystem.Application.Interfaces.Services;
+using Microsoft.EntityFrameworkCore;              
+
 
 namespace WsUtaSystem.Application.Services;
 

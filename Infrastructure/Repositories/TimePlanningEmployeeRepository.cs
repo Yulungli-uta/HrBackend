@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.DTOs.TimePlanningEmployee;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Models;
@@ -16,19 +17,20 @@ namespace WsUtaSystem.Infrastructure.Repositories
 
         public async Task<IEnumerable<TimePlanningEmployee>> GetByPlanIdAsync(int planId, CancellationToken ct = default)
         {
-            //return await _db.Set<TimePlanningEmployee>()
-            //    .Include(tpe => tpe.Employee)
-            //    .Where(tpe => tpe.PlanID == planId)
-            //    .OrderBy(tpe => tpe.Employee.LastName)
-            //    .ThenBy(tpe => tpe.Employee.FirstName)
-            //    .ToListAsync(ct);
-            return null;
+            return await _db.Set<TimePlanningEmployee>()
+                //.Include(tpe => tpe.Employees)
+                .Where(tpe => tpe.PlanID == planId)
+                //.OrderBy(tpe => tpe.Employee.LastName)
+                //.ThenBy(tpe => tpe.Employee.FirstName)
+                .ToListAsync(ct);
+            //return null;
         }
 
         public async Task<IEnumerable<TimePlanningEmployee>> GetByEmployeeIdAsync(int employeeId, CancellationToken ct = default)
         {
             return await _db.Set<TimePlanningEmployee>()
                 .Include(tpe => tpe.TimePlanning)
+                .Include(tpe => tpe.Employees)
                 .Where(tpe => tpe.EmployeeID == employeeId)
                 .OrderByDescending(tpe => tpe.TimePlanning.StartDate)
                 .ToListAsync(ct);

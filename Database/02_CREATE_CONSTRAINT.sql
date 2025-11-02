@@ -324,7 +324,7 @@ ADD CONSTRAINT FK_jobs_Occupational_Groups FOREIGN KEY (GroupID) REFERENCES HR.t
 
 ALTER TABLE HR.tbl_JobActivities
 ADD CONSTRAINT FK_JobActivities_Activities FOREIGN KEY (ActivitiesID) REFERENCES HR.tbl_Activities(ActivitiesID),
-    CONSTRAINT FK_JobActivities_Jobs FOREIGN KEY (tbl_jobs) REFERENCES HR.tbl_jobs(JobID);
+    CONSTRAINT FK_JobActivities_Jobs FOREIGN KEY (JobID) REFERENCES HR.tbl_jobs(JobID);
 
 ALTER TABLE HR.tbl_contract_type
 ADD CONSTRAINT FK_contract_type_PersonalContractType FOREIGN KEY (PersonalContractTypeID) REFERENCES HR.ref_Types(TypeID);

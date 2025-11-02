@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Serilog;
 using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Controllers
@@ -19,6 +20,7 @@ namespace WsUtaSystem.Controllers
         public async Task<IActionResult> GetAll(CancellationToken ct = default)
         {
             var employees = await _employeeDetailsService.GetAllEmployeeDetailsAsync(ct);
+            
             return Ok(employees);
         }
 

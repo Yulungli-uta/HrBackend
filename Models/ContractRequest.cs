@@ -8,7 +8,7 @@ namespace WsUtaSystem.Models
         public decimal NumberHour { get; set; } = 0;
         public int TotalPeopleHired { get; set; } = 0;
 
-        public DateTime dataCreatedAt { get; set; }
+        public DateTime CreatedAt { get; set; }
         public int CreatedBy { get; set; }
 
         public DateTime? UpdatedAt { get; set; }

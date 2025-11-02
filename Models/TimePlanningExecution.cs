@@ -21,5 +21,6 @@
         //public string? EmployeeName { get; set; }
         //public string? VerifiedByName { get; set; }
         public TimePlanningEmployee? TimePlanningEmployee { get; set; }
+        public Employees? Employees { get; set; }
     }
 }

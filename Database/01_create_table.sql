@@ -107,6 +107,42 @@ Books - Libros
 SET NOCOUNT ON;
 PRINT 'INICIANDO CREACIÓN DE TABLAS CON FECHAS LOCALES...';
 
+PRINT '0. Creando HR.TBL_PARAMETER';
+CREATE TABLE TBL_PARAMETERS (
+    ParameterID INT PRIMARY KEY IDENTITY(1,1),
+    name NVARCHAR(100) NOT NULL UNIQUE,
+    --Nombre VARCHAR(100) NOT NULL,
+    Pvalues NVARCHAR(MAX),
+    Description NVARCHAR(255),
+    DataType NVARCHAR(20) CHECK (DataType IN ('TEXTO', 'NUMERO', 'FECHA', 'BOOLEAN')),
+    IsActive BIT DEFAULT 1,
+    CreatedAt DATETIME NOT NULL DEFAULT(GETDATE()),
+	CreatedBy Int NULL,
+    UpdatedAt DATETIME2 NULL,
+    UpdatedBy NVARCHAR(50)
+);
+PRINT '0. Creando HR.TBL_PARAMETER';
+CREATE TABLE TBL_DirectoryParameters (
+    DirectoryID INT PRIMARY KEY IDENTITY(1,1),
+    Code NVARCHAR(50) NOT NULL UNIQUE,
+    --Name NVARCHAR(100) NOT NULL,
+    PhysicalPath NVARCHAR(max) NOT NULL,
+    RelativePath NVARCHAR(max),
+    Description NVARCHAR(255),
+    --DirectoryType VARCHAR(50) CHECK (DirectoryType IN ('INPUT', 'OUTPUT', 'TEMPORARY', 'BACKUP', 'LOGS', 'REPORTS', 'UPLOADS', 'FILES')),
+    Extension NVARCHAR(MAX), -- Allowed extensions: .pdf,.xlsx,.jpg
+    MaxSizeMB INT, -- Maximum size in MB
+    --AllowSubdirectories BIT DEFAULT 1,
+    --AutoCleanup BIT DEFAULT 0,
+    --RetentionDays INT, -- Days before cleaning files
+    Status BIT DEFAULT 1,
+    CreatedAt DATETIME2 DEFAULT GETDATE(),
+	CreatedBy Int NULL,
+    UpdatedAt DATETIME2 NULL,
+    UpdatedBy Int NULL
+);
+
+
 -- 1. TABLA MAESTRA DE TIPOS (BASE PARA MUCHAS TABLAS)
 PRINT '1. Creando HR.ref_Types...';
 CREATE TABLE HR.ref_Types (
@@ -337,6 +373,9 @@ CREATE TABLE HR.tbl_EmployeeSchedules (
     ValidFrom DATE NOT NULL,
     ValidTo DATE NULL,
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+	CreatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL,
+	UpdatedBy INT NULL,
     RowVersion ROWVERSION
 );
 
@@ -359,12 +398,14 @@ Create Table Hr.tbl_FinancialCertification(
 	CertificationID INT IDENTITY(1,1) NOT NULL,
 	RequestID INT NULL,						--tbl_contractRequest.RequestID
 	CertCode NVARCHAR(100) NOT NULL, 		-- CODIGO de certificación presupuestaria
-	CertNumber NVARCHAR(100) NULL,				-- NUMERO de certificación presupuestaria
+	CertNumber NVARCHAR(100) NULL,			-- NUMERO de certificación presupuestaria
 	budget NVARCHAR(100) NULL, 						-- Número de partida presupuestaria
 	CertBudgetDate DATETIME2 NULL,					-- Fecha de certificación presupuestaria           
     -- REMUNERACIÓN
 	rmu_hour DECIMAL(12,2) NULL,                 -- Remuneración por hora
-	rmu_con DECIMAL(12,2) NULL,   
+	rmu_con DECIMAL(12,2) NULL, 
+	filename NVARCHAR(150) NULL,   
+	filepath NVARCHAR(max) NULL,	
 	CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
 	CreatedBy INT NOT NULL,
 	UpdateAt DATETIME2 NULL, 
@@ -472,8 +513,10 @@ CREATE TABLE HR.tbl_Vacations (
     EmployeeID INT NOT NULL,
     StartDate DATE NOT NULL,
     EndDate DATE NOT NULL,
-    DaysGranted INT NOT NULL,
+    DaysGranted INT NOT NULL,	
     DaysTaken INT NOT NULL DEFAULT(0),
+	ApprovedBy INT NULL,
+	ApprovedAt DATETIME2 NULL,
     Status NVARCHAR(20) NOT NULL DEFAULT('Planned'),
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
     UpdatedAt DATETIME2 NULL,                         -- CAMBIADO A DATETIME2
@@ -484,12 +527,14 @@ CREATE TABLE HR.tbl_Permissions (
     PermissionID INT IDENTITY(1,1) NOT NULL,
     EmployeeID INT NOT NULL,
     PermissionTypeID INT NOT NULL,
-    StartDate DATE NOT NULL,
-    EndDate DATE NOT NULL,
+    StartDate DATETIME2 NOT NULL,
+    EndDate DATETIME2 NOT NULL,
     ChargedToVacation BIT NOT NULL DEFAULT(0),
+	HourTaken  DECIMAL(5,2) NULL	---SOLO CUANDO ES EL MISMO DIA 
     ApprovedBy INT NULL,
+	ApprovedAt DATETIME2 NULL,
     Justification NVARCHAR(MAX) NULL,
-    RequestDate DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
     Status NVARCHAR(20) NOT NULL DEFAULT('Pending'),
     VacationID INT NULL,
     RowVersion ROWVERSION
@@ -514,9 +559,9 @@ CREATE TABLE HR.tbl_PunchJustifications (
     EmployeeID INT NOT NULL,
     BossEmployeeID INT NOT NULL,
     JustificationTypeID INT NOT NULL,
-    StartDATETIME2 DATETIME2 NULL,                     -- CAMBIADO A DATETIME2
-    EndDATETIME2 DATETIME2 NULL,                       -- CAMBIADO A DATETIME2
-    JustificationDate DATE NULL,
+    StartDate DATETIME2 NULL,                     -- CAMBIADO A DATETIME2
+    EndDate DATETIME2 NULL,                       -- CAMBIADO A DATETIME2
+    JustificationDate DATETIME2 NULL,
     Reason NVARCHAR(500) NOT NULL,
     HoursRequested DECIMAL(4,2) NULL,
     Approved BIT NOT NULL DEFAULT(0),
@@ -537,9 +582,14 @@ CREATE TABLE HR.tbl_AttendanceCalculations (
     RegularMinutes INT NOT NULL DEFAULT(0),
     OvertimeMinutes INT NOT NULL DEFAULT(0),
     NightMinutes INT NOT NULL DEFAULT(0),
-    HolidayMinutes INT NOT NULL DEFAULT(0),
-    Status NVARCHAR(12) NOT NULL DEFAULT('Pending')
+    HolidayMinutes INT NOT NULL DEFAULT(0),,
+	RequiredMinutes INT NOT NULL CONSTRAINT DF_AttCalc_RequiredMinutes DEFAULT (0),
+	TardinessMin INT NOT NULL CONSTRAINT DF_AttCalc_TardinessMin DEFAULT (0),
+	AbsentMinutes INT NOT NULL CONSTRAINT DF_AttCalc_AbsentMinutes DEFAULT (0),
+	MinutesLate INT NOT NULL CONSTRAINT DF_AttCalc_MinutesLate DEFAULT (0)
 );
+
+
 
 -- 10. TABLAS DE HORAS EXTRA Y RECUPERACIÓN
 PRINT '10. Creando tablas de horas extra...';

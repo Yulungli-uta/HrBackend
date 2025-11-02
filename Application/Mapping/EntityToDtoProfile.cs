@@ -1,4 +1,8 @@
 using AutoMapper;
+using WsUtaSystem.Application.DTOs.VwAttendanceDay;
+using WsUtaSystem.Application.DTOs.VwEmployeeScheduleAtDate;
+using WsUtaSystem.Application.DTOs.VwLeaveWindows;
+using WsUtaSystem.Application.DTOs.VwPunchDay;
 using WsUtaSystem.Models;
 namespace WsUtaSystem.Application.Mapping;
 public class EntityToDtoProfile : Profile
@@ -164,6 +168,10 @@ public class EntityToDtoProfile : Profile
         CreateMap<DirectoryParameters, WsUtaSystem.Application.DTOs.DirectoryParameters.DirectoryParametersCreateDto>().ReverseMap();
         CreateMap<DirectoryParameters, WsUtaSystem.Application.DTOs.DirectoryParameters.DirectoryParametersDto>().ReverseMap();
         CreateMap<DirectoryParameters, WsUtaSystem.Application.DTOs.DirectoryParameters.DirectoryParametersUpdateDto>().ReverseMap();
+        CreateMap<VwEmployeeScheduleAtDate, VwEmployeeScheduleAtDateDto>();
+        CreateMap<VwPunchDay, VwPunchDayDto>();
+        CreateMap<VwLeaveWindows, VwLeaveWindowsDto>();
+        CreateMap<VwAttendanceDay, VwAttendanceDayDto>();
 
 
 

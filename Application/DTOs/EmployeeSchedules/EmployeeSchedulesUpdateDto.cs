@@ -8,4 +8,7 @@ public class EmployeeSchedulesUpdateDto
     public DateOnly ValidFrom { get; set; }
     public DateOnly ValidTo { get; set; }
     public DateTime CreatedAt { get; set; }
+    public int CreatedBy { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public int UpdatedBy { get; set; }
 }

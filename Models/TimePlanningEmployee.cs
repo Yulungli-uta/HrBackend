@@ -20,5 +20,6 @@
         //public string? EmployeeStatusName { get; set; }
         //public string? Department { get; set; }
         public TimePlanning? TimePlanning { get; set; }
+        public Employees? Employees { get; set; }
     }
 }
