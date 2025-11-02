@@ -872,7 +872,7 @@ BEGIN
          WHERE pl.PayrollID = p.PayrollID AND pl.LineType = 'Overtime') AS TotalHorasExtra
     FROM HR.tbl_Payroll p
     INNER JOIN HR.tbl_Employees e ON p.EmployeeID = e.EmployeeID
-    INNER JOIN HR.tbl_People per ON e.EmployeeID = per.PersonID
+    INNER JOIN HR.tbl_People per ON e.PersonID = per.PersonID
     INNER JOIN HR.tbl_Departments d ON e.DepartmentID = d.DepartmentID
     WHERE p.Period = @Period
       AND (@DepartmentID IS NULL OR e.DepartmentID = @DepartmentID)
@@ -906,7 +906,7 @@ BEGIN
         NULL AS PermissionStatus
     FROM HR.tbl_Vacations v
     INNER JOIN HR.tbl_Employees e ON v.EmployeeID = e.EmployeeID
-    INNER JOIN HR.tbl_People p ON e.EmployeeID = p.PersonID
+    INNER JOIN HR.tbl_People p ON e.PersonID = p.PersonID
     INNER JOIN HR.tbl_Departments d ON e.DepartmentID = d.DepartmentID
     WHERE (v.StartDate BETWEEN @StartDate AND @EndDate OR v.EndDate BETWEEN @StartDate AND @EndDate)
       AND (@DepartmentID IS NULL OR e.DepartmentID = @DepartmentID)
@@ -928,7 +928,7 @@ BEGIN
     FROM HR.tbl_Permissions pm
     INNER JOIN HR.tbl_PermissionTypes pt ON pm.PermissionTypeID = pt.TypeID
     INNER JOIN HR.tbl_Employees e ON pm.EmployeeID = e.EmployeeID
-    INNER JOIN HR.tbl_People p ON e.EmployeeID = p.PersonID
+    INNER JOIN HR.tbl_People p ON e.PersonID = p.PersonID
     INNER JOIN HR.tbl_Departments d ON e.DepartmentID = d.DepartmentID
     WHERE (pm.StartDate BETWEEN @StartDate AND @EndDate OR pm.EndDate BETWEEN @StartDate AND @EndDate)
       AND (@DepartmentID IS NULL OR e.DepartmentID = @DepartmentID)

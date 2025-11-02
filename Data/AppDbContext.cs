@@ -84,6 +84,12 @@ public class AppDbContext : DbContext
     public DbSet<Parameters> Parameters => Set<Parameters>();
     public DbSet<DirectoryParameters> DirectoryParameters => Set<DirectoryParameters>();
 
+    public DbSet<VwEmployeeScheduleAtDate> VwEmployeeScheduleAtDate { get; set; }
+    public DbSet<VwPunchDay> VwPunchDay { get; set; }
+    public DbSet<VwLeaveWindows> VwLeaveWindows { get; set; }
+    public DbSet<VwAttendanceDay> VwAttendanceDay { get; set; }
+
+
     protected override void OnModelCreating(ModelBuilder m)
     {
         const string HR = "HR";
@@ -507,9 +513,21 @@ public class AppDbContext : DbContext
          });
 
         m.Entity<VwEmployeeDetails>(e =>
-        {
-            e.HasNoKey(); // Por ser vista
+        {            
             e.ToView("vw_EmployeeDetails", "HR");
+            e.Property(e => e.EmployeeID).HasColumnName("EmployeeID");
+            e.Property(e => e.FirstName).HasColumnName("FirstName");
+            e.Property(e => e.LastName).HasColumnName("LastName");
+            e.Property(e => e.IDCard).HasColumnName("IDCard");
+            e.Property(e => e.Email).HasColumnName("Email");
+            e.Property(e => e.EmployeeType).HasColumnName("EmployeeType");
+            e.Property(e => e.ContractType).HasColumnName("ContractType");
+            e.Property(e => e.ScheduleID).HasColumnName("ScheduleID");
+            e.Property(e => e.Schedule).HasColumnName("Schedule");
+            e.Property(e => e.Department).HasColumnName("Department");
+            e.Property(e => e.BaseSalary).HasColumnName("BaseSalary");
+            e.Property(e => e.HireDate).HasColumnName("HireDate");
+            e.HasNoKey(); // Por ser vista
         });
 
         m.Entity<Job>(e => {
@@ -532,11 +550,37 @@ public class AppDbContext : DbContext
             e.ToTable("tbl_TimePlanningEmployees", HR);
             e.HasKey(x => x.PlanEmployeeID);
             e.Property(x => x.PlanEmployeeID).HasColumnName("PlanEmployeeID");
+            e.Property(x => x.PlanID).HasColumnName("PlanID");
+            e.Property(x => x.EmployeeID).HasColumnName("EmployeeID");
+           /* e.HasOne(e => e.TimePlanning)
+               .WithMany() // Ajusta según tu modelo
+               .HasForeignKey(e => e.PlanID)
+               .OnDelete(DeleteBehavior.Restrict);
+
+            // Configurar relación con Employees
+            e.HasOne(e => e.Employees)
+                   .WithMany() // Ajusta según tu modelo
+                   .HasForeignKey(e => e.EmployeeID)
+                   .OnDelete(DeleteBehavior.Restrict);*/
+           e.HasOne(e => e.TimePlanning)
+               .WithMany()
+               .HasForeignKey(e => e.PlanID)
+               .HasConstraintName("FK_TimePlanningEmployees_Plan")
+               .OnDelete(DeleteBehavior.Cascade);
+
+        // Relación con Employees
+           e.HasOne(e => e.Employees)
+               .WithMany()
+               .HasForeignKey(e => e.EmployeeID)
+               .HasConstraintName("FK_TimePlanningEmployees_Employee")
+               .OnDelete(DeleteBehavior.Restrict);
+
         });
         m.Entity<TimePlanningExecution>(e => {
             e.ToTable("tbl_TimePlanningExecution", HR);
             e.HasKey(x => x.ExecutionID);
             e.Property(x => x.ExecutionID).HasColumnName("ExecutionID");
+            e.Property(x => x.PlanEmployeeID).HasColumnName("PlanEmployeeID"); ;
         });
         m.Entity<Activity>(e => {
             e.ToTable("tbl_Activities", HR);
@@ -574,6 +618,9 @@ public class AppDbContext : DbContext
             e.ToTable("tbl_contractRequest", HR);
             e.HasKey(x => x.RequestId);
             e.Property(x => x.RequestId).HasColumnName("RequestID");
+            e.Property(x => x.CreatedBy).HasColumnName("CreatedBy");
+            e.Property(x => x.UpdatedAt).HasColumnName("UpdateAt");
+            e.Property(x => x.UpdatedBy).HasColumnName("UpdateBy");
         });
         m.Entity<FinancialCertification>(e => {
             e.ToTable("tbl_FinancialCertification", HR);
@@ -592,5 +639,10 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.DirectoryId);
             e.Property(x => x.DirectoryId).HasColumnName("DirectoryID");
         });
+        m.Entity<VwEmployeeScheduleAtDate>().HasNoKey().ToView("vw_EmployeeScheduleAtDate", "HR");
+        m.Entity<VwPunchDay>().HasNoKey().ToView("vw_PunchDay", "HR");
+        m.Entity<VwLeaveWindows>().HasNoKey().ToView("vw_LeaveWindows", "HR");
+        m.Entity<VwAttendanceDay>().HasNoKey().ToView("vw_AttendanceDay", "HR");
+
     }
 }

@@ -8,14 +8,17 @@ namespace WsUtaSystem.Application.DTOs.TimePlanningEmployee
         public int PlanID { get; set; }
         [Required(ErrorMessage = "El ID del empleado es requerido")]
         public int EmployeeID { get; set; }
-
+        public int? EmployeeStatusTypeID { get; set; }
         // Para Overtime
         [Range(0, 24, ErrorMessage = "Las horas asignadas deben estar entre 0 y 24")]
         public decimal? AssignedHours { get; set; }
-
+        
         // Para Recovery
         [Range(0, 1440, ErrorMessage = "Los minutos asignados deben estar entre 0 y 1440")]
-        public int? AssignedMinutes { get; set; }
+        public int? AssignedMinutes { get; set; }        
+        public decimal? ActualHours { get; set; } = 0;
+        public int? ActualMinutes { get; set; } = 0;
+
     }
 
     public class TimePlanningEmployeeUpdateDTO

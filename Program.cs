@@ -11,7 +11,9 @@ using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Services;
 using WsUtaSystem.Filters;
 using WsUtaSystem.Infrastructure.Common;
+using WsUtaSystem.Infrastructure.DependencyInjection;
 using WsUtaSystem.Infrastructure.Filters;
+using WsUtaSystem.Infrastructure.Jobs;
 using WsUtaSystem.Infrastructure.Repositories;
 using WsUtaSystem.Middleware;
 
@@ -243,7 +245,32 @@ builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDire
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IParametersService, WsUtaSystem.Application.Services.ParametersService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDirectoryParametersService, WsUtaSystem.Application.Services.DirectoryParametersService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFileManagementService, WsUtaSystem.Application.Services.FileManagementService>();
+// Vistas
+builder.Services.AddScoped<IVwEmployeeScheduleAtDateRepository, VwEmployeeScheduleAtDateRepository>();
+builder.Services.AddScoped<IVwEmployeeScheduleAtDateService, VwEmployeeScheduleAtDateService>();
+builder.Services.AddScoped<IVwPunchDayRepository, VwPunchDayRepository>();
+builder.Services.AddScoped<IVwPunchDayService, VwPunchDayService>();
+builder.Services.AddScoped<IVwLeaveWindowsRepository, VwLeaveWindowsRepository>();
+builder.Services.AddScoped<IVwLeaveWindowsService, VwLeaveWindowsService>();
+builder.Services.AddScoped<IVwAttendanceDayRepository, VwAttendanceDayRepository>();
+builder.Services.AddScoped<IVwAttendanceDayService, VwAttendanceDayService>();
 
+// Procedimientos Almacenados
+builder.Services.AddScoped<IAttendanceCalculationService, AttendanceCalculationService>();
+builder.Services.AddScoped<IJustificationsService, JustificationsService>();
+builder.Services.AddScoped<IRecoveryService, RecoveryService>();
+builder.Services.AddScoped<IOvertimePriceService, OvertimePriceService>();
+builder.Services.AddScoped<IPayrollDiscountsService, PayrollDiscountsService>();
+builder.Services.AddScoped<IPayrollSubsidiesService, PayrollSubsidiesService>();
+builder.Services.AddScoped<IEncryptionService, EncryptionService>();
+
+// Agregar Quartz.NET Jobs
+//DailyAttendanceCalculationJob 2:00 AM Calcula asistencia del día anterior HR.sp_Attendance_CalculateRange
+//DailyNightMinutesCalculationJob 3:00 AM  Calcula minutos nocturnos del día anterior HR.sp_Attendance_CalcNightMinutes
+//DailyJustificationsJob 4:00 AM Aplica justificaciones aprobadas HR.sp_Justifications_Apply 
+//DailyRecoveryJob 5:00 AM Aplica recuperaciones de tiempo HR.sp_Recovery_Apply
+
+builder.Services.AddQuartzJobs();
 
 
 

@@ -9,280 +9,331 @@ param(
   [Parameter(Mandatory=$true)]
   [string]$Name,
 
-  [string]$Props,          # "Type Prop,Type Prop2,int? X"
+  [string]$Props = "",          # "Type Prop,Type Prop2,int? X"
   [string]$Summary = "",
-  [string]$Command,        # para new-job: "Feature.CommandName"
+  [string]$Command = "",        # para new-job: "Feature.CommandName"
   [string]$Cron = "0 0 2 * * ?",   # Quartz cron (2:00 AM)
   [string]$TimeZone = "America/Guayaquil"
 )
 
 function Ensure-Dir($p) { if (!(Test-Path $p)) { New-Item -ItemType Directory -Force -Path $p | Out-Null } }
 
-$root = Split-Path -Parent $PSCommandPath
-$solutionRoot = Resolve-Path "$root\.."
-$app = Join-Path $solutionRoot "src\HrBackend.Application"
-$infra = Join-Path $solutionRoot "src\HrBackend.Infrastructure"
-$web = Join-Path $solutionRoot "src\HrBackend.WebApi"
+# Rutas base relativas al script
+$solutionRoot = Resolve-Path (Join-Path (Split-Path -Parent $PSCommandPath) "..")
+$app  = Join-Path $solutionRoot "src\HrBackend.Application"
+$infra= Join-Path $solutionRoot "src\HrBackend.Infrastructure"
+$web  = Join-Path $solutionRoot "src\HrBackend.WebApi"
 
 if (!(Test-Path $app) -or !(Test-Path $infra) -or !(Test-Path $web)) {
   Write-Error "No se encontró la estructura src/HrBackend.(Application|Infrastructure|WebApi). Ejecuta en la raíz del repo."
   exit 1
 }
 
-$nsApp   = "HrBackend.Application"
-$nsInfra = "HrBackend.Infrastructure"
-$nsWeb   = "HrBackend.WebApi"
+$NS_APP   = "HrBackend.Application"
+$NS_INFRA = "HrBackend.Infrastructure"
+$NS_WEB   = "HrBackend.WebApi"
 
 $FeaturePascal = $Feature
 $NamePascal = $Name
 
+# Helpers para plantillas
+function Fill-Template {
+  param($template, $map)
+  $out = $template
+  foreach ($k in $map.Keys) { $out = $out.Replace($k, [string]$map[$k]) }
+  return $out
+}
+
 switch ($Action) {
-# ===========================
+
+# =====================================================================
 # new-command
-# ===========================
+# =====================================================================
 'new-command' {
-  # Rutas destino
-  $featureDir = Join-Path $app "$FeaturePascal"
+  $featureDir  = Join-Path $app "$FeaturePascal"
   $commandsDir = Join-Path $featureDir "Commands"
   Ensure-Dir $commandsDir
+
   $endpointsDir = Join-Path $web "Endpoints"
   Ensure-Dir $endpointsDir
 
-  # Parse Props -> firma record/handler & mapping
-  $propList = @()
-  if ($Props) { $propList = $Props.Split(",") | ForEach-Object { $_.Trim() } }
-  $recordProps = if ($Props) { $Props } else { "" }
+  $recordProps = $Props
 
-  # Archivos
   $cmdFile = Join-Path $commandsDir "$($NamePascal)Command.cs"
   $endpointFile = Join-Path $endpointsDir "$($FeaturePascal)Endpoints.cs"
 
-  # ----- Command + Validator + Handler -----
-  $cmdContent = @"
+  # ----- TEMPLATE: Command + Validator + Handler -----
+  $cmdTpl = @'
 using FluentValidation;
 using MediatR;
-using $nsApp.Abstractions;
+using __NS_APP__.Abstractions;
 using System.Data;
 
-namespace $nsApp.$FeaturePascal.Commands;
+namespace __NS_APP__.__FEATURE__.Commands;
 
-public sealed record $($NamePascal)Command($recordProps) : IRequest<Unit>;
+public sealed record __NAME__Command(__RECORD_PROPS__) : IRequest<Unit>;
 
-public sealed class $($NamePascal)Validator : AbstractValidator<$($NamePascal)Command>
+public sealed class __NAME__Validator : AbstractValidator<__NAME__Command>
 {
-    public $($NamePascal)Validator()
+    public __NAME__Validator()
     {
-        // TODO: Reglas mínimas
+        // TODO: Reglas de validación
+        // Example:
         // RuleFor(x => x.From).LessThanOrEqualTo(x => x.To);
     }
 }
 
-public sealed class $($NamePascal)Handler(ISqlExecutor db) : IRequestHandler<$($NamePascal)Command, Unit>
+public sealed class __NAME__Handler(ISqlExecutor db) : IRequestHandler<__NAME__Command, Unit>
 {
-    public async Task<Unit> Handle($($NamePascal)Command req, CancellationToken ct)
+    public async Task<Unit> Handle(__NAME__Command req, CancellationToken ct)
     {
-        // TODO: Invocar SPs necesarios (ejemplo)
-        // await db.ExecSPAsync("HR.sp_Attendance_CalculateRange", cmd =>
-        // {
-        //     var p1 = cmd.CreateParameter(); p1.ParameterName="@FromDate"; p1.Value=req.From.ToDateTime(TimeOnly.MinValue); cmd.Parameters.Add(p1);
-        //     var p2 = cmd.CreateParameter(); p2.ParameterName="@ToDate";   p2.Value=req.To.ToDateTime(TimeOnly.MinValue);   cmd.Parameters.Add(p2);
-        //     if (req.EmployeeId is int id) { var p3=cmd.CreateParameter(); p3.ParameterName="@EmployeeID"; p3.Value=id; cmd.Parameters.Add(p3); }
-        // }, ct);
-
+        // TODO: Invocar tus SPs aquí con db.ExecSPAsync(...)
         return Unit.Value;
     }
 }
-"@
+'@
 
+  $cmdContent = Fill-Template $cmdTpl @{
+    '__NS_APP__'       = $NS_APP
+    '__FEATURE__'      = $FeaturePascal
+    '__NAME__'         = $NamePascal
+    '__RECORD_PROPS__' = $recordProps
+  }
   Set-Content -Encoding UTF8 $cmdFile $cmdContent
-  Write-Host "✔ Command/Validator/Handler: $cmdFile"
+  Write-Host "✔ Creado: $cmdFile"
 
-  # ----- Endpoint Carter (append por feature) -----
-  $endpointExists = Test-Path $endpointFile
-  if (-not $endpointExists) {
-    $moduleContent = @"
+  # ----- TEMPLATE: Endpoint Carter (crea o añade ruta) -----
+  $endpointHeaderTpl = @'
 using Carter;
 using MediatR;
-using $nsApp.$FeaturePascal.Commands;
+using __NS_APP__.__FEATURE__.Commands;
 
-namespace $nsWeb.Endpoints;
+namespace __NS_WEB__.Endpoints;
 
-public sealed class $($FeaturePascal)Endpoints : ICarterModule
+public sealed class __FEATURE__Endpoints : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        // $Summary
-        app.MapPost("/$($FeaturePascal.ToLower())/$($NamePascal.ToLower())", 
-            async (IMediator mediator, [$([string]::IsNullOrEmpty($Props) ? "" : "AsParameters")] $($NamePascal)Command cmd, CancellationToken ct) =>
+        // __SUMMARY__
+        app.MapPost("/__feature_l__/__name_l__", async (IMediator mediator, __NAME__Command cmd, CancellationToken ct) =>
         {
             await mediator.Send(cmd, ct);
-            return Results.Ok(new { message = "$($NamePascal) ok" });
+            return Results.Ok(new { message = "__NAME__ ok" });
         })
-        .WithSummary("$($Summary)")
-        .WithName("$($FeaturePascal)_$($NamePascal)");
+        .WithSummary("__SUMMARY__")
+        .WithName("__FEATURE____NAME__");
     }
 }
-"@
-    Set-Content -Encoding UTF8 $endpointFile $moduleContent
-    Write-Host "✔ Endpoint Carter creado: $endpointFile"
-  }
-  else {
-    # Anexar otra ruta en el mismo módulo
-    $append = @"
-// $Summary
-app.MapPost("/$($FeaturePascal.ToLower())/$($NamePascal.ToLower())", 
-    async (IMediator mediator, [$([string]::IsNullOrEmpty($Props) ? "" : "AsParameters")] $($NamePascal)Command cmd, CancellationToken ct) =>
+'@
+
+  $endpointAppendTpl = @'
+// __SUMMARY__
+app.MapPost("/__feature_l__/__name_l__", async (IMediator mediator, __NAME__Command cmd, CancellationToken ct) =>
 {
     await mediator.Send(cmd, ct);
-    return Results.Ok(new { message = "$($NamePascal) ok" });
+    return Results.Ok(new { message = "__NAME__ ok" });
 })
-.WithSummary("$($Summary)")
-.WithName("$($FeaturePascal)_$($NamePascal)");
-"
+.WithSummary("__SUMMARY__")
+.WithName("__FEATURE____NAME__");
+'@
+
+  if (!(Test-Path $endpointFile)) {
+    $endpointContent = Fill-Template $endpointHeaderTpl @{
+      '__NS_APP__'     = $NS_APP
+      '__NS_WEB__'     = $NS_WEB
+      '__FEATURE__'    = $FeaturePascal
+      '__feature_l__'  = $FeaturePascal.ToLower()
+      '__NAME__'       = $NamePascal
+      '__name_l__'     = $NamePascal.ToLower()
+      '__SUMMARY__'    = $Summary
+    }
+    Set-Content -Encoding UTF8 $endpointFile $endpointContent
+    Write-Host "✔ Creado: $endpointFile"
+  } else {
+    $append = Fill-Template $endpointAppendTpl @{
+      '__FEATURE__'    = $FeaturePascal
+      '__feature_l__'  = $FeaturePascal.ToLower()
+      '__NAME__'       = $NamePascal
+      '__name_l__'     = $NamePascal.ToLower()
+      '__SUMMARY__'    = $Summary
+    }
     Add-Content -Encoding UTF8 $endpointFile $append
-    Write-Host "✔ Endpoint Carter actualizado: $endpointFile"
+    Write-Host "✔ Actualizado: $endpointFile (ruta añadida)"
   }
 }
-# ===========================
-# new-query (similar a command, pero IRequest<T>)
-# ===========================
+# =====================================================================
+# new-query
+# =====================================================================
 'new-query' {
-  $featureDir = Join-Path $app "$FeaturePascal"
-  $queriesDir = Join-Path $featureDir "Queries"
+  $featureDir  = Join-Path $app "$FeaturePascal"
+  $queriesDir  = Join-Path $featureDir "Queries"
   Ensure-Dir $queriesDir
+
   $endpointsDir = Join-Path $web "Endpoints"
   Ensure-Dir $endpointsDir
 
-  $recordProps = if ($Props) { $Props } else { "" }
-  $dtoName = "$($NamePascal)Dto"
+  $recordProps = $Props
+  $dtoName = "${NamePascal}Dto"
 
   $queryFile = Join-Path $queriesDir "$($NamePascal)Query.cs"
   $endpointFile = Join-Path $endpointsDir "$($FeaturePascal)Endpoints.cs"
 
-  $qContent = @"
+  $queryTpl = @'
 using FluentValidation;
 using MediatR;
-using $nsApp.Abstractions;
+using __NS_APP__.Abstractions;
 using System.Data;
 
-namespace $nsApp.$FeaturePascal.Queries;
+namespace __NS_APP__.__FEATURE__.Queries;
 
-public sealed record $($NamePascal)Query($recordProps) : IRequest<IReadOnlyList<$dtoName>>;
-public sealed record $dtoName();
+public sealed record __NAME__Query(__RECORD_PROPS__) : IRequest<IReadOnlyList<__DTO__>>;
+public sealed record __DTO__;
 
-public sealed class $($NamePascal)Validator : AbstractValidator<$($NamePascal)Query>
+public sealed class __NAME__Validator : AbstractValidator<__NAME__Query>
 {
-    public $($NamePascal)Validator()
+    public __NAME__Validator()
     {
         // TODO: Reglas
     }
 }
 
-public sealed class $($NamePascal)Handler(ISqlExecutor db) : IRequestHandler<$($NamePascal)Query, IReadOnlyList<$dtoName>>
+public sealed class __NAME__Handler(ISqlExecutor db) : IRequestHandler<__NAME__Query, IReadOnlyList<__DTO__>>
 {
-    public async Task<IReadOnlyList<$dtoName>> Handle($($NamePascal)Query req, CancellationToken ct)
+    public async Task<IReadOnlyList<__DTO__>> Handle(__NAME__Query req, CancellationToken ct)
     {
-        // TODO: Ejecutar SELECT / SP y mapear a DTO
-        return Array.Empty<$dtoName>();
+        // TODO: SELECT/SP -> mapear a DTO
+        return Array.Empty<__DTO__>();
     }
 }
-"
-  Set-Content -Encoding UTF8 $queryFile $qContent
-  Write-Host "✔ Query + DTO: $queryFile"
+'@
 
-  if (-not (Test-Path $endpointFile)) {
-    $moduleContent = @"
+  $qContent = Fill-Template $queryTpl @{
+    '__NS_APP__'       = $NS_APP
+    '__FEATURE__'      = $FeaturePascal
+    '__NAME__'         = $NamePascal
+    '__DTO__'          = $dtoName
+    '__RECORD_PROPS__' = $recordProps
+  }
+  Set-Content -Encoding UTF8 $queryFile $qContent
+  Write-Host "✔ Creado: $queryFile"
+
+  # ----- TEMPLATE: Endpoint Carter (crea o añade ruta) -----
+  $endpointHeaderTpl = @'
 using Carter;
 using MediatR;
-using $nsApp.$FeaturePascal.Queries;
+using __NS_APP__.__FEATURE__.Queries;
 
-namespace $nsWeb.Endpoints;
+namespace __NS_WEB__.Endpoints;
 
-public sealed class $($FeaturePascal)Endpoints : ICarterModule
+public sealed class __FEATURE__Endpoints : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        app.MapGet("/$($FeaturePascal.ToLower())/$($NamePascal.ToLower())", 
-            async (IMediator mediator, [$([string]::IsNullOrEmpty($Props) ? "" : "AsParameters")] $($NamePascal)Query query, CancellationToken ct) =>
+        app.MapGet("/__feature_l__/__name_l__", async (IMediator mediator, [AsParameters] __NAME__Query query, CancellationToken ct) =>
         {
             var data = await mediator.Send(query, ct);
             return Results.Ok(data);
         })
-        .WithSummary("$($Summary)")
-        .WithName("$($FeaturePascal)_$($NamePascal)_Query");
+        .WithSummary("__SUMMARY__")
+        .WithName("__FEATURE____NAME___Query");
     }
 }
-"
-    Set-Content -Encoding UTF8 $endpointFile $moduleContent
-    Write-Host "✔ Endpoint Carter creado: $endpointFile"
-  } else {
-    $append = @"
-app.MapGet("/$($FeaturePascal.ToLower())/$($NamePascal.ToLower())", 
-    async (IMediator mediator, [$([string]::IsNullOrEmpty($Props) ? "" : "AsParameters")] $($NamePascal)Query query, CancellationToken ct) =>
+'@
+
+  $endpointAppendTpl = @'
+app.MapGet("/__feature_l__/__name_l__", async (IMediator mediator, [AsParameters] __NAME__Query query, CancellationToken ct) =>
 {
     var data = await mediator.Send(query, ct);
     return Results.Ok(data);
 })
-.WithSummary("$($Summary)")
-.WithName("$($FeaturePascal)_$($NamePascal)_Query");
-"
+.WithSummary("__SUMMARY__")
+.WithName("__FEATURE____NAME___Query");
+'@
+
+  if (!(Test-Path $endpointFile)) {
+    $endpointContent = Fill-Template $endpointHeaderTpl @{
+      '__NS_APP__'     = $NS_APP
+      '__NS_WEB__'     = $NS_WEB
+      '__FEATURE__'    = $FeaturePascal
+      '__feature_l__'  = $FeaturePascal.ToLower()
+      '__NAME__'       = $NamePascal
+      '__name_l__'     = $NamePascal.ToLower()
+      '__SUMMARY__'    = $Summary
+    }
+    Set-Content -Encoding UTF8 $endpointFile $endpointContent
+    Write-Host "✔ Creado: $endpointFile"
+  } else {
+    $append = Fill-Template $endpointAppendTpl @{
+      '__FEATURE__'    = $FeaturePascal
+      '__feature_l__'  = $FeaturePascal.ToLower()
+      '__NAME__'       = $NamePascal
+      '__name_l__'     = $NamePascal.ToLower()
+      '__SUMMARY__'    = $Summary
+    }
     Add-Content -Encoding UTF8 $endpointFile $append
-    Write-Host "✔ Endpoint Carter actualizado: $endpointFile"
+    Write-Host "✔ Actualizado: $endpointFile (ruta añadida)"
   }
 }
-# ===========================
-# new-job (Quartz que dispara un Command)
-# ===========================
+# =====================================================================
+# new-job
+# =====================================================================
 'new-job' {
-  if (-not $Command) {
+  if ([string]::IsNullOrWhiteSpace($Command)) {
     Write-Error "-Command es requerido (formato Feature.CommandName)"
     exit 1
   }
-
   $parts = $Command.Split(".")
   if ($parts.Count -ne 2) {
     Write-Error "-Command debe ser 'Feature.CommandName'"
     exit 1
   }
   $cmdFeature = $parts[0]
-  $cmdName = $parts[1]
+  $cmdName    = $parts[1]
 
   $jobsDir = Join-Path $infra "Jobs"
   Ensure-Dir $jobsDir
 
-  $jobFile = Join-Path $jobsDir "$($NamePascal)Job.cs"
+  $jobFile  = Join-Path $jobsDir "$($NamePascal)Job.cs"
   $jobClass = "$($NamePascal)Job"
 
-  $jobContent = @"
+  $jobTpl = @'
 using MediatR;
 using Quartz;
-using $nsApp.$cmdFeature.Commands;
+using __NS_APP__.__CMDFEATURE__.Commands;
 
-namespace $nsInfra.Jobs;
+namespace __NS_INFRA__.Jobs;
 
 [DisallowConcurrentExecution]
-public sealed class $jobClass(IMediator mediator) : IJob
+public sealed class __JOBCLASS__(IMediator mediator) : IJob
 {
     public async Task Execute(IJobExecutionContext ctx)
     {
-        var tzId = ctx.MergedJobDataMap.GetString(""TimeZone"") ?? ""$TimeZone"";
+        var tzId = ctx.MergedJobDataMap.GetString("TimeZone") ?? "__TIMEZONE__";
         var tz   = TimeZoneInfo.FindSystemTimeZoneById(tzId);
         var now  = TimeZoneInfo.ConvertTime(DateTime.UtcNow, tz);
 
-        // TODO: Ajustar parámetros reales del Command
-        var cmd = new $cmdNameCommand();
+        // TODO: Ajustar parámetros del Command real
+        var cmd = new __CMDNAME__Command();
 
         await mediator.Send(cmd, ctx.CancellationToken);
     }
 }
-"
-  Set-Content -Encoding UTF8 $jobFile $jobContent
-  Write-Host "✔ Job Quartz: $jobFile"
+'@
 
-  # Instrucciones para agregar el trigger (una sola vez en Infrastructure.DependencyInjection)
+  $jobContent = Fill-Template $jobTpl @{
+    '__NS_APP__'     = $NS_APP
+    '__NS_INFRA__'   = $NS_INFRA
+    '__CMDFEATURE__' = $cmdFeature
+    '__JOBCLASS__'   = $jobClass
+    '__TIMEZONE__'   = $TimeZone
+    '__CMDNAME__'    = $cmdName
+  }
+  Set-Content -Encoding UTF8 $jobFile $jobContent
+  Write-Host "✔ Creado: $jobFile"
+
   Write-Host ""
-  Write-Host "🔧 Agrega este bloque en Infrastructure.DependencyInjection (dentro de services.AddQuartz):"
-  Write-Host "--------------------------------------------------------------------------"
+  Write-Host "🔧 Pega este bloque en tu configuración de Quartz (Infrastructure.DependencyInjection) dentro de AddQuartz:"
+  Write-Host "--------------------------------------------------------------------------------"
   Write-Host @"
     var $($NamePascal.ToLower())Key = new JobKey(""$jobClass"");
     q.AddJob<$jobClass>(o => o.WithIdentity($($NamePascal.ToLower())Key));
@@ -292,6 +343,6 @@ public sealed class $jobClass(IMediator mediator) : IJob
             .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(""$TimeZone"")))
         .UsingJobData(""TimeZone"", ""$TimeZone""));
 "@
-  Write-Host "--------------------------------------------------------------------------"
+  Write-Host "--------------------------------------------------------------------------------"
 }
 }

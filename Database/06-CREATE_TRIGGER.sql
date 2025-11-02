@@ -191,13 +191,14 @@ BEGIN
     IF EXISTS (
         SELECT 1
         FROM inserted i
-        CROSS APPLY (
-            SELECT TOP 1 p.PunchTime
+        WHERE EXISTS (
+            SELECT 1
             FROM HR.tbl_AttendancePunches p
             WHERE p.EmployeeID = i.EmployeeID
-            ORDER BY p.PunchTime DESC
-        ) prev
-        WHERE DATEDIFF(MINUTE, prev.PunchTime, i.PunchTime) < 5
+              AND p.PunchTime < i.PunchTime
+              AND DATEDIFF(MINUTE, p.PunchTime, i.PunchTime) < 5
+              AND p.PunchID NOT IN (SELECT PunchID FROM inserted)  -- Clave: excluir los nuevos
+        )
     )
     BEGIN
         RAISERROR('ERROR: La diferencia entre marcaciones debe ser al menos de 5 minutos.', 16, 1);
