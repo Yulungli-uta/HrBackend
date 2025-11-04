@@ -272,12 +272,15 @@ builder.Services.AddScoped<IEncryptionService, EncryptionService>();
 
 builder.Services.AddQuartzJobs();
 
-
-
+// ===== Configuración de Autenticación JWT =====
+builder.Services.AddMemoryCache(); // Para caching de tokens validados
+builder.Services.AddHttpClient(); // Para llamadas HTTP al servicio de autenticación
+builder.Services.AddScoped<WsUtaSystem.Infrastructure.Services.ITokenValidationService, WsUtaSystem.Infrastructure.Services.TokenValidationService>();
 
 var app = builder.Build();
 
 app.UseCors(corsName);
+app.UseMiddleware<WsUtaSystem.Middleware.JwtAuthenticationMiddleware>(); // Validación JWT
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
 // Agrupar todos los controladores bajo el prefijo "api/v1/rh/"
