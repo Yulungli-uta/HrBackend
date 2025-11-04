@@ -126,7 +126,8 @@ public class TokenValidationService : ITokenValidationService
 
                 var apiResponse = JsonSerializer.Deserialize<ApiResponse>(content, new JsonSerializerOptions
                 {
-                    PropertyNameCaseInsensitive = true
+                    PropertyNameCaseInsensitive = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
                 });
 
                 if (apiResponse?.Success == true && apiResponse.Data != null)
