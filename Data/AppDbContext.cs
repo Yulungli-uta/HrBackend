@@ -522,6 +522,7 @@ public class AppDbContext : DbContext
             e.Property(e => e.Email).HasColumnName("Email");
             e.Property(e => e.EmployeeType).HasColumnName("EmployeeType");
             e.Property(e => e.ContractType).HasColumnName("ContractType");
+            e.Property(e => e.ImmediateBossID).HasColumnName("ImmediateBossID");
             e.Property(e => e.ScheduleID).HasColumnName("ScheduleID");
             e.Property(e => e.Schedule).HasColumnName("Schedule");
             e.Property(e => e.Department).HasColumnName("Department");
@@ -628,6 +629,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.CertificationId).HasColumnName("CertificationID");
             e.Property(x => x.RmuCon).HasColumnName("rmu_con");
             e.Property(x => x.RmuHour).HasColumnName("rmu_hour");
+            e.Property(x => x.RequestId).HasColumnName("RequestID");
         });
         m.Entity<Parameters>(e => {
             e.ToTable("TBL_PARAMETERS", HR);

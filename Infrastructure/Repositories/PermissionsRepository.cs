@@ -16,4 +16,12 @@ public class PermissionsRepository : ServiceAwareEfRepository<Permissions, int>,
                 .Where(rt => rt.EmployeeId == EmployeeId)
                 .ToListAsync(ct);
     }
+
+    public async Task<IEnumerable<Permissions>> GetByImmediateBossId(int immediateBossId, CancellationToken ct)
+    {
+        return await _db.Set<Permissions>()
+                .Include(v => v.Employee) // Incluir la relación con Employee
+                .Where(v => v.Employee.ImmediateBossId == immediateBossId)
+                .ToListAsync(ct);
+    }
 }

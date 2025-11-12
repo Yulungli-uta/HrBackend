@@ -40,6 +40,15 @@ public class VacationsController : ControllerBase
         //return e is null ? NotFound() : Ok(_mapper.Map<VacationsDto>(e));
     }
 
+    [HttpGet("bossId/{employeeId:int}")]
+    public async Task<IActionResult> GetByImmediateBossId([FromRoute] int employeeId, CancellationToken ct)
+    {
+        var e = await _svc.GetByImmediateBossId(employeeId, ct);
+        return e is null ? NotFound() : Ok(_mapper.Map<List<VacationsDto>>(e));
+        //return e is null ? NotFound() : Ok(_mapper.Map<VacationsDto>(e));
+    }
+
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] VacationsCreateDto dto, CancellationToken ct)

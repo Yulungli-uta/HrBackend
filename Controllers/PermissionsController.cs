@@ -39,6 +39,13 @@ public class PermissionsController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<List<PermissionsDto>>(e));
     }
 
+    [HttpGet("bossId/{employeeId:int}")]
+    public async Task<IActionResult> GetByImmediateBossId([FromRoute] int employeeId, CancellationToken ct)
+    {
+        var e = await _svc.GetByImmediateBossId(employeeId, ct);
+        return e is null ? NotFound() : Ok(_mapper.Map<List<PermissionsDto>>(e));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] PermissionsCreateDto dto, CancellationToken ct)

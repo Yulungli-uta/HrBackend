@@ -10,7 +10,7 @@ namespace WsUtaSystem.Controllers;
 
 
 [ApiController]
-[Route("cv/financial-certification")]
+[Route("financial-certification")]
 public class FinancialCertificationController : ControllerBase
 {
     private readonly IFinancialCertificationService _svc;

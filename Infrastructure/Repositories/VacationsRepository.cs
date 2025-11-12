@@ -16,4 +16,12 @@ public class VacationsRepository : ServiceAwareEfRepository<Vacations, int>, IVa
                 .Where(rt => rt.EmployeeId == EmployeeId)
                 .ToListAsync(ct);
     }
+
+    public async Task<IEnumerable<Vacations>> GetByImmediateBossId(int immediateBossId, CancellationToken ct)
+    {
+        return await _db.Set<Vacations>()
+                .Include(v => v.Employee) // Incluir la relación con Employee
+                .Where(v => v.Employee.ImmediateBossId == immediateBossId)
+                .ToListAsync(ct);
+    }
 }

@@ -38,6 +38,7 @@ public class FileManagementController : ControllerBase
         [FromForm] FileUploadRequestDto form,
         CancellationToken ct)
     {
+        Console.WriteLine("********** FileManagementController - UploadFile - Received upload request for DirectoryCode: " + form.DirectoryCode);
         if (form.File is null || form.File.Length == 0)
         {
             return BadRequest(new { success = false, message = "No file uploaded." });

@@ -582,7 +582,7 @@ CREATE TABLE HR.tbl_AttendanceCalculations (
     RegularMinutes INT NOT NULL DEFAULT(0),
     OvertimeMinutes INT NOT NULL DEFAULT(0),
     NightMinutes INT NOT NULL DEFAULT(0),
-    HolidayMinutes INT NOT NULL DEFAULT(0),,
+    HolidayMinutes INT NOT NULL DEFAULT(0),
 	RequiredMinutes INT NOT NULL CONSTRAINT DF_AttCalc_RequiredMinutes DEFAULT (0),
 	TardinessMin INT NOT NULL CONSTRAINT DF_AttCalc_TardinessMin DEFAULT (0),
 	AbsentMinutes INT NOT NULL CONSTRAINT DF_AttCalc_AbsentMinutes DEFAULT (0),
@@ -599,7 +599,7 @@ CREATE TABLE HR.tbl_Overtime (
     WorkDate DATE NOT NULL,
     OvertimeType NVARCHAR(50) NOT NULL,
     Hours DECIMAL(5,2) NOT NULL,
-    Status NVARCHAR(20) NOT NULL DEFAULT('Planned'),
+    Status NVARCHAR(20) NOT NULL DEFAULT('EXECUTED'),
     ApprovedBy INT NULL,
     SecondApprover INT NULL,
     Factor DECIMAL(5,2) NOT NULL,
@@ -688,6 +688,43 @@ CREATE TABLE HR.tbl_TimePlanningExecution (
     Comments NVARCHAR(500) NULL,
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
 );
+
+-- =========================================================
+-- TABLA: Balance simple por empleado (2 campos separados)
+-- =========================================================
+IF OBJECT_ID('HR.tbl_TimeBalances','U') IS NULL
+BEGIN
+  CREATE TABLE HR.tbl_TimeBalances (
+    EmployeeID           INT          NOT NULL PRIMARY KEY,
+    VacationAvailableMin INT          NOT NULL DEFAULT(0), --SALDO DE VACACIONES 
+    RecoveryPendingMin   INT          NOT NULL DEFAULT(0),	--SALDO A RECUPERAR
+    LastUpdated          DATETIME2	 NOT NULL DEFAULT(GETDATE()),
+    RowVersion           ROWVERSION   NOT NULL
+  );
+  CREATE INDEX IX_TimeBalances_LastUpdated ON HR.tbl_TimeBalances(LastUpdated);
+END
+GO
+
+-- =========================================================
+-- TABLA: Movimientos (auditoría)
+--  - Con clave fuente única para idempotencia
+-- =========================================================
+IF OBJECT_ID('HR.tbl_TimeBalanceMovements','U') IS NULL
+BEGIN
+  CREATE TABLE HR.tbl_TimeBalanceMovements (
+    MovementID        INT       IDENTITY(1,1) PRIMARY KEY,
+    EmployeeID        INT          NOT NULL,
+    DeltaVacationMin  INT          NOT NULL DEFAULT(0),   --S
+    DeltaRecoveryMin  INT          NOT NULL DEFAULT(0),
+    MovementAt        DATETIME2 NOT NULL DEFAULT(GETDATE()),
+    SourceModule      NVARCHAR(50)  NULL,        -- 'VACATION','RECOVERY','RECALC','MANUAL'
+    SourceTable       NVARCHAR(128) NULL,        -- 'VACATION', 'ATTENDANCE', 'LOGS', etc.
+    SourceID          NVARCHAR(128) NULL,        -- clave idempotente (p. ej. '202510' o 'RECALC|2025-10-01|2025-10-31')
+    PerformedByEmpID  INT          NULL,
+    Note              NVARCHAR(400) NULL
+  );
+END
+GO
 
 -- 12. TABLAS DE MOVIMIENTOS Y SUBROGACIONES
 PRINT '12. Creando tablas de movimientos...';
@@ -936,3 +973,5 @@ CREATE TABLE HR.tbl_Books (
 
 PRINT 'TODAS LAS TABLAS CREADAS EXITOSAMENTE CON FECHAS LOCALES.';
 GO
+
+
