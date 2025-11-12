@@ -21,7 +21,7 @@ public class TokenValidationResult
 public class ValidateTokenResponse
 {
     public bool IsValid { get; set; }
-    public int? UserId { get; set; }
+    public string? UserId { get; set; }
     public string? Email { get; set; }
     public string? DisplayName { get; set; }
     public List<string>? Roles { get; set; }
@@ -73,6 +73,7 @@ public class TokenValidationService : ITokenValidationService
 
     public async Task<TokenValidationResult> ValidateTokenAsync(string token)
     {
+        //Console.WriteLine($"**********valor del token : {token}");
         if (string.IsNullOrWhiteSpace(token))
         {
             if (_enableLogging)
@@ -84,7 +85,7 @@ public class TokenValidationService : ITokenValidationService
                 Message = "Token no proporcionado"
             };
         }
-
+        //Console.WriteLine("**********paso la validacion del token nulo o vacio");
         // Verificar cache si está habilitado
         if (_enableCaching)
         {
@@ -132,6 +133,7 @@ public class TokenValidationService : ITokenValidationService
 
                 if (apiResponse?.Success == true && apiResponse.Data != null)
                 {
+                    //Console.WriteLine($"**********paso la validacion del apiResponse {apiResponse} ");
                     var result = new TokenValidationResult
                     {
                         IsValid = apiResponse.Data.IsValid,
@@ -140,6 +142,12 @@ public class TokenValidationService : ITokenValidationService
                         Roles = apiResponse.Data.Roles ?? new List<string>(),
                         Message = apiResponse.Data.Message
                     };
+
+                    Console.WriteLine("******** apiResponse ********");
+                    Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions
+                    {
+                        WriteIndented = true
+                    }));
 
                     // Guardar en cache si está habilitado y el token es válido
                     if (_enableCaching && result.IsValid)

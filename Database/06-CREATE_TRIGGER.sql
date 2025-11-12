@@ -164,7 +164,7 @@ GO
 PRINT '2. Creando HR.trg_Punch_Validations...';
 IF OBJECT_ID('HR.trg_Punch_Validations','TR') IS NOT NULL DROP TRIGGER HR.trg_Punch_Validations;
 GO
-CREATE TRIGGER HR.trg_Punch_Validations
+CREATE OR ALTER TRIGGER HR.trg_Punch_Validations
 ON HR.tbl_AttendancePunches
 INSTEAD OF INSERT
 AS
@@ -175,15 +175,43 @@ BEGIN
     DECLARE @OutputTable TABLE (PunchId INT);
 
     -- 1. VALIDACIÓN: Empleado no puede picar durante vacaciones
-    IF EXISTS (
-        SELECT 1
-        FROM inserted i
-        INNER JOIN HR.tbl_Vacations v ON v.EmployeeID = i.EmployeeID
-        WHERE v.Status IN ('InProgress')
-          AND CAST(i.PunchTime AS DATE) BETWEEN v.StartDate AND v.EndDate
-    )
+    -- IF EXISTS (
+        -- /* SELECT 1
+        -- FROM inserted i
+        -- INNER JOIN HR.tbl_Vacations v ON v.EmployeeID = i.EmployeeID
+        -- WHERE v.Status IN ('InProgress')
+          -- AND CAST(i.PunchTime AS DATE) BETWEEN v.StartDate AND v.EndDate */
+		-- SELECT 1
+        -- FROM inserted i
+        -- INNER JOIN HR.tbl_Vacations v ON v.EmployeeID = i.EmployeeID
+        -- WHERE v.Status = 'InProgress'
+          -- AND CAST(i.PunchTime AS DATE) >= v.StartDate  -- La picada es posterior o igual al inicio
+          -- AND CAST(i.PunchTime AS DATE) <= v.EndDate    -- La picada es anterior o igual al fin
+          -- AND CAST(GETDATE() AS DATE) >= v.StartDate    -- IMPORTANTE: Hoy debe estar en el rango
+          -- AND CAST(GETDATE() AS DATE) <= v.EndDate
+    -- )
+    -- BEGIN
+        -- RAISERROR('ERROR: El empleado está de vacaciones - no se permiten marcaciones.' + STRING_AGG(CONVERT(varchar(20), PunchTime, 120), 16, 1);
+        -- RETURN;
+    -- END
+	DECLARE @ErrorMsg NVARCHAR(500);
+    
+    SELECT TOP 1 @ErrorMsg = 
+        'ERROR: El empleado '+ i.EmployeeID + ' está de vacaciones del ' + 
+        CONVERT(VARCHAR(10), v.StartDate, 103) + ' al ' + 
+        CONVERT(VARCHAR(10), v.EndDate, 103) + 
+        '. No se permiten marcaciones durante este período.'
+    FROM inserted i
+    INNER JOIN HR.tbl_Vacations v ON v.EmployeeID = i.EmployeeID
+    WHERE v.Status = 'InProgress'
+      AND CAST(i.PunchTime AS DATE) >= v.StartDate
+      AND CAST(i.PunchTime AS DATE) <= v.EndDate
+      AND CAST(GETDATE() AS DATE) >= v.StartDate
+      AND CAST(GETDATE() AS DATE) <= v.EndDate;
+
+    IF @ErrorMsg IS NOT NULL
     BEGIN
-        RAISERROR('ERROR: El empleado está de vacaciones - no se permiten marcaciones.', 16, 1);
+        RAISERROR(@ErrorMsg, 16, 1);
         RETURN;
     END
 

@@ -3,10 +3,13 @@
 //using System.ComponentModel.DataAnnotations.Schema;
 //using Microsoft.EntityFrameworkCore;
 
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace WsUtaSystem.Models;
 //[Table("tbl_PunchJustifications", Schema = "HR")]
 public class PunchJustifications
 {
+    [Column("PunchJustID")]
     public int PunchJustId { get; set; }    
     public int EmployeeId { get; set; }
     public int BossEmployeeId { get; set; }

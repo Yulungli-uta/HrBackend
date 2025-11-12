@@ -30,6 +30,13 @@ public class PunchJustificationsController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<PunchJustificationsDto>(e));
     }
 
+    [HttpGet("bossId/{BossEmployeeId:int}")]
+    public async Task<IActionResult> GetByBossEmployeeId([FromRoute] int BossEmployeeId, CancellationToken ct)
+    {
+        var e = await _svc.GetByBossEmployeeId(BossEmployeeId, ct);
+        return e is null ? NotFound() : Ok(_mapper.Map<PunchJustificationsDto>(e));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] PunchJustificationsCreateDto dto, CancellationToken ct)

@@ -17,4 +17,9 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
         return await _repository.GetByEmployeeId(EmployeeId, ct);
         //throw new NotImplementedException();
     }
+
+    public async Task<IEnumerable<Permissions>> GetByImmediateBossId(int immediateBossId, CancellationToken ct)
+    {
+        return await _repository.GetByImmediateBossId(immediateBossId, ct);
+    }
 }

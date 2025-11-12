@@ -1,16 +1,20 @@
 using Microsoft.Data.SqlClient;
-using WsUtaSystem.Application.Interfaces.Services;
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common.Services;
+using WsUtaSystem.Application.Interfaces.Repositories;
+using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Application.Services;
 
-public class JustificationsService : IJustificationsService
+public class JustificationsService : Service<PunchJustifications, int>, IJustificationsService
 {
     private readonly WsUtaSystem.Data.AppDbContext _db;
 
-    public JustificationsService(WsUtaSystem.Data.AppDbContext db)
+    private readonly IPunchJustificationsRepository _repository;
+    public JustificationsService(IPunchJustificationsRepository repo) : base(repo)
     {
-        _db = db;
+        _repository = repo;
     }
 
     public async Task ApplyJustificationsAsync(DateTime fromDate, DateTime toDate, int? employeeId = null, CancellationToken ct = default)
@@ -28,6 +32,16 @@ public class JustificationsService : IJustificationsService
             await connection.OpenAsync(ct);
 
         await command.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task<IEnumerable<PunchJustifications>> GetByBossEmployeeId(int BossEmployeeId, CancellationToken ct)
+    {
+        return await _repository.GetByBossEmployeeId(BossEmployeeId, ct);
+    }
+
+    public async Task<IEnumerable<PunchJustifications>> GetByEmployeeId(int EmployeeId, CancellationToken ct)
+    {
+        return await _repository.GetByEmployeeId(EmployeeId, ct);
     }
 }
 

@@ -3,6 +3,7 @@ using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Models;
 namespace WsUtaSystem.Application.Services;
+
 public class VacationsService : Service<Vacations, int>, IVacationsService
 {
     private readonly IVacationsRepository _repository;
@@ -15,5 +16,10 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
     {
         return await _repository.GetByEmployeeId(EmployeeId, ct);
         //throw new NotImplementedException();
+    }
+
+    public async Task<IEnumerable<Vacations>> GetByImmediateBossId(int immediateBossId, CancellationToken ct)
+    {
+        return await _repository.GetByImmediateBossId(immediateBossId, ct);
     }
 }

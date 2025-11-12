@@ -181,7 +181,7 @@ ADD CONSTRAINT CK_AttendanceCalculations_Status CHECK (Status IN ('Pending','App
 
 -- Check constraints para tbl_Overtime
 ALTER TABLE HR.tbl_Overtime 
-ADD CONSTRAINT CK_Overtime_Status CHECK (Status IN ('Planned','Verified','Rejected','Paid'));
+ADD CONSTRAINT CK_Overtime_Status CHECK (Status IN ('EXECUTED','APPROVED','REJECTED','PAID'));
 
 -- Check constraints para tbl_Payroll
 ALTER TABLE HR.tbl_Payroll 

@@ -8,362 +8,344 @@
 ---------------------------------------------------------------------------------------------------
 
 CREATE OR ALTER PROCEDURE HR.sp_Attendance_CalculateRange
-  @FromDate DATE, 
-  @ToDate DATE, 
-  @EmployeeID INT = NULL,
-  @Debug BIT = 0  -- NUEVO: Activar logs de depuración
+  @FromDate    DATE,
+  @ToDate      DATE,
+  @EmployeeID  INT  = NULL,
+  @Debug       BIT  = 0
 AS
 BEGIN
   SET NOCOUNT ON;
 
-  -------------------------------------------------------------------
-  -- DECLARACIÓN DE PARÁMETROS DEL SISTEMA
-  -------------------------------------------------------------------
+  -------------------------------------------------------------
+  -- 1) Parámetros con defaults seguros
+  -------------------------------------------------------------
   DECLARE 
-    @GraceMin INT = CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='TARDINESS_GRACE_MIN') AS INT),
-    @LunchMin INT = CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='LUNCH_MINUTES') AS INT),
-    @OTMin   INT = CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='OT_MIN_THRESHOLD_MIN') AS INT);
+    @GraceMin      INT,
+    @LunchMin      INT,
+    @OTMin         INT,
+    @NightStart    TIME,
+    @NightEnd      TIME,
+    @FromDate_l    DATE,
+    @ToDate_l      DATE,
+    @EmployeeID_l  INT;
 
-  -- LOG 1: Parámetros del sistema
-  PRINT '============================================================';
-  PRINT 'INICIANDO CÁLCULO DE ASISTENCIA';
-  PRINT '============================================================';
-  PRINT 'Rango de fechas: ' + CONVERT(VARCHAR(10), @FromDate, 120) + ' al ' + CONVERT(VARCHAR(10), @ToDate, 120);
-  PRINT 'EmployeeID filtrado: ' + ISNULL(CAST(@EmployeeID AS VARCHAR(10)), 'TODOS');
-  PRINT '';
-  PRINT 'PARÁMETROS DEL SISTEMA:';
-  PRINT '  - Minutos de gracia (tardanzas): ' + CAST(@GraceMin AS VARCHAR(10));
-  PRINT '  - Minutos de almuerzo: ' + CAST(@LunchMin AS VARCHAR(10));
-  PRINT '  - Umbral mínimo horas extras: ' + CAST(@OTMin AS VARCHAR(10));
-  PRINT '';
+  SELECT @GraceMin   = TRY_CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='TARDINESS_GRACE_MIN') AS INT);
+  SELECT @LunchMin   = TRY_CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='LUNCH_MINUTES') AS INT);
+  SELECT @OTMin      = TRY_CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='OT_MIN_THRESHOLD_MIN') AS INT);
+  SELECT @NightStart = TRY_CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='NIGHT_START') AS TIME);
+  SELECT @NightEnd   = TRY_CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='NIGHT_END')   AS TIME);
 
-  -------------------------------------------------------------------
-  -- TABLA TEMPORAL PARA CÁLCULOS
-  -------------------------------------------------------------------
-  DROP TABLE IF EXISTS #CookedData;
-  
-  CREATE TABLE #CookedData (
-    EmployeeID INT,
-    WorkDate DATE,
-    RequiredMin INT,
-    EntryTime TIME,
-    ExitTime TIME,
-    HasLunchBreak BIT,
-    LunchStart TIME,
-    LunchEnd TIME,
-    FirstIn DATETIME2,
-    LastOut DATETIME2,
-    HasLeave BIT,
-    IsHoliday BIT,
-    IsWeekend BIT,
-    RawWorkedMin INT,
-    TardinessMin INT NOT NULL DEFAULT 0,
-    ScheduledEntry DATETIME2,
-    MinutesLate INT
+  SET @GraceMin   = ISNULL(@GraceMin, 0);
+  SET @LunchMin   = ISNULL(@LunchMin, 0);
+  SET @OTMin      = ISNULL(@OTMin, 0);
+  SET @NightStart = ISNULL(@NightStart, TRY_CAST('22:00' AS TIME));
+  SET @NightEnd   = ISNULL(@NightEnd,   TRY_CAST('06:00' AS TIME));
+
+  SET @FromDate_l   = @FromDate;
+  SET @ToDate_l     = @ToDate;
+  SET @EmployeeID_l = @EmployeeID;
+
+  IF @Debug = 1
+  BEGIN
+    PRINT '============================================================';
+    PRINT 'INICIO: HR.sp_Attendance_CalculateRange';
+    PRINT 'Rango: ' + CONVERT(VARCHAR(10), @FromDate_l, 120) + ' → ' + CONVERT(VARCHAR(10), @ToDate_l, 120);
+    PRINT 'EmpID: ' + COALESCE(CAST(@EmployeeID_l AS VARCHAR(12)), 'TODOS');
+    PRINT 'Params: Grace=' + CAST(@GraceMin AS VARCHAR(10)) 
+        + ', Lunch=' + CAST(@LunchMin AS VARCHAR(10)) 
+        + ', OTMin=' + CAST(@OTMin AS VARCHAR(10)) 
+        + ', Night=' + CONVERT(VARCHAR(8), @NightStart, 108) + '→' + CONVERT(VARCHAR(8), @NightEnd, 108);
+  END;
+
+  -------------------------------------------------------------
+  -- 2) Staging: Calendario y Licencias (rango acotado)
+  -------------------------------------------------------------
+  IF OBJECT_ID('tempdb..#Cal') IS NOT NULL DROP TABLE #Cal;
+  CREATE TABLE #Cal (
+    D          DATE NOT NULL PRIMARY KEY,
+    IsHoliday  BIT  NOT NULL,
+    IsWeekend  BIT  NOT NULL
   );
 
-  -------------------------------------------------------------------
-  -- CÁLCULO Y ALMACENAMIENTO EN TABLA TEMPORAL
-  -------------------------------------------------------------------
-  INSERT INTO #CookedData
-  SELECT 
-    b.EmployeeID,
-    b.WorkDate,
-    b.RequiredMin,
-    b.EntryTime,
-    b.ExitTime,
-    b.HasLunchBreak,
-    b.LunchStart,
-    b.LunchEnd,
-    b.FirstIn,
-    b.LastOut,
-    b.HasLeave,
-    b.IsHoliday,
-    b.IsWeekend,
-    
-    -- CÁLCULO DE MINUTOS TRABAJADOS BRUTOS
+  INSERT INTO #Cal (D, IsHoliday, IsWeekend)
+  SELECT c.D, c.IsHoliday, c.IsWeekend
+  FROM HR.vw_Calendar AS c
+  WHERE c.D BETWEEN @FromDate_l AND @ToDate_l;
+
+  IF OBJECT_ID('tempdb..#Leave') IS NOT NULL DROP TABLE #Leave;
+  CREATE TABLE #Leave (
+    EmployeeID INT NOT NULL,
+    D          DATE NOT NULL,
+    PRIMARY KEY (EmployeeID, D)
+  );
+
+  INSERT INTO #Leave (EmployeeID, D)
+  SELECT DISTINCT l.EmployeeID, d.D
+  FROM HR.vw_LeaveWindows l
+  JOIN #Cal d
+    ON d.D >= CAST(l.FromDT AS DATE)
+   AND d.D <  CAST(l.ToDT   AS DATE)
+  WHERE (@EmployeeID_l IS NULL OR l.EmployeeID = @EmployeeID_l);
+
+  -------------------------------------------------------------
+  -- 3) Staging: Asistencia por día (materializar la vista)
+  -------------------------------------------------------------
+  IF OBJECT_ID('tempdb..#A') IS NOT NULL DROP TABLE #A;
+  CREATE TABLE #A (
+    EmployeeID     INT,
+    WorkDate       DATE,
+    RequiredMin    INT,
+    EntryTime      TIME NULL,
+    ExitTime       TIME NULL,
+    HasLunchBreak  BIT,
+    LunchStart     TIME NULL,
+    LunchEnd       TIME NULL,
+    FirstIn        DATETIME2 NULL,
+    LastOut        DATETIME2 NULL
+  );
+
+  INSERT INTO #A (EmployeeID, WorkDate, RequiredMin, EntryTime, ExitTime, HasLunchBreak, LunchStart, LunchEnd, FirstIn, LastOut)
+  SELECT a.EmployeeID, a.WorkDate, a.RequiredMin, a.EntryTime, a.ExitTime,
+         a.HasLunchBreak, a.LunchStart, a.LunchEnd, a.FirstIn, a.LastOut
+  FROM HR.vw_AttendanceDay a
+  WHERE a.WorkDate BETWEEN @FromDate_l AND @ToDate_l
+    AND (@EmployeeID_l IS NULL OR a.EmployeeID = @EmployeeID_l);
+
+  CREATE CLUSTERED INDEX IX_A ON #A (WorkDate, EmployeeID);
+
+  -------------------------------------------------------------
+  -- 4) Cook: unir Calendar + Leave y calcular métricas
+  --    NightMinutes con cruce de medianoche y picadas crudas
+  -------------------------------------------------------------
+  IF OBJECT_ID('tempdb..#Cooked') IS NOT NULL DROP TABLE #Cooked;
+  CREATE TABLE #Cooked (
+    EmployeeID     INT,
+    WorkDate       DATE,
+    RequiredMin    INT,
+    EntryTime      TIME NULL,
+    FirstIn        DATETIME2 NULL,
+    LastOut        DATETIME2 NULL,
+    IsHoliday      BIT NOT NULL DEFAULT(0),
+    IsWeekend      BIT NOT NULL DEFAULT(0),
+    HasLeave       BIT NOT NULL DEFAULT(0),
+    RawWorkedMin   INT NOT NULL DEFAULT(0),
+    TardinessMin   INT NOT NULL DEFAULT(0),
+    MinutesLate    INT NOT NULL DEFAULT(0),
+    NightMinutes   INT NOT NULL DEFAULT(0)
+  );
+
+  INSERT INTO #Cooked (EmployeeID, WorkDate, RequiredMin, EntryTime, FirstIn, LastOut,
+                       IsHoliday, IsWeekend, HasLeave, RawWorkedMin, TardinessMin, MinutesLate, NightMinutes)
+  SELECT
+    a.EmployeeID,
+    a.WorkDate,
+    ISNULL(a.RequiredMin,0) AS RequiredMin,
+    a.EntryTime,
+
+    -- Guardamos lo que venía de la vista
+    a.FirstIn,
+    a.LastOut,
+
+    cal.IsHoliday,
+    cal.IsWeekend,
+    CASE WHEN l.EmployeeID IS NOT NULL THEN 1 ELSE 0 END AS HasLeave,
+
+    -- RawWorkedMin = MAX(0, (OutDT - InDT) - @LunchMin) usando ventanas efectivas
     CASE 
-      WHEN b.FirstIn IS NULL OR b.LastOut IS NULL THEN 0
-      ELSE 
-        DATEDIFF(MINUTE, b.FirstIn, b.LastOut)
-        - CASE 
-            WHEN b.HasLunchBreak = 1 AND b.LunchStart IS NOT NULL AND b.LunchEnd IS NOT NULL 
-            THEN DATEDIFF(
-              MINUTE, 
-              CAST(CONVERT(varchar(10), b.WorkDate, 120) + ' ' + CONVERT(varchar(8), b.LunchEnd, 108) AS DATETIME2),
-              CAST(CONVERT(varchar(10), b.WorkDate, 120) + ' ' + CONVERT(varchar(8), b.LunchStart, 108) AS DATETIME2)
-            ) * -1
-            ELSE 0 
-          END
+      WHEN Eff.InDT IS NULL OR Eff.OutDT IS NULL OR Eff.OutDT < Eff.InDT THEN 0
+      ELSE CASE 
+             WHEN DATEDIFF(MINUTE, Eff.InDT, Eff.OutDT) - @LunchMin < 0 THEN 0
+             ELSE DATEDIFF(MINUTE, Eff.InDT, Eff.OutDT) - @LunchMin
+           END
     END AS RawWorkedMin,
 
-    -- ✅ CÁLCULO CORREGIDO DE MINUTOS DE TARDANZA
+    -- TardinessMin = MAX(0, (Eff.InDT - ScheduledEntry) - Grace)
     CASE 
-      WHEN b.FirstIn IS NULL OR b.EntryTime IS NULL THEN 0
+      WHEN Eff.InDT IS NULL OR a.EntryTime IS NULL THEN 0
       ELSE 
         CASE 
           WHEN DATEDIFF(
-            MINUTE,
-            CAST(CONVERT(VARCHAR(10), b.WorkDate, 120) + ' ' + CONVERT(VARCHAR(8), b.EntryTime, 108) AS DATETIME2),
-            b.FirstIn
-          ) - @GraceMin <= 0 
-          THEN 0 
+                 MINUTE,
+                 DATEADD(SECOND, DATEDIFF(SECOND, 0, a.EntryTime), CAST(a.WorkDate AS DATETIME2)),
+                 Eff.InDT
+               ) - @GraceMin < 0 THEN 0
           ELSE DATEDIFF(
-            MINUTE,
-            CAST(CONVERT(VARCHAR(10), b.WorkDate, 120) + ' ' + CONVERT(VARCHAR(8), b.EntryTime, 108) AS DATETIME2),
-            b.FirstIn
-          ) - @GraceMin
+                 MINUTE,
+                 DATEADD(SECOND, DATEDIFF(SECOND, 0, a.EntryTime), CAST(a.WorkDate AS DATETIME2)),
+                 Eff.InDT
+               ) - @GraceMin
         END
     END AS TardinessMin,
 
-    -- HORA PROGRAMADA DE ENTRADA
-    CAST(CONVERT(varchar(10), b.WorkDate, 120) + ' ' + CONVERT(varchar(8), b.EntryTime, 108) AS DATETIME2) AS ScheduledEntry,
-    
-    -- MINUTOS DE RETRASO (SIN GRACIA)
+    -- MinutesLate (si quieres clamp 0, aplica CASE WHEN <0 THEN 0)
     CASE 
-      WHEN b.FirstIn IS NULL OR b.EntryTime IS NULL THEN 0
+      WHEN Eff.InDT IS NULL OR a.EntryTime IS NULL THEN 0
       ELSE DATEDIFF(
-        MINUTE,
-        CAST(CONVERT(varchar(10), b.WorkDate, 120) + ' ' + CONVERT(varchar(8), b.EntryTime, 108) AS DATETIME2),
-        b.FirstIn
-      )
-    END AS MinutesLate
+             MINUTE,
+             DATEADD(SECOND, DATEDIFF(SECOND, 0, a.EntryTime), CAST(a.WorkDate AS DATETIME2)),
+             Eff.InDT
+           )
+    END AS MinutesLate,
 
-  FROM (
+    -- NightMinutes con cruce de medianoche y picadas extendidas
+    CASE 
+      WHEN Eff.InDT IS NULL OR Eff.OutDT IS NULL OR Eff.OutDT <= Eff.InDT THEN 0
+      ELSE 
+        CASE 
+          WHEN NA.OverlapEnd <= NA.OverlapStart THEN 0
+          ELSE DATEDIFF(MINUTE, NA.OverlapStart, NA.OverlapEnd)
+        END
+    END AS NightMinutes
+  FROM #A a
+  JOIN #Cal cal 
+    ON cal.D = a.WorkDate
+  LEFT JOIN #Leave l 
+    ON l.EmployeeID = a.EmployeeID AND l.D = a.WorkDate
+
+  -- 1) Ventana nocturna por WorkDate (maneja NightEnd <= NightStart → +1 día)
+  OUTER APPLY (
     SELECT 
-      a.EmployeeID, 
-      a.WorkDate, 
-      a.RequiredMin,
-      a.EntryTime,
-      a.ExitTime,
-      a.HasLunchBreak,
-      a.LunchStart,
-      a.LunchEnd,
-      a.FirstIn,
-      a.LastOut,
-      
-      CASE WHEN EXISTS (
-        SELECT 1 
-        FROM HR.vw_LeaveWindows l 
-        WHERE l.EmployeeID = a.EmployeeID 
-          AND a.WorkDate >= CAST(l.FromDT AS DATE) 
-          AND a.WorkDate <  CAST(l.ToDT   AS DATE)
-      ) THEN 1 ELSE 0 END AS HasLeave,
-      
-      (SELECT TOP 1 IsHoliday FROM HR.vw_Calendar c WHERE c.D = a.WorkDate) AS IsHoliday,
-      (SELECT TOP 1 IsWeekend FROM HR.vw_Calendar c WHERE c.D = a.WorkDate) AS IsWeekend
-    
-    FROM HR.vw_AttendanceDay a
-    WHERE a.WorkDate BETWEEN @FromDate AND @ToDate
-      AND (@EmployeeID IS NULL OR a.EmployeeID = @EmployeeID)
-  ) b;
+      DATEADD(SECOND, DATEDIFF(SECOND, 0, @NightStart), CAST(a.WorkDate AS DATETIME2)) AS NightStartDT,
+      CASE 
+        WHEN @NightEnd <= @NightStart 
+        THEN DATEADD(DAY, 1, DATEADD(SECOND, DATEDIFF(SECOND, 0, @NightEnd), CAST(a.WorkDate AS DATETIME2)))
+        ELSE DATEADD(SECOND, DATEDIFF(SECOND, 0, @NightEnd), CAST(a.WorkDate AS DATETIME2))
+      END AS NightEndDT
+  ) N
 
-  -------------------------------------------------------------------
-  -- LOGS DE DEPURACIÓN
-  -------------------------------------------------------------------
-  DECLARE @TotalRecords INT = (SELECT COUNT(*) FROM #CookedData);
-  DECLARE @NullEntryTime INT = (SELECT COUNT(*) FROM #CookedData WHERE EntryTime IS NULL);
-  DECLARE @NullFirstIn INT = (SELECT COUNT(*) FROM #CookedData WHERE FirstIn IS NULL);
-  DECLARE @RecordsWithTardiness INT = (SELECT COUNT(*) FROM #CookedData WHERE TardinessMin > 0);
+  -- 2) Reconstrucción de In/Out efectivos a partir de picadas crudas
+  --    Rango: [WorkDate 00:00, NightEndDT), incluyendo madrugada del día siguiente
+  OUTER APPLY (
+    SELECT
+      MIN(p.PunchTime) AS MinPunch,
+      MAX(p.PunchTime) AS MaxPunch
+    FROM HR.tbl_AttendancePunches p
+    WHERE p.EmployeeID = a.EmployeeID
+      AND p.PunchTime >= CAST(a.WorkDate AS DATETIME2)
+      AND p.PunchTime <  N.NightEndDT
+  ) P
 
-  PRINT '🔍 VERIFICACIÓN DE CAMPOS CRÍTICOS';
-  PRINT '------------------------------------------------------------';
-  PRINT 'Total registros procesados: ' + CAST(@TotalRecords AS VARCHAR(10));
-  PRINT 'Registros sin EntryTime (hora programada): ' + CAST(@NullEntryTime AS VARCHAR(10));
-  PRINT 'Registros sin FirstIn (primera entrada): ' + CAST(@NullFirstIn AS VARCHAR(10));
-  PRINT 'Registros con tardanza calculada: ' + CAST(@RecordsWithTardiness AS VARCHAR(10));
-  PRINT '';
+  -- 3) Definimos In/Out efectivos
+  OUTER APPLY (
+    SELECT
+      COALESCE(a.FirstIn, P.MinPunch) AS InDT,
+      COALESCE(a.LastOut, P.MaxPunch) AS OutDT
+  ) Eff
 
-  IF @NullEntryTime > 0 OR @NullFirstIn > 0
-  BEGIN
-    PRINT '⚠️ PROBLEMA DETECTADO: Campos NULL impiden calcular tardanzas';
-    PRINT '   Verifique la vista HR.vw_AttendanceDay';
-    PRINT '';
-  END
-
-  -- Logs detallados si hay problemas o si Debug está activo
-  IF @Debug = 1 OR EXISTS(SELECT 1 FROM #CookedData WHERE MinutesLate > @GraceMin AND TardinessMin = 0 AND FirstIn IS NOT NULL)
-  BEGIN
-    PRINT '============================================================';
-    PRINT 'DETALLE DE CÁLCULOS DE TARDANZA';
-    PRINT '============================================================';
-    PRINT '';
-
-    -- Mostrar registros con problema
-    IF EXISTS(SELECT 1 FROM #CookedData WHERE MinutesLate > @GraceMin AND TardinessMin = 0)
-    BEGIN
-      PRINT '⚠️ ALERTAS: Registros con llegada tardía pero tardanza = 0';
-      PRINT '------------------------------------------------------------';
-      
-      DECLARE @AlertMsg NVARCHAR(MAX);
-      DECLARE alert_cursor CURSOR FOR
-      SELECT 
-        'Empleado: ' + CAST(EmployeeID AS VARCHAR(10)) +
-        ' | Fecha: ' + CONVERT(VARCHAR(10), WorkDate, 120) +
-        ' | Programada: ' + ISNULL(CONVERT(VARCHAR(8), ScheduledEntry, 108), 'NULL') +
-        ' | Real: ' + ISNULL(CONVERT(VARCHAR(8), FirstIn, 108), 'NULL') +
-        ' | Tarde: ' + CAST(MinutesLate AS VARCHAR(10)) + ' min' +
-        ' | Gracia: ' + CAST(@GraceMin AS VARCHAR(10)) + ' min' +
-        ' | Tardanza: ' + CAST(TardinessMin AS VARCHAR(10)) + ' min' +
-        CASE WHEN HasLeave = 1 THEN ' [LICENCIA]' ELSE '' END +
-        CASE WHEN IsHoliday = 1 THEN ' [FESTIVO]' ELSE '' END +
-        CASE WHEN IsWeekend = 1 THEN ' [FIN DE SEMANA]' ELSE '' END
-      FROM #CookedData
-      WHERE MinutesLate > @GraceMin AND TardinessMin = 0
-      ORDER BY WorkDate, EmployeeID;
-
-      OPEN alert_cursor;
-      FETCH NEXT FROM alert_cursor INTO @AlertMsg;
-      
-      WHILE @@FETCH_STATUS = 0
-      BEGIN
-        PRINT @AlertMsg;
-        FETCH NEXT FROM alert_cursor INTO @AlertMsg;
-      END
-      
-      CLOSE alert_cursor;
-      DEALLOCATE alert_cursor;
-      PRINT '';
-    END
-
-    -- Mostrar todos los registros si Debug = 1
-    IF @Debug = 1
-    BEGIN
-      PRINT '📊 TODOS LOS REGISTROS PROCESADOS';
-      PRINT '------------------------------------------------------------';
-      
-      DECLARE @DebugMsg NVARCHAR(MAX);
-      DECLARE debug_cursor CURSOR FOR
-      SELECT 
-        'Emp: ' + CAST(EmployeeID AS VARCHAR(10)) +
-        ' | ' + CONVERT(VARCHAR(10), WorkDate, 120) +
-        ' | Prog: ' + ISNULL(CONVERT(VARCHAR(5), EntryTime, 108), 'NULL') +
-        ' | Real: ' + ISNULL(CONVERT(VARCHAR(8), FirstIn, 108), 'NULL') +
-        ' | Tarde: ' + CAST(MinutesLate AS VARCHAR(10)) + ' min' +
-        ' | Tardanza: ' + CAST(TardinessMin AS VARCHAR(10)) + ' min'
-      FROM #CookedData
-      ORDER BY WorkDate, EmployeeID;
-
-      OPEN debug_cursor;
-      FETCH NEXT FROM debug_cursor INTO @DebugMsg;
-      
-      WHILE @@FETCH_STATUS = 0
-      BEGIN
-        PRINT @DebugMsg;
-        FETCH NEXT FROM debug_cursor INTO @DebugMsg;
-      END
-      
-      CLOSE debug_cursor;
-      DEALLOCATE debug_cursor;
-      PRINT '';
-    END
-  END
-
-  -------------------------------------------------------------------
-  -- OPERACIÓN MERGE - CORREGIDA
-  -------------------------------------------------------------------
-  PRINT '============================================================';
-  PRINT 'EJECUTANDO MERGE EN tbl_AttendanceCalculations';
-  PRINT '============================================================';
-
-  MERGE HR.tbl_AttendanceCalculations AS T
-  USING (
+  -- 4) Traslape real: [max(InDT, NightStartDT), min(OutDT, NightEndDT)]
+  OUTER APPLY (
     SELECT 
-      EmployeeID, 
-      WorkDate,
-	  FirstIn,
-      LastOut,
-      CASE 
-        WHEN HasLeave = 1 THEN 0 
-        ELSE ISNULL(RawWorkedMin, 0) 
-      END AS TotalWorkedMinutes,
-      
-      CASE 
-        WHEN HasLeave = 1 OR IsHoliday = 1 OR IsWeekend = 1 THEN 0
-        ELSE ISNULL(RequiredMin, 0)
-      END AS ReqMin,
-      MinutesLate,
-      TardinessMin,
-      IsHoliday,
-      IsWeekend
-    FROM #CookedData
-  ) S ON T.EmployeeID = S.EmployeeID AND T.WorkDate = S.WorkDate
+      CASE WHEN Eff.InDT  > N.NightStartDT THEN Eff.InDT  ELSE N.NightStartDT END AS OverlapStart,
+      CASE WHEN Eff.OutDT < N.NightEndDT   THEN Eff.OutDT ELSE N.NightEndDT    END AS OverlapEnd
+  ) NA;
 
-  WHEN MATCHED THEN 
-    UPDATE SET
-      T.TotalWorkedMinutes = S.TotalWorkedMinutes,
-      T.RegularMinutes = CASE 
-        WHEN S.TotalWorkedMinutes >= S.ReqMin THEN S.ReqMin 
-        ELSE S.TotalWorkedMinutes 
-      END,
-      T.OvertimeMinutes = CASE 
-        WHEN S.TotalWorkedMinutes - S.ReqMin >= @OTMin THEN S.TotalWorkedMinutes - S.ReqMin 
-        ELSE 0 
-      END,
-      T.NightMinutes = T.NightMinutes,
-      T.HolidayMinutes = CASE 
-        WHEN S.IsHoliday = 1 OR S.IsWeekend = 1 THEN S.TotalWorkedMinutes 
-        ELSE 0 
-      END,
-      T.TardinessMin = S.TardinessMin,
-      T.RequiredMinutes = S.ReqMin,     -- ✅ Solo una asignación
-      T.MinutesLate = S.MinutesLate,    -- ✅ Campo separado para MinutesLate
-      T.Status = 'Approved'
+  CREATE CLUSTERED INDEX IX_Cooked ON #Cooked (WorkDate, EmployeeID);
 
-  WHEN NOT MATCHED THEN 
-    INSERT (
-      EmployeeID,
-      WorkDate,
-	  FirstPunchIn,
-	  LastPunchOut,
-      TotalWorkedMinutes,
-      RegularMinutes,
-      OvertimeMinutes,
-      NightMinutes,
-      HolidayMinutes,
-      TardinessMin,
-      RequiredMinutes,
-	  MinutesLate,
-      Status
-    )
-    VALUES (
-      S.EmployeeID,
-      S.WorkDate,
-	  S.FirstIn,
-      S.LastOut,
-      S.TotalWorkedMinutes,
-      CASE 
-        WHEN S.TotalWorkedMinutes >= S.ReqMin THEN S.ReqMin 
-        ELSE S.TotalWorkedMinutes 
-      END,
-      CASE 
-        WHEN S.TotalWorkedMinutes - S.ReqMin >= @OTMin THEN S.TotalWorkedMinutes - S.ReqMin 
-        ELSE 0 
-      END,
-      0,
-      CASE 
-        WHEN S.IsHoliday = 1 OR S.IsWeekend = 1 THEN S.TotalWorkedMinutes 
-        ELSE 0 
-      END,
-      S.TardinessMin,
-      S.ReqMin,
-	  S.MinutesLate,
-      'Approved'
-    );
+  -------------------------------------------------------------
+  -- 5) Debug (sin subconsultas en PRINT/DECLARE)
+  -------------------------------------------------------------
+  IF @Debug = 1
+  BEGIN
+    DECLARE @negN INT, @rowsCooked INT;
+    SELECT @negN = COUNT(*) FROM #Cooked WHERE NightMinutes < 0;
+    SELECT @rowsCooked = COUNT(*) FROM #Cooked;
 
-  DECLARE @RowsAffected INT = @@ROWCOUNT;
+    PRINT 'Cooked filas: ' + CAST(@rowsCooked AS VARCHAR(20));
+    IF @negN > 0
+      PRINT N'⚠️ NightMinutes negativos detectados: ' + CAST(@negN AS VARCHAR(10));
+  END;
 
-  -- LOG FINAL
-  PRINT '';
-  PRINT '✅ MERGE COMPLETADO';
-  PRINT 'Registros afectados: ' + CAST(@RowsAffected AS VARCHAR(10));
-  PRINT '';
-  PRINT '============================================================';
-  PRINT 'CÁLCULO FINALIZADO EXITOSAMENTE';
-  PRINT '============================================================';
+  -------------------------------------------------------------
+  -- 6) UPSERT (UPDATE + INSERT)
+  -------------------------------------------------------------
+  -- UPDATE existentes
+  UPDATE T
+  SET 
+    T.TotalWorkedMinutes = CASE WHEN C.HasLeave = 1 THEN 0 ELSE C.RawWorkedMin END,
+    T.RegularMinutes     = CASE 
+                             WHEN (CASE WHEN C.HasLeave=1 OR C.IsHoliday=1 OR C.IsWeekend=1 THEN 0 ELSE C.RequiredMin END) 
+                                  <= CASE WHEN C.HasLeave=1 THEN 0 ELSE C.RawWorkedMin END
+                             THEN (CASE WHEN C.HasLeave=1 OR C.IsHoliday=1 OR C.IsWeekend=1 THEN 0 ELSE C.RequiredMin END)
+                             ELSE (CASE WHEN C.HasLeave=1 THEN 0 ELSE C.RawWorkedMin END)
+                           END,
+    T.OvertimeMinutes    = CASE 
+                             WHEN (CASE WHEN C.HasLeave=1 THEN 0 ELSE C.RawWorkedMin END) - 
+                                  (CASE WHEN C.HasLeave=1 OR C.IsHoliday=1 OR C.IsWeekend=1 THEN 0 ELSE C.RequiredMin END)
+                                  >= @OTMin
+                             THEN (CASE WHEN C.HasLeave=1 THEN 0 ELSE C.RawWorkedMin END) - 
+                                  (CASE WHEN C.HasLeave=1 OR C.IsHoliday=1 OR C.IsWeekend=1 THEN 0 ELSE C.RequiredMin END)
+                             ELSE 0
+                           END,
+    T.NightMinutes       = CASE WHEN C.NightMinutes < 0 THEN 0 ELSE C.NightMinutes END,
+    T.HolidayMinutes     = CASE WHEN C.IsHoliday=1 OR C.IsWeekend=1 THEN (CASE WHEN C.HasLeave=1 THEN 0 ELSE C.RawWorkedMin END) ELSE 0 END,
+    T.TardinessMin       = CASE WHEN C.TardinessMin < 0 THEN 0 ELSE C.TardinessMin END,
+    T.RequiredMinutes    = (CASE WHEN C.HasLeave=1 OR C.IsHoliday=1 OR C.IsWeekend=1 THEN 0 ELSE C.RequiredMin END),
+    T.MinutesLate        = C.MinutesLate,
+    T.FirstPunchIn       = C.FirstIn,
+    T.LastPunchOut       = C.LastOut,
+    T.Status             = 'Approved'
+  FROM HR.tbl_AttendanceCalculations AS T WITH (UPDLOCK, ROWLOCK)
+  JOIN #Cooked C
+    ON C.EmployeeID = T.EmployeeID
+   AND C.WorkDate   = T.WorkDate;
 
-  -- Limpiar tabla temporal
-  DROP TABLE IF EXISTS #CookedData;
+  -- INSERT nuevos
+  INSERT INTO HR.tbl_AttendanceCalculations (
+    EmployeeID, WorkDate, FirstPunchIn, LastPunchOut,
+    TotalWorkedMinutes, RegularMinutes, OvertimeMinutes,
+    NightMinutes, HolidayMinutes, TardinessMin, RequiredMinutes,
+    MinutesLate, Status
+  )
+  SELECT 
+    C.EmployeeID,
+    C.WorkDate,
+    C.FirstIn, 
+    C.LastOut,
+    CASE WHEN C.HasLeave=1 THEN 0 ELSE C.RawWorkedMin END AS TotalWorkedMinutes,
+    CASE 
+      WHEN (CASE WHEN C.HasLeave=1 OR C.IsHoliday=1 OR C.IsWeekend=1 THEN 0 ELSE C.RequiredMin END) <= 
+           CASE WHEN C.HasLeave=1 THEN 0 ELSE C.RawWorkedMin END
+      THEN (CASE WHEN C.HasLeave=1 OR C.IsHoliday=1 OR C.IsWeekend=1 THEN 0 ELSE C.RequiredMin END)
+      ELSE (CASE WHEN C.HasLeave=1 THEN 0 ELSE C.RawWorkedMin END)
+    END AS RegularMinutes,
+    CASE 
+      WHEN (CASE WHEN C.HasLeave=1 THEN 0 ELSE C.RawWorkedMin END) - 
+           (CASE WHEN C.HasLeave=1 OR C.IsHoliday=1 OR C.IsWeekend=1 THEN 0 ELSE C.RequiredMin END) >= @OTMin
+      THEN (CASE WHEN C.HasLeave=1 THEN 0 ELSE C.RawWorkedMin END) - 
+           (CASE WHEN C.HasLeave=1 OR C.IsHoliday=1 OR C.IsWeekend=1 THEN 0 ELSE C.RequiredMin END)
+      ELSE 0
+    END AS OvertimeMinutes,
+    CASE WHEN C.NightMinutes < 0 THEN 0 ELSE C.NightMinutes END,
+    CASE WHEN C.IsHoliday=1 OR C.IsWeekend=1 THEN (CASE WHEN C.HasLeave=1 THEN 0 ELSE C.RawWorkedMin END) ELSE 0 END,
+    CASE WHEN C.TardinessMin < 0 THEN 0 ELSE C.TardinessMin END,
+    (CASE WHEN C.HasLeave=1 OR C.IsHoliday=1 OR C.IsWeekend=1 THEN 0 ELSE C.RequiredMin END) AS RequiredMinutes,
+    C.MinutesLate,
+    'Approved'
+  FROM #Cooked C
+  WHERE NOT EXISTS (
+    SELECT 1 FROM HR.tbl_AttendanceCalculations T 
+    WHERE T.EmployeeID = C.EmployeeID AND T.WorkDate = C.WorkDate
+  );
+
+  -------------------------------------------------------------
+  -- 7) Debug final (opcional)
+  -------------------------------------------------------------
+  IF @Debug = 1
+  BEGIN
+    PRINT 'Muestra TOP (20):';
+    SELECT TOP (20) EmployeeID, WorkDate, FirstIn, LastOut,
+           EntryTime, RawWorkedMin, TardinessMin, MinutesLate, NightMinutes
+    FROM #Cooked
+    ORDER BY WorkDate DESC, EmployeeID;
+  END;
+
+  -------------------------------------------------------------
+  -- 8) Limpieza
+  -------------------------------------------------------------
+  DROP TABLE IF EXISTS #Cooked;
+  DROP TABLE IF EXISTS #A;
+  DROP TABLE IF EXISTS #Leave;
+  DROP TABLE IF EXISTS #Cal;
 
 END
 GO
@@ -651,50 +633,73 @@ GO
   -------------------------------------------------------------------
   -- FIN -- PROCEDIMIENTO PARA CALCULAR HORAS EXTRAS
   -------------------------------------------------------------------
+  -------------------------------------------------------------------
+  -- Inicio -- PROCEDIMIENTO PARA EJECUTAR TODOS LOS PROCEDIMIENTOS DE ASISTENCIA, PERMISOS, VACACIONES 
+  -------------------------------------------------------------------  
+  
+  CREATE OR ALTER PROCEDURE HR.sp_Attendance_RunAll
+  @FromDate            DATE,
+  @ToDate              DATE,
+  @EmployeeID          INT = NULL,
+  @Debug               BIT = 0,
+  @ApplyJustifications BIT = 1,
+  @ApplyRecovery       BIT = 1,
+  @RunOvertime         BIT = 1   -- << activa o no la consolidación de Overtime
+	AS
+	BEGIN
+	  SET NOCOUNT ON;
+	  SET XACT_ABORT ON;
+
+	  BEGIN TRY
+		BEGIN TRAN;
+
+		-- 1) Cálculo base (asistencia, tardanzas, night, feriados)
+		EXEC HR.sp_Attendance_CalculateRange
+			 @FromDate = @FromDate,
+			 @ToDate   = @ToDate,
+			 @EmployeeID = @EmployeeID,
+			 @Debug    = @Debug;
+
+		-- 2) Post-proceso: justificaciones y recuperaciones (si corresponden)
+		EXEC HR.sp_Attendance_PostProcess
+			 @FromDate   = @FromDate,
+			 @ToDate     = @ToDate,
+			 @EmployeeID = @EmployeeID,
+			 @ApplyJustifications = @ApplyJustifications,
+			 @ApplyRecovery       = @ApplyRecovery;
+
+		-- 3) Consolidación Overtime (cap por plan, factor, réplica)
+		IF @RunOvertime = 1
+		BEGIN
+		  EXEC HR.sp_Overtime_Calculate
+			   @FromDate   = @FromDate,
+			   @ToDate     = @ToDate,
+			   @EmployeeID = @EmployeeID,
+			   @Debug      = @Debug;
+		END
+
+		COMMIT TRAN;
+	  END TRY
+	  BEGIN CATCH
+		IF XACT_STATE() <> 0 ROLLBACK TRAN;
+
+		DECLARE @ErrMsg NVARCHAR(4000) = ERROR_MESSAGE(),
+				@ErrNum INT = ERROR_NUMBER(),
+				@ErrSev INT = ERROR_SEVERITY(),
+				@ErrSta INT = ERROR_STATE(),
+				@ErrLin INT = ERROR_LINE();
+
+		RAISERROR('sp_Attendance_RunAll: %s (Num:%d, Sev:%d, Sta:%d, Lin:%d)',
+				  @ErrSev, 1, @ErrMsg, @ErrNum, @ErrSev, @ErrSta, @ErrLin);
+	  END CATCH
+	END
+	GO
+
+  ------------------------------------------------------------------- 
+  -- FIN -- PROCEDIMIENTO PARA EJECUTAR TODOS LOS PROCEDIMIENTOS DE ASISTENCIA, PERMISOS, VACACIONES 
+  -------------------------------------------------------------------
 
 
-
-
-
-
-
-
---Minutos nocturnos  --(Distribuye minutos trabajados en [NIGHT_START, NIGHT_END])
-
-CREATE OR ALTER PROCEDURE HR.sp_Attendance_CalcNightMinutes
-  @FromDate DATE, @ToDate DATE, @EmployeeID INT = NULL
-AS
-BEGIN
-  SET NOCOUNT ON;
-
-  DECLARE @NightStart TIME = CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='NIGHT_START') AS TIME),
-          @NightEnd   TIME = CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='NIGHT_END')   AS TIME);
-
-  ;WITH punches AS (
-    SELECT EmployeeID, CAST(PunchTime AS DATE) D, MIN(PunchTime) FirstIn, MAX(PunchTime) LastOut
-    FROM HR.tbl_AttendancePunches
-    WHERE CAST(PunchTime AS DATE) BETWEEN @FromDate AND @ToDate
-      AND (@EmployeeID IS NULL OR EmployeeID=@EmployeeID)
-    GROUP BY EmployeeID, CAST(PunchTime AS DATE)
-  )
-  UPDATE ac
-  SET NightMinutes = 
-    DATEDIFF(MINUTE,
-      CASE 
-        WHEN CAST(p.FirstIn AS TIME) > @NightStart 
-             THEN p.FirstIn
-             ELSE CAST(CAST(p.D AS DATETIME2)+CAST(@NightStart AS DATETIME2) AS DATETIME2)
-      END,
-      CASE 
-        WHEN CAST(p.LastOut AS TIME) < @NightEnd 
-             THEN CAST(CAST(DATEADD(DAY,1,p.D) AS DATETIME2)+CAST(@NightEnd AS DATETIME2) AS DATETIME2)
-             ELSE p.LastOut
-      END
-    )
-  FROM HR.tbl_AttendanceCalculations ac
-  JOIN punches p ON p.EmployeeID=ac.EmployeeID AND p.D=ac.WorkDate;
-END
-GO
 
 
 --Aplicar justificaciones (anula atraso o ausencia)

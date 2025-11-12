@@ -18,7 +18,7 @@ namespace WsUtaSystem.Models
         public int? ScheduleID { get; set; }
         [Column("Schedule")]
         public string? Schedule { get; set; }
-
+        public int? ImmediateBossID { get; set; }
         public string? Department { get; set; }
         //public string? Faculty { get; set; }
         [Column(TypeName = "decimal(18,2)")]

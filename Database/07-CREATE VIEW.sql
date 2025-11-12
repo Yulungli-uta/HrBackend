@@ -5,6 +5,7 @@ SELECT
     p.LastName, 
     p.IDCard, 
     e.Email,
+	e.ImmediateBossID,
     e.EmployeeType    AS EmployeeType,
     rt.Name           AS ContractType,
     es_current.ScheduleID AS ScheduleID,
@@ -73,7 +74,7 @@ LEFT JOIN HR.ref_Types rt ON e.employeeType = rt.TypeID
 LEFT JOIN HR.tbl_Departments d ON e.DepartmentID = d.DepartmentID
 --LEFT JOIN HR.tbl_Faculties f ON d.FacultyID = f.FacultyID
 LEFT JOIN HR.tbl_Employees bossEmp ON e.ImmediateBossID = bossEmp.EmployeeID
-LEFT JOIN HR.tbl_People boss ON bossEmp.EmployeeID = boss.PersonID
+LEFT JOIN HR.tbl_People boss ON bossEmp.PersonID = boss.PersonID
 LEFT JOIN HR.ref_Types ms ON p.MaritalStatusTypeID = ms.TypeID
 LEFT JOIN HR.ref_Types eth ON p.EthnicityTypeID = eth.TypeID
 LEFT JOIN HR.ref_Types bt ON p.BloodTypeTypeID = bt.TypeID
@@ -226,12 +227,36 @@ FROM HR.tbl_AttendancePunches p
 GROUP BY p.EmployeeID, CAST(p.PunchTime AS DATE);
 
 /*Ventanas de ausencias justificadas (vacaciones y permisos aprobados)*/
+-- CREATE OR ALTER VIEW HR.vw_LeaveWindows AS
+-- SELECT v.EmployeeID, v.StartDate AS FromDT, DATEADD(DAY,1,v.EndDate) AS ToDT, 'VACATION' AS LeaveType
+-- FROM HR.tbl_Vacations v WHERE v.Status IN ('Planned','InProgress')
+-- UNION ALL
+-- SELECT p.EmployeeID, p.StartDate, p.EndDate, 'PERMISSION'
+-- FROM HR.tbl_Permissions p WHERE p.Status='Approved';
+
 CREATE OR ALTER VIEW HR.vw_LeaveWindows AS
-SELECT v.EmployeeID, v.StartDate AS FromDT, DATEADD(DAY,1,v.EndDate) AS ToDT, 'VACATION' AS LeaveType
-FROM HR.tbl_Vacations v WHERE v.Status IN ('Planned','InProgress')
+SELECT 
+    v.EmployeeID, 
+    v.StartDate AS FromDT, 
+    DATEADD(DAY, 1, v.EndDate) AS ToDT, 
+    'VACATION' AS LeaveType, 
+    0 AS HourTaken,
+    CONCAT('VACATIONID: ', v.VacationID) AS SourceID,
+    --'VACATIONID' + v.VacationID 
+    v.Status
+FROM HR.tbl_Vacations v 
+WHERE v.Status IN ('Planned', 'InProgress', 'Completed')
 UNION ALL
-SELECT p.EmployeeID, p.StartDate, p.EndDate, 'PERMISSION'
-FROM HR.tbl_Permissions p WHERE p.Status='Approved';
+SELECT 
+    p.EmployeeID, 
+    p.StartDate AS FromDT, 
+    p.EndDate AS ToDT, 
+    'PERMISSION:' AS LeaveType, 
+    ISNULL(p.HourTaken, 0) AS HourTaken,
+    CONCAT('PERMISSIONID: ', p.PermissionID) AS SourceID,
+    p.Status
+FROM HR.tbl_Permissions p 
+WHERE p.Status = 'Approved';
 
 
 /*----Día laboral esperado vs trabajado (base para atraso/HE)*/

@@ -14,4 +14,6 @@ public class Permissions {
   public DateTime CreatedAt { get; set; }
   public string Status { get; set; } = null!;
   public int? VacationId { get; set; }
+
+  public virtual Employees Employee { get; set; }
 }

@@ -12,4 +12,6 @@ public class Vacations {
   public string Status { get; set; } = null!;
   public DateTime CreatedAt { get; set; }
   public DateTime? UpdatedAt { get; set; }
+  
+  public virtual Employees Employee { get; set; }
 }
