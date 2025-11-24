@@ -559,6 +559,7 @@ CREATE TABLE HR.tbl_PunchJustifications (
     EmployeeID INT NOT NULL,
     BossEmployeeID INT NOT NULL,
     JustificationTypeID INT NOT NULL,
+    PunchTypeID INT NULL,
     StartDate DATETIME2 NULL,                     -- CAMBIADO A DATETIME2
     EndDate DATETIME2 NULL,                       -- CAMBIADO A DATETIME2
     JustificationDate DATETIME2 NULL,
@@ -589,7 +590,9 @@ CREATE TABLE HR.tbl_AttendanceCalculations (
 	MinutesLate INT NOT NULL CONSTRAINT DF_AttCalc_MinutesLate DEFAULT (0),
 	ScheduledWorkedMin INT NOT NULL CONSTRAINT DF_AttCalc_SchedWorked DEFAULT(0),
 	OffScheduleMin INT NOT NULL CONSTRAINT DF_AttCalc_OffSched DEFAULT(0),
-	JustificationApply BIT NOT NULL DEFAULT(0)  
+	JustificationApply BIT NOT NULL DEFAULT(0),
+	FoodSubsidy INT NOT NULL DEFAULT(0),     --verifica si cuenta subcidio o no 1 cuando cumple la jornada completa y 0 si no tiene la jornada completa , 
+	JustificationMinutes INT NOT NULL DEFAULT(0)  --minutos que se aplico la justificiacion 
 );
 
 

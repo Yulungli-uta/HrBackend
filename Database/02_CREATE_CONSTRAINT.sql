@@ -173,7 +173,7 @@ ADD CONSTRAINT CK_Permissions_Status CHECK (Status IN ('Pending','Approved','Rej
 
 -- Check constraints para tbl_PunchJustifications
 ALTER TABLE HR.tbl_PunchJustifications 
-ADD CONSTRAINT CK_PunchJustifications_Status CHECK (Status IN ('PENDING','APPROVED','REJECTED'));
+ADD CONSTRAINT CK_PunchJustifications_Status CHECK (Status IN ('PENDING','APPROVED','REJECTED','APPLIED'));
 
 -- Check constraints para tbl_AttendanceCalculations
 ALTER TABLE HR.tbl_AttendanceCalculations 
@@ -395,6 +395,7 @@ ALTER TABLE HR.tbl_PunchJustifications
 ADD CONSTRAINT FK_PunchJustifications_Employee FOREIGN KEY (EmployeeID) REFERENCES HR.tbl_Employees(EmployeeID),
     CONSTRAINT FK_PunchJustifications_Boss FOREIGN KEY (BossEmployeeID) REFERENCES HR.tbl_Employees(EmployeeID),
     CONSTRAINT FK_PunchJustifications_JustificationType FOREIGN KEY (JustificationTypeID) REFERENCES HR.ref_Types(TypeID),
+	CONSTRAINT FK_PunchJustifications_PunchType FOREIGN KEY (PunchTypeID) REFERENCES HR.ref_Types(TypeID),
     CONSTRAINT FK_PunchJustifications_CreatedBy FOREIGN KEY (CreatedBy) REFERENCES HR.tbl_Employees(EmployeeID);
 
 ALTER TABLE HR.tbl_AttendanceCalculations
