@@ -116,6 +116,18 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddValidatorsFromAssemblyContaining<WsUtaSystem.Application.Mapping.EntityToDtoProfile>();
 
+// ===== Servicios de Reportes =====
+builder.Services.AddSingleton(sp =>
+{
+    var config = new WsUtaSystem.Application.Services.Reports.Configuration.ReportConfiguration();
+    builder.Configuration.GetSection("Reports").Bind(config);
+    return config;
+});
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Reports.IReportRepository, WsUtaSystem.Infrastructure.Repositories.Reports.ReportRepository>();
+builder.Services.AddScoped<WsUtaSystem.Infrastructure.Repositories.Reports.ReportAuditRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Reports.IReportAuditService, WsUtaSystem.Application.Services.Reports.ReportAuditService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Reports.IReportService, WsUtaSystem.Application.Services.Reports.ReportService>();
+
 // ===== DB =====
 var cs = builder.Configuration.GetConnectionString("SqlServerConn")
         ?? builder.Configuration.GetConnectionString("Sql")
@@ -287,6 +299,9 @@ app.UseMiddleware<ErrorHandlingMiddleware>();
 // Agrupar todos los controladores bajo el prefijo "api/v1/rh/"
 var apiGroup = app.MapGroup("api/v1/rh");
 apiGroup.MapControllers();
+
+// Endpoints de reportes
+WsUtaSystem.Endpoints.ReportEndpoints.MapReportEndpoints(app);
 
 if (app.Environment.IsDevelopment())
 {
