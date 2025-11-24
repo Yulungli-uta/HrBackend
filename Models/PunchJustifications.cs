@@ -14,6 +14,8 @@ public class PunchJustifications
     public int EmployeeId { get; set; }
     public int BossEmployeeId { get; set; }
     public int JustificationTypeId { get; set; }
+    public int? PunchTypeId { get; set; }
+
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
     public DateTime? JustificationDate { get; set; }

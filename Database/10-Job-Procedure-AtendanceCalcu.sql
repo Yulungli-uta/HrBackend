@@ -6,7 +6,7 @@
 -- CREATED: 2024
 -- UPDATED: 2024-10-27 - Agregados logs detallados
 ---------------------------------------------------------------------------------------------------
-
+/*
 CREATE OR ALTER PROCEDURE HR.sp_Attendance_CalculateRange
   @FromDate    DATE,
   @ToDate      DATE,
@@ -141,7 +141,7 @@ BEGIN
     a.WorkDate,
     ISNULL(a.RequiredMin,0) AS RequiredMin,
     a.EntryTime,
-
+	
     -- Guardamos lo que venía de la vista
     a.FirstIn,
     a.LastOut,
@@ -155,7 +155,8 @@ BEGIN
       WHEN Eff.InDT IS NULL OR Eff.OutDT IS NULL OR Eff.OutDT < Eff.InDT THEN 0
       ELSE CASE 
              WHEN DATEDIFF(MINUTE, Eff.InDT, Eff.OutDT) - @LunchMin < 0 THEN 0
-             ELSE DATEDIFF(MINUTE, Eff.InDT, Eff.OutDT) - @LunchMin
+             --ELSE DATEDIFF(MINUTE, Eff.InDT, Eff.OutDT) - @LunchMin
+			 ELSE DATEDIFF(MINUTE, Eff.InDT, Eff.OutDT) - @LunchMin
            END
     END AS RawWorkedMin,
 
@@ -348,7 +349,931 @@ BEGIN
   DROP TABLE IF EXISTS #Cal;
 
 END
-GO
+GO*/
+----------------------------------------------------------------------------------------------------------------------
+
+/* =======================================================================
+   HR.sp_Attendance_CalculateRange
+   Autor:        (tu equipo / DTH)
+   Propósito:    Calcular métricas diarias de asistencia por empleado en
+                 un rango de fechas, tomando el horario asignado efectivo
+                 desde HR.tbl_EmployeeSchedules + HR.tbl_Schedules
+                 y descansos de almuerzo desde LunchStart/LunchEnd.
+
+   Métricas calculadas / actualizadas en HR.tbl_AttendanceCalculations:
+     - TotalWorkedMinutes    : Trabajo neto del día (Out-In) - almuerzo.
+     - RegularMinutes        : Min(RequiredMin, TotalWorkedMinutes) salvo feriados/licencias.
+     - OvertimeMinutes       : Exceso sobre RequiredMin si supera umbral @OTMin.
+     - NightMinutes          : Traslape con ventana nocturna parametrizable.
+     - HolidayMinutes        : Trabajo en feriado/fin de semana.
+     - TardinessMin          : Tardanza sancionable = MAX(0, (In-Entry) - Grace).
+     - MinutesLate           : Retraso bruto (puede ser negativo si llegó antes).
+     - RequiredMinutes       : Minutos requeridos según horario del día.
+     - FirstPunchIn/LastPunchOut : Picadas extremas efectivas del día.
+     - ScheduledWorkedMin    : Minutos trabajados DENTRO del horario (mañana/tarde).
+     - OffScheduleMin        : Minutos trabajados FUERA del horario (neto ya sin almuerzo).
+
+   Supuestos:
+     - El horario del día proviene de la asignación vigente (ValidFrom/ValidTo).
+     - LunchStart/LunchEnd definen el descanso (si HasLunchBreak=1).
+     - Si ExitTime < EntryTime, el turno cruza medianoche.
+     - Las picadas se buscan en [WorkDate 00:00, NightEndDT) para incluir
+       madrugada del día siguiente (configurado por @NightEnd).
+     - Si hay licencia o feriado/fin de semana, RequiredMinutes se fuerza a 0
+       (según reglas de negocio actuales).
+
+   Parámetros de configuración (HR.tbl_Parameters):
+     - TARDINESS_GRACE_MIN
+     - OT_MIN_THRESHOLD_MIN
+     - NIGHT_START, NIGHT_END
+
+   Extensiones futuras:
+     - Manejar múltiples tramos de horario en un mismo día.
+     - Comportamiento especial en teletrabajo o turnos rotativos.
+     - Integración de justificaciones antes/después de este cálculo.
+
+   Última actualización: (yyyy-mm-dd)
+   ======================================================================= */
+/* ============================================================================
+   PROCEDIMIENTO: HR.sp_Attendance_CalculateRange
+   DESCRIPCIÓN:   Calcula y registra asistencia, horarios regulares, horas extras, 
+                  tardanzas y otros indicadores de tiempo laboral para empleados
+   VERSIÓN:       2.2 - Con control preciso de almuerzo y suma de diferencias de picadas
+   FECHA:         2025-11-17
+   AUTOR:         Sistema de Gestión de Asistencia
+   PARÁMETROS:
+      @FromDate     - Fecha inicial del rango
+      @ToDate       - Fecha final del rango  
+      @EmployeeID   - ID específico de empleado (NULL para todos)
+      @Debug        - 1 para mostrar información de depuración
+      @PersistLog   - 1 para guardar log en tabla permanente
+      @OnlySuspects - 1 para mostrar solo registros sospechosos en log
+============================================================================ */
+
+CREATE OR ALTER PROCEDURE HR.sp_Attendance_CalculateRange
+  @FromDate     DATE,
+  @ToDate       DATE,
+  @EmployeeID   INT = NULL,
+  @Debug        BIT = 1,
+  @PersistLog   BIT = 0,
+  @OnlySuspects BIT = 1
+AS
+BEGIN
+  SET NOCOUNT ON;
+  
+  DECLARE @StartTime DATETIME2 = SYSUTCDATETIME();
+  DECLARE @ErrorMsg NVARCHAR(4000);
+  DECLARE @ErrorSeverity INT;
+  DECLARE @ErrorState INT;
+  DECLARE @RowsAffected INT = 0;
+
+  BEGIN TRY
+    /* ============================================================================
+       SECCIÓN 1: VALIDACIÓN DE PARÁMETROS Y CONFIGURACIÓN INICIAL
+    ============================================================================ */
+    
+    -- Validar parámetros de entrada
+    IF @FromDate IS NULL OR @ToDate IS NULL
+    BEGIN
+      RAISERROR('Los parámetros @FromDate y @ToDate son obligatorios.', 16, 1);
+      RETURN;
+    END;
+
+    IF @FromDate > @ToDate
+    BEGIN
+      RAISERROR('@FromDate no puede ser mayor que @ToDate.', 16, 1);
+      RETURN;
+    END;
+
+    -- Obtener parámetros del sistema
+    DECLARE 
+      @GraceMin   INT  = TRY_CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='TARDINESS_GRACE_MIN') AS INT),
+      @OTMin      INT  = TRY_CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='OT_MIN_THRESHOLD_MIN') AS INT),
+      @NightStart TIME = TRY_CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='NIGHT_START') AS TIME),
+      @NightEnd   TIME = TRY_CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='NIGHT_END')   AS TIME);
+
+    -- Establecer valores por defecto para parámetros NULL
+    SET @GraceMin   = ISNULL(@GraceMin, 0);
+    SET @OTMin      = ISNULL(@OTMin, 0);
+    SET @NightStart = ISNULL(@NightStart, TRY_CAST('22:00' AS TIME));
+    SET @NightEnd   = ISNULL(@NightEnd,   TRY_CAST('06:00' AS TIME));
+
+    -- Log de inicio y parámetros
+    IF @Debug = 1
+    BEGIN
+      PRINT '=================================================================';
+      PRINT 'INICIO EJECUCIÓN: HR.sp_Attendance_CalculateRange';
+      PRINT '=================================================================';
+      PRINT 'Parámetros de entrada:';
+      PRINT '  Rango fechas : ' + CONVERT(VARCHAR(10), @FromDate, 120) + ' -> ' + CONVERT(VARCHAR(10), @ToDate, 120);
+      PRINT '  Empleado     : ' + COALESCE(CAST(@EmployeeID AS VARCHAR(12)), 'TODOS');
+      PRINT '  Debug        : ' + CAST(@Debug AS VARCHAR(1));
+      PRINT '  PersistLog   : ' + CAST(@PersistLog AS VARCHAR(1));
+      PRINT '  OnlySuspects : ' + CAST(@OnlySuspects AS VARCHAR(1));
+      PRINT '';
+      PRINT 'Parámetros del sistema:';
+      PRINT '  Tolerancia tardanza : ' + CAST(@GraceMin AS VARCHAR(10)) + ' min';
+      PRINT '  Mínimo horas extras : ' + CAST(@OTMin AS VARCHAR(10)) + ' min'; 
+      PRINT '  Horario nocturno    : ' + CONVERT(VARCHAR(8), @NightStart, 108) + ' -> ' + CONVERT(VARCHAR(8), @NightEnd, 108);
+      PRINT '=================================================================';
+    END;
+
+    /* ============================================================================
+       SECCIÓN 2: PREPARACIÓN DE DATOS BASE
+    ============================================================================ */
+
+    -- Tabla temporal: Calendario laboral
+    IF OBJECT_ID('tempdb..#Calendario') IS NOT NULL DROP TABLE #Calendario;
+    CREATE TABLE #Calendario (
+      Fecha DATE PRIMARY KEY,
+      EsFestivo BIT NOT NULL,
+      EsFinSemana BIT NOT NULL
+    );
+
+    INSERT INTO #Calendario (Fecha, EsFestivo, EsFinSemana)
+    SELECT 
+      D AS Fecha,
+      IsHoliday AS EsFestivo,
+      IsWeekend AS EsFinSemana
+    FROM HR.vw_Calendar
+    WHERE D BETWEEN @FromDate AND @ToDate;
+
+    -- Validar que existen fechas en el rango
+    IF NOT EXISTS (SELECT 1 FROM #Calendario)
+    BEGIN
+      RAISERROR('No existen datos de calendario para el rango de fechas especificado.', 16, 1);
+      RETURN;
+    END;
+
+    -- Tabla temporal: Empleados en scope
+    IF OBJECT_ID('tempdb..#Empleados') IS NOT NULL DROP TABLE #Empleados;
+    CREATE TABLE #Empleados (
+      EmpleadoID INT PRIMARY KEY,
+      Nombre NVARCHAR(100) NULL
+    );
+
+    INSERT INTO #Empleados (EmpleadoID, Nombre)
+    SELECT 
+      e.EmployeeID,
+      e.FirstName + ' ' + e.LastName
+    FROM HR.vw_EmployeeDetails e
+    WHERE (@EmployeeID IS NULL OR e.EmployeeID = @EmployeeID);
+
+    -- Validar que existen empleados
+    IF NOT EXISTS (SELECT 1 FROM #Empleados)
+    BEGIN
+      RAISERROR('No se encontraron empleados para procesar.', 16, 1);
+      RETURN;
+    END;
+
+    -- Tabla temporal: Licencias
+    IF OBJECT_ID('tempdb..#Licencias') IS NOT NULL DROP TABLE #Licencias;
+    CREATE TABLE #Licencias (
+      EmpleadoID INT,
+      Fecha DATE,
+      PRIMARY KEY (EmpleadoID, Fecha)
+    );
+
+    INSERT INTO #Licencias (EmpleadoID, Fecha)
+    SELECT DISTINCT 
+      l.EmployeeID,
+      c.Fecha
+    FROM HR.vw_LeaveWindows l
+    INNER JOIN #Calendario c
+      ON c.Fecha >= CAST(l.FromDT AS DATE)
+     AND c.Fecha < CAST(l.ToDT AS DATE)
+    WHERE EXISTS (SELECT 1 FROM #Empleados e WHERE e.EmpleadoID = l.EmployeeID);
+
+    /* ============================================================================
+       SECCIÓN 3: HORARIOS Y REQUERIMIENTOS
+    ============================================================================ */
+
+    -- Tabla temporal: Horarios por empleado y día
+    IF OBJECT_ID('tempdb..#HorariosEmpleados') IS NOT NULL DROP TABLE #HorariosEmpleados;
+    CREATE TABLE #HorariosEmpleados (
+      EmpleadoID INT NOT NULL,
+      FechaTrabajo DATE NOT NULL,
+      HorarioID INT NULL,
+      HoraEntrada TIME NULL,
+      HoraSalida TIME NULL,
+      TieneAlmuerzo BIT NULL,
+      InicioAlmuerzo TIME NULL,
+      FinAlmuerzo TIME NULL,
+      MinutosRequeridos INT NOT NULL DEFAULT(0),
+      PRIMARY KEY (EmpleadoID, FechaTrabajo)
+    );
+
+    -- Obtener horarios efectivos para cada empleado y día
+    WITH Combinaciones AS (
+      SELECT 
+        e.EmpleadoID,
+        c.Fecha AS FechaTrabajo
+      FROM #Empleados e
+      CROSS JOIN #Calendario c
+    ),
+    HorariosEfectivos AS (
+      SELECT 
+        c.EmpleadoID,
+        c.FechaTrabajo,
+        (SELECT TOP 1 
+            es.ScheduleID
+         FROM HR.tbl_EmployeeSchedules es
+         WHERE es.EmployeeID = c.EmpleadoID
+           AND es.ValidFrom <= c.FechaTrabajo
+           AND (es.ValidTo IS NULL OR c.FechaTrabajo <= es.ValidTo)
+         ORDER BY es.ValidFrom DESC, es.EmpScheduleID DESC) AS HorarioID
+      FROM Combinaciones c
+    )
+    INSERT INTO #HorariosEmpleados (
+      EmpleadoID, FechaTrabajo, HorarioID, HoraEntrada, HoraSalida, 
+      TieneAlmuerzo, InicioAlmuerzo, FinAlmuerzo, MinutosRequeridos
+    )
+    SELECT
+      he.EmpleadoID,
+      he.FechaTrabajo,
+      he.HorarioID,
+      s.EntryTime AS HoraEntrada,
+      s.ExitTime AS HoraSalida,
+      s.HasLunchBreak AS TieneAlmuerzo,
+      s.LunchStart AS InicioAlmuerzo,
+      s.LunchEnd AS FinAlmuerzo,
+      -- Cálculo de minutos requeridos según horario
+      CASE 
+        WHEN s.ScheduleID IS NULL THEN 0
+        WHEN s.RequiredHoursPerDay IS NOT NULL THEN 
+          CAST(ROUND(s.RequiredHoursPerDay * 60.0, 0) AS INT)
+        WHEN s.EntryTime IS NULL OR s.ExitTime IS NULL THEN 0
+        ELSE 
+          -- Diferencia entre hora de entrada y salida
+          CASE 
+            WHEN s.ExitTime >= s.EntryTime THEN
+              DATEDIFF(MINUTE, s.EntryTime, s.ExitTime)
+            ELSE
+              -- Manejo de horarios que cruzan la medianoche
+              DATEDIFF(MINUTE, s.EntryTime, CAST('23:59:59' AS TIME)) + 1 +
+              DATEDIFF(MINUTE, CAST('00:00:00' AS TIME), s.ExitTime)
+          END
+          -- Restar tiempo de almuerzo si está configurado
+          - CASE 
+              WHEN s.HasLunchBreak = 1 
+                 AND s.LunchStart IS NOT NULL 
+                 AND s.LunchEnd IS NOT NULL THEN
+                DATEDIFF(MINUTE, s.LunchStart, s.LunchEnd)
+              ELSE 0
+            END
+      END AS MinutosRequeridos
+    FROM HorariosEfectivos he
+    LEFT JOIN HR.tbl_Schedules s ON s.ScheduleID = he.HorarioID;
+
+    /* ============================================================================
+       SECCIÓN 4: PROCESAMIENTO DE PICADAS Y CÁLCULO DE TIEMPOS TRABAJADOS - CORREGIDA
+    ============================================================================ */
+
+    -- Tabla temporal: Picadas y cálculos base
+    IF OBJECT_ID('tempdb..#ProcesamientoPicadas') IS NOT NULL DROP TABLE #ProcesamientoPicadas;
+    CREATE TABLE #ProcesamientoPicadas (
+      EmpleadoID INT NOT NULL,
+      FechaTrabajo DATE NOT NULL,
+      FinVentanaNocturna DATETIME2 NOT NULL,
+      PrimeraEntrada DATETIME2 NULL,
+      UltimaSalida DATETIME2 NULL,
+      TotalMinutosTrabajados INT NOT NULL DEFAULT(0),
+      CantidadPicadas INT NOT NULL DEFAULT(0),
+      PRIMARY KEY (EmpleadoID, FechaTrabajo)
+    );
+
+    -- Configurar ventana nocturna y obtener picadas
+    INSERT INTO #ProcesamientoPicadas (
+      EmpleadoID, FechaTrabajo, FinVentanaNocturna, 
+      PrimeraEntrada, UltimaSalida, TotalMinutosTrabajados, CantidadPicadas
+    )
+    SELECT
+      h.EmpleadoID,
+      h.FechaTrabajo,
+      -- Calcular fin de ventana nocturna (maneja cruce de medianoche)
+      CASE
+        WHEN @NightEnd <= @NightStart THEN
+          DATEADD(DAY, 1, DATEADD(SECOND, DATEDIFF(SECOND, 0, @NightEnd), CAST(h.FechaTrabajo AS DATETIME2)))
+        ELSE
+          DATEADD(SECOND, DATEDIFF(SECOND, 0, @NightEnd), CAST(h.FechaTrabajo AS DATETIME2))
+      END AS FinVentanaNocturna,
+      NULL, NULL, 0, 0
+    FROM #HorariosEmpleados h;
+
+    -- Calcular primera entrada, última salida y suma de diferencias entre picadas - CORREGIDO
+    UPDATE pp
+    SET 
+      PrimeraEntrada        = datos.PrimeraEntrada,
+      UltimaSalida          = datos.UltimaSalida,
+      TotalMinutosTrabajados = ISNULL(datos.TotalMinutosTrabajados, 0),
+      CantidadPicadas       = ISNULL(datos.CantidadPicadas, 0)
+    FROM #ProcesamientoPicadas pp
+    OUTER APPLY (
+      SELECT 
+        MIN(p2.PunchTime) AS PrimeraEntrada,
+        MAX(p2.PunchTime) AS UltimaSalida,
+        COUNT(*)          AS CantidadPicadas,
+        -- Suma de diferencias entre picadas consecutivas SOLO en filas impares (entradas)
+        SUM(
+          CASE 
+            WHEN p2.NumeroFila % 2 = 1 
+                 AND p2.SiguientePicada IS NOT NULL 
+              THEN DATEDIFF(MINUTE, p2.PunchTime, p2.SiguientePicada)
+            ELSE 0
+          END
+        ) AS TotalMinutosTrabajados
+      FROM (
+        SELECT 
+          p.PunchTime,
+          LEAD(p.PunchTime) OVER (ORDER BY p.PunchTime) AS SiguientePicada,
+          ROW_NUMBER()       OVER (ORDER BY p.PunchTime) AS NumeroFila
+        FROM HR.tbl_AttendancePunches p
+        WHERE p.EmployeeID = pp.EmpleadoID
+          AND p.PunchTime >= CAST(pp.FechaTrabajo AS DATETIME2)
+          AND p.PunchTime < pp.FinVentanaNocturna
+      ) p2
+    ) datos;
+
+
+    /* ============================================================================
+       SECCIÓN 5: CÁLCULOS DETALLADOS POR DÍA - CORREGIDA
+    ============================================================================ */
+
+    -- Tabla temporal: Resultados procesados
+    IF OBJECT_ID('tempdb..#ResultadosCalculados') IS NOT NULL DROP TABLE #ResultadosCalculados;
+    CREATE TABLE #ResultadosCalculados (
+      EmpleadoID INT NOT NULL,
+      FechaTrabajo DATE NOT NULL,
+      MinutosRequeridos INT NOT NULL,
+      HoraEntrada TIME NULL,
+      HoraSalida TIME NULL,
+      TieneAlmuerzo BIT NULL,
+      InicioAlmuerzo TIME NULL,
+      FinAlmuerzo TIME NULL,
+      MinutosAlmuerzo INT NOT NULL DEFAULT(0),
+      FechaHoraEntrada DATETIME2 NULL,
+      FechaHoraSalida DATETIME2 NULL,
+      FechaHoraInicioAlmuerzo DATETIME2 NULL,
+      FechaHoraFinAlmuerzo DATETIME2 NULL,
+      PrimeraEntradaReal DATETIME2 NULL,
+      UltimaSalidaReal DATETIME2 NULL,
+      EsFestivo BIT NOT NULL DEFAULT(0),
+      EsFinSemana BIT NOT NULL DEFAULT(0),
+      TieneLicencia BIT NOT NULL DEFAULT(0),
+      MinutosTrabajadosBrutos INT NOT NULL DEFAULT(0),
+      MinutosTrabajadosNetos INT NOT NULL DEFAULT(0),
+      MinutosTardanza INT NOT NULL DEFAULT(0),
+      MinutosRetraso INT NOT NULL DEFAULT(0),
+      MinutosNocturnos INT NOT NULL DEFAULT(0),
+      InicioManana DATETIME2 NULL,
+      FinManana DATETIME2 NULL,
+      InicioTarde DATETIME2 NULL,
+      FinTarde DATETIME2 NULL,
+      MinutosSolapadosManana INT NOT NULL DEFAULT(0),
+      MinutosSolapadosTarde INT NOT NULL DEFAULT(0),
+      MinutosTrabajadosProgramados INT NOT NULL DEFAULT(0),
+      MinutosFueraHorario INT NOT NULL DEFAULT(0),
+      MinutosRegularesFinales INT NOT NULL DEFAULT(0),
+      FlagRegularesIgualTotal BIT NOT NULL DEFAULT(0),
+      RazonRegularesIgualTotal NVARCHAR(200) NULL,
+      CantidadPicadas INT NOT NULL DEFAULT(0),
+      PRIMARY KEY (EmpleadoID, FechaTrabajo)
+    );
+
+    -- Insertar datos base y calcular tiempos trabajados - CORREGIDO
+    INSERT INTO #ResultadosCalculados (
+      EmpleadoID, FechaTrabajo, MinutosRequeridos,
+      HoraEntrada, HoraSalida, TieneAlmuerzo, InicioAlmuerzo, FinAlmuerzo, MinutosAlmuerzo,
+      FechaHoraEntrada, FechaHoraSalida, FechaHoraInicioAlmuerzo, FechaHoraFinAlmuerzo,
+      PrimeraEntradaReal, UltimaSalidaReal, EsFestivo, EsFinSemana, TieneLicencia,
+      MinutosTrabajadosBrutos, MinutosTrabajadosNetos, MinutosTardanza, MinutosRetraso, 
+      MinutosNocturnos, CantidadPicadas
+    )
+    SELECT
+      h.EmpleadoID,
+      h.FechaTrabajo,
+      ISNULL(h.MinutosRequeridos, 0),
+      h.HoraEntrada,
+      h.HoraSalida,
+      h.TieneAlmuerzo,
+      h.InicioAlmuerzo,
+      h.FinAlmuerzo,
+      CASE 
+        WHEN h.TieneAlmuerzo = 1 
+          AND h.InicioAlmuerzo IS NOT NULL 
+          AND h.FinAlmuerzo IS NOT NULL THEN
+          DATEDIFF(MINUTE, h.InicioAlmuerzo, h.FinAlmuerzo)
+        ELSE 0
+      END,
+      CASE 
+        WHEN h.HoraEntrada IS NULL THEN NULL
+        ELSE DATEADD(SECOND, DATEDIFF(SECOND, 0, h.HoraEntrada), CAST(h.FechaTrabajo AS DATETIME2))
+      END,
+      CASE 
+        WHEN h.HoraSalida IS NULL THEN NULL
+        ELSE 
+          CASE 
+            WHEN h.HoraSalida >= h.HoraEntrada THEN
+              DATEADD(SECOND, DATEDIFF(SECOND, 0, h.HoraSalida), CAST(h.FechaTrabajo AS DATETIME2))
+            ELSE
+              DATEADD(SECOND, DATEDIFF(SECOND, 0, h.HoraSalida), DATEADD(DAY, 1, CAST(h.FechaTrabajo AS DATETIME2)))
+          END
+      END,
+      CASE 
+        WHEN h.TieneAlmuerzo = 1 AND h.InicioAlmuerzo IS NOT NULL THEN
+          DATEADD(SECOND, DATEDIFF(SECOND, 0, h.InicioAlmuerzo), CAST(h.FechaTrabajo AS DATETIME2))
+        ELSE NULL
+      END,
+      CASE 
+        WHEN h.TieneAlmuerzo = 1 AND h.FinAlmuerzo IS NOT NULL THEN
+          DATEADD(SECOND, DATEDIFF(SECOND, 0, h.FinAlmuerzo), CAST(h.FechaTrabajo AS DATETIME2))
+        ELSE NULL
+      END,
+      pp.PrimeraEntrada,
+      pp.UltimaSalida,
+      c.EsFestivo,
+      c.EsFinSemana,
+      CASE WHEN l.EmpleadoID IS NOT NULL THEN 1 ELSE 0 END,
+      -- CORRECCIÓN: Usar ISNULL para evitar NULL en cálculos
+      ISNULL(pp.TotalMinutosTrabajados, 0) AS MinutosTrabajadosBrutos,
+      -- LÓGICA PRINCIPAL: Cálculo de minutos trabajados netos - CORREGIDO
+      CASE 
+        WHEN h.TieneAlmuerzo = 1 
+          AND h.InicioAlmuerzo IS NOT NULL 
+          AND h.FinAlmuerzo IS NOT NULL 
+          AND pp.CantidadPicadas = 2 
+          AND ISNULL(pp.TotalMinutosTrabajados, 0) > h.MinutosRequeridos THEN
+          -- Condición específica: restar almuerzo
+          ISNULL(pp.TotalMinutosTrabajados, 0) - DATEDIFF(MINUTE, h.InicioAlmuerzo, h.FinAlmuerzo)
+        ELSE
+          -- Cualquier otro caso: usar total sin modificar
+          ISNULL(pp.TotalMinutosTrabajados, 0)
+      END AS MinutosTrabajadosNetos,
+      CASE 
+        WHEN pp.PrimeraEntrada IS NULL OR h.HoraEntrada IS NULL THEN 0
+        ELSE 
+          CASE 
+            WHEN DATEDIFF(MINUTE, 
+                  DATEADD(SECOND, DATEDIFF(SECOND, 0, h.HoraEntrada), CAST(h.FechaTrabajo AS DATETIME2)), 
+                  pp.PrimeraEntrada) - @GraceMin < 0 THEN 0
+            ELSE 
+              DATEDIFF(MINUTE,
+                DATEADD(SECOND, DATEDIFF(SECOND, 0, h.HoraEntrada), CAST(h.FechaTrabajo AS DATETIME2)), 
+                pp.PrimeraEntrada) - @GraceMin
+          END
+      END,
+      CASE 
+        WHEN pp.PrimeraEntrada IS NULL OR h.HoraEntrada IS NULL THEN 0
+        ELSE 
+          DATEDIFF(MINUTE,
+            DATEADD(SECOND, DATEDIFF(SECOND, 0, h.HoraEntrada), CAST(h.FechaTrabajo AS DATETIME2)), 
+            pp.PrimeraEntrada)
+      END,
+      CASE
+        WHEN pp.PrimeraEntrada IS NULL OR pp.UltimaSalida IS NULL OR pp.UltimaSalida <= pp.PrimeraEntrada THEN 0
+        ELSE
+          DATEDIFF(MINUTE,
+            CASE 
+              WHEN DATEADD(SECOND, DATEDIFF(SECOND, 0, @NightStart), CAST(h.FechaTrabajo AS DATETIME2)) > pp.PrimeraEntrada
+                THEN DATEADD(SECOND, DATEDIFF(SECOND, 0, @NightStart), CAST(h.FechaTrabajo AS DATETIME2))
+              ELSE pp.PrimeraEntrada
+            END,
+            CASE 
+              WHEN (CASE 
+                      WHEN @NightEnd <= @NightStart THEN
+                        DATEADD(DAY, 1, DATEADD(SECOND, DATEDIFF(SECOND, 0, @NightEnd), CAST(h.FechaTrabajo AS DATETIME2)))
+                      ELSE
+                        DATEADD(SECOND, DATEDIFF(SECOND, 0, @NightEnd), CAST(h.FechaTrabajo AS DATETIME2))
+                    END) < pp.UltimaSalida
+                THEN (CASE 
+                        WHEN @NightEnd <= @NightStart THEN
+                          DATEADD(DAY, 1, DATEADD(SECOND, DATEDIFF(SECOND, 0, @NightEnd), CAST(h.FechaTrabajo AS DATETIME2)))
+                        ELSE
+                          DATEADD(SECOND, DATEDIFF(SECOND, 0, @NightEnd), CAST(h.FechaTrabajo AS DATETIME2))
+                      END)
+              ELSE pp.UltimaSalida
+            END
+          )
+      END,
+      ISNULL(pp.CantidadPicadas, 0) AS CantidadPicadas
+    FROM #HorariosEmpleados h
+    INNER JOIN #Calendario c ON c.Fecha = h.FechaTrabajo
+    LEFT JOIN #Licencias l ON l.EmpleadoID = h.EmpleadoID AND l.Fecha = h.FechaTrabajo
+    INNER JOIN #ProcesamientoPicadas pp ON pp.EmpleadoID = h.EmpleadoID AND pp.FechaTrabajo = h.FechaTrabajo;
+
+    /* ============================================================================
+       SECCIÓN 6: CÁLCULO DE HORARIO REGULAR Y TRASLAPES
+    ============================================================================ */
+
+    -- Calcular ventanas de tiempo para horario de la mañana
+    UPDATE #ResultadosCalculados
+    SET 
+      InicioManana = CASE 
+          WHEN PrimeraEntradaReal IS NULL OR FechaHoraEntrada IS NULL THEN NULL
+          ELSE CASE 
+              WHEN PrimeraEntradaReal > FechaHoraEntrada THEN PrimeraEntradaReal
+              ELSE FechaHoraEntrada
+            END
+        END,
+      FinManana = CASE 
+          WHEN UltimaSalidaReal IS NULL OR FechaHoraSalida IS NULL THEN NULL
+          ELSE
+            CASE 
+              WHEN (CASE 
+                      WHEN FechaHoraInicioAlmuerzo IS NOT NULL THEN FechaHoraInicioAlmuerzo
+                      ELSE FechaHoraSalida
+                    END) < UltimaSalidaReal
+                THEN (CASE 
+                        WHEN FechaHoraInicioAlmuerzo IS NOT NULL THEN FechaHoraInicioAlmuerzo
+                        ELSE FechaHoraSalida
+                      END)
+              ELSE UltimaSalidaReal
+            END
+        END;
+
+    UPDATE #ResultadosCalculados
+    SET MinutosSolapadosManana =
+        CASE 
+          WHEN InicioManana IS NULL OR FinManana IS NULL OR FinManana <= InicioManana THEN 0
+          ELSE DATEDIFF(MINUTE, InicioManana, FinManana)
+        END;
+
+    -- Calcular ventanas de tiempo para horario de la tarde (solo si tiene almuerzo)
+    UPDATE #ResultadosCalculados
+    SET 
+      InicioTarde = CASE 
+          WHEN PrimeraEntradaReal IS NULL OR FechaHoraFinAlmuerzo IS NULL THEN NULL
+          ELSE CASE 
+              WHEN PrimeraEntradaReal > FechaHoraFinAlmuerzo THEN PrimeraEntradaReal
+              ELSE FechaHoraFinAlmuerzo
+            END
+        END,
+      FinTarde = CASE 
+          WHEN UltimaSalidaReal IS NULL OR FechaHoraSalida IS NULL OR FechaHoraFinAlmuerzo IS NULL THEN NULL
+          ELSE CASE 
+              WHEN FechaHoraSalida < UltimaSalidaReal THEN FechaHoraSalida
+              ELSE UltimaSalidaReal
+            END
+        END;
+
+    UPDATE #ResultadosCalculados
+    SET MinutosSolapadosTarde =
+        CASE 
+          WHEN InicioTarde IS NULL OR FinTarde IS NULL OR FinTarde <= InicioTarde THEN 0
+          ELSE DATEDIFF(MINUTE, InicioTarde, FinTarde)
+        END;
+
+    -- Calcular minutos trabajados dentro del horario programado
+    UPDATE #ResultadosCalculados
+    SET 
+      MinutosTrabajadosProgramados = ISNULL(MinutosSolapadosManana, 0) + ISNULL(MinutosSolapadosTarde, 0),
+      MinutosFueraHorario = 
+        CASE 
+          WHEN (ISNULL(MinutosSolapadosManana, 0) + ISNULL(MinutosSolapadosTarde, 0)) >= MinutosTrabajadosNetos
+            THEN 0
+          ELSE MinutosTrabajadosNetos - (ISNULL(MinutosSolapadosManana, 0) + ISNULL(MinutosSolapadosTarde, 0))
+        END;
+
+    -- Calcular minutos regulares finales (nunca mayores que los minutos trabajados netos)
+    UPDATE #ResultadosCalculados
+    SET 
+      MinutosRegularesFinales = CASE 
+          WHEN (EsFestivo = 1 OR EsFinSemana = 1 OR TieneLicencia = 1) THEN 0
+          ELSE
+            CASE
+              WHEN MinutosRequeridos <= MinutosTrabajadosProgramados THEN 
+                CASE 
+                  WHEN MinutosRequeridos > MinutosTrabajadosNetos THEN MinutosTrabajadosNetos
+                  ELSE MinutosRequeridos
+                END
+              ELSE
+                CASE 
+                  WHEN MinutosTrabajadosProgramados > MinutosTrabajadosNetos THEN MinutosTrabajadosNetos
+                  ELSE MinutosTrabajadosProgramados
+                END
+            END
+        END,
+      FlagRegularesIgualTotal = CASE 
+          WHEN (CASE WHEN TieneLicencia = 1 THEN 0 ELSE MinutosTrabajadosNetos END) = 
+               (CASE 
+                  WHEN (EsFestivo = 1 OR EsFinSemana = 1 OR TieneLicencia = 1) THEN 0
+                  ELSE
+                    CASE
+                      WHEN MinutosRequeridos <= MinutosTrabajadosProgramados THEN 
+                        CASE 
+                          WHEN MinutosRequeridos > MinutosTrabajadosNetos THEN MinutosTrabajadosNetos
+                          ELSE MinutosRequeridos
+                        END
+                      ELSE
+                        CASE 
+                          WHEN MinutosTrabajadosProgramados > MinutosTrabajadosNetos THEN MinutosTrabajadosNetos
+                          ELSE MinutosTrabajadosProgramados
+                        END
+                    END
+                END)
+          THEN 1 
+          ELSE 0 
+        END,
+      RazonRegularesIgualTotal = CASE 
+          WHEN PrimeraEntradaReal IS NULL OR UltimaSalidaReal IS NULL THEN N'SIN_PICADAS'
+          WHEN MinutosRequeridos = 0 THEN N'MINUTOS_REQUERIDOS_CERO'
+          WHEN MinutosFueraHorario = 0 
+            AND MinutosTrabajadosNetos = MinutosTrabajadosProgramados 
+            AND MinutosRequeridos >= MinutosTrabajadosProgramados THEN 
+            N'TODO_DENTRO_HORARIO_Y_REQUERIDO>=PROGRAMADO'
+          WHEN MinutosFueraHorario = 0 
+            AND MinutosTrabajadosNetos = MinutosTrabajadosProgramados 
+            AND MinutosRequeridos < MinutosTrabajadosProgramados THEN 
+            N'TODO_DENTRO_HORARIO_PER_REQUERIDO_MENOR'
+          WHEN FechaHoraEntrada IS NULL OR FechaHoraSalida IS NULL THEN N'HORARIO_SIN_ENTRADA_O_SALIDA'
+          ELSE N'OTRA_COINCIDENCIA'
+        END;
+
+    /* ============================================================================
+       SECCIÓN 7: ACTUALIZACIÓN DE LA TABLA DE ASISTENCIA - CORREGIDA
+    ============================================================================ */
+
+    BEGIN TRANSACTION;
+
+    -- Actualizar registros existentes
+    UPDATE T
+    SET 
+      TotalWorkedMinutes = CASE WHEN C.TieneLicencia = 1 THEN 0 ELSE C.MinutosTrabajadosNetos END,
+      RegularMinutes = C.MinutosRegularesFinales,
+      OvertimeMinutes = 
+        CASE 
+          WHEN (CASE WHEN C.TieneLicencia = 1 THEN 0 ELSE C.MinutosTrabajadosNetos END) -
+               (CASE WHEN C.TieneLicencia = 1 OR C.EsFestivo = 1 OR C.EsFinSemana = 1 THEN 0 ELSE C.MinutosRequeridos END) >= @OTMin
+            THEN (CASE WHEN C.TieneLicencia = 1 THEN 0 ELSE C.MinutosTrabajadosNetos END) -
+                 (CASE WHEN C.TieneLicencia = 1 OR C.EsFestivo = 1 OR C.EsFinSemana = 1 THEN 0 ELSE C.MinutosRequeridos END)
+          ELSE 0
+        END,
+      NightMinutes = CASE WHEN C.MinutosNocturnos < 0 THEN 0 ELSE C.MinutosNocturnos END,
+      HolidayMinutes = 
+        CASE 
+          WHEN C.EsFestivo = 1 OR C.EsFinSemana = 1 THEN 
+            (CASE WHEN C.TieneLicencia = 1 THEN 0 ELSE C.MinutosTrabajadosNetos END)
+          ELSE 0
+        END,
+      TardinessMin = CASE WHEN C.MinutosTardanza < 0 THEN 0 ELSE C.MinutosTardanza END,
+      RequiredMinutes = C.MinutosRequeridos,
+      MinutesLate = C.MinutosRetraso,
+      FirstPunchIn = C.PrimeraEntradaReal,
+      LastPunchOut = C.UltimaSalidaReal,
+      ScheduledWorkedMin = C.MinutosTrabajadosProgramados,
+      OffScheduleMin = C.MinutosFueraHorario,
+      Status = 'Approved'
+      -- Comentado porque ModifiedDate no existe en la tabla
+      -- ModifiedDate = SYSUTCDATETIME()
+    FROM HR.tbl_AttendanceCalculations T WITH (UPDLOCK, ROWLOCK)
+    INNER JOIN #ResultadosCalculados C
+      ON C.EmpleadoID = T.EmployeeID AND C.FechaTrabajo = T.WorkDate;
+
+    SET @RowsAffected = @RowsAffected + @@ROWCOUNT;
+
+    -- Insertar nuevos registros
+    INSERT INTO HR.tbl_AttendanceCalculations (
+      EmployeeID, WorkDate, FirstPunchIn, LastPunchOut,
+      TotalWorkedMinutes, RegularMinutes, OvertimeMinutes,
+      NightMinutes, HolidayMinutes, TardinessMin, RequiredMinutes,
+      MinutesLate, ScheduledWorkedMin, OffScheduleMin, Status, FoodSubsidy
+      -- Comentado porque CreatedDate y ModifiedDate no existen en la tabla
+      -- CreatedDate, ModifiedDate
+    )
+    SELECT
+      C.EmpleadoID,
+      C.FechaTrabajo,
+      C.PrimeraEntradaReal,
+      C.UltimaSalidaReal,
+      CASE WHEN C.TieneLicencia = 1 THEN 0 ELSE C.MinutosTrabajadosNetos END,
+      C.MinutosRegularesFinales,
+      CASE 
+        WHEN (CASE WHEN C.TieneLicencia = 1 THEN 0 ELSE C.MinutosTrabajadosNetos END) -
+             (CASE WHEN C.TieneLicencia = 1 OR C.EsFestivo = 1 OR C.EsFinSemana = 1 THEN 0 ELSE C.MinutosRequeridos END) >= @OTMin
+          THEN (CASE WHEN C.TieneLicencia = 1 THEN 0 ELSE C.MinutosTrabajadosNetos END) -
+               (CASE WHEN C.TieneLicencia = 1 OR C.EsFestivo = 1 OR C.EsFinSemana = 1 THEN 0 ELSE C.MinutosRequeridos END)
+        ELSE 0
+      END,
+      CASE WHEN C.MinutosNocturnos < 0 THEN 0 ELSE C.MinutosNocturnos END,
+      CASE 
+        WHEN C.EsFestivo = 1 OR C.EsFinSemana = 1 THEN 
+          (CASE WHEN C.TieneLicencia = 1 THEN 0 ELSE C.MinutosTrabajadosNetos END)
+        ELSE 0
+      END,
+      CASE WHEN C.MinutosTardanza < 0 THEN 0 ELSE C.MinutosTardanza END,
+      C.MinutosRequeridos,
+      C.MinutosRetraso,
+      C.MinutosTrabajadosProgramados,
+      C.MinutosFueraHorario,
+      'Approved',
+      0
+      -- Comentado porque CreatedDate y ModifiedDate no existen en la tabla
+      -- SYSUTCDATETIME(), SYSUTCDATETIME()
+    FROM #ResultadosCalculados C
+    WHERE NOT EXISTS (
+      SELECT 1 
+      FROM HR.tbl_AttendanceCalculations T 
+      WHERE T.EmployeeID = C.EmpleadoID AND T.WorkDate = C.FechaTrabajo
+    );
+
+    SET @RowsAffected = @RowsAffected + @@ROWCOUNT;
+
+    COMMIT TRANSACTION;
+
+    /* ============================================================================
+       SECCIÓN 8: CÁLCULO DE SUBSIDIO DE ALIMENTACIÓN
+    ============================================================================ */
+
+    -- Actualizar subsidio de alimentación para contrato "Código Trabajo"
+    ;WITH ContratoCodigoTrabajo AS (
+      SELECT rt.TypeID
+      FROM HR.ref_Types rt
+      WHERE rt.Category = 'CONTRACT_TYPE' 
+        AND UPPER(rt.Name) = UPPER(N'Código Trabajo')
+    )
+    UPDATE ac
+    SET 
+      ac.FoodSubsidy = CASE WHEN ac.RegularMinutes >= ac.RequiredMinutes THEN 1 ELSE ac.FoodSubsidy END
+    FROM HR.tbl_AttendanceCalculations ac
+    INNER JOIN HR.tbl_Employees e ON e.EmployeeID = ac.EmployeeID
+    INNER JOIN ContratoCodigoTrabajo ct ON ct.TypeID = e.EmployeeType
+    WHERE ac.WorkDate BETWEEN @FromDate AND @ToDate
+      AND (@EmployeeID IS NULL OR ac.EmployeeID = @EmployeeID);
+
+    /* ============================================================================
+       SECCIÓN 9: REGISTRO DE LOGS TEMPORAL
+    ============================================================================ */
+
+    -- Tabla temporal para log detallado (solo para debug)
+    IF OBJECT_ID('tempdb..#LogDetallado') IS NOT NULL DROP TABLE #LogDetallado;
+    CREATE TABLE #LogDetallado (
+        EmpleadoID INT,
+        FechaTrabajo DATE,
+        MinutosRequeridos INT,
+        HoraEntrada TIME NULL,
+        HoraSalida TIME NULL,
+        TieneAlmuerzo BIT,
+        InicioAlmuerzo TIME NULL,
+        FinAlmuerzo TIME NULL,
+        MinutosAlmuerzoConfig INT,
+        FechaHoraEntrada DATETIME2 NULL,
+        FechaHoraSalida DATETIME2 NULL,
+        FechaHoraInicioAlmuerzo DATETIME2 NULL,
+        FechaHoraFinAlmuerzo DATETIME2 NULL,
+        PrimeraEntradaReal DATETIME2 NULL,
+        UltimaSalidaReal DATETIME2 NULL,
+        MinutosTrabajadosBrutos INT,
+        MinutosTrabajadosNetos INT,
+        InicioManana DATETIME2 NULL,
+        FinManana DATETIME2 NULL,
+        MinutosSolapadosManana INT,
+        InicioTarde DATETIME2 NULL,
+        FinTarde DATETIME2 NULL,
+        MinutosSolapadosTarde INT,
+        MinutosTrabajadosProgramados INT,
+        MinutosFueraHorario INT,
+        MinutosTardanza INT,
+        MinutosRetraso INT,
+        MinutosNocturnos INT,
+        MinutosRegularesFinales INT,
+        CantidadPicadas INT
+    );
+
+    INSERT INTO #LogDetallado
+    SELECT
+        rc.EmpleadoID,
+        rc.FechaTrabajo,
+        rc.MinutosRequeridos,
+        rc.HoraEntrada,
+        rc.HoraSalida,
+        rc.TieneAlmuerzo,
+        rc.InicioAlmuerzo,
+        rc.FinAlmuerzo,
+        rc.MinutosAlmuerzo,
+        rc.FechaHoraEntrada,
+        rc.FechaHoraSalida,
+        rc.FechaHoraInicioAlmuerzo,
+        rc.FechaHoraFinAlmuerzo,
+        rc.PrimeraEntradaReal,
+        rc.UltimaSalidaReal,
+        rc.MinutosTrabajadosBrutos,
+        rc.MinutosTrabajadosNetos,
+        rc.InicioManana,
+        rc.FinManana,
+        rc.MinutosSolapadosManana,
+        rc.InicioTarde,
+        rc.FinTarde,
+        rc.MinutosSolapadosTarde,
+        rc.MinutosTrabajadosProgramados,
+        rc.MinutosFueraHorario,
+        rc.MinutosTardanza,
+        rc.MinutosRetraso,
+        rc.MinutosNocturnos,
+        rc.MinutosRegularesFinales,
+        rc.CantidadPicadas
+    FROM #ResultadosCalculados rc;
+
+    -- Mensaje sobre persistencia deshabilitada
+    IF @PersistLog = 1 AND @Debug = 1
+    BEGIN
+        PRINT 'NOTA: Persistencia de log deshabilitada - Log solo disponible temporalmente durante esta ejecución.';
+    END;
+
+    /* ============================================================================
+       SECCIÓN 10: SALIDA Y REPORTE FINAL
+    ============================================================================ */
+
+    DECLARE @EndTime DATETIME2 = SYSUTCDATETIME();
+    DECLARE @DurationMs INT = DATEDIFF(MILLISECOND, @StartTime, @EndTime);
+
+    IF @Debug = 1
+    BEGIN
+        PRINT '';
+        PRINT '=================================================================';
+        PRINT 'RESUMEN EJECUCIÓN: HR.sp_Attendance_CalculateRange';
+        PRINT '=================================================================';
+        PRINT 'Estadísticas:';
+        PRINT '  Registros procesados : ' + CAST(@RowsAffected AS VARCHAR(10));
+        PRINT '  Tiempo ejecución     : ' + CAST(@DurationMs AS VARCHAR(10)) + ' ms';
+        PRINT '  Fecha inicio         : ' + CONVERT(VARCHAR(23), @StartTime, 121);
+        PRINT '  Fecha fin            : ' + CONVERT(VARCHAR(23), @EndTime, 121);
+        PRINT '';
+        
+        -- Mostrar log detallado desde tabla temporal
+        PRINT 'LOG DETALLADO TEMPORAL (Registros procesados):';
+        SELECT 
+            EmpleadoID AS [ID],
+            FechaTrabajo AS [Fecha],
+            MinutosRequeridos AS [Req],
+            MinutosTrabajadosNetos AS [Total],
+            MinutosTrabajadosProgramados AS [Prog],
+            MinutosFueraHorario AS [Fuera],
+            MinutosRegularesFinales AS [Reg],
+            MinutosTardanza AS [Tard],
+            CantidadPicadas AS [Picadas]
+        FROM #LogDetallado
+        ORDER BY FechaTrabajo, EmpleadoID;
+
+        PRINT '';
+        PRINT 'RESULTADOS EN TABLA FINAL:';
+        SELECT 
+            ac.EmployeeID AS [ID],
+            ac.WorkDate AS [Fecha],
+            ac.RequiredMinutes AS [Req],
+            ac.TotalWorkedMinutes AS [Total],
+            ac.ScheduledWorkedMin AS [Prog],
+            ac.OffScheduleMin AS [Fuera],
+            ac.RegularMinutes AS [Reg],
+            ac.OvertimeMinutes AS [Extra],
+            ac.TardinessMin AS [Tard],
+            ac.FirstPunchIn AS [Entrada],
+            ac.LastPunchOut AS [Salida],
+            ac.FoodSubsidy AS [Subsidio]
+        FROM HR.tbl_AttendanceCalculations ac
+        WHERE ac.WorkDate BETWEEN @FromDate AND @ToDate
+            AND EXISTS (SELECT 1 FROM #Empleados e WHERE e.EmpleadoID = ac.EmployeeID)
+        ORDER BY ac.WorkDate, ac.EmployeeID;
+
+        PRINT '';
+        PRINT 'FIN EJECUCIÓN EXITOSA: HR.sp_Attendance_CalculateRange';
+        PRINT '=================================================================';
+    END;
+
+    /* ============================================================================
+       SECCIÓN 11: LIMPIEZA DE RECURSOS
+    ============================================================================ */
+
+    DROP TABLE IF EXISTS #LogDetallado;
+    DROP TABLE IF EXISTS #ResultadosCalculados;
+    DROP TABLE IF EXISTS #ProcesamientoPicadas;
+    DROP TABLE IF EXISTS #HorariosEmpleados;
+    DROP TABLE IF EXISTS #Licencias;
+    DROP TABLE IF EXISTS #Empleados;
+    DROP TABLE IF EXISTS #Calendario;
+
+  END TRY
+  BEGIN CATCH
+    IF @@TRANCOUNT > 0
+      ROLLBACK TRANSACTION;
+
+    SELECT 
+      @ErrorMsg = ERROR_MESSAGE(),
+      @ErrorSeverity = ERROR_SEVERITY(),
+      @ErrorState = ERROR_STATE();
+
+    PRINT 'ERROR en HR.sp_Attendance_CalculateRange:';
+    PRINT '  Mensaje : ' + @ErrorMsg;
+    PRINT '  Severidad: ' + CAST(@ErrorSeverity AS VARCHAR(10));
+    PRINT '  Estado   : ' + CAST(@ErrorState AS VARCHAR(10));
+    PRINT '  Línea    : ' + CAST(ERROR_LINE() AS VARCHAR(10));
+
+    RAISERROR(@ErrorMsg, @ErrorSeverity, @ErrorState);
+  END CATCH;
+END;
+
+
+
+
 
   -------------------------------------------------------------------
   -- PROCEDIMIENTO PARA CALCULAR HORAS EXTRAS

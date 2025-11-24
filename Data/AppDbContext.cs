@@ -232,6 +232,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.EmployeeId).HasColumnName("EmployeeID").IsRequired();
             e.Property(x => x.BossEmployeeId).HasColumnName("BossEmployeeID").IsRequired();
             e.Property(x => x.JustificationTypeId).HasColumnName("JustificationTypeID").IsRequired();
+            e.Property(x => x.PunchTypeId).HasColumnName("PunchTypeID");
         });
 
         m.Entity<AttendanceCalculations>(e => {

@@ -586,7 +586,10 @@ CREATE TABLE HR.tbl_AttendanceCalculations (
 	RequiredMinutes INT NOT NULL CONSTRAINT DF_AttCalc_RequiredMinutes DEFAULT (0),
 	TardinessMin INT NOT NULL CONSTRAINT DF_AttCalc_TardinessMin DEFAULT (0),
 	AbsentMinutes INT NOT NULL CONSTRAINT DF_AttCalc_AbsentMinutes DEFAULT (0),
-	MinutesLate INT NOT NULL CONSTRAINT DF_AttCalc_MinutesLate DEFAULT (0)
+	MinutesLate INT NOT NULL CONSTRAINT DF_AttCalc_MinutesLate DEFAULT (0),
+	ScheduledWorkedMin INT NOT NULL CONSTRAINT DF_AttCalc_SchedWorked DEFAULT(0),
+	OffScheduleMin INT NOT NULL CONSTRAINT DF_AttCalc_OffSched DEFAULT(0),
+	JustificationApply BIT NOT NULL DEFAULT(0)  
 );
 
 
