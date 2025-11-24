@@ -11,8 +11,8 @@ public class SchedulesUpdateDto
     public bool HasLunchBreak { get; set; }
     public TimeOnly LunchStart { get; set; }
     public TimeOnly LunchEnd { get; set; }
-    public bool IsRotating { get; set; }
-    public string RotationPattern { get; set; }
+    public bool? IsRotating { get; set; }
+    public string? RotationPattern { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

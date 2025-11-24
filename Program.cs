@@ -191,6 +191,7 @@ builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPubl
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPublicationsService, WsUtaSystem.Application.Services.PublicationsService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPunchJustificationsRepository, WsUtaSystem.Infrastructure.Repositories.PunchJustificationsRepository>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPunchJustificationsService, WsUtaSystem.Application.Services.PunchJustificationsService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IJustificationsService, WsUtaSystem.Application.Services.JustificationsService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IRefTypesRepository, WsUtaSystem.Infrastructure.Repositories.RefTypesRepository>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IRefTypesService, WsUtaSystem.Application.Services.RefTypesService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ISalaryHistoryRepository, WsUtaSystem.Infrastructure.Repositories.SalaryHistoryRepository>();
