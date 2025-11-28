@@ -48,7 +48,18 @@ IF EXISTS (SELECT * FROM sys.procedures WHERE name = 'sp_GetEmployeesReport' AND
     DROP PROCEDURE [HR].[sp_GetEmployeesReport];
 GO
 
-CREATE PROCEDURE [HR].[sp_GetEmployeesReport]
+CREATE OR ALTER  PROCEDURE [HR].[sp_GetEmployeesReport]
+    @StartDate DATE = NULL,
+    @EndDate DATE = NULL,
+    @DepartmentId INT = NULL,
+    @FacultyId INT = NULL,
+    @EmployeeType NVARCHAR(50) = NULL,
+    @IsActive BIT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+CREATE OR ALTER  PROCEDURE [HR].[sp_GetEmployeesReport]
     @StartDate DATE = NULL,
     @EndDate DATE = NULL,
     @DepartmentId INT = NULL,
@@ -60,43 +71,44 @@ BEGIN
     SET NOCOUNT ON;
     
     SELECT 
-        e.Id,
-        CONCAT(p.FirstName, ' ', ISNULL(p.MiddleName + ' ', ''), p.LastName) AS FullName,
+        e.EmployeeId,
+        CONCAT(p.FirstName, ' ', p.LastName) AS FullName,
         p.FirstName,
-        p.MiddleName,
+        --p.MiddleName,
         p.LastName,
-        p.IdNumber AS IdentificationNumber,
+        p.IDCard AS IdentificationNumber,
         e.Email,
         d.Name AS DepartmentName,
         d.Code AS DepartmentCode,
-        f.Name AS FacultyName,
-        e.EmpType AS EmployeeType,
+        --f.Name AS FacultyName,
+        e.EmployeeType AS EmployeeType,
         e.IsActive,
-        ISNULL(c.BaseSalary, 0) AS BaseSalary,
-        ISNULL(c.NetSalary, 0) AS NetSalary,
-        c.ContractType,
+        --ISNULL(c.BaseSalary, 0) AS BaseSalary,
+        --ISNULL(c.NetSalary, 0) AS NetSalary,
+        c.ContractTypeID,
         c.StartDate AS ContractStartDate,
         c.EndDate AS ContractEndDate,
         e.HireDate,
         e.CreatedAt,
         e.UpdatedAt
     FROM [HR].[tbl_Employees] e
-    INNER JOIN [HR].[tbl_People] p ON e.PersonId = p.Id
-    LEFT JOIN [HR].[tbl_Departments] d ON e.DepartmentId = d.Id
-    LEFT JOIN [HR].[tbl_Faculties] f ON d.FacultyId = f.Id
+    INNER JOIN [HR].[tbl_People] p ON e.PersonId = p.PersonId
+    LEFT JOIN [HR].[tbl_Departments] d ON e.DepartmentId = d.DepartmentId
+    --LEFT JOIN [HR].[tbl_Faculties] f ON d.FacultyId = f.Id
     LEFT JOIN (
-        SELECT EmployeeId, BaseSalary, NetSalary, ContractType, StartDate, EndDate
+        SELECT PersonID, --BaseSalary, 
+                ContractTypeID, StartDate, EndDate
         FROM [HR].[tbl_Contracts]
-        WHERE IsActive = 1
-    ) c ON e.Id = c.EmployeeId
+        --WHERE IsActive = 1
+    ) c ON e.PersonID = c.personid
     WHERE 
         (@StartDate IS NULL OR e.HireDate >= @StartDate)
         AND (@EndDate IS NULL OR e.HireDate <= @EndDate)
         AND (@DepartmentId IS NULL OR e.DepartmentId = @DepartmentId)
-        AND (@FacultyId IS NULL OR d.FacultyId = @FacultyId)
-        AND (@EmployeeType IS NULL OR e.EmpType = @EmployeeType)
+        --AND (@FacultyId IS NULL OR d.FacultyId = @FacultyId)
+        AND (@EmployeeType IS NULL OR e.EmployeeType = @EmployeeType)
         AND (@IsActive IS NULL OR e.IsActive = @IsActive)
-    ORDER BY f.Name, d.Name, FullName;
+    ORDER BY d.Name, FullName;
 END
 GO
 
@@ -154,9 +166,9 @@ BEGIN
             ELSE 'Normal'
         END AS Status
     FROM AttendanceSummary a
-    INNER JOIN [HR].[tbl_Employees] e ON a.EmployeeId = e.Id
-    INNER JOIN [HR].[tbl_People] p ON e.PersonId = p.Id
-    LEFT JOIN [HR].[tbl_Departments] d ON e.DepartmentId = d.Id
+    INNER JOIN [HR].[tbl_Employees] e ON a.EmployeeId = e.EmployeeId
+    INNER JOIN [HR].[tbl_People] p ON e.PersonId = p.PersonId
+    LEFT JOIN [HR].[tbl_Departments] d ON e.DepartmentId = d.DepartmentId
     LEFT JOIN [HR].[tbl_Faculties] f ON d.FacultyId = f.Id
     WHERE 
         (@EmployeeId IS NULL OR a.EmployeeId = @EmployeeId)
@@ -306,3 +318,52 @@ GO
 PRINT '========================================';
 PRINT 'TODOS LOS STORED PROCEDURES CREADOS EXITOSAMENTE';
 PRINT '========================================';
+
+-- =============================================
+-- 7. SP: Resume de reporte de asistencia
+-- =============================================
+
+IF EXISTS (SELECT * FROM sys.procedures WHERE name = 'sp_GetReportAttendanceSumary' AND schema_id = SCHEMA_ID('HR'))
+    DROP PROCEDURE [HR].[sp_GetReportAttendanceSumary];
+GO
+
+CREATE OR ALTER PROCEDURE [HR].[sp_GetReportAttendanceSumary]
+    @StartDate DATETIME2 = NULL,
+    @EndDate DATETIME2 = NULL,
+    @EmployeeID INT = NULL,
+    @EmployeeType INT = NULL
+	--@DepartmentId INT = NULL
+    
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    SELECT tac.EmployeeID,
+		ved.IDCard		,
+		concat(ved.FirstName, ved.LastName) Nombre_completo,
+		ved.EmployeeType,
+		ved.ContractType,		
+		tac.WorkDate, 
+		tac.TotalWorkedMinutes, 
+		tac.RegularMinutes,  
+		tac.OvertimeMinutes, 
+		tac.NightMinutes,
+		tac.HolidayMinutes AS MinFeriado, 
+		tac.RequiredMinutes AS MinTotLaboral, 
+		tac.TardinessMin AS Atrazos,
+		tac.FoodSubsidy AS Alimentacion, 
+		tac.JustificationMinutes AS MinJustificacion
+	FROM hr.tbl_AttendanceCalculations tac
+	INNER JOIN Hr.vw_EmployeeDetails ved ON (tac.EmployeeID = ved.EmployeeID)
+    WHERE 
+		(@StartDate IS NULL OR tac.WorkDate >= @StartDate)
+        AND (@EndDate IS NULL OR tac.WorkDate <= @EndDate)        
+        AND (@EmployeeID IS NULL OR tac.EmployeeID = @EmployeeID)
+		AND (@EmployeeType IS NULL OR ved.EmployeeType = @EmployeeType)
+		--AND (@DepartmentId IS NULL OR tac.DepartmentId = @DepartmentId)
+    ORDER BY tac.WorkDate DESC;
+END
+GO
+
+PRINT 'SP HR.sp_GetReportAudits creado exitosamente';
+GO

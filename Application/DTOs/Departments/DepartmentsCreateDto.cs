@@ -16,5 +16,6 @@ public class DepartmentsCreateDto
     public int? Dlevel { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
+    public byte[]? RowVersion { get; set; }
 
 }

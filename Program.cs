@@ -9,6 +9,7 @@ using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Services;
+using WsUtaSystem.Endpoints;
 using WsUtaSystem.Filters;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Infrastructure.DependencyInjection;
@@ -19,10 +20,9 @@ using WsUtaSystem.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configurar el puerto 5000
-//builder.WebHost.UseUrls("http://localhost:5000");
-
-// ===== CORS (appsettings.json) =====
+// =========================================================
+// CORS (config desde appsettings.json)
+// =========================================================
 var cors = builder.Configuration.GetSection("Cors");
 var corsName = cors["PolicyName"] ?? "Frontend";
 var origins = cors.GetSection("Origins").Get<string[]>() ?? Array.Empty<string>();
@@ -30,20 +30,42 @@ var allowCred = bool.TryParse(cors["AllowCredentials"], out var ac) && ac;
 var headers = cors.GetSection("AllowedHeaders").Get<string[]>() ?? new[] { "content-type", "authorization" };
 var methods = cors.GetSection("AllowedMethods").Get<string[]>() ?? new[] { "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" };
 
-builder.Services.AddCors(opt => opt.AddPolicy(corsName, p =>
+builder.Services.AddCors(opt =>
 {
-    if (origins.Length > 0) p.WithOrigins(origins); else p.AllowAnyOrigin();
-    p.WithHeaders(headers).WithMethods(methods);
-    if (allowCred) p.AllowCredentials();
-}));
+    opt.AddPolicy(corsName, p =>
+    {
+        if (origins.Length > 0)
+        {
+            // Cuando hay credenciales, hay que usar WithOrigins, no AllowAnyOrigin
+            p.WithOrigins(origins);
+        }
+        else
+        {
+            p.AllowAnyOrigin();
+        }
 
+        p.WithHeaders(headers)
+         .WithMethods(methods);
+
+        if (allowCred)
+        {
+            p.AllowCredentials();
+        }
+    });
+});
+
+// =========================================================
+// Logging
+// =========================================================
 builder.Services.AddLogging(loggingBuilder =>
 {
     loggingBuilder.AddConsole();
     loggingBuilder.AddDebug();
 });
 
-// ===== Controllers + JSON + Filtro de modelo =====
+// =========================================================
+// Controllers + JSON + Filtro de modelo
+// =========================================================
 builder.Services.AddControllers(o => o.Filters.Add<ValidateModelFilter>())
     .AddJsonOptions(o =>
     {
@@ -54,7 +76,9 @@ builder.Services.AddControllers(o => o.Filters.Add<ValidateModelFilter>())
 
 builder.Services.AddEndpointsApiExplorer();
 
-// ===== Configuración avanzada de Swagger =====
+// =========================================================
+// Swagger avanzado
+// =========================================================
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
@@ -69,7 +93,7 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 
-    // Configuración para manejar controladores base y herencia
+    // Manejo de herencia / polimorfismo
     c.UseAllOfToExtendReferenceSchemas();
     c.UseAllOfForInheritance();
     c.UseOneOfForPolymorphism();
@@ -77,7 +101,7 @@ builder.Services.AddSwaggerGen(c =>
     // Resolver conflictos de acciones
     c.ResolveConflictingActions(apiDescriptions => apiDescriptions.First());
 
-    // Personalizar OperationIds para evitar conflictos
+    // OperationIds personalizados
     c.CustomOperationIds(apiDesc =>
     {
         return apiDesc.TryGetMethodInfo(out MethodInfo methodInfo)
@@ -85,17 +109,17 @@ builder.Services.AddSwaggerGen(c =>
             : null;
     });
 
-    // Configurar tags para agrupamiento
+    // Tags por controlador
     c.TagActionsBy(api =>
     {
         var controllerName = api.ActionDescriptor.RouteValues["controller"];
         return new[] { controllerName };
     });
 
-    // AGREGAR ESTA LÍNEA: Filtro para mostrar el prefijo de ruta
+    // Prefijo de ruta en Swagger para que coincida con /api/v1/rh
     c.DocumentFilter<PathPrefixDocumentFilter>("/api/v1/rh");
 
-    // Incluir comentarios XML
+    // Comentarios XML
     try
     {
         var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
@@ -112,39 +136,61 @@ builder.Services.AddSwaggerGen(c =>
     }
 });
 
-// ===== AutoMapper & Validadores =====
+// =========================================================
+// AutoMapper & Validadores
+// =========================================================
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddValidatorsFromAssemblyContaining<WsUtaSystem.Application.Mapping.EntityToDtoProfile>();
 
-// ===== Servicios de Reportes =====
+// =========================================================
+// Servicios de Reportes
+// =========================================================
 builder.Services.AddSingleton(sp =>
 {
     var config = new WsUtaSystem.Application.Services.Reports.Configuration.ReportConfiguration();
     builder.Configuration.GetSection("Reports").Bind(config);
     return config;
 });
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Reports.IReportRepository, WsUtaSystem.Infrastructure.Repositories.Reports.ReportRepository>();
-builder.Services.AddScoped<WsUtaSystem.Infrastructure.Repositories.Reports.ReportAuditRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Reports.IReportAuditService, WsUtaSystem.Application.Services.Reports.ReportAuditService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Reports.IReportService, WsUtaSystem.Application.Services.Reports.ReportService>();
 
-// ===== DB =====
+builder.Services.AddScoped<
+    WsUtaSystem.Application.Interfaces.Reports.IReportRepository,
+    WsUtaSystem.Infrastructure.Repositories.Reports.ReportRepository>();
+
+builder.Services.AddScoped<WsUtaSystem.Infrastructure.Repositories.Reports.ReportAuditRepository>();
+builder.Services.AddScoped<
+    WsUtaSystem.Application.Interfaces.Reports.IReportAuditService,
+    WsUtaSystem.Application.Services.Reports.ReportAuditService>();
+
+builder.Services.AddScoped<
+    WsUtaSystem.Application.Interfaces.Reports.IReportService,
+    WsUtaSystem.Application.Services.Reports.ReportService>();
+
+// =========================================================
+// DB
+// =========================================================
 var cs = builder.Configuration.GetConnectionString("SqlServerConn")
         ?? builder.Configuration.GetConnectionString("Sql")
         ?? builder.Configuration.GetConnectionString("SqlServer")
         ?? throw new InvalidOperationException("No se encontró cadena de conexión.");
+
 if (!cs.Contains("Integrated Security", StringComparison.OrdinalIgnoreCase) &&
     !cs.Contains("Authentication", StringComparison.OrdinalIgnoreCase))
+{
     cs += ";Integrated Security=False;Authentication=SqlPassword;";
+}
 
 builder.Services.AddDbContext<WsUtaSystem.Data.AppDbContext>(o =>
     o.UseSqlServer(cs, sql => sql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null)));
 
-// ===== DI genérica =====
+// =========================================================
+// DI genérica
+// =========================================================
 builder.Services.AddScoped(typeof(IRepository<,>), typeof(ServiceAwareEfRepository<,>));
 builder.Services.AddScoped(typeof(IService<,>), typeof(Service<,>));
 
-// ===== DI por entidad =====
+// =========================================================
+// DI por entidad (lo que ya tenías)
+// =========================================================
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IAddressesRepository, WsUtaSystem.Infrastructure.Repositories.AddressesRepository>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IAddressesService, WsUtaSystem.Application.Services.AddressesService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IAttendanceCalculationsRepository, WsUtaSystem.Infrastructure.Repositories.AttendanceCalculationsRepository>();
@@ -258,6 +304,7 @@ builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDire
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IParametersService, WsUtaSystem.Application.Services.ParametersService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDirectoryParametersService, WsUtaSystem.Application.Services.DirectoryParametersService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFileManagementService, WsUtaSystem.Application.Services.FileManagementService>();
+
 // Vistas
 builder.Services.AddScoped<IVwEmployeeScheduleAtDateRepository, VwEmployeeScheduleAtDateRepository>();
 builder.Services.AddScoped<IVwEmployeeScheduleAtDateService, VwEmployeeScheduleAtDateService>();
@@ -268,7 +315,7 @@ builder.Services.AddScoped<IVwLeaveWindowsService, VwLeaveWindowsService>();
 builder.Services.AddScoped<IVwAttendanceDayRepository, VwAttendanceDayRepository>();
 builder.Services.AddScoped<IVwAttendanceDayService, VwAttendanceDayService>();
 
-// Procedimientos Almacenados
+// Procedimientos almacenados
 builder.Services.AddScoped<IAttendanceCalculationService, AttendanceCalculationService>();
 builder.Services.AddScoped<IJustificationsService, JustificationsService>();
 builder.Services.AddScoped<IRecoveryService, RecoveryService>();
@@ -277,32 +324,37 @@ builder.Services.AddScoped<IPayrollDiscountsService, PayrollDiscountsService>();
 builder.Services.AddScoped<IPayrollSubsidiesService, PayrollSubsidiesService>();
 builder.Services.AddScoped<IEncryptionService, EncryptionService>();
 
-// Agregar Quartz.NET Jobs
-//DailyAttendanceCalculationJob 2:00 AM Calcula asistencia del día anterior HR.sp_Attendance_CalculateRange
-//DailyNightMinutesCalculationJob 3:00 AM  Calcula minutos nocturnos del día anterior HR.sp_Attendance_CalcNightMinutes
-//DailyJustificationsJob 4:00 AM Aplica justificaciones aprobadas HR.sp_Justifications_Apply 
-//DailyRecoveryJob 5:00 AM Aplica recuperaciones de tiempo HR.sp_Recovery_Apply
-
+// Quartz jobs
 builder.Services.AddQuartzJobs();
 
-// ===== Configuración de Autenticación JWT =====
-builder.Services.AddMemoryCache(); // Para caching de tokens validados
-builder.Services.AddHttpClient(); // Para llamadas HTTP al servicio de autenticación
-builder.Services.AddScoped<WsUtaSystem.Infrastructure.Services.ITokenValidationService, WsUtaSystem.Infrastructure.Services.TokenValidationService>();
+// =========================================================
+// Configuración de autenticación JWT custom
+// =========================================================
+builder.Services.AddMemoryCache(); // cache de tokens
+builder.Services.AddHttpClient();  // llamadas HTTP al servicio de auth
+builder.Services.AddScoped<
+    WsUtaSystem.Infrastructure.Services.ITokenValidationService,
+    WsUtaSystem.Infrastructure.Services.TokenValidationService>();
 
+// =========================================================
+// Build app
+// =========================================================
 var app = builder.Build();
 
-app.UseCors(corsName);
-app.UseMiddleware<WsUtaSystem.Middleware.JwtAuthenticationMiddleware>(); // Validación JWT
+// =========================================================
+// Orden correcto del pipeline
+// =========================================================
+
+// 1) Manejo global de errores
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
-// Agrupar todos los controladores bajo el prefijo "api/v1/rh/"
-var apiGroup = app.MapGroup("api/v1/rh");
-apiGroup.MapControllers();
+// 2) CORS (para que incluso errores devuelvan headers CORS)
+app.UseCors(corsName);
 
-// Endpoints de reportes
-WsUtaSystem.Endpoints.ReportEndpoints.MapReportEndpoints(app);
+// 3) Middleware de autenticación JWT propio
+app.UseMiddleware<WsUtaSystem.Middleware.JwtAuthenticationMiddleware>();
 
+// 4) Swagger (solo en dev)
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -320,8 +372,27 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+// =========================================================
+// Rutas de la API bajo /api/v1/rh
+// =========================================================
+
+// Agrupamos todo bajo el prefijo /api/v1/rh (controladores + minimal APIs)
+var apiGroup = app.MapGroup("/api/v1/rh");
+
+// Controladores [ApiController]
+apiGroup.MapControllers();
+
+// Endpoints minimal API de reportes
+apiGroup.MapReportEndpoints();
+
+// =========================================================
+// Archivos estáticos, root y healthcheck
+// =========================================================
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
 app.MapGet("/", () => Results.Redirect("/swagger"));
+
 app.MapGet("/health", () => Results.Ok(new { ok = true, time = DateTime.UtcNow }));
+
 app.Run();
