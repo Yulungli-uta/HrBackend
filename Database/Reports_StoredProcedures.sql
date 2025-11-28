@@ -340,7 +340,7 @@ BEGIN
     
     SELECT tac.EmployeeID,
 		ved.IDCard		,
-		concat(ved.FirstName, ved.LastName) Nombre_completo,
+		concat(ved.FirstName, ved.LastName) NombreCompleto,
 		ved.EmployeeType,
 		ved.ContractType,		
 		tac.WorkDate, 
