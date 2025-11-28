@@ -30,6 +30,15 @@ public class EducationLevelsController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<EducationLevelsDto>(e));
     }
 
+    /// <summary>Obtiene todos los niveles educativos de una persona.</summary>
+    /// <param name="personId">ID de la persona</param>
+    [HttpGet("person/{personId:int}")]
+    public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
+    {
+        var educationLevels = await _svc.GetByPersonIdAsync(personId);
+        return Ok(_mapper.Map<List<EducationLevelsDto>(educationLevels));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] EducationLevelsCreateDto dto, CancellationToken ct)

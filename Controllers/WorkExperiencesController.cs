@@ -30,6 +30,15 @@ public class WorkExperiencesController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<WorkExperiencesDto>(e));
     }
 
+    /// <summary>Obtiene todos los registros de experiencia laboral de una persona.</summary>
+    /// <param name="personId">ID de la persona</param>
+    [HttpGet("person/{personId:int}")]
+    public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
+    {
+        var experiences = await _svc.GetByPersonIdAsync(personId);
+        return Ok(_mapper.Map<List<WorkExperiencesDto>>(experiences));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] WorkExperiencesCreateDto dto, CancellationToken ct)

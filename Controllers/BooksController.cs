@@ -31,6 +31,15 @@ public class BooksController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<BooksDto>(e));
     }
 
+    /// <summary>Obtiene todos los libros de una persona.</summary>
+    /// <param name="personId">ID de la persona</param>
+    [HttpGet("person/{personId:int}")]
+    public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
+    {
+        var books = await _svc.GetByPersonIdAsync(personId);
+        return Ok(_mapper.Map<List<BooksDto>(books));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] BooksCreateDto dto, CancellationToken ct)

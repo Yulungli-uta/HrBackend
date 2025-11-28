@@ -30,6 +30,15 @@ public class EmergencyContactsController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<EmergencyContactsDto>(e));
     }
 
+    /// <summary>Obtiene todos los contactos de emergencia de una persona.</summary>
+    /// <param name="personId">ID de la persona</param>
+    [HttpGet("person/{personId:int}")]
+    public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
+    {
+        var contacts = await _svc.GetByPersonIdAsync(personId);
+        return Ok(_mapper.Map<List<EmergencyContactsDto>(contacts));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] EmergencyContactsCreateDto dto, CancellationToken ct)

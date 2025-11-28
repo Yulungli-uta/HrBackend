@@ -1,4 +1,7 @@
 using WsUtaSystem.Models;
 using WsUtaSystem.Application.Common.Interfaces;
 namespace WsUtaSystem.Application.Interfaces.Services;
-public interface IEmergencyContactsService : IService<EmergencyContacts, int> { }
+public interface IEmergencyContactsService : IService<EmergencyContacts, int>
+{
+    Task<IEnumerable<EmergencyContacts>> GetByPersonIdAsync(int personId);
+}

@@ -30,6 +30,15 @@ public class BankAccountsController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<BankAccountsDto>(e));
     }
 
+    /// <summary>Obtiene todos los cuentas bancarias de una persona.</summary>
+    /// <param name="personId">ID de la persona</param>
+    [HttpGet("person/{personId:int}")]
+    public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
+    {
+        var accounts = await _svc.GetByPersonIdAsync(personId);
+        return Ok(_mapper.Map<List<BankAccountsDto>(accounts));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] BankAccountsCreateDto dto, CancellationToken ct)

@@ -30,6 +30,15 @@ public class CantonsController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<CantonsDto>(e));
     }
 
+    /// <summary>Obtiene todos los cantones de una provincia.</summary>
+    /// <param name="provinceId">ID de la provincia</param>
+    [HttpGet("province/{provinceId}")]
+    public async Task<IActionResult> GetByProvinceId([FromRoute] string provinceId, CancellationToken ct)
+    {
+        var cantons = await _svc.GetByProvinceIdAsync(provinceId);
+        return Ok(_mapper.Map<List<CantonsDto>>(cantons));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CantonsCreateDto dto, CancellationToken ct)

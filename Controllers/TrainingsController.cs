@@ -30,6 +30,15 @@ public class TrainingsController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<TrainingsDto>(e));
     }
 
+    /// <summary>Obtiene todas las capacitaciones de una persona.</summary>
+    /// <param name="personId">ID de la persona</param>
+    [HttpGet("person/{personId:int}")]
+    public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
+    {
+        var trainings = await _svc.GetByPersonIdAsync(personId);
+        return Ok(_mapper.Map<List<TrainingsDto>>(trainings));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] TrainingsCreateDto dto, CancellationToken ct)
