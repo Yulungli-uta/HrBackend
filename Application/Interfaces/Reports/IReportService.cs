@@ -19,4 +19,8 @@ public interface IReportService
     // Reportes de Departamentos
     Task<byte[]> GenerateDepartmentsPdfAsync(ReportFilterDto filter, HttpContext context);
     Task<byte[]> GenerateDepartmentsExcelAsync(ReportFilterDto filter, HttpContext context);
+
+    // Reportes de Resumen de Asistencia
+    Task<byte[]> GenerateAttendancesumaryPdfAsync(ReportFilterDto filter, HttpContext context);
+    Task<byte[]> GenerateAttendancesumaryExcelAsync(ReportFilterDto filter, HttpContext context);
 }

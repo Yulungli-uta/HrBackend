@@ -20,4 +20,5 @@ public record DepartmentReportDto
     public decimal MaxSalary { get; init; }
     public DateTime CreatedAt { get; init; }
     public DateTime UpdatedAt { get; init; }
+
 }

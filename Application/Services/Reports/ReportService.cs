@@ -317,5 +317,82 @@ public class ReportService : IReportService
         }
     }
 
+    #region Attendancesumary
+    public async Task<byte[]> GenerateAttendancesumaryPdfAsync(ReportFilterDto filter, HttpContext context)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var userEmail = context.User.Identity?.Name ?? "anonymous";
+
+        try
+        {
+            var data = await _repository.GetAttendanceSumaryReportDataAsync(filter);
+            var generator = new AttendanceSumaryReportGenerator(_config, _env);
+            var pdfBytes = generator.GeneratePdf(data, filter, userEmail);
+
+            stopwatch.Stop();
+
+            if (_config.EnableAudit)
+            {
+                await CreateAuditAsync("Employees", "PDF", filter, pdfBytes.Length,
+                    (int)stopwatch.ElapsedMilliseconds, context, true, null, "Reporte_Empleados.pdf");
+            }
+
+            _logger.LogInformation("Generated Employees PDF report in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+
+            return pdfBytes;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _logger.LogError(ex, "Error generating Employees PDF report");
+
+            if (_config.EnableAudit)
+            {
+                await CreateAuditAsync("Employees", "PDF", filter, null,
+                    (int)stopwatch.ElapsedMilliseconds, context, false, ex.Message, null);
+            }
+
+            throw;
+        }
+    }
     #endregion
+    public async Task<byte[]> GenerateAttendancesumaryExcelAsync(ReportFilterDto filter, HttpContext context)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var userEmail = context.User.Identity?.Name ?? "anonymous";
+
+        try
+        {
+            var data = await _repository.GetAttendanceSumaryReportDataAsync(filter);
+            var generator = new AttendanceSumaryReportGenerator(_config, _env);
+            var excelBytes = generator.GenerateExcel(data, userEmail);
+
+            stopwatch.Stop();
+
+            if (_config.EnableAudit)
+            {
+                await CreateAuditAsync("Employees", "Excel", filter, excelBytes.Length,
+                    (int)stopwatch.ElapsedMilliseconds, context, true, null, "Reporte_Empleados.xlsx");
+            }
+
+            _logger.LogInformation("Generated Employees Excel report in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+
+            return excelBytes;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _logger.LogError(ex, "Error generating Employees Excel report");
+
+            if (_config.EnableAudit)
+            {
+                await CreateAuditAsync("Employees", "Excel", filter, null,
+                    (int)stopwatch.ElapsedMilliseconds, context, false, ex.Message, null);
+            }
+
+            throw;
+        }
+    }
+
+    #endregion Attendancesumary
 }

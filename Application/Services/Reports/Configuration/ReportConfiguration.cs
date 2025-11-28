@@ -34,7 +34,7 @@ public class MarginSettings
 
 public class ColorSettings
 {
-    public string Primary { get; set; } = "#1e3a8a";
+    public string Primary { get; set; } = "#6c1313"; //"#1e3a8a";
     public string Secondary { get; set; } = "#3b82f6";
     public string Success { get; set; } = "#10b981";
     public string Warning { get; set; } = "#f59e0b";

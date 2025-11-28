@@ -13,8 +13,8 @@ public class ReportAuditRepository
 
     public ReportAuditRepository(IConfiguration configuration)
     {
-        _connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+        _connectionString = configuration.GetConnectionString("SqlServerConn")
+            ?? throw new InvalidOperationException("Connection string 'ConnectionStrings' not found.");
     }
 
     public async Task<int> CreateAuditAsync(CreateReportAuditDto audit)

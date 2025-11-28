@@ -14,7 +14,7 @@ SELECT
     1.00              AS BaseSalary,
     e.HireDate
 FROM HR.tbl_People p
-JOIN HR.tbl_Employees e ON e.PersonID = p.PersonID
+JOIN HR.tbl_Employees e ON e.PersonID = p.PersonID	
 LEFT JOIN HR.tbl_Departments d ON d.DepartmentID = e.DepartmentID
 LEFT JOIN HR.ref_Types rt ON rt.TypeID = e.EmployeeType 
                           AND rt.Category = 'CONTRACT_TYPE'
@@ -28,6 +28,7 @@ OUTER APPLY (
     ORDER BY es.ValidFrom DESC, es.EmpScheduleID DESC
 ) es_current
 LEFT JOIN HR.tbl_Schedules ts ON ts.ScheduleID = es_current.ScheduleID
+WHERE e.IsActive = 1
 GO
 
 PRINT (N'Create or alter view [HR].[vw_EmployeeComplete]')

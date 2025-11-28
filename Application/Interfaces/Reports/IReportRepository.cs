@@ -11,4 +11,6 @@ public interface IReportRepository
     Task<IEnumerable<EmployeeReportDto>> GetEmployeesReportDataAsync(ReportFilterDto filter);
     Task<IEnumerable<AttendanceReportDto>> GetAttendanceReportDataAsync(ReportFilterDto filter);
     Task<IEnumerable<DepartmentReportDto>> GetDepartmentsReportDataAsync(ReportFilterDto filter);
+
+    Task<IEnumerable<AttendanceSumaryDto>> GetAttendanceSumaryReportDataAsync(ReportFilterDto filter);
 }

@@ -141,6 +141,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.DepartmentId).HasColumnName("DepartmentID");
             //e.Property(x => x.FacultyId).HasColumnName("FacultyID");
             e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            e.Ignore(x => x.RowVersion);
         });
 
         // Schedules
@@ -169,6 +170,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.JobID).HasColumnName("JobID");
             e.Property(x => x.RegistrationDateAnulCon).HasColumnName("registrationdate_anul_con");
             e.Property(x => x.WorkOf).HasColumnName("work_of");
+            
             //e.Property(x => x.ContractType).HasMaxLength(50);
         });
 
@@ -605,6 +607,7 @@ public class AppDbContext : DbContext
             e.ToTable("tbl_contract_type", HR);
             e.HasKey(x => x.ContractTypeId);
             e.Property(x => x.ContractTypeId).HasColumnName("ContractTypeID");
+            
         });
         m.Entity<Degree>(e => {
             e.ToTable("tbl_Degrees", HR);
