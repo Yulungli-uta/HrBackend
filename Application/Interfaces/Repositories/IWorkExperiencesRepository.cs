@@ -1,4 +1,7 @@
 using WsUtaSystem.Models;
 using WsUtaSystem.Application.Common.Interfaces;
 namespace WsUtaSystem.Application.Interfaces.Repositories;
-public interface IWorkExperiencesRepository : IRepository<WorkExperiences, int> { }
+public interface IWorkExperiencesRepository : IRepository<WorkExperiences, int>
+{
+    Task<IEnumerable<WorkExperiences>> GetByPersonIdAsync(int personId);
+}

@@ -5,5 +5,15 @@ using WsUtaSystem.Models;
 namespace WsUtaSystem.Application.Services;
 public class TrainingsService : Service<Trainings, int>, ITrainingsService
 {
-    public TrainingsService(ITrainingsRepository repo) : base(repo) { }
+    private readonly ITrainingsRepository _repository;
+
+    public TrainingsService(ITrainingsRepository repo) : base(repo)
+    {
+        _repository = repo;
+    }
+
+    public async Task<IEnumerable<Trainings>> GetByPersonIdAsync(int personId)
+    {
+        return await _repository.GetByPersonIdAsync(personId);
+    }
 }

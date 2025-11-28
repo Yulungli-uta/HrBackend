@@ -5,5 +5,15 @@ using WsUtaSystem.Models;
 namespace WsUtaSystem.Application.Services;
 public class ProvincesService : Service<Provinces, string>, IProvincesService
 {
-    public ProvincesService(IProvincesRepository repo) : base(repo) { }
+    private readonly IProvincesRepository _repository;
+
+    public ProvincesService(IProvincesRepository repo) : base(repo)
+    {
+        _repository = repo;
+    }
+
+    public async Task<IEnumerable<Provinces>> GetByCountryIdAsync(string countryId)
+    {
+        return await _repository.GetByCountryIdAsync(countryId);
+    }
 }

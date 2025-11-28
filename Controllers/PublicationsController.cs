@@ -30,6 +30,15 @@ public class PublicationsController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<PublicationsDto>(e));
     }
 
+    /// <summary>Obtiene todas las publicaciones de una persona.</summary>
+    /// <param name="personId">ID de la persona</param>
+    [HttpGet("person/{personId:int}")]
+    public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
+    {
+        var publications = await _svc.GetByPersonIdAsync(personId);
+        return Ok(_mapper.Map<List<PublicationsDto>>(publications));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] PublicationsCreateDto dto, CancellationToken ct)

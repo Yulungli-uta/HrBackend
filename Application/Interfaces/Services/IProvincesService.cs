@@ -1,4 +1,7 @@
 using WsUtaSystem.Models;
 using WsUtaSystem.Application.Common.Interfaces;
 namespace WsUtaSystem.Application.Interfaces.Services;
-public interface IProvincesService : IService<Provinces, string> { }
+public interface IProvincesService : IService<Provinces, string>
+{
+    Task<IEnumerable<Provinces>> GetByCountryIdAsync(string countryId);
+}

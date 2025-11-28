@@ -30,6 +30,15 @@ public class ProvincesController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<ProvincesDto>(e));
     }
 
+    /// <summary>Obtiene todas las provincias de un país.</summary>
+    /// <param name="countryId">ID del país</param>
+    [HttpGet("country/{countryId}")]
+    public async Task<IActionResult> GetByCountryId([FromRoute] string countryId, CancellationToken ct)
+    {
+        var provinces = await _svc.GetByCountryIdAsync(countryId);
+        return Ok(_mapper.Map<List<ProvincesDto>>(provinces));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] ProvincesCreateDto dto, CancellationToken ct)

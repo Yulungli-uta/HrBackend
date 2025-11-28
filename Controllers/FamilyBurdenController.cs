@@ -30,6 +30,15 @@ public class FamilyBurdenController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<FamilyBurdenDto>(e));
     }
 
+    /// <summary>Obtiene toda la carga familiar de una persona.</summary>
+    /// <param name="personId">ID de la persona</param>
+    [HttpGet("person/{personId:int}")]
+    public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
+    {
+        var familyMembers = await _svc.GetByPersonIdAsync(personId);
+        return Ok(_mapper.Map<List<FamilyBurdenDto>>(familyMembers));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] FamilyBurdenCreateDto dto, CancellationToken ct)
