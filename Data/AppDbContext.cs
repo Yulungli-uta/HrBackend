@@ -88,6 +88,7 @@ public class AppDbContext : DbContext
     public DbSet<VwPunchDay> VwPunchDay { get; set; }
     public DbSet<VwLeaveWindows> VwLeaveWindows { get; set; }
     public DbSet<VwAttendanceDay> VwAttendanceDay { get; set; }
+    public DbSet<KnowledgeArea> KnowledgeAreas => Set<KnowledgeArea>();
 
 
     protected override void OnModelCreating(ModelBuilder m)
@@ -503,6 +504,8 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.BookId);
             e.Property(x => x.BookId).HasColumnName("BookID");
             e.Property(x => x.PersonId).HasColumnName("PersonID");
+            e.Property(x => x.BookTypeId).HasColumnName("BookTypeID");
+            e.Property(x => x.ParticipationTypeId).HasColumnName("ParticipationTypeID");
             e.Property(x => x.Title).HasMaxLength(300);
             e.Property(x => x.ISBN).HasMaxLength(20);
             e.Property(x => x.Publisher).HasMaxLength(200);
@@ -644,6 +647,12 @@ public class AppDbContext : DbContext
             e.ToTable("TBL_DirectoryParameters", HR);
             e.HasKey(x => x.DirectoryId);
             e.Property(x => x.DirectoryId).HasColumnName("DirectoryID");
+        });
+        m.Entity<KnowledgeArea>(e => {
+            e.ToTable("tbl_KnowledgeArea", HR);
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).HasColumnName("id");
+            e.Property(x => x.ParentId).HasColumnName("parent_id");            
         });
         m.Entity<VwEmployeeScheduleAtDate>().HasNoKey().ToView("vw_EmployeeScheduleAtDate", "HR");
         m.Entity<VwPunchDay>().HasNoKey().ToView("vw_PunchDay", "HR");

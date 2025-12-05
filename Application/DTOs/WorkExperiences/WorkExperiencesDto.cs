@@ -4,7 +4,7 @@ public class WorkExperiencesDto
     //public class WorkExperiences { get; set; }
     public int WorkExpId { get; set; }
     public int PersonId { get; set; }
-    public int CountryId { get; set; }
+    public string CountryId { get; set; }
     public string Company { get; set; }
     public int InstitutionTypeId { get; set; }
     public string EntryReason { get; set; }

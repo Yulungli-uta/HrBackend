@@ -44,6 +44,7 @@ public class WorkExperiencesController : ControllerBase
     public async Task<IActionResult> Create([FromBody] WorkExperiencesCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<WorkExperiences>(dto);
+        Console.WriteLine("************************* DTO PersonId: " + dto.CountryId);
         var created = await _svc.CreateAsync(entityObj, ct);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<WorkExperiencesDto>(created));

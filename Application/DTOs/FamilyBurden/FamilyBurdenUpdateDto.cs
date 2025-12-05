@@ -9,6 +9,6 @@ public class FamilyBurdenUpdateDto
     public string FirstName { get; set; }
     public string LastName { get; set; }
     public DateOnly BirthDate { get; set; }
-    public int DisabilityTypeId { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public int? DisabilityTypeId { get; set; }
+    public DateTime? CreatedAt { get; set; }
 }

@@ -17,5 +17,6 @@ public class Books {
   public DateOnly? PublicationDate{get;set;}
   public bool? UTAffiliation{get;set;}
   public bool? UTASponsorship{get;set;}
+  public int? BookTypeId { get; set; }
   public DateTime CreatedAt{get;set;}
 }

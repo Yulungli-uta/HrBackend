@@ -37,7 +37,7 @@ public class BooksController : ControllerBase
     public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
     {
         var books = await _svc.GetByPersonIdAsync(personId);
-        return Ok(_mapper.Map<List<BooksDto>(books));
+        return Ok(_mapper.Map<List<BooksDto>>(books));
     }
 
     /// <summary>Crea un nuevo registro.</summary>

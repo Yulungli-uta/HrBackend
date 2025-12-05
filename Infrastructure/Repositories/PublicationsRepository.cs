@@ -5,10 +5,13 @@ using Microsoft.EntityFrameworkCore;
 namespace WsUtaSystem.Infrastructure.Repositories;
 public class PublicationsRepository : ServiceAwareEfRepository<Publications, int>, IPublicationsRepository
 {
-    public PublicationsRepository(WsUtaSystem.Data.AppDbContext db) : base(db) { }
+    private readonly DbContext _db;
+    public PublicationsRepository(WsUtaSystem.Data.AppDbContext db) : base(db) { 
+        _db = db;
+    }
 
     public async Task<IEnumerable<Publications>> GetByPersonIdAsync(int personId)
     {
-        return await _dbSet.Where(p => p.PersonId == personId).ToListAsync();
+        return await _db.Set<Publications>().Where(p => p.PersonId == personId).ToListAsync();
     }
 }

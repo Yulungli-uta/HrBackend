@@ -36,7 +36,7 @@ public class EmergencyContactsController : ControllerBase
     public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
     {
         var contacts = await _svc.GetByPersonIdAsync(personId);
-        return Ok(_mapper.Map<List<EmergencyContactsDto>(contacts));
+        return Ok(_mapper.Map<List<EmergencyContactsDto>>(contacts));
     }
 
     /// <summary>Crea un nuevo registro.</summary>

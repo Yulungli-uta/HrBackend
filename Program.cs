@@ -304,6 +304,8 @@ builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDire
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IParametersService, WsUtaSystem.Application.Services.ParametersService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDirectoryParametersService, WsUtaSystem.Application.Services.DirectoryParametersService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFileManagementService, WsUtaSystem.Application.Services.FileManagementService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IKnowledgeAreaRepository, WsUtaSystem.Infrastructure.Repositories.KnowledgeAreaRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IKnowledgeAreaService, WsUtaSystem.Application.Services.KnowledgeAreaService>();
 
 // Vistas
 builder.Services.AddScoped<IVwEmployeeScheduleAtDateRepository, VwEmployeeScheduleAtDateRepository>();

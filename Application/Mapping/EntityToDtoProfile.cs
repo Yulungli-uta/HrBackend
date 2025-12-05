@@ -172,6 +172,9 @@ public class EntityToDtoProfile : Profile
         CreateMap<VwPunchDay, VwPunchDayDto>();
         CreateMap<VwLeaveWindows, VwLeaveWindowsDto>();
         CreateMap<VwAttendanceDay, VwAttendanceDayDto>();
+        CreateMap<WsUtaSystem.Models.KnowledgeArea, WsUtaSystem.Application.DTOs.KnowledgeArea.KnowledgeAreaCreateDto>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.KnowledgeArea, WsUtaSystem.Application.DTOs.KnowledgeArea.KnowledgeAreaDto>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.KnowledgeArea, WsUtaSystem.Application.DTOs.KnowledgeArea.KnowledgeAreaUpdateDto>().ReverseMap();
 
 
 

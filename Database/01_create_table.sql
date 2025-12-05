@@ -142,6 +142,17 @@ CREATE TABLE TBL_DirectoryParameters (
     UpdatedBy Int NULL
 );
 
+-- Crear tabla de áreas de conocimiento
+CREATE TABLE HR.tbl_KnowledgeArea (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    code VARCHAR(10) UNIQUE NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    parent_id INT NULL,
+    levels INT NOT NULL,
+    IsActive BIT NOT NULL DEFAULT(1),
+    FOREIGN KEY (parent_id) REFERENCES HR.tbl_KnowledgeArea(id)
+);
+GO
 
 -- 1. TABLA MAESTRA DE TIPOS (BASE PARA MUCHAS TABLAS)
 PRINT '1. Creando HR.ref_Types...';
@@ -591,7 +602,8 @@ CREATE TABLE HR.tbl_AttendanceCalculations (
 	ScheduledWorkedMin INT NOT NULL CONSTRAINT DF_AttCalc_SchedWorked DEFAULT(0),
 	OffScheduleMin INT NOT NULL CONSTRAINT DF_AttCalc_OffSched DEFAULT(0),
 	JustificationApply BIT NOT NULL DEFAULT(0),
-	FoodSubsidy INT NOT NULL DEFAULT(0),     --verifica si cuenta subcidio o no 1 cuando cumple la jornada completa y 0 si no tiene la jornada completa , 
+	FoodSubsidy INT NOT NULL DEFAULT(0),     --verifica si cuenta subcidio o no 1 cuando cumple la jornada completa y 0 si no tiene la jornada completa ,
+	recoveredMinutes INT NOT NULL DEFAULT(0), --minutos de recuperacion 
 	JustificationMinutes INT NOT NULL DEFAULT(0)  --minutos que se aplico la justificiacion 
 );
 
@@ -964,7 +976,7 @@ CREATE TABLE HR.tbl_Books (
     PeerReviewed BIT NULL,
     ISBN NVARCHAR(20) NULL,
     Publisher NVARCHAR(200) NULL,
-    CountryID NVARCHAR(10) NULL,
+    CountryID INT NULL,
     City NVARCHAR(100) NULL,
     KnowledgeAreaTypeID INT NULL,
     SubAreaTypeID INT NULL,
@@ -972,6 +984,7 @@ CREATE TABLE HR.tbl_Books (
     VolumeCount INT NULL,
     ParticipationTypeID INT NULL,
     PublicationDate DATE NULL,
+	BookTypeID INT NULL
     UTAffiliation BIT NULL,
     UTASponsorship BIT NULL,
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()

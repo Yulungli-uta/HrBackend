@@ -5,11 +5,15 @@ using Microsoft.EntityFrameworkCore;
 namespace WsUtaSystem.Infrastructure.Repositories;
 public class EducationLevelsRepository : ServiceAwareEfRepository<EducationLevels, int>, IEducationLevelsRepository
 {
-    public EducationLevelsRepository(WsUtaSystem.Data.AppDbContext db) : base(db) { }
+
+    private readonly DbContext _db;
+    public EducationLevelsRepository(WsUtaSystem.Data.AppDbContext db) : base(db) { 
+        _db = db;
+    }
 
     public async Task<IEnumerable<EducationLevels>> GetByPersonIdAsync(int personId)
     {
-        return await _dbSet.Where(e => e.PersonId == personId).ToListAsync();
+        return await _db.Set<EducationLevels>().Where(e => e.PersonId == personId).ToListAsync();
     }
 
 }
