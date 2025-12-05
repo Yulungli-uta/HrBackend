@@ -36,7 +36,7 @@ public class EducationLevelsController : ControllerBase
     public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
     {
         var educationLevels = await _svc.GetByPersonIdAsync(personId);
-        return Ok(_mapper.Map<List<EducationLevelsDto>(educationLevels));
+        return Ok(_mapper.Map<List<EducationLevelsDto>>(educationLevels));
     }
 
     /// <summary>Crea un nuevo registro.</summary>

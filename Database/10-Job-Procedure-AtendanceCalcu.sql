@@ -1007,6 +1007,413 @@ BEGIN
 END;
 GO
 
+/**************************************************************************
+        INICIO - Procedimiento para procesar las Horas Extras 
+**************************************************************************/
+CREATE OR ALTER PROCEDURE HR.sp_ProcessTimePlanningForEmployeeDay
+(
+    @EmployeeID INT,
+    @WorkDate   DATE,
+    @Debug      BIT = 0
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    --------------------------------------------------------------------
+    -- 0) LOG INICIAL
+    --------------------------------------------------------------------
+    IF @Debug = 1 
+        PRINT '============================================================';
+    IF @Debug = 1 
+        PRINT 'sp_ApplyTimePlanningForEmployeeDay INICIO - EmpID=' 
+              + CAST(@EmployeeID AS VARCHAR(10)) 
+              + ' Fecha=' + CONVERT(VARCHAR(10), @WorkDate, 120);
+
+    --------------------------------------------------------------------
+    -- 1) Verificar que exista cálculo de asistencia para ese día
+    --------------------------------------------------------------------
+    IF NOT EXISTS (
+        SELECT 1
+        FROM HR.tbl_AttendanceCalculations ac
+        WHERE ac.EmployeeID = @EmployeeID
+          AND ac.WorkDate   = @WorkDate
+    )
+    BEGIN
+        IF @Debug = 1 
+            PRINT 'No existe registro en HR.tbl_AttendanceCalculations para este empleado y fecha. Se aborta.';
+        RETURN;
+    END
+
+    --------------------------------------------------------------------
+    -- 2) Obtener horario normal (Schedule) vigente para ese día
+    --------------------------------------------------------------------
+    DECLARE @EntryTime TIME = NULL,
+            @ExitTime  TIME = NULL;
+
+    ;WITH EmpSched AS (
+        SELECT 
+            es.EmployeeID,
+            es.ScheduleID,
+            s.EntryTime,
+            s.ExitTime,
+            ROW_NUMBER() OVER (ORDER BY es.ValidFrom DESC) AS rn
+        FROM HR.tbl_EmployeeSchedules es
+        JOIN HR.tbl_Schedules s 
+             ON s.ScheduleID = es.ScheduleID
+        WHERE es.EmployeeID = @EmployeeID
+          AND es.ValidFrom <= @WorkDate
+          AND (es.ValidTo IS NULL OR es.ValidTo >= @WorkDate)
+    )
+    SELECT 
+        @EntryTime = EntryTime,
+        @ExitTime  = ExitTime
+    FROM EmpSched
+    WHERE rn = 1;
+
+    IF @EntryTime IS NULL OR @ExitTime IS NULL
+    BEGIN
+        -- No se encontró un horario claro para este día
+        IF @Debug = 1 
+            PRINT 'No se encontró horario (Schedule) para el empleado en la fecha indicada. No se aplicará planificación.';
+        RETURN;
+    END
+
+    IF @Debug = 1
+        PRINT 'Horario normal detectado: ' 
+              + CONVERT(VARCHAR(8), @EntryTime, 108) 
+              + ' - ' 
+              + CONVERT(VARCHAR(8), @ExitTime, 108);
+
+    --------------------------------------------------------------------
+    -- 3) Obtener planificación vigente para ese empleado/día
+    --    PlanType IN ('Overtime','Recovery') y estado permitido.
+    --------------------------------------------------------------------
+    IF OBJECT_ID('tempdb..#Plans') IS NOT NULL DROP TABLE #Plans;
+
+    SELECT 
+        p.PlanID,
+        p.PlanType,              -- 'Overtime' o 'Recovery'
+        p.StartDate,
+        p.EndDate,
+        p.StartTime,
+        p.EndTime,
+        p.OvertimeType,
+        p.Factor,
+        pe.PlanEmployeeID
+    INTO #Plans
+    FROM HR.tbl_TimePlanning p
+    JOIN HR.tbl_TimePlanningEmployees pe
+         ON pe.PlanID     = p.PlanID
+        AND pe.EmployeeID = @EmployeeID
+    -- Opcional: filtrar por estado del plan si tienes ref_Types
+    LEFT JOIN HR.ref_Types st
+         ON st.TypeID   = p.PlanStatusTypeID
+        AND st.Category = 'PLAN_STATUS'
+    WHERE @WorkDate BETWEEN p.StartDate AND p.EndDate
+      AND p.PlanType IN ('Overtime','Recovery')
+      AND (st.TypeID IS NULL OR st.Name IN ('Aprobado','En Progreso','Borrador'));
+
+    IF NOT EXISTS(SELECT 1 FROM #Plans)
+    BEGIN
+        IF @Debug = 1 
+            PRINT 'No hay planificación Overtime/Recovery aplicable para este empleado en la fecha.';
+        RETURN;
+    END
+
+    IF @Debug = 1 
+        PRINT 'Planes encontrados (sin filtrar por horario): ' 
+              + CAST((SELECT COUNT(*) FROM #Plans) AS VARCHAR(12));
+
+    --------------------------------------------------------------------
+    -- 4) Filtrar planes que estén completamente fuera del horario normal
+    --    Regla: Plan válido si:
+    --      EndTime <= EntryTime  OR  StartTime >= ExitTime
+    --    Cualquier solapamiento con el horario normal → se descarta.
+    --------------------------------------------------------------------
+    IF OBJECT_ID('tempdb..#ValidPlans') IS NOT NULL DROP TABLE #ValidPlans;
+
+    SELECT 
+        p.*,
+        CASE 
+            WHEN p.EndTime   <= @EntryTime 
+                 OR p.StartTime >= @ExitTime 
+                 THEN 1 
+            ELSE 0 
+        END AS IsOutsideSchedule
+    INTO #ValidPlans
+    FROM #Plans p;
+
+    DELETE FROM #ValidPlans WHERE IsOutsideSchedule = 0;
+
+    IF NOT EXISTS (SELECT 1 FROM #ValidPlans)
+    BEGIN
+        IF @Debug = 1 
+            PRINT 'Todos los planes se solapan con el horario normal. No se aplica ninguno.';
+        RETURN;
+    END
+
+    IF @Debug = 1 
+        PRINT 'Planes válidos (fuera de horario normal): ' 
+              + CAST((SELECT COUNT(*) FROM #ValidPlans) AS VARCHAR(12));
+
+    --------------------------------------------------------------------
+    -- 5) Obtener ventana de trabajo real (picadas) desde AttendanceCalculations
+    --------------------------------------------------------------------
+    DECLARE @FirstPunchIn DATETIME2,
+            @LastPunchOut DATETIME2;
+
+    SELECT 
+        @FirstPunchIn = ac.FirstPunchIn,
+        @LastPunchOut = ac.LastPunchOut
+    FROM HR.tbl_AttendanceCalculations ac
+    WHERE ac.EmployeeID = @EmployeeID
+      AND ac.WorkDate   = @WorkDate;
+
+    IF @FirstPunchIn IS NULL OR @LastPunchOut IS NULL
+    BEGIN
+        IF @Debug = 1 
+            PRINT 'No hay FirstPunchIn o LastPunchOut para este día. No se consideran minutos ejecutados en planificación.';
+        -- A pesar de no haber picadas, podríamos querer poner en 0 los campos:
+        UPDATE HR.tbl_AttendanceCalculations
+        SET OvertimeMinutes   = 0,
+            recoveredMinutes  = 0
+        WHERE EmployeeID = @EmployeeID
+          AND WorkDate   = @WorkDate;
+
+        RETURN;
+    END
+
+    IF @Debug = 1
+        PRINT 'Ventana trabajada según picadas: '
+              + CONVERT(VARCHAR(19), @FirstPunchIn, 120)
+              + ' - '
+              + CONVERT(VARCHAR(19), @LastPunchOut, 120);
+
+    --------------------------------------------------------------------
+    -- 6) Calcular minutos de solapamiento (ejecución real) por plan
+    --------------------------------------------------------------------
+    IF OBJECT_ID('tempdb..#ExecPlans') IS NOT NULL DROP TABLE #ExecPlans;
+
+    ;WITH PlanWindows AS (
+        SELECT
+            vp.PlanID,
+            vp.PlanEmployeeID,
+            vp.PlanType,
+            vp.OvertimeType,
+            vp.Factor,
+            -- Construimos la fecha/hora del plan para el @WorkDate
+            PlanStartDT = DATEADD(MINUTE, 
+                                  DATEDIFF(MINUTE, CAST('00:00:00' AS TIME), vp.StartTime),
+                                  CAST(@WorkDate AS DATETIME2)),
+            PlanEndDT   = DATEADD(MINUTE, 
+                                  DATEDIFF(MINUTE, CAST('00:00:00' AS TIME), vp.EndTime),
+                                  CAST(@WorkDate AS DATETIME2))
+        FROM #ValidPlans vp
+    ),
+    Overlaps AS (
+        SELECT
+            w.PlanID,
+            w.PlanEmployeeID,
+            w.PlanType,
+            w.OvertimeType,
+            w.Factor,
+            OverlapStart = CASE 
+                             WHEN @FirstPunchIn > w.PlanStartDT THEN @FirstPunchIn 
+                             ELSE w.PlanStartDT 
+                           END,
+            OverlapEnd   = CASE 
+                             WHEN @LastPunchOut < w.PlanEndDT THEN @LastPunchOut 
+                             ELSE w.PlanEndDT 
+                           END
+        FROM PlanWindows w
+    )
+    SELECT
+        o.PlanID,
+        o.PlanEmployeeID,
+        o.PlanType,
+        o.OvertimeType,
+        o.Factor,
+        ExecutedMinutes =
+            CASE 
+                WHEN o.OverlapEnd > o.OverlapStart 
+                     THEN DATEDIFF(MINUTE, o.OverlapStart, o.OverlapEnd)
+                ELSE 0
+            END
+    INTO #ExecPlans
+    FROM Overlaps o;
+
+    -- Eliminamos planes con 0 minutos ejecutados
+    DELETE FROM #ExecPlans
+    WHERE ExecutedMinutes <= 0;
+
+    IF NOT EXISTS (SELECT 1 FROM #ExecPlans)
+    BEGIN
+        IF @Debug = 1 
+            PRINT 'No hubo minutos realmente trabajados dentro de las ventanas de los planes.';
+        
+        -- Dejamos minutos de Overtime/Recovery en 0 para este día
+        UPDATE HR.tbl_AttendanceCalculations
+        SET OvertimeMinutes  = 0,
+            recoveredMinutes = 0
+        WHERE EmployeeID = @EmployeeID
+          AND WorkDate   = @WorkDate;
+
+        RETURN;
+    END
+
+    IF @Debug = 1
+        PRINT 'Planes con minutos ejecutados: '
+              + CAST((SELECT COUNT(*) FROM #ExecPlans) AS VARCHAR(12));
+
+    --------------------------------------------------------------------
+    -- 7) Totalizar minutos por tipo (Overtime / Recovery)
+    --------------------------------------------------------------------
+    DECLARE @TotalOvertimeMin INT = 0,
+            @TotalRecoveryMin INT = 0;
+
+    SELECT 
+        @TotalOvertimeMin = ISNULL(SUM(CASE WHEN PlanType = 'Overtime' THEN ExecutedMinutes ELSE 0 END), 0),
+        @TotalRecoveryMin = ISNULL(SUM(CASE WHEN PlanType = 'Recovery' THEN ExecutedMinutes ELSE 0 END), 0)
+    FROM #ExecPlans;
+
+    IF @Debug = 1
+    BEGIN
+        PRINT 'Minutos ejecutados Overtime:  ' + CAST(@TotalOvertimeMin AS VARCHAR(12));
+        PRINT 'Minutos ejecutados Recovery: ' + CAST(@TotalRecoveryMin AS VARCHAR(12));
+    END
+
+    --------------------------------------------------------------------
+    -- 8) Actualizar tbl_AttendanceCalculations con minutos verificados
+    --    IMPORTANTE: aquí se establece el valor en función de la planificación
+    --    y las picadas. El procedimiento es idempotente.
+    --------------------------------------------------------------------
+    UPDATE HR.tbl_AttendanceCalculations
+    SET OvertimeMinutes  = @TotalOvertimeMin,
+        recoveredMinutes = @TotalRecoveryMin
+    WHERE EmployeeID = @EmployeeID
+      AND WorkDate   = @WorkDate;
+
+    IF @Debug = 1
+        PRINT 'Actualizados OvertimeMinutes y recoveredMinutes en HR.tbl_AttendanceCalculations.';
+
+    --------------------------------------------------------------------
+    -- 9) Actualizar saldo de recuperación en HR.tbl_TimeBalances
+    --    RecoveryPendingMin = max(SaldoActual - TotalRecoveryMin, 0)
+    --------------------------------------------------------------------
+    IF @TotalRecoveryMin > 0
+    BEGIN
+        IF EXISTS (SELECT 1 FROM HR.tbl_TimeBalances WHERE EmployeeID = @EmployeeID)
+        BEGIN
+            UPDATE HR.tbl_TimeBalances
+            SET RecoveryPendingMin = CASE 
+                                        WHEN RecoveryPendingMin - @TotalRecoveryMin < 0 
+                                             THEN 0 
+                                        ELSE RecoveryPendingMin - @TotalRecoveryMin 
+                                     END,
+                LastUpdated        = SYSDATETIME()
+            WHERE EmployeeID = @EmployeeID;
+
+            IF @Debug = 1
+                PRINT 'Actualizado HR.tbl_TimeBalances.RecoveryPendingMin para el empleado.';
+        END
+        ELSE
+        BEGIN
+            IF @Debug = 1
+                PRINT 'No existe fila en HR.tbl_TimeBalances para el empleado. No se descuenta RecoveryPendingMin.';
+        END
+    END
+
+    --------------------------------------------------------------------
+    -- 10) Registrar ejecución en HR.tbl_TimePlanningExecution
+    --     Por cada PlanEmployeeID y WorkDate.
+    --     Para Overtime se usa OvertimeMinutes; para Recovery se guarda en RegularMinutes.
+    --------------------------------------------------------------------
+    MERGE HR.tbl_TimePlanningExecution AS T
+    USING (
+        SELECT 
+            ep.PlanEmployeeID,
+            @WorkDate AS WorkDate,
+            ep.ExecutedMinutes,
+            ep.PlanType
+        FROM #ExecPlans ep
+    ) AS S
+    ON T.PlanEmployeeID = S.PlanEmployeeID
+       AND T.WorkDate   = S.WorkDate
+    WHEN MATCHED THEN
+        UPDATE SET
+            T.TotalMinutes    = S.ExecutedMinutes,
+            T.OvertimeMinutes = CASE WHEN S.PlanType = 'Overtime' THEN S.ExecutedMinutes ELSE 0 END,
+            T.RegularMinutes  = CASE WHEN S.PlanType = 'Recovery' THEN S.ExecutedMinutes ELSE T.RegularMinutes END
+    WHEN NOT MATCHED THEN
+        INSERT (PlanEmployeeID, WorkDate, StartTime, EndTime, TotalMinutes, RegularMinutes, OvertimeMinutes, NightMinutes, HolidayMinutes, CreatedAt)
+        VALUES (
+            S.PlanEmployeeID,
+            S.WorkDate,
+            NULL,                           -- StartTime real no se detalla aquí
+            NULL,                           -- EndTime real no se detalla aquí
+            S.ExecutedMinutes,
+            CASE WHEN S.PlanType = 'Recovery' THEN S.ExecutedMinutes ELSE 0 END,
+            CASE WHEN S.PlanType = 'Overtime' THEN S.ExecutedMinutes ELSE 0 END,
+            0,
+            0,
+            SYSDATETIME()
+        );
+
+    IF @Debug = 1
+        PRINT 'Actualizada/insertada ejecución en HR.tbl_TimePlanningExecution.';
+
+    --------------------------------------------------------------------
+    -- 11) Consolidar horas extra en HR.tbl_Overtime (solo PlanType = 'Overtime')
+    --------------------------------------------------------------------
+    IF @TotalOvertimeMin > 0
+    BEGIN
+        DECLARE @HoursOT DECIMAL(5,2) = CAST(@TotalOvertimeMin AS DECIMAL(10,2)) / 60.0;
+
+        MERGE HR.tbl_Overtime AS T
+        USING (
+            SELECT 
+                @EmployeeID AS EmployeeID,
+                @WorkDate   AS WorkDate,
+                @HoursOT    AS Hours
+        ) AS S
+        ON T.EmployeeID = S.EmployeeID
+           AND T.WorkDate = S.WorkDate
+        WHEN MATCHED THEN
+            UPDATE SET
+                -- Si ya está APPROVED o PAID, no se pisa
+                T.Hours       = CASE WHEN T.Status IN ('APPROVED','PAID') THEN T.Hours       ELSE S.Hours END,
+                T.ActualHours = CASE WHEN T.Status IN ('APPROVED','PAID') THEN T.ActualHours ELSE S.Hours END,
+                T.Status      = CASE WHEN T.Status IN ('APPROVED','PAID') THEN T.Status      ELSE 'EXECUTED' END
+        WHEN NOT MATCHED THEN
+            INSERT (EmployeeID, WorkDate, OvertimeType, Hours, Status, Factor, ActualHours, PaymentAmount, CreatedAt)
+            VALUES (S.EmployeeID, S.WorkDate, 'Ordinaria', S.Hours, 'EXECUTED', 1.0, S.Hours, 0, SYSDATETIME());
+
+        IF @Debug = 1
+            PRINT 'Actualizada/insertada consolidación en HR.tbl_Overtime.';
+    END
+    ELSE
+    BEGIN
+        IF @Debug = 1
+            PRINT 'No se registran horas en HR.tbl_Overtime porque no hubo minutos de Overtime ejecutados.';
+    END
+
+    --------------------------------------------------------------------
+    -- 12) FIN
+    --------------------------------------------------------------------
+    IF @Debug = 1 
+        PRINT 'sp_ApplyTimePlanningForEmployeeDay FIN - EmpID=' 
+              + CAST(@EmployeeID AS VARCHAR(10)) 
+              + ' Fecha=' + CONVERT(VARCHAR(10), @WorkDate, 120);
+END;
+GO
+
+
+/**************************************************************************
+        FIN - Procedimiento para procesar las Horas Extras 
+**************************************************************************/
+
+
 
 CREATE OR ALTER PROCEDURE HR.sp_ProcessAttendanceForDate
 (
@@ -1028,8 +1435,17 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        EXEC HR.sp_ProcessAttendanceEmployeeDay @EmployeeID = @EmployeeID,
-                                                @WorkDate   = @WorkDate;
+        -- 1) Procesa la asistencia base (genera tbl_AttendanceCalculations)
+        EXEC HR.sp_ProcessAttendanceEmployeeDay 
+             @EmployeeID = @EmployeeID,
+             @WorkDate   = @WorkDate;
+
+        -- 2) Aplica planificación (Overtime / Recovery) y actualiza 
+        --    AttendanceCalculations, TimeBalances, TimePlanningExecution y Overtime
+        EXEC HR.sp_ProcessTimePlanningForEmployeeDay
+             @EmployeeID = @EmployeeID,
+             @WorkDate   = @WorkDate,
+             @Debug      = 0;   -- pon 1 para ver logs detallados									
         FETCH NEXT FROM cur INTO @EmployeeID;
     END;
 

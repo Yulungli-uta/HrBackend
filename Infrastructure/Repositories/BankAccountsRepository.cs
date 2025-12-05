@@ -5,11 +5,14 @@ using Microsoft.EntityFrameworkCore;
 namespace WsUtaSystem.Infrastructure.Repositories;
 public class BankAccountsRepository : ServiceAwareEfRepository<BankAccounts, int>, IBankAccountsRepository
 {
-    public BankAccountsRepository(WsUtaSystem.Data.AppDbContext db) : base(db) { }
+    private readonly DbContext _db;
+    public BankAccountsRepository(WsUtaSystem.Data.AppDbContext db) : base(db) {
+        _db = db;
+    }
 
     public async Task<IEnumerable<BankAccounts>> GetByPersonIdAsync(int personId)
     {
-        return await _dbSet.Where(a => a.PersonId == personId).ToListAsync();
+        return await _db.Set<BankAccounts>().Where(a => a.PersonId == personId).ToListAsync();
     }
 
 }

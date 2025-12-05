@@ -493,7 +493,7 @@ ADD CONSTRAINT FK_FamilyBurden_Person FOREIGN KEY (PersonID) REFERENCES HR.tbl_P
 
 ALTER TABLE HR.tbl_Trainings
 ADD CONSTRAINT FK_Trainings_Person FOREIGN KEY (PersonID) REFERENCES HR.tbl_People(PersonID),
-    CONSTRAINT FK_Trainings_KnowledgeArea FOREIGN KEY (KnowledgeAreaTypeID) REFERENCES HR.ref_Types(TypeID),
+    CONSTRAINT FK_Trainings_KnowledgeArea FOREIGN KEY (KnowledgeAreaTypeID) REFERENCES HR.tbl_KnowledgeArea(id),
     CONSTRAINT FK_Trainings_EventType FOREIGN KEY (EventTypeID) REFERENCES HR.ref_Types(TypeID),
     CONSTRAINT FK_Trainings_CertificateType FOREIGN KEY (CertificateTypeID) REFERENCES HR.ref_Types(TypeID),
     CONSTRAINT FK_Trainings_ApprovalType FOREIGN KEY (ApprovalTypeID) REFERENCES HR.ref_Types(TypeID);
@@ -512,16 +512,17 @@ ALTER TABLE HR.tbl_Publications
 ADD CONSTRAINT FK_Publications_Person FOREIGN KEY (PersonID) REFERENCES HR.tbl_People(PersonID),
     CONSTRAINT FK_Publications_PublicationType FOREIGN KEY (PublicationTypeID) REFERENCES HR.ref_Types(TypeID),
     CONSTRAINT FK_Publications_JournalType FOREIGN KEY (JournalTypeID) REFERENCES HR.ref_Types(TypeID),
-    CONSTRAINT FK_Publications_KnowledgeArea FOREIGN KEY (KnowledgeAreaTypeID) REFERENCES HR.ref_Types(TypeID),
-    CONSTRAINT FK_Publications_SubArea FOREIGN KEY (SubAreaTypeID) REFERENCES HR.ref_Types(TypeID),
-    CONSTRAINT FK_Publications_Area FOREIGN KEY (AreaTypeID) REFERENCES HR.ref_Types(TypeID);
+    CONSTRAINT FK_Publications_KnowledgeArea FOREIGN KEY (KnowledgeAreaTypeID) REFERENCES HR.tbl_KnowledgeArea(id),
+    CONSTRAINT FK_Publications_SubArea FOREIGN KEY (SubAreaTypeID) REFERENCES HR.tbl_KnowledgeArea(id),
+    CONSTRAINT FK_Publications_Area FOREIGN KEY (AreaTypeID) REFERENCES HR.tbl_KnowledgeArea(id);
 
 ALTER TABLE HR.tbl_Books
 ADD CONSTRAINT FK_Books_Person FOREIGN KEY (PersonID) REFERENCES HR.tbl_People(PersonID),
     CONSTRAINT FK_Books_Country FOREIGN KEY (CountryID) REFERENCES HR.tbl_Countries(CountryID),
-    CONSTRAINT FK_Books_KnowledgeArea FOREIGN KEY (KnowledgeAreaTypeID) REFERENCES HR.ref_Types(TypeID),
-    CONSTRAINT FK_Books_SubArea FOREIGN KEY (SubAreaTypeID) REFERENCES HR.ref_Types(TypeID),
-    CONSTRAINT FK_Books_Area FOREIGN KEY (AreaTypeID) REFERENCES HR.ref_Types(TypeID),
+    CONSTRAINT FK_Books_KnowledgeArea FOREIGN KEY (KnowledgeAreaTypeID) REFERENCES HR.tbl_KnowledgeArea(id),
+    CONSTRAINT FK_Books_SubArea FOREIGN KEY (SubAreaTypeID) REFERENCES HR.tbl_KnowledgeArea(id),
+    CONSTRAINT FK_Books_Area FOREIGN KEY (AreaTypeID) REFERENCES HR.tbl_KnowledgeArea(id),
+	CONSTRAINT FK_Books_Type FOREIGN KEY (BookTypeID) REFERENCES HR.ref_Types(TypeID),
     CONSTRAINT FK_Books_ParticipationType FOREIGN KEY (ParticipationTypeID) REFERENCES HR.ref_Types(TypeID);
 
 --ALTER TABLE HR.contract_type ADD CONSTRAINT UQ_contract_type_ContractCode UNIQUE (ContractCode);

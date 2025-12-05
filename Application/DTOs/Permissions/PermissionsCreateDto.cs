@@ -12,7 +12,7 @@ public class PermissionsCreateDto
     public int? ApprovedBy { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public string Justification { get; set; }
-    public DateTime CreatedAt { get; set; }
+    //public DateTime CreatedAt { get; set; }
     public string Status { get; set; }
     public int? VacationId { get; set; }
 }

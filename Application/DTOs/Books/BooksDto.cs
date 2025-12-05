@@ -8,7 +8,7 @@ public class BooksDto
     public bool PeerReviewed { get; set; }
     public string ISBN { get; set; }
     public string Publisher { get; set; }
-    public int CountryId { get; set; }
+    public string CountryId { get; set; }
     public string City { get; set; }
     public int KnowledgeAreaTypeId { get; set; }
     public int SubAreaTypeId { get; set; }
@@ -18,5 +18,6 @@ public class BooksDto
     public DateOnly PublicationDate { get; set; }
     public bool UTAffiliation { get; set; }
     public bool UTASponsorship { get; set; }
+    public int? BookTypeId { get; set; }
     public DateTime CreatedAt { get; set; }
 }

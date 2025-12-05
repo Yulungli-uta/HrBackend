@@ -5,10 +5,13 @@ using Microsoft.EntityFrameworkCore;
 namespace WsUtaSystem.Infrastructure.Repositories;
 public class ProvincesRepository : ServiceAwareEfRepository<Provinces, string>, IProvincesRepository
 {
-    public ProvincesRepository(WsUtaSystem.Data.AppDbContext db) : base(db) { }
+    private readonly DbContext _db;
+    public ProvincesRepository(WsUtaSystem.Data.AppDbContext db) : base(db) { 
+        _db = db;
+    }
 
     public async Task<IEnumerable<Provinces>> GetByCountryIdAsync(string countryId)
     {
-        return await _dbSet.Where(p => p.CountryId == countryId).ToListAsync();
+        return await _db.Set<Provinces>().Where(p => p.CountryId == countryId).ToListAsync();
     }
 }

@@ -15,7 +15,7 @@ public class PeopleCreateDto
     public string? Disability { get; set; }
     public string Address { get; set; }
     public bool IsActive { get; set; }
-    public DateTime CreatedAt { get; set; }
+    //public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public int MaritalStatusTypeId { get; set; }
     public string? MilitaryCard { get; set; }
@@ -26,7 +26,7 @@ public class PeopleCreateDto
     public string CantonId { get; set; }
     public int? YearsOfResidence { get; set; }
     public int? EthnicityTypeId { get; set; }
-    public int BloodTypeTypeId { get; set; }
+    public int? BloodTypeTypeId { get; set; }
     public int? SpecialNeedsTypeId { get; set; }
     public decimal? DisabilityPercentage { get; set; }
     public string? ConadisCard { get; set; }

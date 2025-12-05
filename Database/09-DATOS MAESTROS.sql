@@ -1035,6 +1035,274 @@ INSERT HR.tbl_OvertimeConfig(OvertimeType, Factor, Description) VALUES ('Nocturn
 INSERT HR.tbl_OvertimeConfig(OvertimeType, Factor, Description) VALUES ('Ordinaria', 1.50, 'Hora extra ordinaria')
 GO
 
+
+-- ============================================
+-- NIVEL 1: ÁREAS PRINCIPALES (Códigos: 01-10)
+-- ============================================
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('01', 'EDUCACIÓN', NULL, 1, 1),
+('02', 'ARTES Y HUMANIDADES', NULL, 1, 1),
+('03', 'CIENCIAS SOCIALES, PERIODISMO E INFORMACIÓN', NULL, 1, 1),
+('04', 'ADMINISTRACIÓN DE EMPRESAS Y DERECHO', NULL, 1, 1),
+('05', 'CIENCIAS NATURALES, MATEMÁTICAS Y ESTADÍSTICA', NULL, 1, 1),
+('06', 'TECNOLOGÍAS DE LA INFORMACIÓN Y LA COMUNICACIÓN (TIC)', NULL, 1, 1),
+('07', 'INGENIERÍA, INDUSTRIA Y CONSTRUCCIÓN', NULL, 1, 1),
+('08', 'AGRICULTURA, SILVICULTURA, PESCA Y VETERINARIA', NULL, 1, 1),
+('09', 'SALUD Y BIENESTAR', NULL, 1, 1),
+('10', 'SERVICIOS', NULL, 1, 1);
+GO
+
+-- ============================================
+-- NIVEL 2: SUBÁREAS (Códigos: 0101, 0201, etc.)
+-- ============================================
+
+-- Subáreas de EDUCACIÓN (01)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0101', 'EDUCACIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='01'), 2, 1);
+GO
+
+-- Subáreas de ARTES Y HUMANIDADES (02)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0201', 'ARTES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='02'), 2, 1),
+('0202', 'HUMANIDADES (EXCEPTO IDIOMAS)', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='02'), 2, 1),
+('0203', 'IDIOMAS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='02'), 2, 1);
+GO
+
+-- Subáreas de CIENCIAS SOCIALES (03)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0301', 'CIENCIAS SOCIALES Y DEL COMPORTAMIENTO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='03'), 2, 1),
+('0302', 'PERIODISMO E INFORMACIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='03'), 2, 1);
+GO
+
+-- Subáreas de ADMINISTRACIÓN Y DERECHO (04)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0401', 'CIENCIAS EMPRESARIALES Y ADMINISTRACIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='04'), 2, 1),
+('0402', 'DERECHO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='04'), 2, 1);
+GO
+
+-- Subáreas de CIENCIAS NATURALES (05)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0501', 'CIENCIAS BIOLÓGICAS Y AFINES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='05'), 2, 1),
+('0502', 'MEDIO AMBIENTE', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='05'), 2, 1),
+('0503', 'CIENCIAS FÍSICAS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='05'), 2, 1),
+('0504', 'MATEMÁTICAS Y ESTADÍSTICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='05'), 2, 1);
+GO
+
+-- Subáreas de TIC (06)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0601', 'TECNOLOGÍAS DE LA INFORMACIÓN Y LA COMUNICACIÓN (TIC)', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='06'), 2, 1);
+GO
+
+-- Subáreas de INGENIERÍA (07)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0701', 'INGENIERÍA Y PROFESIONES AFINES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='07'), 2, 1),
+('0702', 'INDUSTRIA Y PRODUCCIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='07'), 2, 1),
+('0703', 'ARQUITECTURA Y CONSTRUCCIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='07'), 2, 1);
+GO
+
+-- Subáreas de AGRICULTURA (08)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0801', 'AGRICULTURA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='08'), 2, 1),
+('0802', 'SILVICULTURA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='08'), 2, 1),
+('0803', 'PESCA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='08'), 2, 1),
+('0804', 'VETERINARIA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='08'), 2, 1);
+GO
+
+-- Subáreas de SALUD (09)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0901', 'SALUD', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='09'), 2, 1),
+('0902', 'BIENESTAR', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='09'), 2, 1);
+GO
+
+-- Subáreas de SERVICIOS (10)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('1001', 'SERVICIOS PERSONALES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='10'), 2, 1),
+('1002', 'SERVICIOS DE HIGIENE Y SALUD OCUPACIONAL', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='10'), 2, 1),
+('1003', 'SERVICIOS DE SEGURIDAD', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='10'), 2, 1),
+('1004', 'SERVICIOS DE TRANSPORTE', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='10'), 2, 1);
+GO
+
+-- ============================================
+-- NIVEL 3: ESPECIALIZACIONES (Códigos: 010101, 020101, etc.)
+-- ============================================
+
+-- Especializaciones de EDUCACIÓN (0101)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('010101', 'CIENCIAS DE LA EDUCACIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0101'), 3, 1),
+('010102', 'CAPACITACIÓN PARA MAESTROS DE PREESCOLAR', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0101'), 3, 1),
+('010103', 'FORMACIÓN DE PROFESOR SIN ASIGNATURA DE ESPECIALIZACIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0101'), 3, 1),
+('010104', 'FORMACIÓN DE PROFESOR CON ASIGNATURA DE ESPECIALIZACIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0101'), 3, 1),
+('010105', 'TÉCNICAS AUDIOVISUALES Y PRODUCCIÓN DE MEDIOS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0101'), 3, 1),
+('010106', 'FORMACIÓN DE DOCENTES DE EDUCACIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0101'), 3, 1);
+GO
+
+-- Especializaciones de ARTES (0201)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('020101', 'BELLAS ARTES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0201'), 3, 1),
+('020102', 'ARTESANÍAS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0201'), 3, 1),
+('020103', 'ARTES MUSICALES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0201'), 3, 1),
+('020104', 'ARTES PLÁSTICAS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0201'), 3, 1),
+('020105', 'ACTIVIDAD FÍSICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0201'), 3, 1);
+GO
+
+-- Especializaciones de HUMANIDADES (0202)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('020201', 'RELIGIÓN Y TEOLOGÍA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0202'), 3, 1),
+('020202', 'HISTORIA Y ARQUEOLOGÍA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0202'), 3, 1),
+('020203', 'FILOSOFÍA Y ÉTICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0202'), 3, 1);
+GO
+
+-- Especializaciones de IDIOMAS (0203)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('020301', 'LENGUAS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0203'), 3, 1),
+('020302', 'LITERATURA Y LINGÜÍSTICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0203'), 3, 1);
+GO
+
+-- Especializaciones de CIENCIAS SOCIALES (0301)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('030101', 'ECONOMÍA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0301'), 3, 1),
+('030102', 'CIENCIAS POLÍTICAS Y EDUCACIÓN CÍVICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0301'), 3, 1),
+('030103', 'PSICOLOGÍA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0301'), 3, 1),
+('030104', 'SOCIOLOGÍA, ESTUDIOS CULTURALES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0301'), 3, 1);
+GO
+
+-- Especializaciones de PERIODISMO (0302)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('030201', 'PERIODISMO Y REPORTAJE', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0302'), 3, 1),
+('030202', 'BIBLIOTECA, INFORMACIÓN Y ARCHIVÍSTICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0302'), 3, 1);
+GO
+
+-- Especializaciones de CIENCIAS EMPRESARIALES (0401)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('040101', 'CONTABILIDAD Y AUDITORÍA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1),
+('040102', 'FINANZAS, BANCA Y SEGUROS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1),
+('040103', 'GESTIÓN Y ADMINISTRACIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1),
+('040104', 'MARKETING Y PUBLICIDAD', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1),
+('040105', 'SECRETARIADO Y TRABAJO DE OFICINA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1),
+('040106', 'VIDA LABORAL Y RECURSOS HUMANOS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1),
+('040107', 'INVERSIONES, LABORAL', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1);
+GO
+
+-- Especializaciones de DERECHO (0402)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('040201', 'DERECHO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0402'), 3, 1);
+GO
+
+-- Especializaciones de CIENCIAS BIOLÓGICAS (0501)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('050101', 'BIOLOGÍA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0501'), 3, 1),
+('050102', 'BIOQUÍMICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0501'), 3, 1);
+GO
+
+-- Especializaciones de MEDIO AMBIENTE (0502)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('050201', 'CIENCIAS AMBIENTALES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0502'), 3, 1),
+('050202', 'MEDIO AMBIENTE Y VIDA SILVESTRE', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0502'), 3, 1);
+GO
+
+-- Especializaciones de CIENCIAS FÍSICAS (0503)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('050301', 'QUÍMICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0503'), 3, 1),
+('050302', 'CIENCIA DE LA TIERRA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0503'), 3, 1),
+('050303', 'FÍSICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0503'), 3, 1);
+GO
+
+-- Especializaciones de MATEMÁTICAS (0504)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('050401', 'MATEMÁTICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0504'), 3, 1),
+('050402', 'ESTADÍSTICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0504'), 3, 1);
+GO
+
+-- Especializaciones de TIC (0601)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('060101', 'EL USO DEL ORDENADOR', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0601'), 3, 1),
+('060102', 'BASE DE DATOS, DISEÑO Y ADMINISTRACIÓN DE REDES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0601'), 3, 1),
+('060103', 'SOFTWARE Y DESARROLLO Y ANÁLISIS DE APLICATIVOS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0601'), 3, 1);
+GO
+
+-- Especializaciones de INGENIERÍA (0701)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('070101', 'INGENIERÍA Y PROCESOS QUÍMICOS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1),
+('070102', 'TECNOLOGÍA DE PROTECCIÓN DEL MEDIO AMBIENTE', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1),
+('070103', 'ELECTRICIDAD Y ENERGÍA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1),
+('070104', 'ELECTRÓNICA Y AUTOMATIZACIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1),
+('070105', 'MECÁNICA Y METALISTERÍA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1),
+('070106', 'MOTOR DE VEHÍCULOS, EMBARCACIONES Y AERONAVES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1),
+('070107', 'TELECOMUNICACIONES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1);
+GO
+
+-- Especializaciones de INDUSTRIA (0702)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('070201', 'PROCESAMIENTO DE ALIMENTOS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0702'), 3, 1),
+('070202', 'MATERIALES (VIDRIO, PAPEL, PLÁSTICO Y MADERA)', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0702'), 3, 1),
+('070203', 'TEXTILES, CONFECCIÓN, CALZADO Y CUERO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0702'), 3, 1),
+('070204', 'MINERÍA Y EXTRACCIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0702'), 3, 1),
+('070205', 'PRODUCCIÓN INDUSTRIAL', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0702'), 3, 1);
+GO
+
+-- Especializaciones de ARQUITECTURA (0703)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('070301', 'ARQUITECTURA Y URBANISMO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0703'), 3, 1),
+('070302', 'CONSTRUCCIÓN E INGENIERÍA CIVIL', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0703'), 3, 1);
+GO
+
+-- Especializaciones de AGRICULTURA (0801)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('080101', 'PRODUCCIÓN AGRÍCOLA Y GANADERA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0801'), 3, 1),
+('080102', 'HORTICULTURA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0801'), 3, 1);
+GO
+
+-- Especializaciones de SILVICULTURA (0802)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('080201', 'SILVICULTURA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0802'), 3, 1);
+GO
+
+-- Especializaciones de PESCA (0803)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('080301', 'PESCA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0803'), 3, 1);
+GO
+
+-- Especializaciones de VETERINARIA (0804)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('080401', 'VETERINARIA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0804'), 3, 1),
+('080402', 'ESTUDIOS DENTALES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0804'), 3, 1);
+GO
+
+-- Especializaciones de SALUD (0901)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('090101', 'MEDICINA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0901'), 3, 1),
+('090102', 'ENFERMERÍA Y OBSTETRICIA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0901'), 3, 1),
+('090103', 'TECNOLOGÍA DE DIAGNÓSTICO Y TRATAMIENTO MÉDICO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0901'), 3, 1),
+('090104', 'TERAPIA Y REHABILITACIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0901'), 3, 1),
+('090105', 'FARMACIA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0901'), 3, 1),
+('090106', 'ASISTENCIA MÉDICA, PROGRAMAS COMPARTIDOS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0901'), 3, 1);
+GO
+
+-- Especializaciones de BIENESTAR (0902)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('090201', 'CUIDADO DEL ADULTO MAYOR Y ATENCIÓN DISCAPACIDAD', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0902'), 3, 1),
+('090202', 'SERVICIO DE CUIDADO A NIÑOS Y JÓVENES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0902'), 3, 1),
+('090203', 'TRABAJO SOCIAL Y ORIENTACIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0902'), 3, 1),
+('090204', 'SERVICIO DOMÉSTICO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0902'), 3, 1);
+GO
+
+-- Especializaciones de SERVICIOS PERSONALES (1001)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('100101', 'SERVICIOS DE ALIMENTACIÓN', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='1001'), 3, 1),
+('100102', 'HOTELES, RESTAURANTES Y CATERING', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='1001'), 3, 1),
+('100103', 'DEPORTES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='1001'), 3, 1),
+('100104', 'VIAJES, TURISMO Y OCIO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='1001'), 3, 1);
+GO
+
+-- Especializaciones de HIGIENE Y SALUD OCUPACIONAL (1002)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('100201', 'SANEAMIENTO DE LA COMUNIDAD', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='1002'), 3, 1),
+('100202', 'SALUD Y SEGURIDAD OCUPACIONAL', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='1002'), 3, 1);
+GO
+
+
+
+
 PRINT (N'Dumping data for table tbl_Holidays')
 SET IDENTITY_INSERT HR.tbl_Holidays ON
 GO
@@ -1129,3 +1397,5 @@ INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, Devic
 GO
 SET IDENTITY_INSERT HR.tbl_AttendancePunches OFF
 GO
+
+

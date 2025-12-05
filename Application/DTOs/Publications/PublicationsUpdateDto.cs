@@ -22,5 +22,5 @@ public class PublicationsUpdateDto
     public string EventEdition { get; set; }
     public DateOnly PublicationDate { get; set; }
     public bool UTAffiliation { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public DateTime? CreatedAt { get; set; }
 }

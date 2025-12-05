@@ -1,10 +1,12 @@
 using AutoMapper;
+using DocumentFormat.OpenXml.Spreadsheet;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
-using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.BankAccounts;
-using WsUtaSystem.Models;
+using WsUtaSystem.Application.DTOs.RefTypes;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers;
 
@@ -36,7 +38,8 @@ public class BankAccountsController : ControllerBase
     public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
     {
         var accounts = await _svc.GetByPersonIdAsync(personId);
-        return Ok(_mapper.Map<List<BankAccountsDto>(accounts));
+               
+        return Ok(_mapper.Map<List<BankAccountsDto>>(accounts));
     }
 
     /// <summary>Crea un nuevo registro.</summary>
