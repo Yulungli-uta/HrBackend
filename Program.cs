@@ -166,6 +166,17 @@ builder.Services.AddScoped<
     WsUtaSystem.Application.Services.Reports.ReportService>();
 
 // =========================================================
+// Servicios de Permisos de Usuario
+// =========================================================
+builder.Services.AddScoped<
+    Application.Interfaces.Repositories.IUserPermissionRepository,
+    Infrastructure.Repositories.UserPermissionRepository>();
+
+builder.Services.AddScoped<
+    Application.Interfaces.Services.IUserPermissionService,
+    Application.Services.UserPermissionService>();
+
+// =========================================================
 // DB
 // =========================================================
 var cs = builder.Configuration.GetConnectionString("SqlServerConn")
@@ -386,6 +397,9 @@ apiGroup.MapControllers();
 
 // Endpoints minimal API de reportes
 apiGroup.MapReportEndpoints();
+
+// Endpoints minimal API de permisos de usuario
+app.MapUserPermissionEndpoints();
 
 // =========================================================
 // Archivos estáticos, root y healthcheck
