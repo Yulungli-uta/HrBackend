@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using System.Reflection.Emit;
 using WsUtaSystem.Models;
+using Models.Views;
 
 namespace WsUtaSystem.Data;
 
@@ -90,6 +91,9 @@ public class AppDbContext : DbContext
     public DbSet<VwAttendanceDay> VwAttendanceDay { get; set; }
     public DbSet<KnowledgeArea> KnowledgeAreas => Set<KnowledgeArea>();
 
+    // Vistas de Permisos y Men√∫s
+    public DbSet<VwUserRole> VwUserRoles { get; set; }
+    public DbSet<VwRoleMenuItem> VwRoleMenuItems { get; set; }
 
     protected override void OnModelCreating(ModelBuilder m)
     {
@@ -216,7 +220,7 @@ public class AppDbContext : DbContext
             {
                 // Declara los triggers que existen en SQL Server (puedes listar varios)
                 tb.HasTrigger("trg_Punch_Validations");
-                // tb.HasTrigger("trg_Punch_Otros"); // si tienes m·s
+                // tb.HasTrigger("trg_Punch_Otros"); // si tienes m√°s
             });
             e.HasKey(x => x.PunchId);
             e.Property(x => x.PunchId).UseIdentityColumn();
@@ -560,13 +564,13 @@ public class AppDbContext : DbContext
             e.Property(x => x.PlanID).HasColumnName("PlanID");
             e.Property(x => x.EmployeeID).HasColumnName("EmployeeID");
            /* e.HasOne(e => e.TimePlanning)
-               .WithMany() // Ajusta seg˙n tu modelo
+               .WithMany() // Ajusta seg√∫n tu modelo
                .HasForeignKey(e => e.PlanID)
                .OnDelete(DeleteBehavior.Restrict);
 
-            // Configurar relaciÛn con Employees
+            // Configurar relaci√≥n con Employees
             e.HasOne(e => e.Employees)
-                   .WithMany() // Ajusta seg˙n tu modelo
+                   .WithMany() // Ajusta seg√∫n tu modelo
                    .HasForeignKey(e => e.EmployeeID)
                    .OnDelete(DeleteBehavior.Restrict);*/
            e.HasOne(e => e.TimePlanning)
@@ -575,7 +579,7 @@ public class AppDbContext : DbContext
                .HasConstraintName("FK_TimePlanningEmployees_Plan")
                .OnDelete(DeleteBehavior.Cascade);
 
-        // RelaciÛn con Employees
+        // Relaci√≥n con Employees
            e.HasOne(e => e.Employees)
                .WithMany()
                .HasForeignKey(e => e.EmployeeID)
@@ -659,5 +663,8 @@ public class AppDbContext : DbContext
         m.Entity<VwLeaveWindows>().HasNoKey().ToView("vw_LeaveWindows", "HR");
         m.Entity<VwAttendanceDay>().HasNoKey().ToView("vw_AttendanceDay", "HR");
 
+        // Vistas de Permisos y Men√∫s (del sistema de autenticaci√≥n)
+        m.Entity<VwUserRole>().HasNoKey().ToView("vw_UserRoles", "dbo");
+        m.Entity<VwRoleMenuItem>().HasNoKey().ToView("vw_RoleMenuItems", "dbo");
     }
 }
