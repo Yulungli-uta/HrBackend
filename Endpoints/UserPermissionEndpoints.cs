@@ -36,7 +36,7 @@ public static class UserPermissionEndpoints
         })
         .WithName("GetUserPermissions")
         .WithDescription("Obtiene todos los permisos, roles y menús de un usuario")
-        .Produces<Application.DTOs.UserPermissions.UserPermissionsDto>(200)
+        //.Produces<WsUtaSystem.Application.DTOs.UserPermissions.UserPermissionsDto>(200)
         .Produces(500);
 
         // GET /api/users/{userId}/roles
@@ -61,7 +61,7 @@ public static class UserPermissionEndpoints
         })
         .WithName("GetUserRoles")
         .WithDescription("Obtiene solo los roles asignados a un usuario")
-        .Produces<List<Application.DTOs.UserPermissions.UserRoleDto>>(200)
+        //.Produces<List<Application.DTOs.UserPermissions.UserRoleDto>>(200)
         .Produces(500);
 
         // GET /api/users/{userId}/menu-items
@@ -86,7 +86,7 @@ public static class UserPermissionEndpoints
         })
         .WithName("GetUserMenuItems")
         .WithDescription("Obtiene solo los items de menú asignados a un usuario")
-        .Produces<List<Application.DTOs.UserPermissions.MenuItemDto>>(200)
+        //.Produces<List<Application.DTOs.UserPermissions.MenuItemDto>>(200)
         .Produces(500);
 
         // GET /api/users/{userId}/permissions-urls

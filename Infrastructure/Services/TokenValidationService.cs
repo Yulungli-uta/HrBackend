@@ -103,7 +103,7 @@ public class TokenValidationService : ITokenValidationService
         {
             if (_enableLogging)
                 _logger.LogInformation("Validating token against auth service at {Url}", _authServiceUrl);
-
+            //Console.WriteLine($"******************** enviando a validar token url: {_authServiceUrl}");
             var client = _httpClientFactory.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(10);
 
@@ -117,7 +117,7 @@ public class TokenValidationService : ITokenValidationService
                 $"{_authServiceUrl}/api/auth/validate-token",
                 request
             );
-
+            //Console.WriteLine($"***********************respuesta del consumo {response.StatusCode}, body: {await response.Content.ReadAsStringAsync()}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
