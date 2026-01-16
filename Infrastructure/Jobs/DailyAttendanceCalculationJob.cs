@@ -32,8 +32,9 @@ public class DailyAttendanceCalculationJob : BaseJob
             _logger.LogInformation("Starting daily attendance calculation for date: {Date}", yesterday);
 
             // Calcular asistencia del día anterior
-            await _attendanceService.CalculateRangeAsync(yesterday, yesterday, null, context.CancellationToken);
-
+            //await _attendanceService.CalculateRangeAsync(yesterday, yesterday, null, context.CancellationToken);
+            await _attendanceService.ProcessAttendanceRange(yesterday, yesterday, context.CancellationToken);
+            
             _logger.LogInformation("Daily attendance calculation completed successfully for date: {Date}", yesterday);
         }
         catch (Exception ex)

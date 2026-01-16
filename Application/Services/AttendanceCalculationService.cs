@@ -47,5 +47,56 @@ public class AttendanceCalculationService : IAttendanceCalculationService
 
         await command.ExecuteNonQueryAsync(ct);
     }
+
+    public async Task ProcessAttendanceRange(DateTime fromDate, DateTime toDate, CancellationToken ct = default)
+    {
+        var connection = _db.Database.GetDbConnection();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "HR.sp_ProcessAttendanceRange";
+        command.CommandType = System.Data.CommandType.StoredProcedure;
+
+        command.Parameters.Add(new SqlParameter("@FromDate", fromDate.Date));
+        command.Parameters.Add(new SqlParameter("@ToDate", toDate.Date));
+        //command.Parameters.Add(new SqlParameter("@EmployeeID", (object?)employeeId ?? DBNull.Value));
+
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(ct);
+
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task ProcessApplyJustification(DateTime fromDate, DateTime toDate, int? employeeId = null,  CancellationToken ct = default)
+    {
+        var connection = _db.Database.GetDbConnection();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "HR.sp_Justifications_Apply";
+        command.CommandType = System.Data.CommandType.StoredProcedure;
+
+        command.Parameters.Add(new SqlParameter("@FromDate", fromDate.Date));
+        command.Parameters.Add(new SqlParameter("@ToDate", toDate.Date));
+        command.Parameters.Add(new SqlParameter("@EmployeeID", (object?)employeeId ?? DBNull.Value));
+
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(ct);
+
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task ProcessApplyOvertimeRecovery(DateTime fromDate, DateTime toDate, int? employeeId = null, CancellationToken ct = default)
+    {
+        var connection = _db.Database.GetDbConnection();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "HR.sp_Overtime_Calculate";
+        command.CommandType = System.Data.CommandType.StoredProcedure;
+
+        command.Parameters.Add(new SqlParameter("@FromDate", fromDate.Date));
+        command.Parameters.Add(new SqlParameter("@ToDate", toDate.Date));
+        command.Parameters.Add(new SqlParameter("@EmployeeID", (object?)employeeId ?? DBNull.Value));
+
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(ct);
+
+        await command.ExecuteNonQueryAsync(ct);
+    }
 }
 

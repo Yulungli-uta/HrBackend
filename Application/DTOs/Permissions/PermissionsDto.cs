@@ -11,7 +11,7 @@ public class PermissionsDto
     public int? ApprovedBy { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public string? Justification { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public DateTime? CreatedAt { get; set; }
     public string Status { get; set; } = null!;
     public int? VacationId { get; set; }
 }

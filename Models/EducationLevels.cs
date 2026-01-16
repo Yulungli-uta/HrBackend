@@ -1,6 +1,8 @@
 
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models;
-public class EducationLevels {
+public class EducationLevels : IAuditable{
   public int EducationId{get;set;}
   public int PersonId{get;set;}
   public int EducationLevelTypeId{get;set;}
@@ -12,5 +14,8 @@ public class EducationLevels {
   public string? Grade{get;set;}
   public string? Location{get;set;}
   public decimal? Score{get;set;}
-  public DateTime CreatedAt{get;set;}
+  public DateTime? CreatedAt { get; set; }
+  public int? CreatedBy { get; set; }
+  public DateTime? UpdatedAt { get; set; }
+  public int? UpdatedBy { get; set; }
 }

@@ -55,6 +55,7 @@ public class RefTypesController : ControllerBase
     public async Task<IActionResult> Create([FromBody] RefTypesCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<RefTypes>(dto);
+        entityObj.CreatedAt = DateTime.Now;
         var created = await _svc.CreateAsync(entityObj, ct);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<RefTypesDto>(created));
@@ -64,7 +65,7 @@ public class RefTypesController : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] RefTypesUpdateDto dto, CancellationToken ct)
     {
-        var entityObj = _mapper.Map<RefTypes>(dto);
+        var entityObj = _mapper.Map<RefTypes>(dto);        
         await _svc.UpdateAsync(id, entityObj, ct);
         return NoContent();
     }

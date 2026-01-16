@@ -3,7 +3,7 @@ public class PermissionsUpdateDto
 {
     //public class Permissions { get; set; }
     public int PermissionId { get; set; }
-    public int EmployeeId { get; set; }
+    //public int EmployeeId { get; set; }
     public int PermissionTypeId { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }

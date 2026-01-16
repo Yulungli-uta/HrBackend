@@ -1,6 +1,8 @@
 
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models;
-public class CatastrophicIllnesses {
+public class CatastrophicIllnesses : IAuditable{
   public int IllnessId{get;set;}
   public int PersonId{get;set;}
   public string Illness{get;set;}=null!;
@@ -8,5 +10,8 @@ public class CatastrophicIllnesses {
   public string? SubstituteName{get;set;}
   public int IllnessTypeId{get;set;}
   public string? CertificateNumber{get;set;}
-  public DateTime CreatedAt{get;set;}
+  public DateTime? CreatedAt { get; set; }
+  public int? CreatedBy { get; set; }
+  public DateTime? UpdatedAt { get; set; }
+  public int? UpdatedBy { get; set; }
 }

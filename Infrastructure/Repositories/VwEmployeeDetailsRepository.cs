@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Infrastructure.Common;
-using WsUtaSystem.Models;
+using WsUtaSystem.Models.Views;
 
 namespace WsUtaSystem.Infrastructure.Repositories
 {

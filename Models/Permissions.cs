@@ -1,6 +1,8 @@
 
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models;
-public class Permissions {
+public class Permissions : IAuditable{
   public int PermissionId { get; set; }
   public int EmployeeId { get; set; }
   public int PermissionTypeId { get; set; }
@@ -11,9 +13,12 @@ public class Permissions {
   public int? ApprovedBy { get; set; }
   public DateTime? ApprovedAt { get; set; }
   public string? Justification { get; set; }
-  public DateTime CreatedAt { get; set; }
+  //public DateTime? CreatedAt { get; set; }
   public string Status { get; set; } = null!;
   public int? VacationId { get; set; }
-
+  public int? CreatedBy { get; set; }
+  public DateTime? CreatedAt { get; set; }
+  public int? UpdatedBy { get; set; }
+  public DateTime? UpdatedAt { get; set; }
   public virtual Employees Employee { get; set; }
 }

@@ -1,6 +1,8 @@
 
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models;
-public class People {
+public class People : IAuditable {
   public int PersonId { get; set; }
   public string FirstName { get; set; } = null!;
   public string LastName { get; set; } = null!;
@@ -14,8 +16,8 @@ public class People {
   public string? Disability { get; set; }
   public string? Address { get; set; }
   public bool IsActive { get; set; } = true;
-  public DateTime CreatedAt { get; set; }
-  public DateTime? UpdatedAt { get; set; }
+  //public DateTime CreatedAt { get; set; }
+  //public DateTime? UpdatedAt { get; set; }
   // Campos extra por ALTER
   public int? MaritalStatusTypeId { get; set; }
   public string? MilitaryCard { get; set; }
@@ -30,4 +32,8 @@ public class People {
   public int? SpecialNeedsTypeId { get; set; }
   public decimal? DisabilityPercentage { get; set; }
   public string? ConadisCard { get; set; }
+  public DateTime? CreatedAt { get; set; }
+  public int? CreatedBy { get; set; }
+  public DateTime? UpdatedAt { get; set; }
+  public int? UpdatedBy { get; set; }
 }

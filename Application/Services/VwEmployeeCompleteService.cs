@@ -1,6 +1,6 @@
 ﻿using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
-using WsUtaSystem.Models;
+using WsUtaSystem.Models.Views;
 
 namespace WsUtaSystem.Application.Services
 {

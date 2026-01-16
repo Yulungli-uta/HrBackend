@@ -4,10 +4,11 @@
 //using Microsoft.EntityFrameworkCore;
 
 using System.ComponentModel.DataAnnotations.Schema;
+using WsUtaSystem.Application.Interfaces.Auditable;
 
 namespace WsUtaSystem.Models;
 //[Table("tbl_PunchJustifications", Schema = "HR")]
-public class PunchJustifications
+public class PunchJustifications : ICreationAuditable
 {
     [Column("PunchJustID")]
     public int PunchJustId { get; set; }    
@@ -22,8 +23,8 @@ public class PunchJustifications
     public string Reason { get; set; } = string.Empty;
     public decimal? HoursRequested { get; set; }
     public bool Approved { get; set; } = false;
-    public DateTime CreatedAt { get; set; }
-    public int CreatedBy { get; set; }
+    public DateTime? CreatedAt { get; set; }
+    public int? CreatedBy { get; set; }
     public string? Comments { get; set; }
     public string Status { get; set; } = "PENDING";
 }

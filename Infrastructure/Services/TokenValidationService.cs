@@ -117,7 +117,7 @@ public class TokenValidationService : ITokenValidationService
                 $"{_authServiceUrl}/api/auth/validate-token",
                 request
             );
-            //Console.WriteLine($"***********************respuesta del consumo {response.StatusCode}, body: {await response.Content.ReadAsStringAsync()}");
+            _logger.LogInformation($"***********************respuesta del consumo PostAsJsonAsync {response.StatusCode}, body: {await response.Content.ReadAsStringAsync()}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -133,18 +133,22 @@ public class TokenValidationService : ITokenValidationService
 
                 if (apiResponse?.Success == true && apiResponse.Data != null)
                 {
-                    //Console.WriteLine($"**********paso la validacion del apiResponse {apiResponse} ");
+                    _logger.LogInformation($"**********paso la validacion del apiResponse {apiResponse} ");
+                    _logger.LogInformation("**********paso la validacion del apiResponse {apiResponse}", JsonSerializer.Serialize(apiResponse, new JsonSerializerOptions
+                    {
+                        WriteIndented = true
+                    }));
                     var result = new TokenValidationResult
                     {
                         IsValid = apiResponse.Data.IsValid,
-                        UserId = apiResponse.Data.UserId?.ToString(),
+                        UserId = apiResponse.Data.UserId?.ToString(),             
                         Email = apiResponse.Data.Email,
                         Roles = apiResponse.Data.Roles ?? new List<string>(),
                         Message = apiResponse.Data.Message
                     };
 
-                    Console.WriteLine("******** apiResponse ********");
-                    Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions
+                    //Console.WriteLine("******** apiResponse ********");
+                    _logger.LogInformation(JsonSerializer.Serialize(result, new JsonSerializerOptions
                     {
                         WriteIndented = true
                     }));

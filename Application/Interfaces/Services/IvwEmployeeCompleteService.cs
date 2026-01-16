@@ -1,6 +1,6 @@
-﻿using WsUtaSystem.Models;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
+using WsUtaSystem.Models.Views;
 
 namespace WsUtaSystem.Application.Interfaces.Services
 {

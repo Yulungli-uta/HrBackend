@@ -1,6 +1,9 @@
 
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models;
-public class Publications {
+public class Publications : IAuditable 
+{
   public int PublicationId{get;set;}
   public int PersonId{get;set;}
   public string? Location{get;set;}
@@ -21,5 +24,8 @@ public class Publications {
   public string? EventEdition{get;set;}
   public DateOnly? PublicationDate{get;set;}
   public bool? UTAffiliation{get;set;}
-  public DateTime CreatedAt{get;set;}
+    public DateTime? CreatedAt { get; set; }
+    public int? CreatedBy { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    public int? UpdatedBy { get; set; }
 }

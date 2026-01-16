@@ -11,10 +11,10 @@ namespace WsUtaSystem.Application.DTOs.FinancialCertification
         public decimal? RmuCon { get; set; }
         public string? filename { get; set; }
         public string? filepath { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public int CreatedBy { get; set; }
-        //public DateTime? UpdatedAt { get; set; }
-        //public int? UpdatedBy { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public int? CreatedBy { get; set; }
+        public DateTime? UpdateAt { get; set; }
+        public int? UpdateBy { get; set; }
         public int? Status { get; set; }
     }
 }

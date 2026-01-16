@@ -1,6 +1,8 @@
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models
 {
-    public class ContractRequest
+    public class ContractRequest : IAuditable
     {
         public int RequestId { get; set; }
         public int? WorkModalityId { get; set; }
@@ -8,13 +10,14 @@ namespace WsUtaSystem.Models
         public decimal NumberHour { get; set; } = 0;
         public int TotalPeopleHired { get; set; } = 0;
 
-        public DateTime CreatedAt { get; set; }
-        public int CreatedBy { get; set; }
+        public DateTime? CreatedAt { get; set; }
+        public int? CreatedBy { get; set; }
 
         public DateTime? UpdatedAt { get; set; }
         public int? UpdatedBy { get; set; }
 
         public int? Status { get; set; }
+
     }
 }
 

@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.AttendancePunches;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
@@ -15,11 +16,15 @@ public class AttendancePunchesController : ControllerBase
 {
     private readonly IAttendancePunchesService _svc;
     private readonly IMapper _mapper;
+    private readonly ICurrentUserService _clientInfo;
+    private readonly ILogger<AttendancePunchesController> _logger;
 
-    public AttendancePunchesController(IAttendancePunchesService svc, IMapper mapper)
+    public AttendancePunchesController(IAttendancePunchesService svc, IMapper mapper, ICurrentUserService clientInfo, ILogger<AttendancePunchesController> logger)
     {
         _svc = svc;
         _mapper = mapper;
+        _clientInfo = clientInfo;
+        _logger = logger;
     }
 
     /// <summary>Lista todos los registros de AttendancePunches.</summary>
@@ -121,8 +126,10 @@ public class AttendancePunchesController : ControllerBase
         {
             var punches = await _svc.GetPunchesByDateRangeAsync(startDate, endDate, ct);
 
-            if (punches == null || !punches.Any())
+            if (punches == null || !punches.Any()) { 
+                _logger.LogInformation("No punches found between {StartDate} and {EndDate}", startDate, endDate);
                 return NotFound("No se encontraron marcaciones en el rango de fechas especificado");
+            }
 
             return Ok(_mapper.Map<List<AttendancePunchesDto>>(punches));
         }
@@ -137,41 +144,12 @@ public class AttendancePunchesController : ControllerBase
     public async Task<IActionResult> Create([FromBody] AttendancePunchesCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<AttendancePunches>(dto);
-   
-        //// Reemplaza esta línea:
-        //// var punchTime = DateTime.Parse(entityObj.PunchTime);   
-        //if (!entityObj.PunchTime.HasValue)
-        //    return BadRequest("PunchTime es requerido y no puede ser nulo.");
 
-        //// Reemplaza esta línea:
-        //// var punchTime = DateTime.Parse(entityObj.PunchTime.Value);
-
-        //// Solución: No necesitas convertir un DateTime a DateTime usando Parse.
-        //// Simplemente usa el valor directamente.
-        //var punchTime = entityObj.PunchTime.Value;
-
-        //// Especificar explícitamente que es una fecha sin información de zona horaria
-        //punchTime = DateTime.SpecifyKind(punchTime, DateTimeKind.Unspecified);
-
-        //// Obtener la zona horaria de Ecuador
-        //TimeZoneInfo ecuadorTimeZone;
-        //try
-        //{
-        //    // Para sistemas Linux/macOS
-        //    ecuadorTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/Guayaquil");
-        //}
-        //catch (TimeZoneNotFoundException)
-        //{
-        //    // Para sistemas Windows
-        //    ecuadorTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SA Pacific Standard Time");
-        //}
-
-        //var utcTime = TimeZoneInfo.ConvertTimeToUtc(punchTime, ecuadorTimeZone);
-        //entityObj.PunchTime = utcTime;
-        //Console.WriteLine($"Creating AttendancePunches: {entityObj.EmployeeId}, {entityObj.PunchTime}, {entityObj.PunchType}");
+        entityObj.IpAddress = _clientInfo.GetIp();        
         var created = await _svc.CreateAsync(entityObj, ct);
-        var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
-        //Console.WriteLine("valor id:" + idVal );
+        //var created = await _svc.CreatePunchesWithIPAsync(entityObj, _clientInfo.GetIp(), ct);
+        _logger.LogInformation("Created AttendancePunches with ID: {AttendancePunchesId}", created.PunchId);
+        var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);        
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<AttendancePunchesDto>(created));
     }
 

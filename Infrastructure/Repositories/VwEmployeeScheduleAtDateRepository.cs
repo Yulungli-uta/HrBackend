@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Application.Interfaces.Repositories;
-using WsUtaSystem.Models;
+using WsUtaSystem.Models.Views;
 namespace WsUtaSystem.Infrastructure.Repositories;
 public class VwEmployeeScheduleAtDateRepository : IVwEmployeeScheduleAtDateRepository
 {

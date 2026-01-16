@@ -227,3 +227,82 @@ WHERE IsActive = 1;
 
 PRINT 'TODOS LOS ÍNDICES CREADOS EXITOSAMENTE.';
 GO
+
+-- Idempotencia / búsqueda rápida por SourceID
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_TimeBalanceMovements_Employee_SourceID')
+BEGIN
+  CREATE NONCLUSTERED INDEX IX_TimeBalanceMovements_Employee_SourceID
+  ON HR.tbl_TimeBalanceMovements(EmployeeID, SourceID);
+END
+GO
+
+-- Consultas de movimientos por fecha
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_TimeBalanceMovements_Employee_MovementAt')
+BEGIN
+  CREATE NONCLUSTERED INDEX IX_TimeBalanceMovements_Employee_MovementAt
+  ON HR.tbl_TimeBalanceMovements(EmployeeID, MovementAt DESC);
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = 'IX_TBL_StoredFile_ByEntity'
+      AND object_id = OBJECT_ID('HR.TBL_StoredFile')
+)
+BEGIN
+    CREATE NONCLUSTERED INDEX IX_TBL_StoredFile_ByEntity
+    ON HR.TBL_StoredFile (DirectoryCode, EntityType, EntityId, UploadYear)
+    INCLUDE (StoredFileName, RelativeFolder, Extension, SizeBytes, Status, CreatedAt);
+END
+GO
+
+-- 3.2 Índice por módulo + año (reportes, limpieza, etc.)
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = 'IX_TBL_StoredFile_ByDirectoryYear'
+      AND object_id = OBJECT_ID('HR.TBL_StoredFile')
+)
+BEGIN
+    CREATE NONCLUSTERED INDEX IX_TBL_StoredFile_ByDirectoryYear
+    ON HR.TBL_StoredFile (DirectoryCode, UploadYear)
+    INCLUDE (EntityType, EntityId, StoredFileName, RelativeFolder, Status, CreatedAt);
+END
+GO
+
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = 'UX_TBL_StoredFile_NoDuplicate_Active'
+      AND object_id = OBJECT_ID('HR.TBL_StoredFile')
+)
+BEGIN
+    CREATE UNIQUE NONCLUSTERED INDEX UX_TBL_StoredFile_NoDuplicate_Active
+    ON HR.TBL_StoredFile (FilePathHash)
+    WHERE Status = 1;
+END
+GO
+
+-- 3.4 (Opcional) Índice por SHA256 (dedup / auditoría)
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = 'IX_TBL_StoredFile_Sha256'
+      AND object_id = OBJECT_ID('HR.TBL_StoredFile')
+)
+BEGIN
+    CREATE NONCLUSTERED INDEX IX_TBL_StoredFile_Sha256
+    ON HR.TBL_StoredFile (Sha256)
+    WHERE Sha256 IS NOT NULL;
+END
+GO
+
+-- 3.5 (Opcional) GUID único (si lo expones por API)
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = 'UX_TBL_StoredFile_FileGuid'
+      AND object_id = OBJECT_ID('HR.TBL_StoredFile')
+)
+BEGIN
+    CREATE UNIQUE NONCLUSTERED INDEX UX_TBL_StoredFile_FileGuid
+    ON HR.TBL_StoredFile (FileGuid);
+END
+GO

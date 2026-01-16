@@ -1,6 +1,10 @@
+using DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing;
 using FluentValidation;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using Serilog;
+using Serilog.Events;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Reflection;
 using System.Text.Json.Serialization;
@@ -63,6 +67,17 @@ builder.Services.AddLogging(loggingBuilder =>
     loggingBuilder.AddDebug();
 });
 
+// =========================================================
+// Serilog
+// =========================================================
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day)
+    .CreateLogger();
+
+builder.Host.UseSerilog();
 // =========================================================
 // Controllers + JSON + Filtro de modelo
 // =========================================================
@@ -190,8 +205,16 @@ if (!cs.Contains("Integrated Security", StringComparison.OrdinalIgnoreCase) &&
     cs += ";Integrated Security=False;Authentication=SqlPassword;";
 }
 
-builder.Services.AddDbContext<WsUtaSystem.Data.AppDbContext>(o =>
-    o.UseSqlServer(cs, sql => sql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null)));
+// Interceptor de auditoría - agregado al DbContext - error
+//builder.Services.AddDbContext<WsUtaSystem.Data.AppDbContext>(o =>
+//    o.UseSqlServer(cs, sql => sql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null)));
+//builder.Services.AddDbContext<WsUtaSystem.Data.AppDbContext>((sp, o) =>
+//{
+//    o.UseSqlServer(cs, sql =>
+//        sql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null));
+
+//    o.AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>());
+//});
 
 // =========================================================
 // DI genérica
@@ -283,7 +306,7 @@ builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IvwEm
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IvwEmployeeCompleteService, WsUtaSystem.Application.Services.VwEmployeeCompleteService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IJobRepository, WsUtaSystem.Infrastructure.Repositories.JobRepository>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IJobService, WsUtaSystem.Application.Services.JobService>();
-builder.Services.AddScoped<ITimeService, TimeService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimeService, WsUtaSystem.Application.Services.TimeService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IvwEmployeeDetailsRepository, WsUtaSystem.Infrastructure.Repositories.VwEmployeeDetailsRepository>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IvwEmployeeDetailsService, WsUtaSystem.Application.Services.VwEmployeeDetailsService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IHolidayRepository, WsUtaSystem.Infrastructure.Repositories.HolidayRepository>();
@@ -317,6 +340,14 @@ builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDirector
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFileManagementService, WsUtaSystem.Application.Services.FileManagementService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IKnowledgeAreaRepository, WsUtaSystem.Infrastructure.Repositories.KnowledgeAreaRepository>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IKnowledgeAreaService, WsUtaSystem.Application.Services.KnowledgeAreaService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimeBalancesService, WsUtaSystem.Application.Services.TimeBalancesService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimeBalancesRepository, WsUtaSystem.Infrastructure.Repositories.TimeBalancesRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IHrBalanceRepository, WsUtaSystem.Infrastructure.Repositories.HrBalanceRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IHrBalanceService, WsUtaSystem.Application.Services.HrBalanceService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IStoredFileRepository, WsUtaSystem.Infrastructure.Repositories.StoredFileRepository>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IStoredFileService, WsUtaSystem.Application.Services.StoredFileService>();
+builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDocumentOrchestratorService, WsUtaSystem.Application.Services.DocumentOrchestratorService>();
+
 
 // Vistas
 builder.Services.AddScoped<IVwEmployeeScheduleAtDateRepository, VwEmployeeScheduleAtDateRepository>();
@@ -337,6 +368,11 @@ builder.Services.AddScoped<IPayrollDiscountsService, PayrollDiscountsService>();
 builder.Services.AddScoped<IPayrollSubsidiesService, PayrollSubsidiesService>();
 builder.Services.AddScoped<IEncryptionService, EncryptionService>();
 
+//// Campo Auditoria
+//builder.Services.AddScoped<AuditSaveChangesInterceptor>();
+
+
+
 // Quartz jobs
 builder.Services.AddQuartzJobs();
 
@@ -348,18 +384,38 @@ builder.Services.AddHttpClient();  // llamadas HTTP al servicio de auth
 builder.Services.AddScoped<
     WsUtaSystem.Infrastructure.Services.ITokenValidationService,
     WsUtaSystem.Infrastructure.Services.TokenValidationService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<AuditSaveChangesInterceptor>();
+
+builder.Services.AddDbContext<WsUtaSystem.Data.AppDbContext>((sp, o) =>
+{
+    o.UseSqlServer(cs, sql => sql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null));
+    o.AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>());
+});
 
 // =========================================================
 // Build app
 // =========================================================
 var app = builder.Build();
 
+
 // =========================================================
 // Orden correcto del pipeline
 // =========================================================
-
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 // 1) Manejo global de errores
 app.UseMiddleware<ErrorHandlingMiddleware>();
+
+// 1.1) Serilog - Logging automático de requests HTTP (PRO)
+//app.UseSerilogRequestLogging();
+app.UseSerilogRequestLogging(opts =>
+{
+    opts.IncludeQueryInRequestPath = true; // si quieres ver querystring
+});
 
 // 2) CORS (para que incluso errores devuelvan headers CORS)
 app.UseCors(corsName);
@@ -385,6 +441,9 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+//QuestPDF.Settings.EnableDebugging = true;
+//QuestPDF.Settings.EnableCaching = true;
+
 // =========================================================
 // Rutas de la API bajo /api/v1/rh
 // =========================================================
@@ -409,6 +468,6 @@ app.UseStaticFiles();
 
 app.MapGet("/", () => Results.Redirect("/swagger"));
 
-app.MapGet("/health", () => Results.Ok(new { ok = true, time = DateTime.UtcNow }));
+app.MapGet("/health", () => Results.Ok(new { ok = true, time = DateTime.Now }));
 
 app.Run();

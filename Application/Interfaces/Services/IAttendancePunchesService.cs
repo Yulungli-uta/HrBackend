@@ -8,4 +8,5 @@ public interface IAttendancePunchesService : IService<AttendancePunches, int>
     Task<IEnumerable<AttendancePunches>> GetTodayPunchesByEmployeeAsync(int employeeId, CancellationToken ct);
     Task<IEnumerable<AttendancePunches>> GetPunchesByEmployeeAsync(int employeeId, DateTime startDate, DateTime endDate, CancellationToken ct);
     Task<IEnumerable<AttendancePunches>> GetPunchesByDateRangeAsync(DateTime startDate, DateTime endDate, CancellationToken ct);
+    Task<AttendancePunches> CreatePunchesWithIPAsync(AttendancePunches attendancePunches, String ipAddress, CancellationToken ct);
 }

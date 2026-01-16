@@ -9,10 +9,14 @@ public class AttendancePunches {
     [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     public int PunchId { get; set; }
   public int EmployeeId { get; set; }
-  public DateTime? PunchTime { get; set; }
+  public DateTime PunchTime { get; set; }
   public string PunchType { get; set; } = null!;
   public string? DeviceId { get; set; }
+  public string? IpAddress { get; set; }
   public decimal? Longitude { get; set; }
   public decimal? Latitude { get; set; }
-  public DateTime CreatedAt { get; set; }
+  
+  public DateTime? CreatedAt { get; set; }
+  [Timestamp]
+  public byte[]? RowVersion { get; set; }
 }

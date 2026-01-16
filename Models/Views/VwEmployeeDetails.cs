@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace WsUtaSystem.Models
+namespace WsUtaSystem.Models.Views
 {
     public class VwEmployeeDetails
     {
