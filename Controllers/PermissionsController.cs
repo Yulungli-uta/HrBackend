@@ -1,9 +1,7 @@
-using AutoMapper;
+﻿using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
-using System.ComponentModel.DataAnnotations;
 using WsUtaSystem.Application.DTOs.Permissions;
 using WsUtaSystem.Application.Interfaces.Services;
-using WsUtaSystem.Infrastructure.Controller;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers;
@@ -14,15 +12,17 @@ public class PermissionsController : ControllerBase
 {
     private readonly IPermissionsService _svc;
     private readonly IMapper _mapper;
-    public PermissionsController(IPermissionsService svc, IMapper mapper) { _svc = svc; _mapper = mapper; }
 
-    /// <summary>Lista todos los registros de Permissions.</summary>
+    public PermissionsController(IPermissionsService svc, IMapper mapper)
+    {
+        _svc = svc;
+        _mapper = mapper;
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<PermissionsDto>>(await _svc.GetAllAsync(ct)));
 
-    /// <summary>Obtiene un registro por ID.</summary>
-    /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
@@ -30,8 +30,6 @@ public class PermissionsController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<PermissionsDto>(e));
     }
 
-    /// <summary>Obtiene un registro por EmployeeID.</summary>
-    /// <param name="employeeId">Identificador</param>
     [HttpGet("employee/{employeeId:int}")]
     public async Task<IActionResult> GetByEmplopyeeId([FromRoute] int employeeId, CancellationToken ct)
     {
@@ -46,27 +44,31 @@ public class PermissionsController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<List<PermissionsDto>>(e));
     }
 
-    /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] PermissionsCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Permissions>(dto);
-        var created = await _svc.CreateAsync(entityObj, ct);
-        Console.WriteLine($"Created entity: {created} dto: {dto}");
-        var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
+        var created = await _svc.CreateWithBalanceCheckAsync(entityObj, ct);
+
+        var idVal = created?.GetType()?.GetProperties()
+            ?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))
+            ?.GetValue(created);
+
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<PermissionsDto>(created));
     }
 
-    /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] PermissionsUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Permissions>(dto);
-        await _svc.UpdateAsync(id, entityObj, ct);
+
+        // ✅ Antes: UpdateAsync (no afectaba saldo)
+        // ✅ Ahora: UpdateBalanceAffectAsync (sí afecta saldo)
+        await _svc.UpdateBalanceAffectAsync(id, entityObj, ct);
+
         return NoContent();
     }
 
-    /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {

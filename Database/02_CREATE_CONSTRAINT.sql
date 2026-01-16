@@ -94,7 +94,7 @@ ALTER TABLE HR.tbl_contractRequest ADD CONSTRAINT PK_contractRequest PRIMARY KEY
 ALTER TABLE HR.tbl_FinancialCertification ADD CONSTRAINT PK_FinancialCertification PRIMARY KEY (CertificationID);
 ALTER TABLE HR.tbl_Contracts ADD CONSTRAINT PK_Contracts PRIMARY KEY (ContractID);
 ALTER TABLE HR.tbl_AdditionalActivities ADD CONSTRAINT PK_AdditionalActivities PRIMARY KEY (ActivitiesID, ContractID);
-ALTER TABLE HR.tbl_contractAttachedFile ADD CONSTRAINT PK_contractAttachedFile PRIMARY KEY (AttachedID);
+-- ALTER TABLE HR.tbl_contractAttachedFile ADD CONSTRAINT PK_contractAttachedFile PRIMARY KEY (AttachedID);
 ALTER TABLE HR.tbl_Vacations ADD CONSTRAINT PK_Vacations PRIMARY KEY (VacationID);
 ALTER TABLE HR.tbl_Permissions ADD CONSTRAINT PK_Permissions PRIMARY KEY (PermissionID);
 
@@ -231,6 +231,27 @@ ADD CONSTRAINT CK_Payroll_BaseSalary CHECK (BaseSalary >= 0);
 ALTER TABLE HR.tbl_SalaryHistory 
 ADD CONSTRAINT CK_SalaryHistory_Salaries CHECK (OldSalary >= 0 AND NewSalary >= 0);
 
+
+ALTER TABLE HR.TBL_StoredFile WITH CHECK
+ADD CONSTRAINT CK_TBL_StoredFile_UploadYear
+    CHECK (UploadYear BETWEEN 1900 AND 2100);
+
+ALTER TABLE HR.TBL_StoredFile WITH CHECK
+ADD CONSTRAINT CK_TBL_StoredFile_SizeBytes
+    CHECK (SizeBytes > 0);
+
+ALTER TABLE HR.TBL_StoredFile WITH CHECK
+ADD CONSTRAINT CK_TBL_StoredFile_Status
+    CHECK (Status IN (1,2,3));
+
+ALTER TABLE HR.TBL_StoredFile WITH CHECK
+ADD CONSTRAINT CK_TBL_StoredFile_EntityType
+    CHECK (LEN(LTRIM(RTRIM(EntityType))) > 0);
+
+ALTER TABLE HR.TBL_StoredFile WITH CHECK
+ADD CONSTRAINT CK_TBL_StoredFile_EntityId
+    CHECK (LEN(LTRIM(RTRIM(EntityId))) > 0);
+GO
 -- =============================================
 -- 2.4 DEFAULT CONSTRAINTS
 -- =============================================
@@ -368,10 +389,10 @@ ALTER TABLE HR.tbl_AdditionalActivities
 ADD CONSTRAINT FK_AdditionalActivities_Activities FOREIGN KEY (ActivitiesID) REFERENCES HR.tbl_Activities(ActivitiesID),
     CONSTRAINT FK_AdditionalActivities_Contract FOREIGN KEY (ContractID) REFERENCES HR.tbl_Contracts(ContractID);
 
-ALTER TABLE HR.tbl_contractAttachedFile
-ADD CONSTRAINT FK_contractAttachedFile_Contract FOREIGN KEY (ContractID) REFERENCES HR.tbl_Contracts(ContractID),
-    CONSTRAINT FK_contractAttachedFile_Type FOREIGN KEY (typeID) REFERENCES HR.ref_Types(TypeID),
-    CONSTRAINT FK_contractAttachedFile_CreatedBy FOREIGN KEY (CreatedBy) REFERENCES HR.tbl_Employees(EmployeeID);
+-- ALTER TABLE HR.tbl_contractAttachedFile
+-- ADD CONSTRAINT FK_contractAttachedFile_Contract FOREIGN KEY (ContractID) REFERENCES HR.tbl_Contracts(ContractID),
+    -- CONSTRAINT FK_contractAttachedFile_Type FOREIGN KEY (typeID) REFERENCES HR.ref_Types(TypeID),
+    -- CONSTRAINT FK_contractAttachedFile_CreatedBy FOREIGN KEY (CreatedBy) REFERENCES HR.tbl_Employees(EmployeeID);
 
 -- 8. FOREIGN KEYS PARA TABLAS OPERATIVAS PRINCIPALES
 ALTER TABLE HR.tbl_EmployeeSchedules
@@ -526,7 +547,20 @@ ADD CONSTRAINT FK_Books_Person FOREIGN KEY (PersonID) REFERENCES HR.tbl_People(P
     CONSTRAINT FK_Books_ParticipationType FOREIGN KEY (ParticipationTypeID) REFERENCES HR.ref_Types(TypeID);
 
 --ALTER TABLE HR.contract_type ADD CONSTRAINT UQ_contract_type_ContractCode UNIQUE (ContractCode);
+IF NOT EXISTS (
+    SELECT 1 FROM sys.foreign_keys
+    WHERE name = 'FK_TBL_StoredFile_DirectoryCode'
+)
+BEGIN
+    ALTER TABLE HR.TBL_StoredFile
+    ADD CONSTRAINT FK_TBL_StoredFile_DirectoryCode
+        FOREIGN KEY (DirectoryCode)
+        REFERENCES HR.TBL_DirectoryParameters(Code);
+END
+GO
 
+ALTER TABLE HR.TBL_StoredFile
+ADD CONSTRAINT FK_StoredFile_DocumentTypeId FOREIGN KEY (DocumentTypeId) REFERENCES HR.ref_Types(TypeID);
 
 PRINT 'TODOS LOS CONSTRAINTS CREADOS EXITOSAMENTE.';
 GO

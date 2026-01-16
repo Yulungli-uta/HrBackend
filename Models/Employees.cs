@@ -1,6 +1,8 @@
 
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models;
-public class Employees {
+public class Employees : IAuditable{
   public int EmployeeId { get; set; }
   public int PersonID { get; set; }
   public int EmployeeType { get; set; }
@@ -10,7 +12,7 @@ public class Employees {
   public string? Email { get; set; }
   public bool IsActive { get; set; } = true;
   public int? CreatedBy { get; set; }
-  public DateTime CreatedAt { get; set; }
+  public DateTime? CreatedAt { get; set; }
   public int? UpdatedBy { get; set; }
   public DateTime? UpdatedAt { get; set; }
 }

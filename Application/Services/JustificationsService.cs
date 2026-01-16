@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Data;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Application.Services;
@@ -12,9 +13,12 @@ public class JustificationsService : Service<PunchJustifications, int>, IJustifi
     private readonly WsUtaSystem.Data.AppDbContext _db;
 
     private readonly IPunchJustificationsRepository _repository;
-    public JustificationsService(IPunchJustificationsRepository repo) : base(repo)
+    public JustificationsService(IPunchJustificationsRepository repo,
+        AppDbContext db
+        ) : base(repo)
     {
         _repository = repo;
+        _db = db;
     }
 
     public async Task ApplyJustificationsAsync(DateTime fromDate, DateTime toDate, int? employeeId = null, CancellationToken ct = default)

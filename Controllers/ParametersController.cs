@@ -1,10 +1,11 @@
-using AutoMapper;
+﻿using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
-using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.Parameters;
-using WsUtaSystem.Models;
+using WsUtaSystem.Application.DTOs.RefTypes;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers;
 
@@ -29,6 +30,21 @@ public class ParametersController : ControllerBase
     {
         var e = await _svc.GetByIdAsync(id, ct);
         return e is null ? NotFound() : Ok(_mapper.Map<ParametersDto>(e));
+    }
+
+    [HttpGet("name/{name}")]
+    public async Task<IActionResult> GetByName([FromRoute] string name, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return BadRequest("El nombre no puede estar vacío.");
+
+        var entities = (await _svc.GetByNameAsync(name, ct))?.ToList() ?? new List<Parameters>();
+
+        if (entities.Count == 0)
+            return NotFound($"No se encontraron parámetros con el nombre '{name}'");
+
+        // ✅ devuelve DTOs, no entidades
+        return Ok(_mapper.Map<List<ParametersDto>>(entities));
     }
 
     /// <summary>Crea un nuevo registro.</summary>

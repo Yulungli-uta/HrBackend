@@ -1,6 +1,8 @@
 
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models;
-public class TimeRecoveryPlans {
+public class TimeRecoveryPlans : ICreationAuditable{
   public int RecoveryPlanId { get; set; }
   public int EmployeeId { get; set; }
   public int OwedMinutes { get; set; }
@@ -9,5 +11,5 @@ public class TimeRecoveryPlans {
   public TimeOnly ToTime { get; set; }
   public string? Reason { get; set; }
   public int? CreatedBy { get; set; }
-  public DateTime CreatedAt { get; set; }
+  public DateTime? CreatedAt { get; set; }
 }

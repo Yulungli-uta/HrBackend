@@ -142,6 +142,50 @@ CREATE TABLE TBL_DirectoryParameters (
     UpdatedBy Int NULL
 );
 
+IF OBJECT_ID('HR.TBL_StoredFile', 'U') IS NULL
+BEGIN
+    CREATE TABLE HR.TBL_StoredFile
+    (
+        FileId           INT PRIMARY KEY IDENTITY(1,1),
+		FileGuid          uniqueidentifier NOT NULL
+            CONSTRAINT DF_TBL_StoredFile_FileGuid DEFAULT (newid()),
+        DirectoryCode    nvarchar(50) NOT NULL,
+		 -- Relación por CODE (UNIQUE en DirectoryParameters)
+        
+        EntityType       nvarchar(50)  NOT NULL,   -- Ej: 'CONTRACT'
+        EntityId         nvarchar(100) NOT NULL,   -- Ej: '987'
+		-- Contexto de negocio (contrato, empleado, etc.)
+        UploadYear       SMALLINT       NOT NULL,   -- 2025
+        RelativeFolder   nvarchar(600) NOT NULL,   -- Ej: contracts\2025\987\
+        StoredFileName   nvarchar(260) NOT NULL,   -- Nombre en disco
+        OriginalFileName nvarchar(260) NULL,       -- Nombre original
+
+        Extension        nvarchar(20)  NULL,       -- '.pdf'
+		DocumentTypeId	 int 		   NULL,
+        ContentType      nvarchar(100) NULL,       -- 'application/pdf'
+        SizeBytes        bigint        NOT NULL,
+
+        Sha256           binary(32)    NULL,       -- opcional (integridad/dedup)
+        Status           TINYINT       NOT NULL DEFAULT (1),
+			-- 1=Active, 2=Deleted, 3=Archived
+
+        CreatedAt        datetime2     NOT NULL DEFAULT (GETDATE()),
+        CreatedBy        int           NULL,
+        UpdatedAt        datetime2     NULL,
+        UpdatedBy        int           NULL,
+        DeletedAt        datetime2     NULL,
+        DeletedBy        int           NULL,
+		FilePathHash AS CONVERT(binary(32),
+            HASHBYTES(
+                'SHA2_256',
+                CONCAT(DirectoryCode, N'|', RelativeFolder, N'|', StoredFileName)
+            )
+        ) PERSISTED
+    );
+END
+GO
+
+
 -- Crear tabla de áreas de conocimiento
 CREATE TABLE HR.tbl_KnowledgeArea (
     id INT PRIMARY KEY IDENTITY(1,1),
@@ -150,6 +194,10 @@ CREATE TABLE HR.tbl_KnowledgeArea (
     parent_id INT NULL,
     levels INT NOT NULL,
     IsActive BIT NOT NULL DEFAULT(1),
+	CreatedAt datetime2 NOT NULL DEFAULT (GETDATE()),
+    CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL,
     FOREIGN KEY (parent_id) REFERENCES HR.tbl_KnowledgeArea(id)
 );
 GO
@@ -162,7 +210,10 @@ CREATE TABLE HR.ref_Types (
     Name NVARCHAR(100) NOT NULL,
     Description NVARCHAR(255) NULL,
     IsActive BIT NOT NULL DEFAULT(1),
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+	CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL
 );
 
 -- 2. TABLAS GEOGRÁFICAS (BASE PARA PERSONAS Y DIRECCIONES)
@@ -207,8 +258,8 @@ CREATE TABLE HR.tbl_People (
     Disability NVARCHAR(200) NULL,
     Address NVARCHAR(255) NULL,
     IsActive BIT NOT NULL DEFAULT(1),
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
-    UpdatedAt DATETIME2 NULL,                         -- CAMBIADO A DATETIME2
+    -- CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    -- UpdatedAt DATETIME2 NULL,                         -- CAMBIADO A DATETIME2
     MaritalStatusTypeID INT NULL,
     MilitaryCard NVARCHAR(50) NULL,
     MotherName NVARCHAR(100) NULL,
@@ -222,6 +273,10 @@ CREATE TABLE HR.tbl_People (
     SpecialNeedsTypeID INT NULL,
     DisabilityPercentage DECIMAL(5,2) NULL,
     CONADISCard NVARCHAR(50) NULL,
+	CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+	CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL,
     RowVersion ROWVERSION
 );
 
@@ -242,7 +297,9 @@ CREATE TABLE HR.tbl_Departments (
     Dlevel INT NULL,
     IsActive BIT NOT NULL DEFAULT(1),
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
-    UpdatedAt DATETIME2 NULL,                         -- CAMBIADO A DATETIME2
+	CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL,                        -- CAMBIADO A DATETIME2
     RowVersion ROWVERSION
 );
 
@@ -252,8 +309,10 @@ CREATE TABLE HR.tbl_Degrees (
     DegreeID INT IDENTITY(1,1) NOT NULL,
     Description NVARCHAR(200) NOT NULL,
     IsActive BIT NOT NULL DEFAULT(1),
-    CreatedAt DATETIME2(0) NOT NULL DEFAULT(GETDATE()),
-    UpdatedAt DATETIME2(0) NULL
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+	CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL
 );
 PRINT '5.2. Creando HR.tbl_Degrees...';
 CREATE TABLE HR.tbl_Occupational_Groups(
@@ -262,8 +321,10 @@ CREATE TABLE HR.tbl_Occupational_Groups(
     RMU DECIMAL(10, 2) NOT NULL,
     DegreeID INT NOT NULL,
     IsActive BIT NOT NULL DEFAULT(1),
-    CreatedAt DATETIME2(0) NOT NULL DEFAULT(GETDATE()),
-    UpdatedAt DATETIME2(0) NULL
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+	CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL
 );
 PRINT '5.3. Creando HR.tbl_jobs...';
 CREATE TABLE HR.tbl_jobs (
@@ -274,7 +335,9 @@ CREATE TABLE HR.tbl_jobs (
     GroupID INT NULL,
     IsActive BIT NOT NULL DEFAULT(1),
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
-	UpdatedAt DATETIME2(0) NULL
+	CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL
 );
 
 CREATE TABLE HR.tbl_Activities (
@@ -283,7 +346,9 @@ CREATE TABLE HR.tbl_Activities (
 	ActivitiesType NVARCHAR(20) NOT NULL DEFAULT('LABORAL') CHECK (ActivitiesType IN ('LABORAL','ADICIONAL')),
     IsActive BIT NOT NULL DEFAULT(1),
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
-	UpdatedAt DATETIME2(0) NULL
+	CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL
 );
 
 CREATE TABLE HR.tbl_JobActivities (
@@ -291,7 +356,9 @@ CREATE TABLE HR.tbl_JobActivities (
     JobID INT NOT NULL,
     IsActive BIT NOT NULL DEFAULT(1),
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
-	UpdatedAt DATETIME2(0) NULL
+	CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL
 );
 
 CREATE TABLE hr.tbl_contract_type (
@@ -301,7 +368,11 @@ CREATE TABLE hr.tbl_contract_type (
 	description NVARCHAR(150) NULL,
 	Status VARCHAR(1) NOT NULL,
 	ContractText NVARCHAR(MAX) NULL,	 
-	ContractCode NVARCHAR(30) NULL	 --UNIQUE
+	ContractCode NVARCHAR(30) NULL,	 --UNIQUE
+	CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+	CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL
 );
 
 
@@ -310,7 +381,9 @@ CREATE TABLE HR.tbl_AdditionalActivities (
 	ContractID INT NOT NULL,       --CONTRACT 
     IsActive BIT NOT NULL DEFAULT(1),
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
-	UpdatedAt DATETIME2(0) NULL
+	CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL
 );
 
 
@@ -340,7 +413,12 @@ CREATE TABLE HR.tbl_PermissionTypes (
     Name NVARCHAR(80) NOT NULL,
     DeductsFromVacation BIT NOT NULL DEFAULT(0),
     RequiresApproval BIT NOT NULL DEFAULT(1),
-    MaxDays INT NULL
+	AttachedFile BIT NULL DEFAULT(1),
+    MaxDays INT NULL,
+	CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+	CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL
 );
 
 CREATE TABLE HR.tbl_OvertimeConfig (
@@ -362,7 +440,9 @@ CREATE TABLE HR.tbl_Schedules (
     IsRotating BIT NOT NULL DEFAULT(0),
     RotationPattern NVARCHAR(120) NULL,
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
-    UpdatedAt DATETIME2 NULL,                         -- CAMBIADO A DATETIME2
+	CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL
     RowVersion ROWVERSION
 );
 
@@ -372,7 +452,10 @@ CREATE TABLE HR.tbl_Holidays (
     HolidayDate DATE NOT NULL,
     IsActive BIT NOT NULL DEFAULT(1),
     Description NVARCHAR(255) NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+	CreatedBy int NULL,
+    UpdatedAt datetime2 NULL,
+    UpdatedBy int NULL
 );
 
 -- 8. TABLAS OPERATIVAS PRINCIPALES
@@ -399,8 +482,8 @@ CREATE TABLE HR.tbl_contractRequest (
 	TotalPeopleHired INT NOT NULL DEFAULT (0), --numero total de personas ya contratadas 
 	CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
 	CreatedBy INT NOT NULL, -- persona que solicita 
-	UpdateAt DATETIME2 NULL, 
-	UpdateBy INT NULL,	
+	UpdatedAt DATETIME2 NULL, 
+	UpdatedBy INT NULL,	
 	Status INT NULL --ESTADO Category CONTRACT_REQUEST_STATUS
 );
 
@@ -419,8 +502,8 @@ Create Table Hr.tbl_FinancialCertification(
 	filepath NVARCHAR(max) NULL,	
 	CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
 	CreatedBy INT NOT NULL,
-	UpdateAt DATETIME2 NULL, 
-	UpdateBy INT NULL,
+	UpdatedAt DATETIME2 NULL, 
+	UpdatedBy INT NULL,
 	Status INT NULL 			--ESTADO Category CERTF_FINANCIAL
   );
 
@@ -505,17 +588,17 @@ CREATE TABLE HR.tbl_Contracts (
     RowVersion ROWVERSION
 );
 
-CREATE TABLE HR.tbl_contractAttachedFile (
-	AttachedID INT IDENTITY(1,1) NOT NULL,	
-	ContractID INT NULL,			--tBL_CONTRACT.ContractID
-	typeID  INT NULL,				--reftype.typeID CATEGORY CONTRAC_FILE_TYPE
-	Description NVARCHAR(200) NULL, 
-	filename NVARCHAR(150) NULL,   
-	filepath NVARCHAR(max) NULL,   
-	IsActive BIT NOT NULL DEFAULT(1),  
-	CreatedBy INT NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
-);
+-- CREATE TABLE HR.tbl_contractAttachedFile (
+	-- AttachedID INT IDENTITY(1,1) NOT NULL,	
+	-- ContractID INT NULL,			--tBL_CONTRACT.ContractID
+	-- typeID  INT NULL,				--reftype.typeID CATEGORY CONTRAC_FILE_TYPE
+	-- Description NVARCHAR(200) NULL, 
+	-- filename NVARCHAR(150) NULL,   
+	-- filepath NVARCHAR(max) NULL,   
+	-- IsActive BIT NOT NULL DEFAULT(1),  
+	-- CreatedBy INT NULL,
+    -- CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
+-- );
 
 
 
@@ -529,8 +612,10 @@ CREATE TABLE HR.tbl_Vacations (
 	ApprovedBy INT NULL,
 	ApprovedAt DATETIME2 NULL,
     Status NVARCHAR(20) NOT NULL DEFAULT('Planned'),
+    CreatedBy INT NULL,
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
-    UpdatedAt DATETIME2 NULL,                         -- CAMBIADO A DATETIME2
+    UpdatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL,                          -- CAMBIADO A DATETIME2
     RowVersion ROWVERSION
 );
 
@@ -545,7 +630,10 @@ CREATE TABLE HR.tbl_Permissions (
     ApprovedBy INT NULL,
 	ApprovedAt DATETIME2 NULL,
     Justification NVARCHAR(MAX) NULL,
+    CreatedBy INT NULL,
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    UpdatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL,      -- CAMBIADO A GETDATE()
     Status NVARCHAR(20) NOT NULL DEFAULT('Pending'),
     VacationID INT NULL,
     RowVersion ROWVERSION
@@ -559,6 +647,7 @@ CREATE TABLE HR.tbl_AttendancePunches (
     PunchTime DATETIME2 NOT NULL,                     -- CAMBIADO A DATETIME2
     PunchType NVARCHAR(10) NOT NULL,
     DeviceID NVARCHAR(60) NULL,
+	IpAddress NVARCHAR(60) NULL,
     Longitude DECIMAL(10,7) NULL,
     Latitude DECIMAL(10,7) NULL,
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
@@ -838,7 +927,10 @@ CREATE TABLE HR.tbl_Addresses (
     SecondaryStreet NVARCHAR(100) NULL,
     HouseNumber NVARCHAR(20) NULL,
     Reference NVARCHAR(255) NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
+    CreatedBy INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    UpdatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL
 );
 
 CREATE TABLE HR.tbl_Institutions (
@@ -848,7 +940,10 @@ CREATE TABLE HR.tbl_Institutions (
     CountryID NVARCHAR(10) NOT NULL,
     ProvinceID NVARCHAR(10) NOT NULL,
     CantonID NVARCHAR(10) NOT NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
+    CreatedBy INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    UpdatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL
 );
 
 CREATE TABLE HR.tbl_EducationLevels (
@@ -863,7 +958,10 @@ CREATE TABLE HR.tbl_EducationLevels (
     Grade NVARCHAR(50) NULL,
     Location NVARCHAR(100) NULL,
     Score DECIMAL(5,2) NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
+    CreatedBy INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    UpdatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL
 );
 
 CREATE TABLE HR.tbl_EmergencyContacts (
@@ -876,7 +974,10 @@ CREATE TABLE HR.tbl_EmergencyContacts (
     Address NVARCHAR(255) NULL,
     Phone NVARCHAR(30) NULL,
     Mobile NVARCHAR(30) NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
+    CreatedBy INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    UpdatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL
 );
 
 CREATE TABLE HR.tbl_CatastrophicIllnesses (
@@ -887,7 +988,10 @@ CREATE TABLE HR.tbl_CatastrophicIllnesses (
     SubstituteName NVARCHAR(100) NULL,
     IllnessTypeID INT NOT NULL,
     CertificateNumber NVARCHAR(50) NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
+    CreatedBy INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    UpdatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL
 );
 
 CREATE TABLE HR.tbl_FamilyBurden (
@@ -899,7 +1003,10 @@ CREATE TABLE HR.tbl_FamilyBurden (
     LastName NVARCHAR(100) NOT NULL,
     BirthDate DATE NOT NULL,
     DisabilityTypeID INT NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
+    CreatedBy INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    UpdatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL
 );
 
 CREATE TABLE HR.tbl_Trainings (
@@ -916,7 +1023,10 @@ CREATE TABLE HR.tbl_Trainings (
     EndDate DATE NOT NULL,
     Hours INT NOT NULL,
     ApprovalTypeID INT NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
+    CreatedBy INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    UpdatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL
 );
 
 CREATE TABLE HR.tbl_WorkExperiences (
@@ -933,7 +1043,10 @@ CREATE TABLE HR.tbl_WorkExperiences (
     EndDate DATE NULL,
     ExperienceTypeID INT NULL,
     IsCurrent BIT NOT NULL DEFAULT(0),
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
+    CreatedBy INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    UpdatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL
 );
 
 CREATE TABLE HR.tbl_BankAccounts (
@@ -942,7 +1055,10 @@ CREATE TABLE HR.tbl_BankAccounts (
     FinancialInstitution NVARCHAR(150) NOT NULL,
     AccountTypeID INT NOT NULL,
     AccountNumber NVARCHAR(50) NOT NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
+    CreatedBy INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    UpdatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL
 );
 
 CREATE TABLE HR.tbl_Publications (
@@ -966,7 +1082,10 @@ CREATE TABLE HR.tbl_Publications (
     EventEdition NVARCHAR(50) NULL,
     PublicationDate DATE NULL,
     UTAffiliation BIT NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
+    CreatedBy INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    UpdatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL
 );
 
 CREATE TABLE HR.tbl_Books (
@@ -987,7 +1106,10 @@ CREATE TABLE HR.tbl_Books (
 	BookTypeID INT NULL
     UTAffiliation BIT NULL,
     UTASponsorship BIT NULL,
-    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE())  -- CAMBIADO A GETDATE()
+    CreatedBy INT NOT NULL,
+    CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
+    UpdatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL
 );
 
 PRINT 'TODAS LAS TABLAS CREADAS EXITOSAMENTE CON FECHAS LOCALES.';

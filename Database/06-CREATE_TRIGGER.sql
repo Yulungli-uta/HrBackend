@@ -162,44 +162,162 @@ GO
 
 -- 2. TRIGGER PARA VALIDACIONES DE PICADAS/MARCACIONES
 PRINT '2. Creando HR.trg_Punch_Validations...';
-IF OBJECT_ID('HR.trg_Punch_Validations','TR') IS NOT NULL DROP TRIGGER HR.trg_Punch_Validations;
-GO
-CREATE OR ALTER TRIGGER HR.trg_Punch_Validations
+-- IF OBJECT_ID('HR.trg_Punch_Validations','TR') IS NOT NULL DROP TRIGGER HR.trg_Punch_Validations;
+-- GO
+-- CREATE OR ALTER TRIGGER HR.trg_Punch_Validations
+-- ON HR.tbl_AttendancePunches
+-- INSTEAD OF INSERT
+-- AS
+-- BEGIN
+    -- SET NOCOUNT ON;
+
+    -- -- Tabla temporal para almacenar los inserted con IDs generados
+    -- DECLARE @OutputTable TABLE (PunchId INT);
+
+    -- -- 1. VALIDACIÓN: Empleado no puede picar durante vacaciones
+    -- -- IF EXISTS (
+        -- -- /* SELECT 1
+        -- -- FROM inserted i
+        -- -- INNER JOIN HR.tbl_Vacations v ON v.EmployeeID = i.EmployeeID
+        -- -- WHERE v.Status IN ('InProgress')
+          -- -- AND CAST(i.PunchTime AS DATE) BETWEEN v.StartDate AND v.EndDate */
+		-- -- SELECT 1
+        -- -- FROM inserted i
+        -- -- INNER JOIN HR.tbl_Vacations v ON v.EmployeeID = i.EmployeeID
+        -- -- WHERE v.Status = 'InProgress'
+          -- -- AND CAST(i.PunchTime AS DATE) >= v.StartDate  -- La picada es posterior o igual al inicio
+          -- -- AND CAST(i.PunchTime AS DATE) <= v.EndDate    -- La picada es anterior o igual al fin
+          -- -- AND CAST(GETDATE() AS DATE) >= v.StartDate    -- IMPORTANTE: Hoy debe estar en el rango
+          -- -- AND CAST(GETDATE() AS DATE) <= v.EndDate
+    -- -- )
+    -- -- BEGIN
+        -- -- RAISERROR('ERROR: El empleado está de vacaciones - no se permiten marcaciones.' + STRING_AGG(CONVERT(varchar(20), PunchTime, 120), 16, 1);
+        -- -- RETURN;
+    -- -- END
+	-- DECLARE @ErrorMsg NVARCHAR(500);
+    
+    -- SELECT TOP 1 @ErrorMsg = 
+        -- 'ERROR: El empleado '+ i.EmployeeID + ' está de vacaciones del ' + 
+        -- CONVERT(VARCHAR(10), v.StartDate, 103) + ' al ' + 
+        -- CONVERT(VARCHAR(10), v.EndDate, 103) + 
+        -- '. No se permiten marcaciones durante este período.'
+    -- FROM inserted i
+    -- INNER JOIN HR.tbl_Vacations v ON v.EmployeeID = i.EmployeeID
+    -- WHERE v.Status = 'InProgress'
+      -- AND CAST(i.PunchTime AS DATE) >= v.StartDate
+      -- AND CAST(i.PunchTime AS DATE) <= v.EndDate
+      -- AND CAST(GETDATE() AS DATE) >= v.StartDate
+      -- AND CAST(GETDATE() AS DATE) <= v.EndDate;
+
+    -- IF @ErrorMsg IS NOT NULL
+    -- BEGIN
+        -- RAISERROR(@ErrorMsg, 16, 1);
+        -- RETURN;
+    -- END
+
+    -- -- 2. VALIDACIÓN: Diferencia mínima de 5 minutos entre picadas
+    -- IF EXISTS (
+        -- SELECT 1
+        -- FROM inserted i
+        -- WHERE EXISTS (
+            -- SELECT 1
+            -- FROM HR.tbl_AttendancePunches p
+            -- WHERE p.EmployeeID = i.EmployeeID
+              -- AND p.PunchTime < i.PunchTime
+              -- AND DATEDIFF(MINUTE, p.PunchTime, i.PunchTime) < 5
+              -- AND p.PunchID NOT IN (SELECT PunchID FROM inserted)  -- Clave: excluir los nuevos
+        -- )
+    -- )
+    -- BEGIN
+        -- RAISERROR('ERROR: La diferencia entre marcaciones debe ser al menos de 5 minutos.', 16, 1);
+        -- RETURN;
+    -- END
+
+    -- -- 3. VALIDACIÓN: Empleado debe estar activo
+    -- IF EXISTS (
+        -- SELECT 1
+        -- FROM inserted i
+        -- INNER JOIN HR.tbl_Employees e ON e.EmployeeID = i.EmployeeID
+        -- WHERE e.IsActive = 0
+    -- )
+    -- BEGIN
+        -- RAISERROR('ERROR: No se permiten marcaciones para empleados inactivos.', 16, 1);
+        -- RETURN;
+    -- END
+
+    -- -- 4. VALIDACIÓN: Tipo de picada debe ser 'In' o 'Out'
+    -- IF EXISTS (
+        -- SELECT 1
+        -- FROM inserted i
+        -- WHERE i.PunchType NOT IN ('In', 'Out')
+    -- )
+    -- BEGIN
+        -- RAISERROR('ERROR: El tipo de marcación debe ser "In" (Entrada) o "Out" (Salida).', 16, 1);
+        -- RETURN;
+    -- END
+
+    -- -- 5. VALIDACIÓN: No puede haber más de 2 picadas por día del mismo tipo sin justificación
+    -- IF EXISTS (
+        -- SELECT i.EmployeeID, CAST(i.PunchTime AS DATE) AS PunchDate, i.PunchType
+        -- FROM inserted i
+        -- INNER JOIN (
+            -- SELECT EmployeeID, CAST(PunchTime AS DATE) AS PunchDate, PunchType
+            -- FROM HR.tbl_AttendancePunches
+            -- UNION ALL
+            -- SELECT EmployeeID, CAST(PunchTime AS DATE) AS PunchDate, PunchType
+            -- FROM inserted
+        -- ) all_punches ON all_punches.EmployeeID = i.EmployeeID 
+                      -- AND all_punches.PunchDate = CAST(i.PunchTime AS DATE)
+                      -- AND all_punches.PunchType = i.PunchType
+        -- GROUP BY i.EmployeeID, CAST(i.PunchTime AS DATE), i.PunchType
+        -- HAVING COUNT(*) > 2
+    -- )
+    -- BEGIN
+        -- RAISERROR('ADVERTENCIA: Se detectaron múltiples marcaciones del mismo tipo en un día. Verifique posibles errores.', 10, 1);
+    -- END
+
+    -- -- INSERTAR DATOS VÁLIDOS
+    -- INSERT INTO HR.tbl_AttendancePunches(
+        -- EmployeeID, 
+        -- PunchTime, 
+        -- PunchType, 
+        -- DeviceID, 
+        -- Longitude, 
+        -- Latitude, 
+        -- CreatedAt
+    -- )
+    -- OUTPUT INSERTED.PunchId INTO @OutputTable
+    -- SELECT 
+        -- EmployeeID, 
+        -- PunchTime, 
+        -- PunchType, 
+        -- DeviceID, 
+        -- Longitude, 
+        -- Latitude,
+        -- ISNULL(CreatedAt, GETDATE())
+    -- FROM inserted;
+
+    -- -- Devolver los IDs generados
+    -- SELECT PunchId FROM @OutputTable;
+-- END
+-- GO
+
+CREATE or ALTER TRIGGER HR.trg_Punch_Validations
 ON HR.tbl_AttendancePunches
-INSTEAD OF INSERT
+AFTER INSERT
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Tabla temporal para almacenar los inserted con IDs generados
-    DECLARE @OutputTable TABLE (PunchId INT);
+    --------------------------------------------------------------------
+    -- 1) VALIDACIÓN: Empleado no puede marcar durante vacaciones
+    --------------------------------------------------------------------
+    DECLARE @ErrorMsg NVARCHAR(500);
 
-    -- 1. VALIDACIÓN: Empleado no puede picar durante vacaciones
-    -- IF EXISTS (
-        -- /* SELECT 1
-        -- FROM inserted i
-        -- INNER JOIN HR.tbl_Vacations v ON v.EmployeeID = i.EmployeeID
-        -- WHERE v.Status IN ('InProgress')
-          -- AND CAST(i.PunchTime AS DATE) BETWEEN v.StartDate AND v.EndDate */
-		-- SELECT 1
-        -- FROM inserted i
-        -- INNER JOIN HR.tbl_Vacations v ON v.EmployeeID = i.EmployeeID
-        -- WHERE v.Status = 'InProgress'
-          -- AND CAST(i.PunchTime AS DATE) >= v.StartDate  -- La picada es posterior o igual al inicio
-          -- AND CAST(i.PunchTime AS DATE) <= v.EndDate    -- La picada es anterior o igual al fin
-          -- AND CAST(GETDATE() AS DATE) >= v.StartDate    -- IMPORTANTE: Hoy debe estar en el rango
-          -- AND CAST(GETDATE() AS DATE) <= v.EndDate
-    -- )
-    -- BEGIN
-        -- RAISERROR('ERROR: El empleado está de vacaciones - no se permiten marcaciones.' + STRING_AGG(CONVERT(varchar(20), PunchTime, 120), 16, 1);
-        -- RETURN;
-    -- END
-	DECLARE @ErrorMsg NVARCHAR(500);
-    
-    SELECT TOP 1 @ErrorMsg = 
-        'ERROR: El empleado '+ i.EmployeeID + ' está de vacaciones del ' + 
-        CONVERT(VARCHAR(10), v.StartDate, 103) + ' al ' + 
-        CONVERT(VARCHAR(10), v.EndDate, 103) + 
+    SELECT TOP 1 @ErrorMsg =
+        'ERROR: El empleado ' + CONVERT(VARCHAR(10), v.EmployeeID) +
+        ' está de vacaciones del ' + CONVERT(VARCHAR(10), v.StartDate, 103) +
+        ' al ' + CONVERT(VARCHAR(10), v.EndDate, 103) +
         '. No se permiten marcaciones durante este período.'
     FROM inserted i
     INNER JOIN HR.tbl_Vacations v ON v.EmployeeID = i.EmployeeID
@@ -211,29 +329,31 @@ BEGIN
 
     IF @ErrorMsg IS NOT NULL
     BEGIN
-        RAISERROR(@ErrorMsg, 16, 1);
-        RETURN;
+        ROLLBACK TRANSACTION;
+        THROW 50001, @ErrorMsg, 1;
     END
 
-    -- 2. VALIDACIÓN: Diferencia mínima de 5 minutos entre picadas
+    --------------------------------------------------------------------
+    -- 2) VALIDACIÓN: Diferencia mínima de 5 minutos entre marcaciones
+    -- Nota: Como ya insertó, excluimos el mismo PunchID.
+    --------------------------------------------------------------------
     IF EXISTS (
         SELECT 1
         FROM inserted i
-        WHERE EXISTS (
-            SELECT 1
-            FROM HR.tbl_AttendancePunches p
-            WHERE p.EmployeeID = i.EmployeeID
-              AND p.PunchTime < i.PunchTime
-              AND DATEDIFF(MINUTE, p.PunchTime, i.PunchTime) < 5
-              AND p.PunchID NOT IN (SELECT PunchID FROM inserted)  -- Clave: excluir los nuevos
-        )
+        INNER JOIN HR.tbl_AttendancePunches p
+            ON p.EmployeeID = i.EmployeeID
+           AND p.PunchID <> i.PunchID
+           -- Si quieres solo "marcaciones anteriores", usa p.PunchTime < i.PunchTime
+           AND DATEDIFF(MINUTE, p.PunchTime, i.PunchTime) BETWEEN -4 AND 4
     )
     BEGIN
-        RAISERROR('ERROR: La diferencia entre marcaciones debe ser al menos de 5 minutos.', 16, 1);
-        RETURN;
+        ROLLBACK TRANSACTION;
+        THROW 50002, 'ERROR: La diferencia entre marcaciones debe ser al menos de 5 minutos.', 1;
     END
 
-    -- 3. VALIDACIÓN: Empleado debe estar activo
+    --------------------------------------------------------------------
+    -- 3) VALIDACIÓN: Empleado debe estar activo
+    --------------------------------------------------------------------
     IF EXISTS (
         SELECT 1
         FROM inserted i
@@ -241,66 +361,58 @@ BEGIN
         WHERE e.IsActive = 0
     )
     BEGIN
-        RAISERROR('ERROR: No se permiten marcaciones para empleados inactivos.', 16, 1);
-        RETURN;
+        ROLLBACK TRANSACTION;
+        THROW 50003, 'ERROR: No se permiten marcaciones para empleados inactivos.', 1;
     END
 
-    -- 4. VALIDACIÓN: Tipo de picada debe ser 'In' o 'Out'
+    --------------------------------------------------------------------
+    -- 4) VALIDACIÓN: Tipo de picada debe ser 'In' o 'Out'
+    --------------------------------------------------------------------
     IF EXISTS (
         SELECT 1
         FROM inserted i
         WHERE i.PunchType NOT IN ('In', 'Out')
     )
     BEGIN
-        RAISERROR('ERROR: El tipo de marcación debe ser "In" (Entrada) o "Out" (Salida).', 16, 1);
-        RETURN;
+        ROLLBACK TRANSACTION;
+        THROW 50004, 'ERROR: El tipo de marcación debe ser "In" (Entrada) o "Out" (Salida).', 1;
     END
 
-    -- 5. VALIDACIÓN: No puede haber más de 2 picadas por día del mismo tipo sin justificación
-    IF EXISTS (
-        SELECT i.EmployeeID, CAST(i.PunchTime AS DATE) AS PunchDate, i.PunchType
-        FROM inserted i
-        INNER JOIN (
-            SELECT EmployeeID, CAST(PunchTime AS DATE) AS PunchDate, PunchType
-            FROM HR.tbl_AttendancePunches
-            UNION ALL
-            SELECT EmployeeID, CAST(PunchTime AS DATE) AS PunchDate, PunchType
-            FROM inserted
-        ) all_punches ON all_punches.EmployeeID = i.EmployeeID 
-                      AND all_punches.PunchDate = CAST(i.PunchTime AS DATE)
-                      AND all_punches.PunchType = i.PunchType
-        GROUP BY i.EmployeeID, CAST(i.PunchTime AS DATE), i.PunchType
-        HAVING COUNT(*) > 2
-    )
-    BEGIN
-        RAISERROR('ADVERTENCIA: Se detectaron múltiples marcaciones del mismo tipo en un día. Verifique posibles errores.', 10, 1);
-    END
-
-    -- INSERTAR DATOS VÁLIDOS
-    INSERT INTO HR.tbl_AttendancePunches(
-        EmployeeID, 
-        PunchTime, 
-        PunchType, 
-        DeviceID, 
-        Longitude, 
-        Latitude, 
-        CreatedAt
-    )
-    OUTPUT INSERTED.PunchId INTO @OutputTable
-    SELECT 
-        EmployeeID, 
-        PunchTime, 
-        PunchType, 
-        DeviceID, 
-        Longitude, 
-        Latitude,
-        ISNULL(CreatedAt, GETDATE())
-    FROM inserted;
-
-    -- Devolver los IDs generados
-    SELECT PunchId FROM @OutputTable;
+    --------------------------------------------------------------------
+    -- 5) REGLA: >2 marcaciones por día del mismo tipo
+    -- Recomendación: si esto debe bloquear => THROW.
+    -- Si solo es advertencia, NO uses RAISERROR 10; mejor registra en una tabla log.
+    --------------------------------------------------------------------
+--    IF EXISTS (
+--        SELECT 1
+--        FROM inserted i
+--        CROSS APPLY (
+--            SELECT COUNT(*) AS Cnt
+--            FROM HR.tbl_AttendancePunches p
+--            WHERE p.EmployeeID = i.EmployeeID
+--              AND CAST(p.PunchTime AS DATE) = CAST(i.PunchTime AS DATE)
+--              AND p.PunchType = i.PunchType
+--        ) x
+--        WHERE x.Cnt > 2
+--    )
+--    BEGIN
+--        -- Decide una de estas dos:
+--
+--        -- (A) Bloquear:
+--         ROLLBACK TRANSACTION;
+--         THROW 50005, 'ERROR: Se detectaron más de 2 marcaciones del mismo tipo en el día.', 1;
+--
+--        -- (B) Solo advertir (sin romper EF): registrar en tabla de auditoría
+--        -- (si no tienes tabla, omite este bloque)
+--        -- INSERT INTO HR.tbl_AttendanceWarnings(EmployeeID, PunchTime, PunchType, Message, CreatedAt)
+--        -- SELECT i.EmployeeID, i.PunchTime, i.PunchType,
+--        --        'ADVERTENCIA: múltiples marcaciones del mismo tipo en un día.',
+--        --        GETDATE()
+--        -- FROM inserted i;
+--    END
 END
 GO
+
 
 -- 3. TRIGGER PARA EVITAR SOLAPAMIENTO DE SUBROGACIONES
 PRINT '3. Creando HR.trg_Subrogations_NoOverlap...';

@@ -1,6 +1,9 @@
 
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models;
-public class WorkExperiences {
+public class WorkExperiences : IAuditable 
+{
   public int WorkExpId{get;set;}
   public int PersonId{get;set;}
   public string? CountryId{get;set;}
@@ -14,5 +17,8 @@ public class WorkExperiences {
   public DateOnly? EndDate{get;set;}
   public int? ExperienceTypeId{get;set;}
   public bool IsCurrent{get;set;}
-  public DateTime CreatedAt{get;set;}
+    public DateTime? CreatedAt { get; set; }
+    public int? CreatedBy { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    public int? UpdatedBy { get; set; }
 }

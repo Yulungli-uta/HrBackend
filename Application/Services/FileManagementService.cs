@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.DTOs.FileManagement;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Configuration;
@@ -34,15 +35,18 @@ public class FileManagementService : IFileManagementService
             }
 
             // 2. Validar extensión del archivo
-            var fileExtension = Path.GetExtension(request.FileName).ToLower();
+            var originalFileName = Path.GetFileName(request.FileName);
+            var fileExtension = Path.GetExtension(originalFileName).ToLowerInvariant();
             if (!string.IsNullOrEmpty(directory.Extension))
             {
-                var allowedExtensions = directory.Extension.Split(',').Select(e => e.Trim().ToLower()).ToList();
+                var allowedExtensions = directory.Extension.Split(',')
+                    .Select(e => e.Trim().ToLowerInvariant())
+                    .ToList();
                 if (!allowedExtensions.Contains(fileExtension))
                 {
                     return CreateErrorResponse(
-                        $"File extension '{fileExtension}' is not allowed. Allowed: {directory.Extension}", 
-                        request.FileName);
+                        $"File extension '{fileExtension}' is not allowed. Allowed: {directory.Extension}",
+                        originalFileName);
                 }
             }
 
@@ -51,16 +55,20 @@ public class FileManagementService : IFileManagementService
             if (directory.MaxSizeMb.HasValue && fileSizeInMb > directory.MaxSizeMb.Value)
             {
                 return CreateErrorResponse(
-                    $"File size ({fileSizeInMb:F2} MB) exceeds maximum ({directory.MaxSizeMb} MB)", 
-                    request.FileName);
+                    $"File size ({fileSizeInMb:F2} MB) exceeds maximum ({directory.MaxSizeMb} MB)",
+                    originalFileName);
             }
 
             // 4. Preparar rutas
             int currentYear = DateTime.Now.Year;
             var relativePath = request.RelativePath.TrimStart('/').TrimEnd('/');
             var folderPath = Path.Combine(directory.PhysicalPath, relativePath, currentYear.ToString());
-            var sanitizedFileName = Path.GetFileName(request.FileName);
-            var fullPath = Path.Combine(folderPath, sanitizedFileName);
+            //var sanitizedFileName = Path.GetFileName(request.FileName);
+            //var fullPath = Path.Combine(folderPath, sanitizedFileName);
+
+            // ✅ Generar nombre físico seguro y único (NO usar el del usuario)
+            var storedFileName = FileNameGenerator.Generate(originalFileName, request.DirectoryCode);
+            var fullPath = Path.Combine(folderPath, storedFileName);
 
             // 5. Ejecutar operación con o sin impersonation según configuración
             if (_settings.UseImpersonation)
@@ -68,7 +76,7 @@ public class FileManagementService : IFileManagementService
                 // CON CREDENCIALES (NAS remoto con autenticación)
                 var (username, password, domain) = DecryptCredentials();
                 using var impersonation = new WindowsImpersonation();
-                
+
                 await impersonation.RunImpersonatedAsync(username, password, domain, async () =>
                 {
                     await SaveFileAsync(folderPath, fullPath, request.File, ct);
@@ -81,15 +89,27 @@ public class FileManagementService : IFileManagementService
             }
 
             // 6. Retornar respuesta exitosa
-            var relativePathResult = $"/{relativePath}/{currentYear}/{sanitizedFileName}";
-            
+            //var relativePathResult = $"/{relativePath}/{currentYear}/{sanitizedFileName}";
+
+            //return new FileUploadResponseDto
+            //{
+            //    Success = true,
+            //    Message = "File uploaded successfully.",
+            //    FullPath = fullPath,
+            //    RelativePath = relativePathResult,
+            //    FileName = sanitizedFileName,
+            //    FileSize = request.File.Length,
+            //    Year = currentYear
+            //};
+            var relativePathResult = $"/{relativePath}/{currentYear}/{storedFileName}";
+
             return new FileUploadResponseDto
             {
                 Success = true,
                 Message = "File uploaded successfully.",
                 FullPath = fullPath,
                 RelativePath = relativePathResult,
-                FileName = sanitizedFileName,
+                FileName = storedFileName,     // ✅ nombre físico guardado
                 FileSize = request.File.Length,
                 Year = currentYear
             };
@@ -137,18 +157,15 @@ public class FileManagementService : IFileManagementService
     }
 
     public async Task<(byte[] fileBytes, string contentType, string fileName)?> DownloadFileAsync(
-        string directoryCode, 
-        string filePath, 
+        string directoryCode,
+        string filePath,
         CancellationToken ct = default)
     {
         try
         {
             // 1. Buscar DirectoryParameters por Code
             var directory = await _directoryService.GetByCodeAsync(directoryCode, ct);
-            if (directory == null)
-            {
-                return null;
-            }
+            if (directory == null) return null;
 
             // 2. Sanitizar y construir ruta
             var sanitizedPath = filePath.TrimStart('/');
@@ -162,7 +179,7 @@ public class FileManagementService : IFileManagementService
                 // CON CREDENCIALES (NAS remoto con autenticación)
                 var (username, password, domain) = DecryptCredentials();
                 using var impersonation = new WindowsImpersonation();
-                
+
                 fileBytes = await impersonation.RunImpersonatedAsync(username, password, domain, async () =>
                 {
                     return await ReadFileAsync(fullPath, ct);
@@ -174,10 +191,8 @@ public class FileManagementService : IFileManagementService
                 fileBytes = await ReadFileAsync(fullPath, ct);
             }
 
-            if (fileBytes.Length == 0)
-            {
-                return null;
-            }
+            if (fileBytes.Length == 0) return null;
+
 
             // 4. Determinar Content-Type
             var contentType = GetContentType(fullPath);
@@ -192,8 +207,8 @@ public class FileManagementService : IFileManagementService
     }
 
     public async Task<FileDeleteResponseDto> DeleteFileAsync(
-        string directoryCode, 
-        string filePath, 
+        string directoryCode,
+        string filePath,
         CancellationToken ct = default)
     {
         try
@@ -222,7 +237,7 @@ public class FileManagementService : IFileManagementService
                 // CON CREDENCIALES (NAS remoto con autenticación)
                 var (username, password, domain) = DecryptCredentials();
                 using var impersonation = new WindowsImpersonation();
-                
+
                 deleted = await impersonation.RunImpersonatedAsync(username, password, domain, async () =>
                 {
                     return await DeleteFileInternalAsync(fullPath, ct);
@@ -294,7 +309,7 @@ public class FileManagementService : IFileManagementService
         }
 
         // Guardar archivo
-        using var stream = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
+        using var stream = new FileStream(fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, true);
         await file.CopyToAsync(stream, ct);
     }
 

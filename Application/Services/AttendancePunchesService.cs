@@ -5,7 +5,7 @@ using WsUtaSystem.Models;
 namespace WsUtaSystem.Application.Services;
 public class AttendancePunchesService : Service<AttendancePunches, int>, IAttendancePunchesService
 {
-
+    private readonly ILogger<AttendancePunchesService> _logger;
     private readonly IAttendancePunchesRepository _repository;
     public AttendancePunchesService(IAttendancePunchesRepository repo) : base(repo) {
 
@@ -32,9 +32,11 @@ public class AttendancePunchesService : Service<AttendancePunches, int>, IAttend
         return await _repository.GetTodayPunchesByEmployeeAsync(employeeId,ct);
         
     }
+    public async Task<AttendancePunches> CreatePunchesWithIPAsync(AttendancePunches entity, string ipAddress, CancellationToken ct)
+    {
+        //var _attendancePunches = attendancePunches;        
+        entity.IpAddress = ipAddress;
+        return await _repository.CreatePunchWithIPAsync(entity, ct);
+    }
 
-    //Task<IEnumerable<AttendancePunches>> IAttendancePunchesService.GetLastPunchAsync(int employeeId, CancellationToken ct)
-    //{
-    //    throw new NotImplementedException();
-    //}
 }

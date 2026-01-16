@@ -1,6 +1,8 @@
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models
 {
-    public class DirectoryParameters
+    public class DirectoryParameters :IAuditable
     {
         public int DirectoryId { get; set; }
         public string Code { get; set; } = null!;

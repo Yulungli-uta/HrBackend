@@ -1,10 +1,10 @@
 ﻿using WsUtaSystem.Application.Interfaces.Repositories;
 using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Data;
-using WsUtaSystem.Models;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using WsUtaSystem.Models.Views;
 
 namespace WsUtaSystem.Infrastructure.Repositories
 {

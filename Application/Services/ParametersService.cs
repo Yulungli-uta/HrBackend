@@ -5,6 +5,15 @@ using WsUtaSystem.Models;
 namespace WsUtaSystem.Application.Services;
 public class ParametersService : Service<Parameters, int>, IParametersService
 {
-    public ParametersService(IParametersRepository repo) : base(repo) { }
+    private readonly IParametersRepository _repository;
+
+    public ParametersService(IParametersRepository repo) : base(repo) { 
+        _repository = repo;
+    }
+
+    public async Task<IEnumerable<Parameters>> GetByNameAsync(string name, CancellationToken ct)
+    {
+        return await _repository.GetByNameAsync(name, ct);
+    }
 }
 

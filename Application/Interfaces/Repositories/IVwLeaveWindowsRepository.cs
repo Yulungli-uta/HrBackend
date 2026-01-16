@@ -1,4 +1,4 @@
-using WsUtaSystem.Models;
+using WsUtaSystem.Models.Views;
 namespace WsUtaSystem.Application.Interfaces.Repositories;
 public interface IVwLeaveWindowsRepository
 {

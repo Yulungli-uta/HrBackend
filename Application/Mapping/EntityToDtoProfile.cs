@@ -4,6 +4,7 @@ using WsUtaSystem.Application.DTOs.VwEmployeeScheduleAtDate;
 using WsUtaSystem.Application.DTOs.VwLeaveWindows;
 using WsUtaSystem.Application.DTOs.VwPunchDay;
 using WsUtaSystem.Models;
+using WsUtaSystem.Models.Views;
 namespace WsUtaSystem.Application.Mapping;
 public class EntityToDtoProfile : Profile
 {
@@ -175,6 +176,12 @@ public class EntityToDtoProfile : Profile
         CreateMap<WsUtaSystem.Models.KnowledgeArea, WsUtaSystem.Application.DTOs.KnowledgeArea.KnowledgeAreaCreateDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.KnowledgeArea, WsUtaSystem.Application.DTOs.KnowledgeArea.KnowledgeAreaDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.KnowledgeArea, WsUtaSystem.Application.DTOs.KnowledgeArea.KnowledgeAreaUpdateDto>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.TimeBalances, WsUtaSystem.Application.DTOs.TimeBalances.TimeBalancesDTO.TimeBalancesCreateDTO>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.TimeBalances, WsUtaSystem.Application.DTOs.TimeBalances.TimeBalancesDTO.TimeBalancesUpdateDTO>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.TimeBalances, WsUtaSystem.Application.DTOs.TimeBalances.TimeBalancesDTO.TimeBalancesResponseDTO>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.StoredFile, WsUtaSystem.Application.DTOs.StoredFile.StoredFileCreateDto>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.StoredFile, WsUtaSystem.Application.DTOs.StoredFile.StoredFileDto>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.StoredFile, WsUtaSystem.Application.DTOs.StoredFile.StoredFileUpdateDto>().ReverseMap();
 
 
 

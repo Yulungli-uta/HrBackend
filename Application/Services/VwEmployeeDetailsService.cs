@@ -1,6 +1,6 @@
 ﻿using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
-using WsUtaSystem.Models;
+using WsUtaSystem.Models.Views;
 
 namespace WsUtaSystem.Application.Services
 {
@@ -20,7 +20,7 @@ namespace WsUtaSystem.Application.Services
         {
             try
             {
-                _logger.LogInformation("Getting employee details for Email: {email}", email);
+                _logger.LogInformation("***************Getting employee details for Email: {email}", email);
 
                 if (email.Length <= 0)
                 {

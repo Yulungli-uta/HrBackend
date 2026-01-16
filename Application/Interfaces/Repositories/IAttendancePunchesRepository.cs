@@ -8,4 +8,7 @@ public interface IAttendancePunchesRepository : IRepository<AttendancePunches, i
     Task<IEnumerable<AttendancePunches>> GetTodayPunchesByEmployeeAsync(int employeeId, CancellationToken ct);
     Task<IEnumerable<AttendancePunches>> GetPunchesByEmployeeAsync(int employeeId, DateTime startDate, DateTime endDate, CancellationToken ct);
     Task<IEnumerable<AttendancePunches>> GetPunchesByDateRangeAsync(DateTime startDate, DateTime endDate, CancellationToken ct);
+    //Task<Task<IEnumerable<AttendancePunches>>> CreatePunchesWithIPAsync(AttendancePunches attendancePunches, CancellationToken ct);
+    Task<AttendancePunches> CreatePunchWithIPAsync(AttendancePunches entity, CancellationToken ct);
+
 }

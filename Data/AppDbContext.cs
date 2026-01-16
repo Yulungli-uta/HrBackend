@@ -1,8 +1,10 @@
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Models.Views;
 using System.Reflection.Emit;
 using WsUtaSystem.Models;
-using Models.Views;
+using WsUtaSystem.Models.Views;
 
 namespace WsUtaSystem.Data;
 
@@ -90,6 +92,8 @@ public class AppDbContext : DbContext
     public DbSet<VwLeaveWindows> VwLeaveWindows { get; set; }
     public DbSet<VwAttendanceDay> VwAttendanceDay { get; set; }
     public DbSet<KnowledgeArea> KnowledgeAreas => Set<KnowledgeArea>();
+
+    public DbSet<TimeBalances> TimeBalances => Set<TimeBalances>();
 
     // Vistas de Permisos y Menús
     public DbSet<VwUserRole> VwUserRoles { get; set; }
@@ -223,13 +227,24 @@ public class AppDbContext : DbContext
                 // tb.HasTrigger("trg_Punch_Otros"); // si tienes más
             });
             e.HasKey(x => x.PunchId);
-            e.Property(x => x.PunchId).UseIdentityColumn();
+            e.Property(x => x.PunchId).HasColumnName("PunchID").UseIdentityColumn();
             e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
             e.Property(x => x.PunchTime).HasColumnType("datetime2");            
             e.Property(x => x.PunchType).HasMaxLength(10);
-            e.Property(x => x.DeviceId).HasMaxLength(60);
-            e.Property(x => x.CreatedAt).HasColumnType("datetime2");
+            e.Property(x => x.DeviceId).HasMaxLength(60);            
+            e.Property(x => x.IpAddress).HasColumnName("IpAddress");
+            //e.Property(x => x.CreatedAt).HasColumnType("datetime2");
+            e.Property(x => x.CreatedAt)
+                .HasColumnType("datetime2")
+                .HasDefaultValueSql("GETDATE()")
+                .ValueGeneratedOnAdd()
+                .Metadata.SetAfterSaveBehavior(Microsoft.EntityFrameworkCore.Metadata.PropertySaveBehavior.Ignore);
             
+            // ✅ RowVersion: control de concurrencia optimista
+            e.Property(x => x.RowVersion)
+                .IsRowVersion()
+                .HasColumnName("RowVersion")
+                .IsConcurrencyToken();
         });
 
         m.Entity<PunchJustifications>(e => {
@@ -641,6 +656,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.RmuCon).HasColumnName("rmu_con");
             e.Property(x => x.RmuHour).HasColumnName("rmu_hour");
             e.Property(x => x.RequestId).HasColumnName("RequestID");
+            
         });
         m.Entity<Parameters>(e => {
             e.ToTable("TBL_PARAMETERS", HR);
@@ -652,6 +668,90 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.DirectoryId);
             e.Property(x => x.DirectoryId).HasColumnName("DirectoryID");
         });
+        m.Entity<StoredFile>(e =>
+        {
+            e.ToTable("TBL_StoredFile", "HR");
+
+            e.HasKey(x => x.FileId);
+
+            e.Property(x => x.FileId)
+                .ValueGeneratedOnAdd();
+
+            e.Property(x => x.FileGuid)
+                .HasDefaultValueSql("newid()");
+
+            e.Property(x => x.DirectoryCode)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            e.Property(x => x.EntityType)
+                .HasMaxLength(50)
+                .IsRequired();
+
+            e.Property(x => x.EntityId)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            e.Property(x => x.UploadYear)
+                .HasColumnType("smallint")
+                .HasConversion<short>()
+                .IsRequired();
+
+            e.Property(x => x.RelativeFolder)
+                .HasMaxLength(600)
+                .IsRequired();
+
+            e.Property(x => x.StoredFileName)
+                .HasMaxLength(260)
+                .IsRequired();
+
+            e.Property(x => x.OriginalFileName)
+                .HasMaxLength(260);
+
+            e.Property(x => x.Extension)
+                .HasMaxLength(20);
+
+            e.Property(x => x.ContentType)
+                .HasMaxLength(100);
+
+            e.Property(x => x.SizeBytes)
+                .IsRequired();
+
+            e.Property(x => x.Sha256)
+                .HasColumnType("binary(32)");
+
+            e.Property(x => x.Status)
+                .HasConversion<byte>()      // tu propiedad es int, la guardas/lees como tinyint
+                .HasColumnType("tinyint")
+                .IsRequired();
+
+            e.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("GETDATE()");
+
+            // Computed column
+            e.Property(x => x.FilePathHash)
+                .HasColumnType("binary(32)")
+                .ValueGeneratedOnAddOrUpdate()
+                .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore); ;
+
+            // FK -> DirectoryParameters(Code)
+            e.HasOne<DirectoryParameters>() // ver clase abajo
+                .WithMany()
+                .HasForeignKey(x => x.DirectoryCode)
+                .HasPrincipalKey(p => p.Code);            
+
+            // Índices (opcional en EF, ya existen en DB)
+            //e.HasIndex(x => new { x.DirectoryCode, x.EntityType, x.EntityId, x.UploadYear })
+            //    .HasDatabaseName("IX_TBL_StoredFile_ByEntity");
+
+            //e.HasIndex(x => new { x.DirectoryCode, x.UploadYear })
+            //    .HasDatabaseName("IX_TBL_StoredFile_ByDirectoryYear");
+
+            //e.HasIndex(x => x.FileGuid)
+            //    .IsUnique()
+            //    .HasDatabaseName("UX_TBL_StoredFile_FileGuid");
+        });
+
         m.Entity<KnowledgeArea>(e => {
             e.ToTable("tbl_KnowledgeArea", HR);
             e.HasKey(x => x.Id);
@@ -666,5 +766,10 @@ public class AppDbContext : DbContext
         // Vistas de Permisos y Menús (del sistema de autenticación)
         m.Entity<VwUserRole>().HasNoKey().ToView("vw_UserRoles", "dbo");
         m.Entity<VwRoleMenuItem>().HasNoKey().ToView("vw_RoleMenuItems", "dbo");
+        m.Entity<TimeBalances>(e => {
+            e.ToTable("tbl_TimeBalances", HR);
+            e.HasKey(x => x.EmployeeID);
+            e.Property(x => x.EmployeeID).HasColumnName("EmployeeID");
+        });
     }
 }

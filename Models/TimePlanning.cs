@@ -1,8 +1,9 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using WsUtaSystem.Application.Interfaces.Auditable;
 
 namespace WsUtaSystem.Models
 {
-    public class TimePlanning
+    public class TimePlanning : IAuditable
     {
         public int PlanID { get; set; }
         public string PlanType { get; set; } = string.Empty; // "Overtime", "Recovery"
@@ -20,8 +21,8 @@ namespace WsUtaSystem.Models
         public int? ApprovedBy { get; set; }
         public int? SecondApprover { get; set; }
         public DateTime? ApprovedAt { get; set; }
-        public int CreatedBy { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public int? CreatedBy { get; set; }
+        public DateTime? CreatedAt { get; set; } = DateTime.Now;
         public int? UpdatedBy { get; set; }
         public DateTime? UpdatedAt { get; set; }
         [Timestamp]

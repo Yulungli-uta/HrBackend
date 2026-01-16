@@ -1,4 +1,4 @@
-namespace WsUtaSystem.Models
+namespace WsUtaSystem.Models.Views
 {
     public class VwAttendanceDay
     {

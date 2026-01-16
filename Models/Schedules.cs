@@ -1,6 +1,8 @@
 
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models;
-public class Schedules {
+public class Schedules : IAuditable{
   public int ScheduleId { get; set; }
   public string Description { get; set; } = null!;
   public TimeOnly EntryTime { get; set; }
@@ -12,6 +14,8 @@ public class Schedules {
   public TimeOnly? LunchEnd { get; set; }
   public bool IsRotating { get; set; } = false;
   public string? RotationPattern { get; set; }
-  public DateTime CreatedAt { get; set; }
+  public int? CreatedBy { get; set; }
+  public DateTime? CreatedAt { get; set; }
+  public int? UpdatedBy { get; set; }
   public DateTime? UpdatedAt { get; set; }
 }

@@ -105,3 +105,10 @@ Thumbs.db
 coverage.xml
 coverage.json
 lcov.info
+
+# Ignorar toda la carpeta de logs
+logs/
+
+# Opcionalmente, ignorar cualquier archivo .txt o .log en cualquier parte
+*.log
+logs/*.txt

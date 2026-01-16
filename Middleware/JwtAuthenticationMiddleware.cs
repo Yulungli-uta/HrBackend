@@ -1,4 +1,8 @@
+using System.Security.Claims;
+using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Application.Services;
 using WsUtaSystem.Infrastructure.Services;
+using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Middleware;
 
@@ -11,6 +15,7 @@ public class JwtAuthenticationMiddleware
     private readonly ILogger<JwtAuthenticationMiddleware> _logger;
     private readonly bool _enableLogging;
     private readonly HashSet<string> _publicPaths;
+    private readonly IvwEmployeeDetailsService _employeeDetailsService;
 
     public JwtAuthenticationMiddleware(
         RequestDelegate next,
@@ -29,16 +34,17 @@ public class JwtAuthenticationMiddleware
         );
     }
 
-    public async Task InvokeAsync(HttpContext context, ITokenValidationService tokenValidationService)
+    public async Task InvokeAsync(HttpContext context, ITokenValidationService tokenValidationService, IvwEmployeeDetailsService employeeDetailsService)
     {
         var path = context.Request.Path.Value ?? string.Empty;
         
+
         // Permitir endpoints públicos
         if (IsPublicEndpoint(path))
         {
             if (_enableLogging)
                 _logger.LogDebug("Public endpoint accessed: {Path}", path);
-            
+
             await _next(context);
             return;
         }
@@ -51,7 +57,7 @@ public class JwtAuthenticationMiddleware
         {
             if (_enableLogging)
                 _logger.LogWarning("Request to {Path} rejected: No token provided", path);
-            
+
             context.Response.StatusCode = 401;
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsJsonAsync(new
@@ -70,7 +76,7 @@ public class JwtAuthenticationMiddleware
         {
             if (_enableLogging)
                 _logger.LogWarning("Request to {Path} rejected: Invalid token - {Message}", path, validationResult.Message);
-            
+
             context.Response.StatusCode = 401;
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsJsonAsync(new
@@ -82,15 +88,114 @@ public class JwtAuthenticationMiddleware
             return;
         }
 
-        // Agregar información del usuario al contexto para uso en controladores
+        // 1) Mantener Items (compatibilidad con lo que ya tienes)
         context.Items["UserId"] = validationResult.UserId;
         context.Items["UserEmail"] = validationResult.Email;
         context.Items["UserRoles"] = validationResult.Roles;
+        
+
+        // ✅ Resolver EmployeeId (fallback con tu vista)
+        int? employeeId = null;
+        employeeId = TryGetEmployeeId(validationResult); // intenta desde result (si existe)
+
+        if (!string.IsNullOrWhiteSpace(validationResult.Email))
+        {
+            _logger.LogDebug("Resolving EmployeeID from view by email: {Email}", validationResult.Email);
+
+            var emp = await employeeDetailsService.GetByEmailAsync(validationResult.Email, context.RequestAborted);
+
+            if (_enableLogging)
+                _logger.LogInformation("Fetched employee details: {@Employee}", emp);
+
+            // ✅ Tu view usa EmployeeID (así se llama la prop)
+            employeeId = emp?.EmployeeID;
+        }
+
+        // Guarda SIEMPRE (para CurrentUserService fallback)
+        context.Items["EmployeeId"] = employeeId;
+
+        // 2) ✅ Crear ClaimsPrincipal para que Controller/User/ICurrentUserService funcionen
+        var principal = BuildPrincipal(
+            email: validationResult.Email,
+            userId: validationResult.UserId,
+            roles: validationResult.Roles,
+            employeeId: employeeId
+        );
+
+        
+
+        context.User = principal;
 
         if (_enableLogging)
+        {
             _logger.LogInformation("Request to {Path} authorized for user {Email}", path, validationResult.Email);
+            _logger.LogDebug("User injected into HttpContext.User. IsAuth={IsAuth}", context.User?.Identity?.IsAuthenticated);
+        }
 
         await _next(context);
+    }
+
+    private int? TryGetEmployeeId(dynamic validationResult)
+    {
+        // Si tu ValidateTokenAsync ya retorna EmployeeId, úsalo.
+        // Si no existe, devuelve null (y luego lo podrás mapear en el auth-service para incluirlo).
+        try
+        {
+            //_logger.LogInformation("Attempting to extract EmployeeId from validation result. userid:{UserId}",
+            //    validationResult.EmployeeId);
+            // Ej: validationResult.EmployeeId            
+            var value = validationResult.EmployeeId;
+            if (value is null) return null;
+
+            if (value is int i) return i;
+
+            if (int.TryParse(value.ToString(), out int parsed))
+                return parsed;
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static ClaimsPrincipal BuildPrincipal(string? email, string? userId, IEnumerable<string>? roles, int? employeeId)
+    {
+        var claims = new List<Claim>();
+
+        if (!string.IsNullOrWhiteSpace(email))
+        {
+            claims.Add(new Claim(ClaimTypes.Email, email));
+            claims.Add(new Claim(ClaimTypes.Name, email)); // útil para logs/Identity.Name
+        }
+
+        // NameIdentifier es estándar, muchos sistemas lo usan
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, userId));
+            claims.Add(new Claim("userId", userId));
+            claims.Add(new Claim("sub", userId));
+        }
+
+        // Claim esperado por tu CurrentUserService
+        if (employeeId.HasValue)
+        {
+            claims.Add(new Claim("employeeId", employeeId.Value.ToString()));
+        }
+
+        // Roles
+        if (roles != null)
+        {
+            foreach (var r in roles.Where(x => !string.IsNullOrWhiteSpace(x)))
+            {
+                claims.Add(new Claim(ClaimTypes.Role, r));
+                claims.Add(new Claim("role", r));
+            }
+        }
+
+        // ✅ authenticationType NO vacío => IsAuthenticated = true
+        var identity = new ClaimsIdentity(claims, authenticationType: "JwtCustom");
+        return new ClaimsPrincipal(identity);
     }
 
     /// <summary>
@@ -117,7 +222,7 @@ public class JwtAuthenticationMiddleware
         {
             if (_enableLogging)
                 _logger.LogWarning("Invalid Authorization header format: {Header}", authHeader);
-            
+
             return null;
         }
 
@@ -130,33 +235,15 @@ public class JwtAuthenticationMiddleware
 /// </summary>
 public static class HttpContextExtensions
 {
-    /// <summary>
-    /// Obtiene el ID del usuario autenticado desde el contexto
-    /// </summary>
-    public static string? GetUserId(this HttpContext context)
-    {
-        return context.Items["UserId"]?.ToString();
-    }
+    public static string? GetUserId(this HttpContext context) =>
+        context.Items["UserId"]?.ToString();
 
-    /// <summary>
-    /// Obtiene el email del usuario autenticado desde el contexto
-    /// </summary>
-    public static string? GetUserEmail(this HttpContext context)
-    {
-        return context.Items["UserEmail"]?.ToString();
-    }
+    public static string? GetUserEmail(this HttpContext context) =>
+        context.Items["UserEmail"]?.ToString();
 
-    /// <summary>
-    /// Obtiene los roles del usuario autenticado desde el contexto
-    /// </summary>
-    public static List<string> GetUserRoles(this HttpContext context)
-    {
-        return context.Items["UserRoles"] as List<string> ?? new List<string>();
-    }
+    public static List<string> GetUserRoles(this HttpContext context) =>
+        context.Items["UserRoles"] as List<string> ?? new List<string>();
 
-    /// <summary>
-    /// Verifica si el usuario autenticado tiene un rol específico
-    /// </summary>
     public static bool HasRole(this HttpContext context, string role)
     {
         var roles = context.GetUserRoles();

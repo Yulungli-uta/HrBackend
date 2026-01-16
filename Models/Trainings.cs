@@ -1,6 +1,9 @@
 
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models;
-public class Trainings {
+public class Trainings : IAuditable 
+{
   public int TrainingId{get;set;}
   public int PersonId{get;set;}
   public string? Location{get;set;}
@@ -14,5 +17,8 @@ public class Trainings {
   public DateOnly EndDate{get;set;}
   public int Hours{get;set;}
   public int? ApprovalTypeId{get;set;}
-  public DateTime CreatedAt{get;set;}
+  public DateTime? CreatedAt { get; set; }
+  public int? CreatedBy { get; set; }
+  public DateTime? UpdatedAt { get; set; }
+  public int? UpdatedBy { get; set; }
 }

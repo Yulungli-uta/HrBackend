@@ -5,6 +5,7 @@ using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.FinancialCertification;
 using WsUtaSystem.Models;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Application.Common.Interfaces;
 
 namespace WsUtaSystem.Controllers;
 
@@ -15,7 +16,14 @@ public class FinancialCertificationController : ControllerBase
 {
     private readonly IFinancialCertificationService _svc;
     private readonly IMapper _mapper;
-    public FinancialCertificationController(IFinancialCertificationService svc, IMapper mapper) { _svc = svc; _mapper = mapper; }
+    private readonly ICurrentUserService _user;
+    private readonly ILogger<FinancialCertificationController> _logger;
+    public FinancialCertificationController(IFinancialCertificationService svc, IMapper mapper, ICurrentUserService userService, ILogger<FinancialCertificationController> logger) { 
+        _svc = svc; 
+        _mapper = mapper;
+        _logger = logger;
+        _user = userService;
+    }
 
     /// <summary>Lista todos los registros de FinancialCertification.</summary>
     [HttpGet]
@@ -35,7 +43,28 @@ public class FinancialCertificationController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] FinancialCertificationCreateDto dto, CancellationToken ct)
     {
+      var claimsDump = User?.Claims
+      .Select(c => $"{c.Type}={c.Value}")
+      .ToArray();
+
+            _logger.LogInformation("Claims: {Claims}", claimsDump);
+            _logger.LogInformation("IsAuth={IsAuth} NameId={NameId} Sub={Sub} Email={Email} EmpClaim={EmpClaim} userid {userId}",
+              _user.IsAuthenticated,
+              User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+              User?.FindFirst("sub")?.Value,
+              _user.Email,
+              User?.FindFirst("employeeId")?.Value,
+              User?.FindFirst("userId")?.Value
+            );
         var entityObj = _mapper.Map<FinancialCertification>(dto);
+        //entityObj.CreatedAt = DateTime.Now;
+        //entityObj.CreatedBy = _user.IsAuthenticated ? _user.EmployeeId : null;
+
+        _logger.LogInformation(
+            "****************Creating FinancialCertification: {CreatedAt} createdby {EmployeeId}",
+            DateTime.Now,
+            _user.EmployeeId
+        );
         var created = await _svc.CreateAsync(entityObj, ct);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<FinancialCertificationDto>(created));
@@ -46,6 +75,9 @@ public class FinancialCertificationController : ControllerBase
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] FinancialCertificationUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<FinancialCertification>(dto);
+        //entityObj.UpdatedAt = DateTime.Now;
+        //entityObj.UpdatedBy = _user.IsAuthenticated ? _user.EmployeeId : null;
+        _logger.LogInformation("****************updateing FinancialCertification: {createat} createdby {EmployeeId}", DateTime.Now, _user.EmployeeId);
         await _svc.UpdateAsync(id, entityObj, ct);
         return NoContent();
     }

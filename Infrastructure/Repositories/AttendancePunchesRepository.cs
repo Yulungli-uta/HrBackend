@@ -69,4 +69,12 @@ public class AttendancePunchesRepository : ServiceAwareEfRepository<AttendancePu
         return lastPunch != null ? new List<AttendancePunches> 
             { lastPunch } : Enumerable.Empty<AttendancePunches>();
     }
+    public async  Task<AttendancePunches> CreatePunchWithIPAsync(AttendancePunches entity, CancellationToken ct)
+    {
+        await _db.Set<AttendancePunches>().AddAsync(entity, ct);
+        await _db.SaveChangesAsync(ct);
+        return entity;
+    }
+
+
 }

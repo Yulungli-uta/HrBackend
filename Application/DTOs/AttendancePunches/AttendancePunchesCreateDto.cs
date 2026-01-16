@@ -7,7 +7,8 @@ public class AttendancePunchesCreateDto
     public DateTime PunchTime { get; set; }
     public string PunchType { get; set; }
     public string DeviceId { get; set; }
+    public string? IpAddress { get; set; }
     public decimal Longitude { get; set; }
     public decimal Latitude { get; set; }
-    public DateTime CreatedAt { get; set; }
+    //public DateTime CreatedAt { get; set; }
 }

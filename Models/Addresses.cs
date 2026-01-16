@@ -1,6 +1,9 @@
 
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models;
-public class Addresses {
+public class Addresses : IAuditable
+{
   public int AddressId{get;set;}
   public int PersonId{get;set;}
   public int AddressTypeId{get;set;}
@@ -13,5 +16,8 @@ public class Addresses {
   public string? SecondaryStreet{get;set;}
   public string? HouseNumber{get;set;}
   public string? Reference{get;set;}
-  public DateTime CreatedAt{get;set;}
+  public DateTime? CreatedAt { get; set; }
+  public int? CreatedBy { get; set; }
+  public DateTime? UpdatedAt { get; set; }
+  public int? UpdatedBy { get; set; }
 }

@@ -1,6 +1,9 @@
 
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models;
-public class Books {
+public class Books : IAuditable 
+{
   public int BookId{get;set;}
   public int PersonId{get;set;}
   public string Title{get;set;}=null!;
@@ -18,5 +21,8 @@ public class Books {
   public bool? UTAffiliation{get;set;}
   public bool? UTASponsorship{get;set;}
   public int? BookTypeId { get; set; }
-  public DateTime CreatedAt{get;set;}
+    public DateTime? CreatedAt { get; set; }
+    public int? CreatedBy { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    public int? UpdatedBy { get; set; }
 }

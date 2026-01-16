@@ -1,6 +1,8 @@
 
+using WsUtaSystem.Application.Interfaces.Auditable;
+
 namespace WsUtaSystem.Models;
-public class Contracts {
+public class Contracts : IAuditable{
     public int ContractID { get; set; }
     public int? CertificationID { get; set; }
     public int? ParentID { get; set; }
@@ -37,7 +39,7 @@ public class Contracts {
     public string? Competition { get; set; }
     public DateTime? CompetitionDate { get; set; }
     public int? CreatedBy { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public DateTime? CreatedAt { get; set; }
     public int? UpdatedBy { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }

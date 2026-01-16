@@ -6,5 +6,6 @@ public class PermissionTypesCreateDto
     public string Name { get; set; }
     public bool DeductsFromVacation { get; set; }
     public bool RequiresApproval { get; set; }
+    public bool? AttachedFile { get; set; }
     public int MaxDays { get; set; }
 }
