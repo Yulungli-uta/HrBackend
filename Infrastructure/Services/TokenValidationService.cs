@@ -117,7 +117,7 @@ public class TokenValidationService : ITokenValidationService
                 $"{_authServiceUrl}/api/auth/validate-token",
                 request
             );
-            _logger.LogInformation($"***********************respuesta del consumo PostAsJsonAsync {response.StatusCode}, body: {await response.Content.ReadAsStringAsync()}");
+            //_logger.LogInformation($"***********************respuesta del consumo PostAsJsonAsync {response.StatusCode}, body: {await response.Content.ReadAsStringAsync()}");
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync();
@@ -133,11 +133,11 @@ public class TokenValidationService : ITokenValidationService
 
                 if (apiResponse?.Success == true && apiResponse.Data != null)
                 {
-                    _logger.LogInformation($"**********paso la validacion del apiResponse {apiResponse} ");
-                    _logger.LogInformation("**********paso la validacion del apiResponse {apiResponse}", JsonSerializer.Serialize(apiResponse, new JsonSerializerOptions
-                    {
-                        WriteIndented = true
-                    }));
+                    //_logger.LogInformation($"**********paso la validacion del apiResponse {apiResponse} ");
+                    //_logger.LogInformation("**********paso la validacion del apiResponse {apiResponse}", JsonSerializer.Serialize(apiResponse, new JsonSerializerOptions
+                    //{
+                    //    WriteIndented = true
+                    //}));
                     var result = new TokenValidationResult
                     {
                         IsValid = apiResponse.Data.IsValid,

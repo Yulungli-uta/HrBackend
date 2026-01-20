@@ -1,41 +1,37 @@
-﻿using Quartz;
+﻿using Microsoft.Extensions.Logging;
+using Quartz;
 using WsUtaSystem.Application.Interfaces.Services;
 
-namespace WsUtaSystem.Infrastructure.Jobs
+namespace WsUtaSystem.Infrastructure.Jobs;
+
+[DisallowConcurrentExecution]
+public sealed class DailyOvertimeRecoveryCalculation : BaseJob
 {
-    [DisallowConcurrentExecution]
-    public class DailyOvertimeRecoveryCalculation : BaseJob
+    private readonly IAttendanceCalculationService _attendanceService;
+
+    public DailyOvertimeRecoveryCalculation(
+        IAttendanceCalculationService attendanceService,
+        ILogger<DailyOvertimeRecoveryCalculation> logger)
+        : base(logger)
     {
-        private readonly IAttendanceCalculationService _attendanceService;
-        private readonly ILogger<DailyNightMinutesCalculationJob> _logger;
+        _attendanceService = attendanceService;
+    }
 
-        public DailyOvertimeRecoveryCalculation(
-            IAttendanceCalculationService attendanceService,
-            ILogger<DailyNightMinutesCalculationJob> logger)
-        {
-            _attendanceService = attendanceService;
-            _logger = logger;
-        }
+    protected override async Task ExecuteJobAsync(
+        IJobExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        var now = GetCurrentDateTime(context);
+        var targetDate = now.Date.AddDays(-1);
 
-        public override async Task Execute(IJobExecutionContext context)
-        {
-            try
-            {
-                var now = GetCurrentDateTime(context);
-                var yesterday = now.Date.AddDays(-1);
+        Logger.LogInformation(
+            "Daily overtime recovery targetDate={TargetDate:yyyy-MM-dd}",
+            targetDate);
 
-                _logger.LogInformation("Starting ProcessApplyOvertimeRecovery calculation for date: {Date}", yesterday);
-
-                // Calcular minutos nocturnos del día anterior
-                await _attendanceService.ProcessApplyOvertimeRecovery(yesterday, yesterday, null, context.CancellationToken);
-
-                _logger.LogInformation("Night ProcessApplyOvertimeRecovery calculation completed successfully for date: {Date}", yesterday);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error executing ProcessApplyOvertimeRecovery job");
-                throw;
-            }
-        }
+        await _attendanceService.ProcessApplyOvertimeRecovery(
+            targetDate,
+            targetDate,
+            null,
+            cancellationToken);
     }
 }

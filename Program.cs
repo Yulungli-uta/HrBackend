@@ -18,6 +18,7 @@ using WsUtaSystem.Filters;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Infrastructure.DependencyInjection;
 using WsUtaSystem.Infrastructure.Filters;
+using WsUtaSystem.Infrastructure.Interceptors;
 using WsUtaSystem.Infrastructure.Jobs;
 using WsUtaSystem.Infrastructure.Repositories;
 using WsUtaSystem.Middleware;
@@ -33,6 +34,13 @@ var origins = cors.GetSection("Origins").Get<string[]>() ?? Array.Empty<string>(
 var allowCred = bool.TryParse(cors["AllowCredentials"], out var ac) && ac;
 var headers = cors.GetSection("AllowedHeaders").Get<string[]>() ?? new[] { "content-type", "authorization" };
 var methods = cors.GetSection("AllowedMethods").Get<string[]>() ?? new[] { "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" };
+
+// =========================================================
+// Log Directory (configuracion del directorio del log )
+// =========================================================
+//var appBase = AppContext.BaseDirectory;
+//var logDir = Path.Combine(appBase, "log");
+//Directory.CreateDirectory(logDir);
 
 builder.Services.AddCors(opt =>
 {
@@ -387,11 +395,15 @@ builder.Services.AddScoped<
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<AuditSaveChangesInterceptor>();
+builder.Services.AddScoped<SqlErrorLoggingInterceptor>();
 
 builder.Services.AddDbContext<WsUtaSystem.Data.AppDbContext>((sp, o) =>
 {
     o.UseSqlServer(cs, sql => sql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null));
-    o.AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>());
+    o.AddInterceptors(
+        sp.GetRequiredService<AuditSaveChangesInterceptor>(),
+        sp.GetRequiredService<SqlErrorLoggingInterceptor>()
+    );
 });
 
 // =========================================================

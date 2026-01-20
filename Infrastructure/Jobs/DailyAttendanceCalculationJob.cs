@@ -1,47 +1,30 @@
+using Microsoft.Extensions.Logging;
 using Quartz;
 using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Jobs;
 
-/// <summary>
-/// Job que ejecuta el cálculo de asistencia diariamente
-/// Se ejecuta automáticamente cada día a las 2:00 AM
-/// Calcula la asistencia del día anterior
-/// </summary>
 [DisallowConcurrentExecution]
-public class DailyAttendanceCalculationJob : BaseJob
+public sealed class DailyAttendanceCalculationJob : BaseJob
 {
     private readonly IAttendanceCalculationService _attendanceService;
-    private readonly ILogger<DailyAttendanceCalculationJob> _logger;
 
     public DailyAttendanceCalculationJob(
         IAttendanceCalculationService attendanceService,
         ILogger<DailyAttendanceCalculationJob> logger)
+        : base(logger)
     {
         _attendanceService = attendanceService;
-        _logger = logger;
     }
 
-    public override async Task Execute(IJobExecutionContext context)
+    protected override async Task ExecuteJobAsync(IJobExecutionContext context, CancellationToken cancellationToken)
     {
-        try
-        {
-            var now = GetCurrentDateTime(context);
-            var yesterday = now.Date.AddDays(-1);
+        var now = GetCurrentDateTime(context);
+        var targetDate = now.Date.AddDays(-1);
 
-            _logger.LogInformation("Starting daily attendance calculation for date: {Date}", yesterday);
+        // Nota: el cron real está a la 01:00 (QuartzConfiguration), no 02:00. :contentReference[oaicite:1]{index=1}
+        Logger.LogInformation("Daily attendance calculation targetDate={TargetDate:yyyy-MM-dd}", targetDate);
 
-            // Calcular asistencia del día anterior
-            //await _attendanceService.CalculateRangeAsync(yesterday, yesterday, null, context.CancellationToken);
-            await _attendanceService.ProcessAttendanceRange(yesterday, yesterday, context.CancellationToken);
-            
-            _logger.LogInformation("Daily attendance calculation completed successfully for date: {Date}", yesterday);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error executing daily attendance calculation job");
-            throw;
-        }
+        await _attendanceService.ProcessAttendanceRange(targetDate, targetDate, cancellationToken);
     }
 }
-
