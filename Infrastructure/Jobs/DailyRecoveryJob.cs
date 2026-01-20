@@ -1,46 +1,37 @@
+using Microsoft.Extensions.Logging;
 using Quartz;
 using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Jobs;
 
-/// <summary>
-/// Job que aplica recuperaciones de tiempo diariamente
-/// Se ejecuta automáticamente cada día a las 5:00 AM
-/// Aplica recuperaciones del día anterior
-/// </summary>
 [DisallowConcurrentExecution]
-public class DailyRecoveryJob : BaseJob
+public sealed class DailyRecoveryJob : BaseJob
 {
     private readonly IRecoveryService _recoveryService;
-    private readonly ILogger<DailyRecoveryJob> _logger;
 
     public DailyRecoveryJob(
         IRecoveryService recoveryService,
         ILogger<DailyRecoveryJob> logger)
+        : base(logger)
     {
         _recoveryService = recoveryService;
-        _logger = logger;
     }
 
-    public override async Task Execute(IJobExecutionContext context)
+    protected override async Task ExecuteJobAsync(
+        IJobExecutionContext context,
+        CancellationToken cancellationToken)
     {
-        try
-        {
-            var now = GetCurrentDateTime(context);
-            var yesterday = now.Date.AddDays(-1);
+        var now = GetCurrentDateTime(context);
+        var targetDate = now.Date.AddDays(-1);
 
-            _logger.LogInformation("Starting recovery application for date: {Date}", yesterday);
+        Logger.LogInformation(
+            "Daily recovery application targetDate={TargetDate:yyyy-MM-dd}",
+            targetDate);
 
-            // Aplicar recuperaciones del día anterior
-            await _recoveryService.ApplyRecoveryAsync(yesterday, yesterday, null, context.CancellationToken);
-
-            _logger.LogInformation("Recovery applied successfully for date: {Date}", yesterday);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error executing recovery job");
-            throw;
-        }
+        await _recoveryService.ApplyRecoveryAsync(
+            targetDate,
+            targetDate,
+            null,
+            cancellationToken);
     }
 }
-

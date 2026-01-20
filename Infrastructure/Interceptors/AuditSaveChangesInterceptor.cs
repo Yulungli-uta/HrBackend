@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Interfaces.Auditable;
 
-namespace WsUtaSystem.Application.Services
+namespace WsUtaSystem.Infrastructure.Interceptors
 {
     /// <summary>
     /// Interceptor que asigna automáticamente campos de auditoría 
@@ -53,10 +53,10 @@ namespace WsUtaSystem.Application.Services
             var now = DateTime.Now;
             var employeeId = _currentUser.EmployeeId.Value;
 
-            _logger.LogInformation(
-                "Aplicando auditoría para EmployeeId {EmployeeId} a las {Timestamp}",
-                employeeId,
-                now);
+            //_logger.LogInformation(
+            //    "Aplicando auditoría para EmployeeId {EmployeeId} a las {Timestamp}",
+            //    employeeId,
+            //    now);
 
             // Procesar entidades con auditoría de CREACIÓN
             ProcessCreationAudit(context, now, employeeId);
@@ -79,10 +79,10 @@ namespace WsUtaSystem.Application.Services
                 entry.Entity.CreatedAt = timestamp;
                 entry.Entity.CreatedBy = employeeId;
 
-                _logger.LogDebug(
-                    "Auditoría de creación aplicada: {EntityType} - CreatedBy: {EmployeeId}",
-                    entry.Entity.GetType().Name,
-                    employeeId);
+                //_logger.LogDebug(
+                //    "Auditoría de creación aplicada: {EntityType} - CreatedBy: {EmployeeId}",
+                //    entry.Entity.GetType().Name,
+                //    employeeId);
             }
         }
 
@@ -108,10 +108,10 @@ namespace WsUtaSystem.Application.Services
                     entry.Property(nameof(ICreationAuditable.CreatedBy)).IsModified = false;
                 }
 
-                _logger.LogDebug(
-                    "Auditoría de modificación aplicada: {EntityType} - UpdatedBy: {EmployeeId}",
-                    entry.Entity.GetType().Name,
-                    employeeId);
+                //_logger.LogDebug(
+                //    "Auditoría de modificación aplicada: {EntityType} - UpdatedBy: {EmployeeId}",
+                //    entry.Entity.GetType().Name,
+                //    employeeId);
             }
         }
     }

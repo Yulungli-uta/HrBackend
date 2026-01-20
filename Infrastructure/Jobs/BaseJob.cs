@@ -1,13 +1,18 @@
+using Microsoft.Extensions.Logging;
 using Quartz;
+using System.Diagnostics;
 
 namespace WsUtaSystem.Infrastructure.Jobs;
 
-/// <summary>
-/// Clase base para todos los Jobs de Quartz.NET
-/// Proporciona funcionalidad común para obtener la zona horaria y fecha actual
-/// </summary>
 public abstract class BaseJob : IJob
 {
+    protected ILogger Logger { get; }
+
+    protected BaseJob(ILogger logger)
+    {
+        Logger = logger;
+    }
+
     protected TimeZoneInfo GetTimeZone(IJobExecutionContext context)
     {
         var tzId = context.MergedJobDataMap.GetString("TimeZone") ?? "America/Guayaquil";
@@ -20,6 +25,48 @@ public abstract class BaseJob : IJob
         return TimeZoneInfo.ConvertTime(DateTime.UtcNow, tz);
     }
 
-    public abstract Task Execute(IJobExecutionContext context);
-}
+    public async Task Execute(IJobExecutionContext context)
+    {
+        var runId = Guid.NewGuid().ToString("N");
+        var sw = Stopwatch.StartNew();
 
+        Logger.LogInformation(
+            "JOB_START runId={RunId} jobKey={JobKey} triggerKey={TriggerKey} fireInstanceId={FireInstanceId} scheduledUtc={ScheduledUtc} firedUtc={FiredUtc}",
+            runId,
+            context.JobDetail.Key.ToString(),
+            context.Trigger.Key.ToString(),
+            context.FireInstanceId,
+            context.ScheduledFireTimeUtc,
+            context.FireTimeUtc
+        );
+
+        try
+        {
+            await ExecuteJobAsync(context, context.CancellationToken);
+
+            sw.Stop();
+            Logger.LogInformation(
+                "JOB_OK runId={RunId} jobKey={JobKey} durationMs={DurationMs}",
+                runId,
+                context.JobDetail.Key.ToString(),
+                sw.ElapsedMilliseconds
+            );
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            Logger.LogError(
+                ex,
+                "JOB_FAIL runId={RunId} jobKey={JobKey} durationMs={DurationMs}",
+                runId,
+                context.JobDetail.Key.ToString(),
+                sw.ElapsedMilliseconds
+            );
+            throw;
+        }
+    }
+
+    protected abstract Task ExecuteJobAsync(
+        IJobExecutionContext context,
+        CancellationToken cancellationToken);
+}

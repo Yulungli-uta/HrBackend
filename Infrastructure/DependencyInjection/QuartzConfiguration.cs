@@ -32,7 +32,7 @@ public static class QuartzConfiguration
                 .WithIdentity("DailyAttendanceCalculationTrigger")
                 .WithCronSchedule("0 0 1 * * ?", x => x
                     .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-                .WithDescription("Ejecuta el cálculo de asistencia diariamente a las 2:00 AM")
+                .WithDescription("Ejecuta el cálculo de asistencia diariamente a las 1:00 AM")
                 .UsingJobData("TimeZone", timeZone));
 
             //// 2. Cálculo de minutos nocturnos - 3:00 AM
