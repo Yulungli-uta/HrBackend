@@ -9,10 +9,9 @@ public class PermissionsUpdateDto
     public DateTime EndDate { get; set; }
     public bool ChargedToVacation { get; set; }
     public decimal? HourTaken { get; set; }
-    public int ApprovedBy { get; set; }
+    public int? ApprovedBy { get; set; }
     public DateTime? ApprovedAt { get; set; }
-    public string Justification { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public string Status { get; set; }
+    public string Justification { get; set; } = "";
+    public string Status { get; set; } = "Pending";
     public int? VacationId { get; set; }
 }

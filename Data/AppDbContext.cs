@@ -92,8 +92,10 @@ public class AppDbContext : DbContext
     public DbSet<VwLeaveWindows> VwLeaveWindows { get; set; }
     public DbSet<VwAttendanceDay> VwAttendanceDay { get; set; }
     public DbSet<KnowledgeArea> KnowledgeAreas => Set<KnowledgeArea>();
-
     public DbSet<TimeBalances> TimeBalances => Set<TimeBalances>();
+    public DbSet<EmailLayout> EmailLayouts => Set<EmailLayout>();
+    public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
+    public DbSet<EmailLogAttachment> EmailLogAttachments => Set<EmailLogAttachment>();
 
     // Vistas de Permisos y Menús
     public DbSet<VwUserRole> VwUserRoles { get; set; }
@@ -227,7 +229,7 @@ public class AppDbContext : DbContext
                 // tb.HasTrigger("trg_Punch_Otros"); // si tienes más
             });
             e.HasKey(x => x.PunchId);
-            e.Property(x => x.PunchId).HasColumnName("PunchID").UseIdentityColumn();
+            e.Property(x => x.PunchId).HasColumnName("PunchID").ValueGeneratedOnAdd().UseIdentityColumn();
             e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
             e.Property(x => x.PunchTime).HasColumnType("datetime2");            
             e.Property(x => x.PunchType).HasMaxLength(10);
@@ -539,7 +541,8 @@ public class AppDbContext : DbContext
 
         m.Entity<VwEmployeeDetails>(e =>
         {            
-            e.ToView("vw_EmployeeDetails", "HR");
+            e.ToView("vw_EmployeeDetails", HR);
+            e.HasNoKey(); // Por ser vista
             e.Property(e => e.EmployeeID).HasColumnName("EmployeeID");
             e.Property(e => e.FirstName).HasColumnName("FirstName");
             e.Property(e => e.LastName).HasColumnName("LastName");
@@ -553,7 +556,7 @@ public class AppDbContext : DbContext
             e.Property(e => e.Department).HasColumnName("Department");
             e.Property(e => e.BaseSalary).HasColumnName("BaseSalary");
             e.Property(e => e.HireDate).HasColumnName("HireDate");
-            e.HasNoKey(); // Por ser vista
+            
         });
 
         m.Entity<Job>(e => {
@@ -646,8 +649,8 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.RequestId);
             e.Property(x => x.RequestId).HasColumnName("RequestID");
             e.Property(x => x.CreatedBy).HasColumnName("CreatedBy");
-            e.Property(x => x.UpdatedAt).HasColumnName("UpdateAt");
-            e.Property(x => x.UpdatedBy).HasColumnName("UpdateBy");
+            e.Property(x => x.UpdatedAt).HasColumnName("UpdatedAt");
+            e.Property(x => x.UpdatedBy).HasColumnName("UpdatedBy");
         });
         m.Entity<FinancialCertification>(e => {
             e.ToTable("tbl_FinancialCertification", HR);
@@ -758,6 +761,139 @@ public class AppDbContext : DbContext
             e.Property(x => x.Id).HasColumnName("id");
             e.Property(x => x.ParentId).HasColumnName("parent_id");            
         });
+
+        m.Entity<EmailLayout>(e =>
+        {
+            e.ToTable("tbl_EmailLayouts", HR);
+
+            e.HasKey(x => x.EmailLayoutID);
+
+            e.Property(x => x.EmailLayoutID)
+                .HasColumnName("EmailLayoutID")
+                .ValueGeneratedOnAdd();
+
+            e.Property(x => x.Slug)
+                .HasMaxLength(150)
+                .IsRequired();
+
+            e.HasIndex(x => x.Slug)
+                .IsUnique()
+                .HasDatabaseName("UX_tbl_EmailLayouts_Slug");
+
+            e.Property(x => x.HeaderHtml).HasColumnType("nvarchar(max)");
+            e.Property(x => x.FooterHtml).HasColumnType("nvarchar(max)");
+
+            e.Property(x => x.IsActive)
+                .HasDefaultValue(true);
+
+            e.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("GETDATE()")
+                .ValueGeneratedOnAdd();
+
+            e.Property(x => x.CreatedBy);
+
+            e.Property(x => x.UpdatedAt);
+            e.Property(x => x.UpdatedBy);
+        });
+
+        // EmailLogs
+        m.Entity<EmailLog>(e =>
+        {
+            e.ToTable("tbl_EmailLogs", HR);
+
+            e.HasKey(x => x.EmailLogID);
+
+            e.Property(x => x.EmailLogID)
+                .HasColumnName("EmailLogID")
+                .ValueGeneratedOnAdd();
+
+            e.Property(x => x.Recipient)
+                .HasMaxLength(320)
+                .IsRequired();
+
+            e.Property(x => x.Subject)
+                .HasMaxLength(255)
+                .IsRequired();
+
+            e.Property(x => x.BodyRendered)
+                .HasColumnType("nvarchar(max)")
+                .IsRequired();
+
+            e.Property(x => x.Status)
+                .HasMaxLength(20)
+                .IsRequired();
+
+            e.Property(x => x.SentAt)
+                .HasDefaultValueSql("GETDATE()")
+                .ValueGeneratedOnAdd();
+
+            e.Property(x => x.ErrorMessage)
+                .HasColumnType("nvarchar(max)");
+
+            e.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("GETDATE()")
+                .ValueGeneratedOnAdd();
+
+            e.Property(x => x.CreatedBy);
+
+            e.HasIndex(x => x.SentAt)
+                .HasDatabaseName("IX_tbl_EmailLogs_SentAt");
+
+            e.HasIndex(x => new { x.Recipient, x.SentAt })
+                .HasDatabaseName("IX_tbl_EmailLogs_Recipient_SentAt");
+
+            e.HasMany(x => x.Attachments)
+                .WithOne(a => a.EmailLog!)
+                .HasForeignKey(a => a.EmailLogID)
+                .HasConstraintName("FK_tbl_EmailLogAttachments_tbl_EmailLogs")
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // EmailLogAttachments
+        m.Entity<EmailLogAttachment>(e =>
+        {
+            e.ToTable("tbl_EmailLogAttachments", HR);
+
+            e.HasKey(x => x.EmailLogAttachmentID);
+
+            e.Property(x => x.EmailLogAttachmentID)
+                .HasColumnName("EmailLogAttachmentID")
+                .ValueGeneratedOnAdd();
+
+            e.Property(x => x.EmailLogID)
+                .IsRequired();
+
+            e.Property(x => x.StoredFileGuid)
+                .IsRequired();
+
+            e.Property(x => x.FileName)
+                .HasMaxLength(260);
+
+            e.Property(x => x.ContentType)
+                .HasMaxLength(100);
+
+            e.Property(x => x.CreatedAt)
+                .HasDefaultValueSql("GETDATE()")
+                .ValueGeneratedOnAdd();
+
+            e.Property(x => x.CreatedBy);
+
+            e.HasIndex(x => new { x.EmailLogID, x.StoredFileGuid })
+                .IsUnique()
+                .HasDatabaseName("UX_tbl_EmailLogAttachments_EmailLogID_StoredFileGuid");
+
+            e.HasIndex(x => x.EmailLogID)
+                .HasDatabaseName("IX_tbl_EmailLogAttachments_EmailLogID");
+
+            // FK a HR.TBL_StoredFile(FileGuid) (tu tabla existente)
+            e.HasOne(a => a.StoredFile)
+                .WithMany() // no necesitas navegación inversa
+                .HasForeignKey(a => a.StoredFileGuid)
+                .HasPrincipalKey(sf => sf.FileGuid)
+                .HasConstraintName("FK_tbl_EmailLogAttachments_TBL_StoredFile_FileGuid")
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         m.Entity<VwEmployeeScheduleAtDate>().HasNoKey().ToView("vw_EmployeeScheduleAtDate", "HR");
         m.Entity<VwPunchDay>().HasNoKey().ToView("vw_PunchDay", "HR");
         m.Entity<VwLeaveWindows>().HasNoKey().ToView("vw_LeaveWindows", "HR");

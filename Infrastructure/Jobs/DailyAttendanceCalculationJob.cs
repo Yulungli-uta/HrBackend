@@ -8,13 +8,15 @@ namespace WsUtaSystem.Infrastructure.Jobs;
 public sealed class DailyAttendanceCalculationJob : BaseJob
 {
     private readonly IAttendanceCalculationService _attendanceService;
-
+    private readonly ILogger<DailyAttendanceCalculationJob> _logger;
     public DailyAttendanceCalculationJob(
         IAttendanceCalculationService attendanceService,
-        ILogger<DailyAttendanceCalculationJob> logger)
+        ILogger<DailyAttendanceCalculationJob> logger
+        )
         : base(logger)
     {
         _attendanceService = attendanceService;
+        _logger = logger;
     }
 
     protected override async Task ExecuteJobAsync(IJobExecutionContext context, CancellationToken cancellationToken)
@@ -23,7 +25,7 @@ public sealed class DailyAttendanceCalculationJob : BaseJob
         var targetDate = now.Date.AddDays(-1);
 
         // Nota: el cron real está a la 01:00 (QuartzConfiguration), no 02:00. :contentReference[oaicite:1]{index=1}
-        Logger.LogInformation("Daily attendance calculation targetDate={TargetDate:yyyy-MM-dd}", targetDate);
+        _logger.LogInformation("Daily attendance calculation targetDate={TargetDate:yyyy-MM-dd}", targetDate);
 
         await _attendanceService.ProcessAttendanceRange(targetDate, targetDate, cancellationToken);
     }

@@ -73,7 +73,8 @@ public class JustificationsController : ControllerBase
     public async Task<IActionResult> Create([FromBody] PunchJustificationsCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<PunchJustifications>(dto);
-        var created = await _svc.CreateAsync(entityObj, ct);
+        //var created = await _svc.CreateAsync(entityObj, ct);
+        var created = await _svc.CreateWithNotifyAsync(entityObj, ct);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<PunchJustificationsDto>(created));
     }
@@ -96,12 +97,13 @@ public class JustificationsController : ControllerBase
             //Console.WriteLine($"Found entity, mapping updates...");
 
             // 2. Mapear el DTO a la entidad existente (no crear nueva)
-            _mapper.Map(dto, existingEntity);
+            var entity = _mapper.Map<PunchJustifications>(dto);
 
             //Console.WriteLine($"Mapped updates to existing entity");
 
             // 3. Actualizar usando la entidad existente
-            await _svc.UpdateAsync(id, existingEntity, ct);
+            //await _svc.UpdateAsync(id, existingEntity, ct);
+            await _svc.UpdateWithNotifyAsync(id, entity, ct);
 
             //Console.WriteLine($"Update completed successfully");
             return NoContent();

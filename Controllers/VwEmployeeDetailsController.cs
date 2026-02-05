@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Serilog;
+using System.Diagnostics;
 using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Controllers
@@ -10,10 +11,12 @@ namespace WsUtaSystem.Controllers
     public class VwEmployeeDetailsController : ControllerBase
     {
         private readonly IvwEmployeeDetailsService _employeeDetailsService;
+        private readonly ILogger<VwEmployeeDetailsController> _logger;
 
-        public VwEmployeeDetailsController(IvwEmployeeDetailsService employeeDetailsService)
+        public VwEmployeeDetailsController(IvwEmployeeDetailsService employeeDetailsService, ILogger<VwEmployeeDetailsController> logger)
         {
             _employeeDetailsService = employeeDetailsService;
+            _logger = logger;
         }
 
         [HttpGet]
@@ -34,8 +37,35 @@ namespace WsUtaSystem.Controllers
         [HttpGet("email/{email}")]
         public async Task<IActionResult> GetByEmail(string email, CancellationToken ct = default)
         {
-            var employee = await _employeeDetailsService.GetByEmailAsync(email, ct);
-            return employee != null ? Ok(employee) : NotFound();
+            //var employee = await _employeeDetailsService.GetByEmailAsync(email, ct);
+            //return employee != null ? Ok(employee) : NotFound();
+
+            var sw = Stopwatch.StartNew();
+            //_logger.LogInformation("[EMP-CTRL] START GetByEmail email={Email} trace={TraceId}",
+            //    email, HttpContext.TraceIdentifier);
+
+            try
+            {
+                //_logger.LogInformation("CTRL BEFORE service");
+                var employee = await _employeeDetailsService.GetByEmailAsync(email, ct);
+
+                //_logger.LogInformation("[EMP-CTRL] END GetByEmail found={Found} status={Status} elapsed={Elapsed}ms trace={TraceId}",
+                //    employee != null, employee != null ? 200 : 404, sw.ElapsedMilliseconds, HttpContext.TraceIdentifier);
+
+                return employee != null ? Ok(employee) : NotFound();
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                _logger.LogWarning("[EMP-CTRL] CANCELED GetByEmail email={Email} elapsed={Elapsed}ms trace={TraceId}",
+                    email, sw.ElapsedMilliseconds, HttpContext.TraceIdentifier);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[EMP-CTRL] ERROR GetByEmail email={Email} elapsed={Elapsed}ms trace={TraceId}",
+                    email, sw.ElapsedMilliseconds, HttpContext.TraceIdentifier);
+                throw;
+            }
         }
 
         [HttpGet("department/{departmentName}")]

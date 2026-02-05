@@ -1,258 +1,220 @@
-﻿using WsUtaSystem.Application.Interfaces.Repositories;
+﻿// VwEmployeeDetailsService.cs
+using System.Diagnostics;
+using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Models.Views;
 
-namespace WsUtaSystem.Application.Services
+namespace WsUtaSystem.Application.Services;
+
+public class VwEmployeeDetailsService : IvwEmployeeDetailsService
 {
-    public class VwEmployeeDetailsService : IvwEmployeeDetailsService
+    private readonly IvwEmployeeDetailsRepository _repository;
+    private readonly ILogger<VwEmployeeDetailsService> _logger;
+
+    public VwEmployeeDetailsService(
+        IvwEmployeeDetailsRepository repository,
+        ILogger<VwEmployeeDetailsService> logger)
     {
-        private readonly IvwEmployeeDetailsRepository _repository;
-        private readonly ILogger<VwEmployeeDetailsService> _logger;
+        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
-        public VwEmployeeDetailsService(IvwEmployeeDetailsRepository repository,
-             ILogger<VwEmployeeDetailsService> logger)
+    public async Task<VwEmployeeDetails?> GetByEmailAsync(string email, CancellationToken ct = default)
+    {
+        var sw = Stopwatch.StartNew();
+        var normalized = (email ?? string.Empty).Trim();
+
+        try
         {
-            _repository = repository;
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                //_logger.LogWarning("[EMP-SVC] GetByEmailAsync called with empty email");
+                return null;
+            }
+
+            //_logger.LogInformation("[EMP-SVC] GetByEmailAsync START email={Email}", normalized);
+
+            var result = await _repository.GetByEmailAsync(normalized, ct);
+
+            //if (result == null)
+            //{
+            //    _logger.LogInformation("[EMP-SVC] GetByEmailAsync NOT FOUND email={Email} in {Elapsed}ms",
+            //        normalized, sw.ElapsedMilliseconds);
+            //}
+            //else
+            //{
+            //    _logger.LogInformation("[EMP-SVC] GetByEmailAsync FOUND employeeId={EmployeeId} in {Elapsed}ms",
+            //        result.EmployeeID, sw.ElapsedMilliseconds);
+            //}
+            _logger.LogInformation("");
+            return result;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            _logger.LogWarning("[EMP-SVC] GetByEmailAsync CANCELED email={Email} after {Elapsed}ms",
+                normalized, sw.ElapsedMilliseconds);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[EMP-SVC] GetByEmailAsync ERROR email={Email} after {Elapsed}ms",
+                normalized, sw.ElapsedMilliseconds);
+            throw;
         }
 
-        public async Task<VwEmployeeDetails?> GetByEmailAsync(string email, CancellationToken ct = default)
+
+    }
+
+    public async Task<VwEmployeeDetails?> GetEmployeeDetailsAsync(int employeeId, CancellationToken ct = default)
+    {
+        var sw = Stopwatch.StartNew();
+
+        try
         {
-            try
+            //_logger.LogInformation("[EMP-SVC] GetEmployeeDetailsAsync START employeeId={EmployeeId}", employeeId);
+
+            if (employeeId <= 0)
             {
-                _logger.LogInformation("***************Getting employee details for Email: {email}", email);
-
-                if (email.Length <= 0)
-                {
-                    _logger.LogWarning("Invalid email provided: {email}", email);
-                    return null;
-                }
-
-                var result = await _repository.GetByEmailAsync(email, ct);
-
-                if (result == null)
-                {
-                    _logger.LogInformation("Employee not found with ID: {EmployeeId}", email);
-                }
-
-                return result;
+                //_logger.LogWarning("[EMP-SVC] Invalid employeeId={EmployeeId}", employeeId);
+                return null;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting employee details for ID: {EmployeeId}", email);
-                throw;
-            }
+
+            var result = await _repository.GetByIdAsync(employeeId, ct);
+
+            //if (result == null)
+            //{
+            //    _logger.LogInformation("[EMP-SVC] GetEmployeeDetailsAsync NOT FOUND employeeId={EmployeeId} in {Elapsed}ms",
+            //        employeeId, sw.ElapsedMilliseconds);
+            //}
+            //else
+            //{
+            //    _logger.LogInformation("[EMP-SVC] GetEmployeeDetailsAsync FOUND employeeId={EmployeeId} in {Elapsed}ms",
+            //        employeeId, sw.ElapsedMilliseconds);
+            //}
+
+            return result;
         }
-
-        //public VwEmployeeDetailsService(
-        //    IvwEmployeeDetailsService repository,
-        //    ILogger<VwEmployeeDetailsService> logger)
-        //{
-        //    _repository = repository ?? throw new ArgumentNullException(nameof(repository));
-        //    _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        //}
-
-        public async Task<VwEmployeeDetails?> GetEmployeeDetailsAsync(
-            int employeeId,
-            CancellationToken ct = default)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            try
-            {
-                _logger.LogInformation("Getting employee details for ID: {EmployeeId}", employeeId);
-
-                if (employeeId <= 0)
-                {
-                    _logger.LogWarning("Invalid employee ID provided: {EmployeeId}", employeeId);
-                    return null;
-                }
-
-                var result = await _repository.GetByIdAsync(employeeId, ct);
-
-                if (result == null)
-                {
-                    _logger.LogInformation("Employee not found with ID: {EmployeeId}", employeeId);
-                }
-
-                return result;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting employee details for ID: {EmployeeId}", employeeId);
-                throw;
-            }
+            _logger.LogWarning("[EMP-SVC] GetEmployeeDetailsAsync CANCELED employeeId={EmployeeId} after {Elapsed}ms",
+                employeeId, sw.ElapsedMilliseconds);
+            throw;
         }
-
-        //public async Task<PagedResultDto<EmployeeDetailsDto>> GetEmployeeDetailsPagedAsync(
-        //    EmployeeDetailsFilterDto filter,
-        //    CancellationToken ct = default)
-        //{
-        //    try
-        //    {
-        //        _logger.LogInformation("Getting paged employee details with filter");
-
-        //        ValidateFilter(filter);
-
-        //        return await _repository.GetPagedAsync(filter, ct);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "Error getting paged employee details");
-        //        throw;
-        //    }
-        //}
-
-        public async Task<IEnumerable<VwEmployeeDetails>> GetAllEmployeeDetailsAsync(
-            CancellationToken ct = default)
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogInformation("Getting all employee details");
-                return await _repository.GetAllAsync(ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting all employee details");
-                throw;
-            }
+            _logger.LogError(ex, "[EMP-SVC] GetEmployeeDetailsAsync ERROR employeeId={EmployeeId} after {Elapsed}ms",
+                employeeId, sw.ElapsedMilliseconds);
+            throw;
         }
+    }
 
-        public async Task<IEnumerable<VwEmployeeDetails>> GetEmployeesByDepartmentAsync(
-            string departmentName,
-            CancellationToken ct = default)
+    public async Task<IEnumerable<VwEmployeeDetails>> GetAllEmployeeDetailsAsync(CancellationToken ct = default)
+    {
+        try
         {
-            try
-            {
-                _logger.LogInformation("Getting employees by department: {Department}", departmentName);
-
-                if (string.IsNullOrWhiteSpace(departmentName))
-                {
-                    throw new ArgumentException("Department name cannot be null or empty", nameof(departmentName));
-                }
-
-                return await _repository.GetByDepartmentAsync(departmentName, ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting employees by department: {Department}", departmentName);
-                throw;
-            }
+            //_logger.LogInformation("[EMP-SVC] GetAllEmployeeDetailsAsync");
+            return await _repository.GetAllAsync(ct);
         }
-
-        public async Task<IEnumerable<VwEmployeeDetails>> GetEmployeesByFacultyAsync(
-            string facultyName,
-            CancellationToken ct = default)
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogInformation("Getting employees by faculty: {Faculty}", facultyName);
-
-                if (string.IsNullOrWhiteSpace(facultyName))
-                {
-                    throw new ArgumentException("Faculty name cannot be null or empty", nameof(facultyName));
-                }
-
-                return await _repository.GetByFacultyAsync(facultyName, ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting employees by faculty: {Faculty}", facultyName);
-                throw;
-            }
+            _logger.LogError(ex, "[EMP-SVC] Error getting all employee details");
+            throw;
         }
+    }
 
-        public async Task<IEnumerable<VwEmployeeDetails>> GetEmployeesByTypeAsync(
-            int employeeType,
-            CancellationToken ct = default)
+    public async Task<IEnumerable<VwEmployeeDetails>> GetEmployeesByDepartmentAsync(string departmentName, CancellationToken ct = default)
+    {
+        try
         {
-            try
-            {
-                _logger.LogInformation("Getting employees by type: {EmployeeType}", employeeType);
+            //_logger.LogInformation("[EMP-SVC] GetEmployeesByDepartmentAsync dept={Department}", departmentName);
 
-                //if (string.IsNullOrWhiteSpace(employeeType))
-                if (employeeType <= 0)
-                {
-                    throw new ArgumentException("Employee type cannot be null or empty", nameof(employeeType));
-                }
+            if (string.IsNullOrWhiteSpace(departmentName))
+                throw new ArgumentException("Department name cannot be null or empty", nameof(departmentName));
 
-                return await _repository.GetByEmployeeTypeAsync(employeeType, ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting employees by type: {EmployeeType}", employeeType);
-                throw;
-            }
+            return await _repository.GetByDepartmentAsync(departmentName, ct);
         }
-
-        public async Task<IEnumerable<int>> GetAvailableEmployeeTypesAsync(
-            CancellationToken ct = default)
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogInformation("Getting available employee types");
-                return await _repository.GetEmployeeTypesAsync(ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting available employee types");
-                throw;
-            }
+            _logger.LogError(ex, "[EMP-SVC] Error getting employees by department: {Department}", departmentName);
+            throw;
         }
+    }
 
-        public async Task<IEnumerable<string>> GetAvailableDepartmentsAsync(
-            CancellationToken ct = default)
+    public async Task<IEnumerable<VwEmployeeDetails>> GetEmployeesByFacultyAsync(string facultyName, CancellationToken ct = default)
+    {
+        try
         {
-            try
-            {
-                _logger.LogInformation("Getting available departments");
-                return await _repository.GetDepartmentsAsync(ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting available departments");
-                throw;
-            }
-        }
+            //_logger.LogInformation("[EMP-SVC] GetEmployeesByFacultyAsync faculty={Faculty}", facultyName);
 
-        public async Task<IEnumerable<string>> GetAvailableFacultiesAsync(
-            CancellationToken ct = default)
+            if (string.IsNullOrWhiteSpace(facultyName))
+                throw new ArgumentException("Faculty name cannot be null or empty", nameof(facultyName));
+
+            return await _repository.GetByFacultyAsync(facultyName, ct);
+        }
+        catch (Exception ex)
         {
-            try
-            {
-                _logger.LogInformation("Getting available faculties");
-                return await _repository.GetFacultiesAsync(ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting available faculties");
-                throw;
-            }
+            _logger.LogError(ex, "[EMP-SVC] Error getting employees by faculty: {Faculty}", facultyName);
+            throw;
         }
+    }
 
-     
+    public async Task<IEnumerable<VwEmployeeDetails>> GetEmployeesByTypeAsync(int employeeType, CancellationToken ct = default)
+    {
+        try
+        {
+            //_logger.LogInformation("[EMP-SVC] GetEmployeesByTypeAsync type={EmployeeType}", employeeType);
 
+            if (employeeType <= 0)
+                throw new ArgumentException("Employee type cannot be null or empty", nameof(employeeType));
 
+            return await _repository.GetByEmployeeTypeAsync(employeeType, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[EMP-SVC] Error getting employees by type: {EmployeeType}", employeeType);
+            throw;
+        }
+    }
 
+    public async Task<IEnumerable<int>> GetAvailableEmployeeTypesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            //_logger.LogInformation("[EMP-SVC] GetAvailableEmployeeTypesAsync");
+            return await _repository.GetEmployeeTypesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[EMP-SVC] Error getting available employee types");
+            throw;
+        }
+    }
 
+    public async Task<IEnumerable<string>> GetAvailableDepartmentsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            //_logger.LogInformation("[EMP-SVC] GetAvailableDepartmentsAsync");
+            return await _repository.GetDepartmentsAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[EMP-SVC] GetAvailableDepartmentsAsync error");
+            throw;
+        }
+    }
 
-        //private static void ValidateFilter(EmployeeDetailsFilterDto filter)
-        //{
-        //    if (filter.PageNumber < 1)
-        //        filter.PageNumber = 1;
-
-        //    if (filter.PageSize < 1 || filter.PageSize > 100)
-        //        filter.PageSize = 10;
-
-        //    if (filter.MinSalary.HasValue && filter.MaxSalary.HasValue &&
-        //        filter.MinSalary > filter.MaxSalary)
-        //    {
-        //        throw new ArgumentException("MinSalary cannot be greater than MaxSalary");
-        //    }
-
-        //    if (filter.HireDateFrom.HasValue && filter.HireDateTo.HasValue &&
-        //        filter.HireDateFrom > filter.HireDateTo)
-        //    {
-        //        throw new ArgumentException("HireDateFrom cannot be greater than HireDateTo");
-        //    }
-        //}
+    public async Task<IEnumerable<string>> GetAvailableFacultiesAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            //_logger.LogInformation("[EMP-SVC] GetAvailableFacultiesAsync");
+            return await _repository.GetFacultiesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[EMP-SVC] GetAvailableFacultiesAsync error");
+            throw;
+        }
     }
 }

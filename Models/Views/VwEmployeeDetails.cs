@@ -18,6 +18,7 @@ namespace WsUtaSystem.Models.Views
         public int? ScheduleID { get; set; }
         [Column("Schedule")]
         public string? Schedule { get; set; }
+        [Column("ImmediateBossID")]
         public int? ImmediateBossID { get; set; }
         public string? Department { get; set; }
         //public string? Faculty { get; set; }

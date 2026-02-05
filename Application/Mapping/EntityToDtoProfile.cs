@@ -182,9 +182,14 @@ public class EntityToDtoProfile : Profile
         CreateMap<WsUtaSystem.Models.StoredFile, WsUtaSystem.Application.DTOs.StoredFile.StoredFileCreateDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.StoredFile, WsUtaSystem.Application.DTOs.StoredFile.StoredFileDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.StoredFile, WsUtaSystem.Application.DTOs.StoredFile.StoredFileUpdateDto>().ReverseMap();
-
-
-
-
+        CreateMap<EmailLayout, WsUtaSystem.Application.DTOs.Email.EmailLayoutDto>().ReverseMap();
+        CreateMap<EmailLayout, WsUtaSystem.Application.DTOs.Email.EmailLayoutCreateDto>().ReverseMap();
+        CreateMap<EmailLayout, WsUtaSystem.Application.DTOs.Email.EmailLayoutUpdateDto>().ReverseMap();        
+        CreateMap<EmailLog, WsUtaSystem.Application.DTOs.Email.EmailLogDto>().ReverseMap();
+        CreateMap<EmailLog, WsUtaSystem.Application.DTOs.Email.EmailLayoutCreateDto>().ReverseMap();
+        CreateMap<EmailLog, WsUtaSystem.Application.DTOs.Email.EmailLayoutUpdateDto>().ReverseMap();
+        CreateMap<EmailLogAttachment, WsUtaSystem.Application.DTOs.Email.EmailLogAttachmentDto>().ReverseMap();
+        CreateMap<EmailLogAttachment, WsUtaSystem.Application.DTOs.Email.EmailLogAttachmentCreateDto>().ReverseMap();
+        
     }
 }

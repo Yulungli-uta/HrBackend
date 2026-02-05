@@ -8,6 +8,7 @@ namespace WsUtaSystem.Infrastructure.Jobs;
 public sealed class DailyRecoveryJob : BaseJob
 {
     private readonly IRecoveryService _recoveryService;
+    private readonly ILogger<DailyRecoveryJob> _logger;
 
     public DailyRecoveryJob(
         IRecoveryService recoveryService,
@@ -15,6 +16,7 @@ public sealed class DailyRecoveryJob : BaseJob
         : base(logger)
     {
         _recoveryService = recoveryService;
+        _logger = logger;
     }
 
     protected override async Task ExecuteJobAsync(
@@ -24,7 +26,7 @@ public sealed class DailyRecoveryJob : BaseJob
         var now = GetCurrentDateTime(context);
         var targetDate = now.Date.AddDays(-1);
 
-        Logger.LogInformation(
+        _logger.LogInformation(
             "Daily recovery application targetDate={TargetDate:yyyy-MM-dd}",
             targetDate);
 

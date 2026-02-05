@@ -13,6 +13,7 @@ public class PunchJustificationsCreateDto
     public string Reason { get; set; } = string.Empty;
     public decimal? HoursRequested { get; set; }
     public bool Approved { get; set; } = false;
+    public DateTime ApprovedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public int CreatedBy { get; set; }
     public string? Comments { get; set; }

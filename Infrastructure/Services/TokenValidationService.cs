@@ -148,10 +148,10 @@ public class TokenValidationService : ITokenValidationService
                     };
 
                     //Console.WriteLine("******** apiResponse ********");
-                    _logger.LogInformation(JsonSerializer.Serialize(result, new JsonSerializerOptions
-                    {
-                        WriteIndented = true
-                    }));
+                    //_logger.LogInformation(JsonSerializer.Serialize(result, new JsonSerializerOptions
+                    //{
+                    //    WriteIndented = true
+                    //}));
 
                     // Guardar en cache si está habilitado y el token es válido
                     if (_enableCaching && result.IsValid)
@@ -166,13 +166,13 @@ public class TokenValidationService : ITokenValidationService
                             _logger.LogDebug("Token validation result cached for {Minutes} minutes", _cacheDurationMinutes);
                     }
 
-                    if (_enableLogging)
-                    {
-                        if (result.IsValid)
-                            _logger.LogInformation("Token validated successfully for user {Email}", result.Email);
-                        else
-                            _logger.LogWarning("Token validation failed: {Message}", result.Message);
-                    }
+                    //if (_enableLogging)
+                    //{
+                    //    if (result.IsValid)
+                    //        _logger.LogInformation("Token validated successfully for user {Email}", result.Email);
+                    //    else
+                    //        _logger.LogWarning("Token validation failed: {Message}", result.Message);
+                    //}
 
                     return result;
                 }

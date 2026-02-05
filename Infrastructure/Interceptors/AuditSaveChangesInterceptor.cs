@@ -5,21 +5,17 @@ using WsUtaSystem.Application.Interfaces.Auditable;
 
 namespace WsUtaSystem.Infrastructure.Interceptors
 {
-    /// <summary>
-    /// Interceptor que asigna automáticamente campos de auditoría 
-    /// a entidades que implementan ICreationAuditable y/o IModificationAuditable
-    /// </summary>
     public sealed class AuditSaveChangesInterceptor : SaveChangesInterceptor
     {
-        private readonly ICurrentUserService _currentUser;
+        private readonly IServiceProvider _serviceProvider; // Cambiado para evitar circularidad
         private readonly ILogger<AuditSaveChangesInterceptor> _logger;
 
         public AuditSaveChangesInterceptor(
-            ICurrentUserService currentUser,
+            IServiceProvider serviceProvider,
             ILogger<AuditSaveChangesInterceptor> logger)
         {
-            _currentUser = currentUser ?? throw new ArgumentNullException(nameof(currentUser));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _serviceProvider = serviceProvider;
+            _logger = logger;
         }
 
         public override InterceptionResult<int> SavingChanges(
@@ -41,34 +37,28 @@ namespace WsUtaSystem.Infrastructure.Interceptors
 
         private void ApplyAuditFields(DbContext? context)
         {
-            if (context is null) return;
+            if (context == null) return;
 
-            // Validación de usuario autenticado
-            if (!_currentUser.IsAuthenticated || !_currentUser.EmployeeId.HasValue)
+            var timestamp = DateTime.Now;
+            int? employeeId = null;
+
+            try
             {
-                throw new UnauthorizedAccessException(
-                    "No se pudo resolver EmployeeId desde el token para la auditoría.");
+                // Resolvemos el servicio de usuario de forma perezosa (Lazy)
+                using var scope = _serviceProvider.CreateScope();
+                var currentUser = scope.ServiceProvider.GetService<ICurrentUserService>();
+                employeeId = currentUser?.EmployeeId;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[AUDIT] No se pudo obtener el EmployeeId del usuario actual");
             }
 
-            var now = DateTime.Now;
-            var employeeId = _currentUser.EmployeeId.Value;
-
-            //_logger.LogInformation(
-            //    "Aplicando auditoría para EmployeeId {EmployeeId} a las {Timestamp}",
-            //    employeeId,
-            //    now);
-
-            // Procesar entidades con auditoría de CREACIÓN
-            ProcessCreationAudit(context, now, employeeId);
-
-            // Procesar entidades con auditoría de MODIFICACIÓN
-            ProcessModificationAudit(context, now, employeeId);
+            ProcessCreationAudit(context, timestamp, employeeId);
+            ProcessModificationAudit(context, timestamp, employeeId);
         }
 
-        /// <summary>
-        /// Aplica auditoría de creación a entidades nuevas
-        /// </summary>
-        private void ProcessCreationAudit(DbContext context, DateTime timestamp, int employeeId)
+        private void ProcessCreationAudit(DbContext context, DateTime timestamp, int? employeeId)
         {
             var creationEntries = context.ChangeTracker
                 .Entries<ICreationAuditable>()
@@ -77,19 +67,11 @@ namespace WsUtaSystem.Infrastructure.Interceptors
             foreach (var entry in creationEntries)
             {
                 entry.Entity.CreatedAt = timestamp;
-                entry.Entity.CreatedBy = employeeId;
-
-                //_logger.LogDebug(
-                //    "Auditoría de creación aplicada: {EntityType} - CreatedBy: {EmployeeId}",
-                //    entry.Entity.GetType().Name,
-                //    employeeId);
+                if (employeeId.HasValue) entry.Entity.CreatedBy = employeeId.Value;
             }
         }
 
-        /// <summary>
-        /// Aplica auditoría de modificación a entidades actualizadas
-        /// </summary>
-        private void ProcessModificationAudit(DbContext context, DateTime timestamp, int employeeId)
+        private void ProcessModificationAudit(DbContext context, DateTime timestamp, int? employeeId)
         {
             var modificationEntries = context.ChangeTracker
                 .Entries<IModificationAuditable>()
@@ -98,20 +80,13 @@ namespace WsUtaSystem.Infrastructure.Interceptors
             foreach (var entry in modificationEntries)
             {
                 entry.Entity.UpdatedAt = timestamp;
-                entry.Entity.UpdatedBy = employeeId;
+                if (employeeId.HasValue) entry.Entity.UpdatedBy = employeeId.Value;
 
-                // Si la entidad también implementa ICreationAuditable,
-                // proteger los campos de creación contra modificación
                 if (entry.Entity is ICreationAuditable)
                 {
                     entry.Property(nameof(ICreationAuditable.CreatedAt)).IsModified = false;
                     entry.Property(nameof(ICreationAuditable.CreatedBy)).IsModified = false;
                 }
-
-                //_logger.LogDebug(
-                //    "Auditoría de modificación aplicada: {EntityType} - UpdatedBy: {EmployeeId}",
-                //    entry.Entity.GetType().Name,
-                //    employeeId);
             }
         }
     }
