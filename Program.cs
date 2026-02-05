@@ -1,15 +1,19 @@
 using DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing;
+using DocumentFormat.OpenXml.Wordprocessing;
 using FluentValidation;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using Serilog.Events;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Reflection;
 using System.Text.Json.Serialization;
+using WsUtaSystem.Application.Common.Email;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Common.Services;
+using WsUtaSystem.Application.Interfaces.Email;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Services;
@@ -17,10 +21,12 @@ using WsUtaSystem.Endpoints;
 using WsUtaSystem.Filters;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Infrastructure.DependencyInjection;
+using WsUtaSystem.Infrastructure.Email;
 using WsUtaSystem.Infrastructure.Filters;
 using WsUtaSystem.Infrastructure.Interceptors;
 using WsUtaSystem.Infrastructure.Jobs;
 using WsUtaSystem.Infrastructure.Repositories;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,6 +41,22 @@ var allowCred = bool.TryParse(cors["AllowCredentials"], out var ac) && ac;
 var headers = cors.GetSection("AllowedHeaders").Get<string[]>() ?? new[] { "content-type", "authorization" };
 var methods = cors.GetSection("AllowedMethods").Get<string[]>() ?? new[] { "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" };
 
+builder.Services.AddCors(opt =>
+{
+    opt.AddPolicy(corsName, p =>
+    {
+        if (origins.Length > 0)
+            p.WithOrigins(origins);
+        else
+            p.AllowAnyOrigin();
+
+        p.WithHeaders(headers)
+         .WithMethods(methods);
+
+        if (allowCred)
+            p.AllowCredentials();
+    });
+});
 // =========================================================
 // Log Directory (configuracion del directorio del log )
 // =========================================================
@@ -42,44 +64,27 @@ var methods = cors.GetSection("AllowedMethods").Get<string[]>() ?? new[] { "GET"
 //var logDir = Path.Combine(appBase, "log");
 //Directory.CreateDirectory(logDir);
 
-builder.Services.AddCors(opt =>
-{
-    opt.AddPolicy(corsName, p =>
-    {
-        if (origins.Length > 0)
-        {
-            // Cuando hay credenciales, hay que usar WithOrigins, no AllowAnyOrigin
-            p.WithOrigins(origins);
-        }
-        else
-        {
-            p.AllowAnyOrigin();
-        }
-
-        p.WithHeaders(headers)
-         .WithMethods(methods);
-
-        if (allowCred)
-        {
-            p.AllowCredentials();
-        }
-    });
-});
 
 // =========================================================
 // Logging
 // =========================================================
-builder.Services.AddLogging(loggingBuilder =>
-{
-    loggingBuilder.AddConsole();
-    loggingBuilder.AddDebug();
-});
+//builder.Services.AddLogging(loggingBuilder =>
+//{
+//    loggingBuilder.AddConsole();
+//    loggingBuilder.AddDebug();
+//});
 
 // =========================================================
 // Serilog
 // =========================================================
+builder.Logging.ClearProviders();
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+    .MinimumLevel.Information()
+    //.MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+    //.MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Information)
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+    .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
     .Enrich.FromLogContext()
     .WriteTo.Console()
     .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day)
@@ -356,6 +361,77 @@ builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IStor
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IStoredFileService, WsUtaSystem.Application.Services.StoredFileService>();
 builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDocumentOrchestratorService, WsUtaSystem.Application.Services.DocumentOrchestratorService>();
 
+////// Servicios de Email
+//builder.Services.AddScoped<IEmailLayoutsRepository, EmailLayoutsRepository>();
+//builder.Services.AddScoped<IEmailLogsRepository, EmailLogsRepository>();
+//builder.Services.AddScoped<IEmailLogAttachmentsRepository, EmailLogAttachmentsRepository>();
+//builder.Services.AddScoped<IEmailLayoutsService, EmailLayoutsService>();
+//builder.Services.AddScoped<IEmailLogsService, EmailLogsService>();
+//builder.Services.AddScoped<IEmailLogAttachmentsService, EmailLogAttachmentsService>();
+//builder.Services.AddTransient<WsUtaSystem.Application.Interfaces.Services.IEmailBuilder,
+//    WsUtaSystem.Application.Services.EmailBuilder>();
+
+//builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
+
+//builder.Services.AddSingleton<IEnvironmentCredentialProvider, EnvironmentCredentialProvider>();
+//builder.Services.AddScoped<IEmailProvider, MailKitEmailProvider>();
+//builder.Services.AddScoped<IEmailSenderService, EmailSenderService>();
+
+//builder.Services.Configure<WsUtaSystem.Application.Common.Email.EmailTemplatesOptions>(
+//    builder.Configuration.GetSection("EmailTemplates"));
+
+//// Cola de emails en background
+//builder.Services.AddSingleton<IBackgroundTaskQueue<WsUtaSystem.Application.DTOs.Email.EmailSendRequestDto>>(
+//    _ => new BackgroundTaskQueue<WsUtaSystem.Application.DTOs.Email.EmailSendRequestDto>(capacity: 1000));
+
+//builder.Services.AddSingleton<IEmailDispatcher, EmailDispatcher>();
+//builder.Services.AddHostedService<EmailQueueWorker>();
+
+//// ============================================================
+//// SERVICIOS DE EMAIL - CONFIGURACIÓN COMPLETA
+//// ============================================================
+
+// Repositories
+builder.Services.AddScoped<IEmailLayoutsRepository, EmailLayoutsRepository>();
+builder.Services.AddScoped<IEmailLogsRepository, EmailLogsRepository>();
+builder.Services.AddScoped<IEmailLogAttachmentsRepository, EmailLogAttachmentsRepository>();
+
+// Services
+builder.Services.AddScoped<IEmailLayoutsService, EmailLayoutsService>();
+builder.Services.AddScoped<IEmailLogsService, EmailLogsService>();
+builder.Services.AddScoped<IEmailLogAttachmentsService, EmailLogAttachmentsService>();
+builder.Services.AddScoped<IEmailSenderService, EmailSenderService>();
+
+// Builder (fluent interface para construir emails)
+builder.Services.AddTransient<WsUtaSystem.Application.Interfaces.Services.IEmailBuilder,
+    WsUtaSystem.Application.Services.EmailBuilder>();
+
+// Configuration Options
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
+builder.Services.Configure<WsUtaSystem.Application.Common.Email.EmailTemplatesOptions>(
+    builder.Configuration.GetSection("EmailTemplates"));
+
+// Email Provider (SMTP)
+builder.Services.AddSingleton<IEnvironmentCredentialProvider, EnvironmentCredentialProvider>();
+builder.Services.AddScoped<IEmailProvider, MailKitEmailProvider>();
+
+// Background Queue Infrastructure
+builder.Services.AddSingleton<IBackgroundTaskQueue<WsUtaSystem.Application.DTOs.Email.EmailSendRequestDto>>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<BackgroundTaskQueue<WsUtaSystem.Application.DTOs.Email.EmailSendRequestDto>>>();
+    return new BackgroundTaskQueue<WsUtaSystem.Application.DTOs.Email.EmailSendRequestDto>(
+        capacity: 1000,                           // Capacidad máxima de la cola
+        enqueueTimeout: TimeSpan.FromSeconds(2),  // Timeout si la cola está llena
+        logger: logger);                          // Logger para diagnóstico
+});
+
+
+builder.Services.AddSingleton<IEmailDispatcher, EmailDispatcher>();
+builder.Services.AddHostedService<EmailQueueWorker>();
+
+//// ============================================================
+//// FIN SERVICIOS DE EMAIL
+//// ============================================================
 
 // Vistas
 builder.Services.AddScoped<IVwEmployeeScheduleAtDateRepository, VwEmployeeScheduleAtDateRepository>();
@@ -394,22 +470,53 @@ builder.Services.AddScoped<
     WsUtaSystem.Infrastructure.Services.TokenValidationService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+// Registrar los interceptores primero
 builder.Services.AddScoped<AuditSaveChangesInterceptor>();
 builder.Services.AddScoped<SqlErrorLoggingInterceptor>();
 
 builder.Services.AddDbContext<WsUtaSystem.Data.AppDbContext>((sp, o) =>
 {
-    o.UseSqlServer(cs, sql => sql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null));
+    o.UseSqlServer(cs, sql => 
+        sql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null)
+    );
     o.AddInterceptors(
         sp.GetRequiredService<AuditSaveChangesInterceptor>(),
         sp.GetRequiredService<SqlErrorLoggingInterceptor>()
     );
+    //o.EnableDetailedErrors();
+    //o.EnableSensitiveDataLogging();
+
+    if (builder.Environment.IsDevelopment())
+    {
+        o.EnableSensitiveDataLogging();
+        o.EnableDetailedErrors();
+    }
+    //// imprime Logs EF a consola: conexión y comandos
+    //o.LogTo(Console.WriteLine,
+    //   new[]
+    //   {
+    //        DbLoggerCategory.Database.Connection.Name,
+    //        DbLoggerCategory.Database.Command.Name
+    //   },
+    //   LogLevel.Information);
 });
+
+
 
 // =========================================================
 // Build app
 // =========================================================
 var app = builder.Build();
+
+
+// ===== TAP GLOBAL PIPELINE (SIEMPRE VISIBLE) =====
+app.Use(async (ctx, next) =>
+{
+    //Console.WriteLine($"[PIPE] IN  {ctx.Request.Method} {ctx.Request.Path} trace={ctx.TraceIdentifier}");
+    await next();
+    //Console.WriteLine($"[PIPE] OUT {ctx.Response.StatusCode} {ctx.Request.Method} {ctx.Request.Path} trace={ctx.TraceIdentifier}");
+});
 
 
 // =========================================================
@@ -419,23 +526,44 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 });
-// 1) Manejo global de errores
+// =========================================================
+// Middleware global de errores (debe envolver todo)
+// =========================================================
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
-// 1.1) Serilog - Logging automático de requests HTTP (PRO)
-//app.UseSerilogRequestLogging();
+// =========================================================
+// Static files primero (no afecta API, pero evita rarezas)
+// =========================================================
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
+
+// =========================================================
+// Serilog request logging
+// =========================================================
 app.UseSerilogRequestLogging(opts =>
 {
-    opts.IncludeQueryInRequestPath = true; // si quieres ver querystring
+    opts.IncludeQueryInRequestPath = true;
 });
 
-// 2) CORS (para que incluso errores devuelvan headers CORS)
+// =========================================================
+// Routing explícito (IMPORTANTE para orden con CORS + Endpoints)
+// =========================================================
+app.UseRouting();
+
+// =========================================================
+// CORS en lugar correcto: entre Routing y Endpoints
+// =========================================================
 app.UseCors(corsName);
 
-// 3) Middleware de autenticación JWT propio
+// =========================================================
+// JWT custom (AQUÍ debe ejecutar SIEMPRE para /api/v1/rh/*)
+// =========================================================
 app.UseMiddleware<WsUtaSystem.Middleware.JwtAuthenticationMiddleware>();
 
-// 4) Swagger (solo en dev)
+// =========================================================
+// Swagger (solo en dev)
+// =========================================================
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -457,29 +585,37 @@ if (app.Environment.IsDevelopment())
 //QuestPDF.Settings.EnableCaching = true;
 
 // =========================================================
-// Rutas de la API bajo /api/v1/rh
+// Endpoints (Controllers + Groups) - explícito
 // =========================================================
+app.UseEndpoints(endpoints =>
+{
+    // Todo bajo /api/v1/rh
+    var apiGroup = endpoints.MapGroup("/api/v1/rh");
+    apiGroup.RequireCors(corsName);
 
-// Agrupamos todo bajo el prefijo /api/v1/rh (controladores + minimal APIs)
-var apiGroup = app.MapGroup("/api/v1/rh");
+    // Controllers
+    apiGroup.MapControllers();
 
-// Controladores [ApiController]
-apiGroup.MapControllers();
+    // Minimal APIs de reportes
+    apiGroup.MapReportEndpoints();
 
-// Endpoints minimal API de reportes
-apiGroup.MapReportEndpoints();
+    // Si estos endpoints deben también estar bajo /api/v1/rh, muévelos aquí.
+    // Si deben quedarse globales, déjalos fuera.
+    endpoints.MapUserPermissionEndpoints();
 
-// Endpoints minimal API de permisos de usuario
-app.MapUserPermissionEndpoints();
+    // Root + health
+    endpoints.MapGet("/", () => Results.Redirect("/swagger"));
+    endpoints.MapGet("/health", () => Results.Ok(new { ok = true, time = DateTime.Now }));
+});
 
 // =========================================================
-// Archivos estáticos, root y healthcheck
+// TAP GLOBAL PIPELINE (SIEMPRE VISIBLE) - después (opcional)
 // =========================================================
-app.UseDefaultFiles();
-app.UseStaticFiles();
-
-app.MapGet("/", () => Results.Redirect("/swagger"));
-
-app.MapGet("/health", () => Results.Ok(new { ok = true, time = DateTime.Now }));
+app.Use(async (ctx, next) =>
+{
+    Console.WriteLine($"[PIPE-B] IN  {ctx.Request.Method} {ctx.Request.Path} trace={ctx.TraceIdentifier}");
+    await next();
+    Console.WriteLine($"[PIPE-B] OUT {ctx.Response.StatusCode} {ctx.Request.Method} {ctx.Request.Path} trace={ctx.TraceIdentifier}");
+});
 
 app.Run();

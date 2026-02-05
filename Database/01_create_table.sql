@@ -480,6 +480,7 @@ CREATE TABLE HR.tbl_contractRequest (
 	NumberOfPeopleToHire INT NOT NULL DEFAULT (0), 	 --numero de personas a requerir 
 	NumberHour DECIMAL(12,2) NOT NULL DEFAULT (0), --numerod e horas 
 	TotalPeopleHired INT NOT NULL DEFAULT (0), --numero total de personas ya contratadas 
+	Observation NVARCHAR(1000) NULL, 
 	CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
 	CreatedBy INT NOT NULL, -- persona que solicita 
 	UpdatedAt DATETIME2 NULL, 
@@ -828,7 +829,7 @@ BEGIN
     SourceTable       NVARCHAR(128) NULL,        -- 'VACATION', 'ATTENDANCE', 'LOGS', etc.
     SourceID          NVARCHAR(128) NULL,        -- clave idempotente (p. ej. '202510' o 'RECALC|2025-10-01|2025-10-31')
     PerformedByEmpID  INT          NULL,
-    Note              NVARCHAR(400) NULL
+    Note              NVARCHAR(2000) NULL
   );
 END
 GO
@@ -1111,6 +1112,62 @@ CREATE TABLE HR.tbl_Books (
     UpdatedBy INT NULL,
     UpdatedAt DATETIME2 NULL
 );
+
+
+/* ============================================================
+   Modulo notificaciones - Gestion de Correos
+   ============================================================ */
+
+IF OBJECT_ID('HR.tbl_EmailLayouts', 'U') IS NULL
+BEGIN
+    CREATE TABLE HR.tbl_EmailLayouts (
+        EmailLayoutID INT IDENTITY(1,1) NOT NULL,
+        Slug NVARCHAR(150) NOT NULL,
+        HeaderHtml NVARCHAR(MAX) NULL,
+        FooterHtml NVARCHAR(MAX) NULL,
+        IsActive BIT NOT NULL DEFAULT(1),
+
+        CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
+        CreatedBy INT NULL,
+        UpdatedAt DATETIME2 NULL,
+        UpdatedBy INT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('HR.tbl_EmailLogs', 'U') IS NULL
+BEGIN
+    CREATE TABLE HR.tbl_EmailLogs (
+        EmailLogID INT IDENTITY(1,1) NOT NULL,
+        Recipient NVARCHAR(320) NOT NULL,
+        Subject NVARCHAR(255) NOT NULL,
+        BodyRendered NVARCHAR(MAX) NOT NULL,
+        Status NVARCHAR(20) NOT NULL,  -- Queued | Sent | Failed
+        SentAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
+        ErrorMessage NVARCHAR(MAX) NULL,
+
+        CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
+        CreatedBy INT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('HR.tbl_EmailLogAttachments', 'U') IS NULL
+BEGIN
+    CREATE TABLE HR.tbl_EmailLogAttachments (
+        EmailLogAttachmentID INT IDENTITY(1,1) NOT NULL,
+        EmailLogID INT NOT NULL,
+        StoredFileGuid UNIQUEIDENTIFIER NOT NULL,
+
+        FileName NVARCHAR(260) NULL,
+        ContentType NVARCHAR(100) NULL,
+
+        CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
+        CreatedBy INT NULL
+    );
+END
+GO
+
 
 PRINT 'TODAS LAS TABLAS CREADAS EXITOSAMENTE CON FECHAS LOCALES.';
 GO

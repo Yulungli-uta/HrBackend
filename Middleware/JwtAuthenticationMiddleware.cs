@@ -1,21 +1,24 @@
+using System.Diagnostics;
 using System.Security.Claims;
 using WsUtaSystem.Application.Interfaces.Services;
-using WsUtaSystem.Application.Services;
 using WsUtaSystem.Infrastructure.Services;
-using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Middleware;
 
-/// <summary>
-/// Middleware que valida tokens JWT en todas las peticiones
-/// </summary>
 public class JwtAuthenticationMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<JwtAuthenticationMiddleware> _logger;
     private readonly bool _enableLogging;
     private readonly HashSet<string> _publicPaths;
-    private readonly IvwEmployeeDetailsService _employeeDetailsService;
+
+    private static readonly string[] SkipEmployeeLookupMarkers =
+    {
+        "/vw/employeedetails",
+        "/api/v1/rh/vw/employeedetails"
+    };
+
+    private const string SkipLookupFlagKey = "__skip_employee_lookup";
 
     public JwtAuthenticationMiddleware(
         RequestDelegate next,
@@ -24,229 +27,167 @@ public class JwtAuthenticationMiddleware
     {
         _next = next;
         _logger = logger;
+
         _enableLogging = bool.TryParse(configuration["AuthService:EnableLogging"], out var logging) ? logging : true;
-        
-        // Cargar rutas públicas desde configuración o usar valores por defecto
+
         var publicPathsConfig = configuration.GetSection("AuthService:PublicPaths").Get<string[]>();
         _publicPaths = new HashSet<string>(
             publicPathsConfig ?? new[] { "/health", "/swagger", "/api/v1/rh/public" },
             StringComparer.OrdinalIgnoreCase
         );
+
+        //_logger.LogInformation("[AUTH-MW] Middleware inicializado. Rutas públicas: {Paths}", string.Join(" | ", _publicPaths));
     }
 
-    public async Task InvokeAsync(HttpContext context, ITokenValidationService tokenValidationService, IvwEmployeeDetailsService employeeDetailsService)
+    public async Task InvokeAsync(HttpContext context)
     {
         var path = context.Request.Path.Value ?? string.Empty;
-        
+        var method = context.Request.Method;
+        var traceId = context.TraceIdentifier;
 
-        // Permitir endpoints públicos
-        if (IsPublicEndpoint(path))
-        {
-            if (_enableLogging)
-                _logger.LogDebug("Public endpoint accessed: {Path}", path);
+        // Log inicial crítico para confirmar que el middleware está vivo
+        //_logger.LogInformation("[AUTH-MW] Request recibida: {Method} {Path} (Trace: {TraceId})", method, path, traceId);
 
-            await _next(context);
-            return;
-        }
+        var swTotal = Stopwatch.StartNew();
 
-        // Extraer token del header Authorization
-        var authHeader = context.Request.Headers["Authorization"].ToString();
-        var token = ExtractToken(authHeader);
-
-        if (string.IsNullOrEmpty(token))
-        {
-            if (_enableLogging)
-                _logger.LogWarning("Request to {Path} rejected: No token provided", path);
-
-            context.Response.StatusCode = 401;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsJsonAsync(new
-            {
-                error = "Token no proporcionado",
-                message = "Se requiere autenticación para acceder a este recurso",
-                statusCode = 401
-            });
-            return;
-        }
-
-        // Validar token contra el servicio de autenticación
-        var validationResult = await tokenValidationService.ValidateTokenAsync(token);
-
-        if (!validationResult.IsValid)
-        {
-            if (_enableLogging)
-                _logger.LogWarning("Request to {Path} rejected: Invalid token - {Message}", path, validationResult.Message);
-
-            context.Response.StatusCode = 401;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsJsonAsync(new
-            {
-                error = "Token inválido o expirado",
-                message = validationResult.Message ?? "El token proporcionado no es válido",
-                statusCode = 401
-            });
-            return;
-        }
-
-        // 1) Mantener Items (compatibilidad con lo que ya tienes)
-        context.Items["UserId"] = validationResult.UserId;
-        context.Items["UserEmail"] = validationResult.Email;
-        context.Items["UserRoles"] = validationResult.Roles;
-        
-
-        // ✅ Resolver EmployeeId (fallback con tu vista)
-        int? employeeId = null;
-        employeeId = TryGetEmployeeId(validationResult); // intenta desde result (si existe)
-
-        if (!string.IsNullOrWhiteSpace(validationResult.Email))
-        {
-            _logger.LogDebug("Resolving EmployeeID from view by email: {Email}", validationResult.Email);
-
-            var emp = await employeeDetailsService.GetByEmailAsync(validationResult.Email, context.RequestAborted);
-
-            if (_enableLogging)
-                _logger.LogInformation("Fetched employee details: {@Employee}", emp);
-
-            // ✅ Tu view usa EmployeeID (así se llama la prop)
-            employeeId = emp?.EmployeeID;
-        }
-
-        // Guarda SIEMPRE (para CurrentUserService fallback)
-        context.Items["EmployeeId"] = employeeId;
-
-        // 2) ✅ Crear ClaimsPrincipal para que Controller/User/ICurrentUserService funcionen
-        var principal = BuildPrincipal(
-            email: validationResult.Email,
-            userId: validationResult.UserId,
-            roles: validationResult.Roles,
-            employeeId: employeeId
-        );
-
-        
-
-        context.User = principal;
-
-        if (_enableLogging)
-        {
-            _logger.LogInformation("Request to {Path} authorized for user {Email}", path, validationResult.Email);
-            _logger.LogDebug("User injected into HttpContext.User. IsAuth={IsAuth}", context.User?.Identity?.IsAuthenticated);
-        }
-
-        await _next(context);
-    }
-
-    private int? TryGetEmployeeId(dynamic validationResult)
-    {
-        // Si tu ValidateTokenAsync ya retorna EmployeeId, úsalo.
-        // Si no existe, devuelve null (y luego lo podrás mapear en el auth-service para incluirlo).
         try
         {
-            //_logger.LogInformation("Attempting to extract EmployeeId from validation result. userid:{UserId}",
-            //    validationResult.EmployeeId);
-            // Ej: validationResult.EmployeeId            
-            var value = validationResult.EmployeeId;
-            if (value is null) return null;
+            // 1. Bypass para OPTIONS (CORS)
+            if (HttpMethods.IsOptions(method))
+            {
+                await _next(context);
+                return;
+            }
 
-            if (value is int i) return i;
+            // 2. Bypass para rutas públicas
+            if (TryMatchPublicEndpoint(path, out _))
+            {
+                await _next(context);
+                return;
+            }
 
-            if (int.TryParse(value.ToString(), out int parsed))
-                return parsed;
-            return null;
+            // 3. Extracción de Token
+            var authHeader = context.Request.Headers["Authorization"].ToString();
+            var token = ExtractToken(authHeader);
+
+            if (string.IsNullOrEmpty(token))
+            {
+                _logger.LogWarning("[AUTH-MW] No se proporcionó token para: {Path}", path);
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new { error = "No autorizado", message = "Token requerido" });
+                return;
+            }
+
+            // 4. Resolución de Servicios (IMPORTANTE: Esto evita el Deadlock)
+            // Resolvemos aquí dentro para que si hay una circularidad, podamos loguear el error exacto
+            var tokenValidationService = context.RequestServices.GetRequiredService<ITokenValidationService>();
+            var employeeDetailsService = context.RequestServices.GetRequiredService<IvwEmployeeDetailsService>();
+
+            // 5. Validación de Token
+            var validationResult = await tokenValidationService.ValidateTokenAsync(token);
+
+            if (!validationResult.IsValid)
+            {
+                //_logger.LogWarning("[AUTH-MW] Token inválido: {Msg}", validationResult.Message);
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new { error = "Token inválido", message = validationResult.Message });
+                return;
+            }
+
+            // 6. Inyección de Claims y datos básicos en el Contexto
+            context.Items["UserId"] = validationResult.UserId;
+            context.Items["UserEmail"] = validationResult.Email;
+            context.Items["UserRoles"] = validationResult.Roles;
+
+            // 7. Búsqueda de EmployeeId (con guardián anti-recursión)
+            int? employeeId = null;
+            var skipLookup = ShouldSkipEmployeeLookup(path) || (context.Items.TryGetValue(SkipLookupFlagKey, out var f) && f is true);
+
+            if (!skipLookup && !string.IsNullOrWhiteSpace(validationResult.Email))
+            {
+                context.Items[SkipLookupFlagKey] = true; // Marcamos para evitar re-entrada
+                try
+                {
+                    // Timeout de seguridad de 5 segundos para la DB
+                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+                    cts.CancelAfter(TimeSpan.FromSeconds(5));
+
+                    var emp = await employeeDetailsService.GetByEmailAsync(validationResult.Email, cts.Token);
+                    employeeId = emp?.EmployeeID;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "[AUTH-MW] Error buscando empleado para {Email}", validationResult.Email);
+                }
+            }
+
+            context.Items["EmployeeId"] = employeeId;
+
+            // 8. Construir el Principal para el sistema de seguridad de .NET
+            context.User = BuildPrincipal(validationResult.Email, validationResult.UserId, validationResult.Roles, employeeId);
+
+            // 9. Continuar la cadena
+            await _next(context);
         }
-        catch
+        catch (Exception ex)
         {
-            return null;
+            _logger.LogError(ex, "[AUTH-MW] Error crítico en el pipeline de autenticación");
+            throw; // Re-lanzar para que el middleware de excepciones lo capture
         }
+        finally
+        {
+            swTotal.Stop();
+            if (_enableLogging)
+                _logger.LogInformation("[AUTH-MW] Fin de procesamiento. Path: {Path} Status: {Status} Time: {Elapsed}ms",
+                    path, context.Response.StatusCode, swTotal.ElapsedMilliseconds);
+        }
+    }
+
+    private bool ShouldSkipEmployeeLookup(string path)
+    {
+        return SkipEmployeeLookupMarkers.Any(m => path.Contains(m, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool TryMatchPublicEndpoint(string path, out string matched)
+    {
+        foreach (var publicPath in _publicPaths)
+        {
+            if (path.StartsWith(publicPath, StringComparison.OrdinalIgnoreCase))
+            {
+                matched = publicPath;
+                return true;
+            }
+        }
+        matched = string.Empty;
+        return false;
     }
 
     private static ClaimsPrincipal BuildPrincipal(string? email, string? userId, IEnumerable<string>? roles, int? employeeId)
     {
         var claims = new List<Claim>();
+        if (!string.IsNullOrWhiteSpace(email)) claims.Add(new Claim(ClaimTypes.Email, email));
+        if (!string.IsNullOrWhiteSpace(userId)) claims.Add(new Claim(ClaimTypes.NameIdentifier, userId));
+        if (employeeId.HasValue) claims.Add(new Claim("employeeId", employeeId.Value.ToString()));
 
-        if (!string.IsNullOrWhiteSpace(email))
-        {
-            claims.Add(new Claim(ClaimTypes.Email, email));
-            claims.Add(new Claim(ClaimTypes.Name, email)); // útil para logs/Identity.Name
-        }
-
-        // NameIdentifier es estándar, muchos sistemas lo usan
-        if (!string.IsNullOrWhiteSpace(userId))
-        {
-            claims.Add(new Claim(ClaimTypes.NameIdentifier, userId));
-            claims.Add(new Claim("userId", userId));
-            claims.Add(new Claim("sub", userId));
-        }
-
-        // Claim esperado por tu CurrentUserService
-        if (employeeId.HasValue)
-        {
-            claims.Add(new Claim("employeeId", employeeId.Value.ToString()));
-        }
-
-        // Roles
         if (roles != null)
         {
-            foreach (var r in roles.Where(x => !string.IsNullOrWhiteSpace(x)))
-            {
-                claims.Add(new Claim(ClaimTypes.Role, r));
-                claims.Add(new Claim("role", r));
-            }
+            foreach (var r in roles) claims.Add(new Claim(ClaimTypes.Role, r));
         }
 
-        // ✅ authenticationType NO vacío => IsAuthenticated = true
-        var identity = new ClaimsIdentity(claims, authenticationType: "JwtCustom");
-        return new ClaimsPrincipal(identity);
+        return new ClaimsPrincipal(new ClaimsIdentity(claims, "JwtCustom"));
     }
 
-    /// <summary>
-    /// Verifica si el endpoint es público y no requiere autenticación
-    /// </summary>
-    private bool IsPublicEndpoint(string path)
-    {
-        // Verificar coincidencias exactas o prefijos
-        return _publicPaths.Any(publicPath =>
-            path.Equals(publicPath, StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWith(publicPath, StringComparison.OrdinalIgnoreCase)
-        );
-    }
-
-    /// <summary>
-    /// Extrae el token del header Authorization
-    /// </summary>
     private string? ExtractToken(string authHeader)
     {
-        if (string.IsNullOrEmpty(authHeader))
+        if (string.IsNullOrEmpty(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             return null;
-
-        if (!authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            if (_enableLogging)
-                _logger.LogWarning("Invalid Authorization header format: {Header}", authHeader);
-
-            return null;
-        }
-
-        return authHeader.Substring("Bearer ".Length).Trim();
+        return authHeader["Bearer ".Length..].Trim();
     }
 }
 
-/// <summary>
-/// Clase de extensión para facilitar el acceso a la información del usuario autenticado
-/// </summary>
 public static class HttpContextExtensions
 {
-    public static string? GetUserId(this HttpContext context) =>
-        context.Items["UserId"]?.ToString();
-
-    public static string? GetUserEmail(this HttpContext context) =>
-        context.Items["UserEmail"]?.ToString();
-
-    public static List<string> GetUserRoles(this HttpContext context) =>
-        context.Items["UserRoles"] as List<string> ?? new List<string>();
-
-    public static bool HasRole(this HttpContext context, string role)
-    {
-        var roles = context.GetUserRoles();
-        return roles.Any(r => r.Equals(role, StringComparison.OrdinalIgnoreCase));
-    }
+    public static string? GetUserId(this HttpContext context) => context.Items["UserId"]?.ToString();
+    public static string? GetUserEmail(this HttpContext context) => context.Items["UserEmail"]?.ToString();
+    public static int? GetEmployeeId(this HttpContext context) => context.Items.TryGetValue("EmployeeId", out var v) && v is int id ? id : null;
 }

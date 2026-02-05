@@ -145,9 +145,9 @@ public class AttendancePunchesController : ControllerBase
     {
         var entityObj = _mapper.Map<AttendancePunches>(dto);
 
-        entityObj.IpAddress = _clientInfo.GetIp();        
-        var created = await _svc.CreateAsync(entityObj, ct);
-        //var created = await _svc.CreatePunchesWithIPAsync(entityObj, _clientInfo.GetIp(), ct);
+        entityObj.IpAddress = _clientInfo.GetIp();
+        //var created = await _svc.CreateAsync(entityObj, ct);
+        var created = await _svc.CreatePunchesWithIPAsync(entityObj, _clientInfo.GetIp(), ct);
         _logger.LogInformation("Created AttendancePunches with ID: {AttendancePunchesId}", created.PunchId);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);        
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<AttendancePunchesDto>(created));

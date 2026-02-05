@@ -6,8 +6,14 @@
         int? EmployeeId { get; }
         string? UserName { get; }
         string? Email { get; }
+        int? BossId { get; }
+        string? BossName { get; }
+        string? BossEmail { get; }
+        Task<CurrentBossInfo?> LoadBossAsync(CancellationToken ct = default);
         string? GetIp();
         string? GetUserAgent();
         string? GetDeviceInfo();
     }
+
+    public sealed record CurrentBossInfo(int BossId, string FullName, string Email);
 }

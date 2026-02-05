@@ -68,16 +68,29 @@ public static class QuartzConfiguration
                 .WithDescription("Aplica justificaciones aprobadas diariamente a las 2:30 AM")
                 .UsingJobData("TimeZone", timeZone));
 
-            // 4. Acreditacion de tiempos de vacacic iones  - 0:30 AM
-            var accrueVacation = new JobKey("DailyAccrueVacationBalanceJob");
+            //4.Acreditacion de vacaciones -Día 1 del mes a las 00:30
+            var accrueVacation = new JobKey("MonthlyAccrueVacationBalanceJob");
             q.AddJob<DailyAccrueVacationBalance>(opts => opts.WithIdentity(accrueVacation));
             q.AddTrigger(opts => opts
                 .ForJob(accrueVacation)
-                .WithIdentity("DailyAccrueVacationBalanceTrigger")
-                .WithCronSchedule("0 0 3 * * ?", x => x
+                .WithIdentity("MonthlyAccrueVacationBalanceTrigger")
+                .WithCronSchedule("0 30 0 1 * ?", x => x
                     .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-                .WithDescription("Aplica recuperaciones de tiempo diariamente a las 3:00 AM")
+                .WithDescription("Acredita vacaciones mensual el día 1 (acredita el mes anterior)")
                 .UsingJobData("TimeZone", timeZone));
+
+
+            //// 4. Acreditacion de tiempos de vacacic iones  - 0:30 AM
+            //var accrueVacation = new JobKey("DailyAccrueVacationBalanceJob");
+            //q.AddJob<DailyAccrueVacationBalance>(opts => opts.WithIdentity(accrueVacation));
+            //q.AddTrigger(opts => opts
+            //    .ForJob(accrueVacation)
+            //    .WithIdentity("DailyAccrueVacationBalanceTrigger")
+            //    //.WithCronSchedule("0 0 3 * * ?", x => x
+            //    .WithCronSchedule("0 * * ? * * *", x => x
+            //        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
+            //    .WithDescription("Aplica recuperaciones de tiempo diariamente a las 3:00 AM")
+            //    .UsingJobData("TimeZone", timeZone));
 
             //// 4. Aplicar recuperaciones - 5:00 AM
             //var recoveryKey = new JobKey("DailyRecoveryJob");

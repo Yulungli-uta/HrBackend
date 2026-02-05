@@ -8,13 +8,14 @@ namespace WsUtaSystem.Infrastructure.Jobs;
 public sealed class DailyNightMinutesCalculationJob : BaseJob
 {
     private readonly IAttendanceCalculationService _attendanceService;
-
+    private readonly ILogger<DailyNightMinutesCalculationJob> _logger;
     public DailyNightMinutesCalculationJob(
         IAttendanceCalculationService attendanceService,
         ILogger<DailyNightMinutesCalculationJob> logger)
         : base(logger)
     {
         _attendanceService = attendanceService;
+        _logger = logger;
     }
 
     protected override async Task ExecuteJobAsync(
@@ -24,7 +25,7 @@ public sealed class DailyNightMinutesCalculationJob : BaseJob
         var now = GetCurrentDateTime(context);
         var targetDate = now.Date.AddDays(-1);
 
-        Logger.LogInformation(
+        _logger.LogInformation(
             "Daily night minutes calculation targetDate={TargetDate:yyyy-MM-dd}",
             targetDate);
 

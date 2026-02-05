@@ -8,6 +8,7 @@ namespace WsUtaSystem.Infrastructure.Jobs;
 public sealed class DailyJustificationsJob : BaseJob
 {
     private readonly IJustificationsService _justificationsService;
+    private readonly ILogger<DailyJustificationsJob> _logger;
 
     public DailyJustificationsJob(
         IJustificationsService justificationsService,
@@ -15,6 +16,7 @@ public sealed class DailyJustificationsJob : BaseJob
         : base(logger)
     {
         _justificationsService = justificationsService;
+        _logger = logger;
     }
 
     protected override async Task ExecuteJobAsync(

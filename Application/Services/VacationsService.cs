@@ -1,6 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage; // GetDbTransaction()
 using WsUtaSystem.Application.Common;
+using WsUtaSystem.Application.Common.Email;
+using WsUtaSystem.Application.Common.Enums;
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -17,7 +20,10 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
     private readonly IHrBalanceRepository _hrRepo;
     private readonly AppDbContext _db;
 
-    // ✅ SOLO PARA LOGS (no afecta funcionalidad)
+    private readonly IEmailBuilder _emailBuilder;
+    private readonly ICurrentUserService _currentUser;
+    private readonly IvwEmployeeDetailsService _employeeDetails;
+
     private readonly ILogger<VacationsService> _logger;
 
     public VacationsService(
@@ -26,7 +32,10 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
         IParametersRepository paramRepo,
         IHrBalanceRepository hrBalanceRepository,
         AppDbContext db,
-        ILogger<VacationsService> logger // ✅ agregado
+        IEmailBuilder emailBuilder,
+        ICurrentUserService currentUser,
+        IvwEmployeeDetailsService employeeDetails,
+        ILogger<VacationsService> logger
     ) : base(repo)
     {
         _repository = repo ?? throw new ArgumentNullException(nameof(repo));
@@ -34,10 +43,15 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
         _paramRepo = paramRepo ?? throw new ArgumentNullException(nameof(paramRepo));
         _hrRepo = hrBalanceRepository ?? throw new ArgumentNullException(nameof(hrBalanceRepository));
         _db = db ?? throw new ArgumentNullException(nameof(db));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger)); // ✅ agregado
+
+        _emailBuilder = emailBuilder ?? throw new ArgumentNullException(nameof(emailBuilder));
+        _currentUser = currentUser ?? throw new ArgumentNullException(nameof(currentUser));
+        _employeeDetails = employeeDetails ?? throw new ArgumentNullException(nameof(employeeDetails));
+
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    // ✅ IMPORTANTE: Debe coincidir con el SP:
+    // IMPORTANTE: Debe coincidir con el SP:
     // HR.sp_hr_ReserveVacationBalance => SourceID = 'VAC_RESERVE|<VacationID>'
     private static string ReserveSourceIdForVacation(int vacationId)
         => $"VAC_RESERVE|{vacationId}";
@@ -94,8 +108,8 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
 
             _logger.LogInformation("VAC CREATE BEGIN TX TraceId={TraceId} EmpId={EmpId}", traceId, entity.EmployeeId);
 
-            //entity.CreatedAt = entity.CreatedAt == default ? DateTime.Now : entity.CreatedAt;
             entity.CreatedAt = DateTime.Now;
+
             // 1) Crear (aún sin commit)
             created = await base.CreateAsync(entity, ct);
 
@@ -134,6 +148,13 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
             );
         });
 
+        // CORREO: fuera de la transacción
+        if (created is not null)
+        {
+            _logger.LogInformation("VAC CREATE => notificando por correo. VacationId={VacationId}", created.VacationId);
+            await NotifyBossOnCreateAsync(created, ct);
+        }
+
         return created!;
     }
 
@@ -152,6 +173,10 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
         var strategy = _db.Database.CreateExecutionStrategy();
         Vacations? updated = null;
 
+        // Para notificación fuera de TX
+        string oldStatus = "";
+        string newStatus = "";
+
         await strategy.ExecuteAsync(async () =>
         {
             await using var tx = await _db.Database.BeginTransactionAsync(ct);
@@ -161,11 +186,13 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
             var current = await _repository.GetByIdAsync(id, ct)
                 ?? throw new KeyNotFoundException($"Vacations con id={id} no existe.");
 
-            string oldStatus = (current.Status ?? "").Trim().ToUpperInvariant();
-            string newStatus = (entity.Status ?? "").Trim().ToUpperInvariant();
+            oldStatus = NormalizeStatus(current.Status);
+            newStatus = NormalizeStatus(entity.Status);
 
             var reserveSourceId = ReserveSourceIdForVacation(id);
+
             entity.UpdatedAt = DateTime.UtcNow;
+
             _logger.LogInformation(
                 "VAC UPDATE START TraceId={TraceId} VacationId={VacationId} EmpId={EmpId} OldStatus={OldStatus} NewStatus={NewStatus} SourceId={SourceId}",
                 traceId, id, current.EmployeeId, oldStatus, newStatus, reserveSourceId
@@ -181,47 +208,50 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
                 traceId, id, updated.EmployeeId, updated.Status
             );
 
-            // Reglas
-            bool oldCanceled = oldStatus is "REJECTED" or "CANCELED";
-            bool newCanceled = newStatus is "REJECTED" or "CANCELED";
-            bool newPending = newStatus is "PENDING";
-            bool newApproved = newStatus is "APPROVED";
+            // ----------------------------
+            // Reglas de saldo alineadas a:
+            // Planned | InProgress | Approved | Canceled | Completed
+            // ----------------------------
+            bool oldCanceled = oldStatus == "CANCELED";
+            bool newCanceled = newStatus == "CANCELED";
+            bool newPlanned = newStatus == "PLANNED";
+            bool newApproved = newStatus == "APPROVED";
 
             _logger.LogInformation(
-                "VAC UPDATE RULES TraceId={TraceId} VacationId={VacationId} oldCanceled={OldCanceled} newCanceled={NewCanceled} newPending={NewPending} newApproved={NewApproved}",
-                traceId, id, oldCanceled, newCanceled, newPending, newApproved
+                "VAC UPDATE RULES TraceId={TraceId} VacationId={VacationId} oldCanceled={OldCanceled} newCanceled={NewCanceled} newPlanned={NewPlanned} newApproved={NewApproved}",
+                traceId, id, oldCanceled, newCanceled, newPlanned, newApproved
             );
 
-            // A) pasa a REJECTED/CANCELED → liberar
+            // A) pasa a CANCELED → liberar
             if (!oldCanceled && newCanceled)
             {
                 _logger.LogInformation(
-                    "VAC REJECT/CANCEL => calling ReleaseReservationAsync TraceId={TraceId} VacationId={VacationId} EmpId={EmpId} SourceId={SourceId}",
+                    "VAC CANCEL => calling ReleaseReservationAsync TraceId={TraceId} VacationId={VacationId} EmpId={EmpId} SourceId={SourceId}",
                     traceId, id, updated.EmployeeId, reserveSourceId
                 );
 
                 var sp = await _hrRepo.ReleaseReservationAsync(reserveSourceId, updated.EmployeeId, adoTx);
 
                 _logger.LogInformation(
-                    "VAC REJECT/CANCEL => ReleaseReservationAsync result TraceId={TraceId} VacationId={VacationId} StatusCode={StatusCode} Ok={Ok} NoOp={NoOp} Message={Message}",
+                    "VAC CANCEL => ReleaseReservationAsync result TraceId={TraceId} VacationId={VacationId} StatusCode={StatusCode} Ok={Ok} NoOp={NoOp} Message={Message}",
                     traceId, id, sp.StatusCode, sp.Ok, sp.NoOp, sp.Message
                 );
 
                 if (!(sp.Ok || sp.NoOp)) throw new BusinessRuleException(sp.Message);
             }
 
-            // B) cancelado/rechazado → vuelve a PENDING → reservar de nuevo
-            if (oldCanceled && newPending)
+            // B) cancelado → vuelve a PLANNED → reservar de nuevo
+            if (oldCanceled && newPlanned)
             {
                 _logger.LogInformation(
-                    "VAC RE-PENDING => calling ReserveVacationAsync TraceId={TraceId} VacationId={VacationId} EmpId={EmpId}",
+                    "VAC RE-PLANNED => calling ReserveVacationAsync TraceId={TraceId} VacationId={VacationId} EmpId={EmpId}",
                     traceId, id, updated.EmployeeId
                 );
 
                 var sp = await _hrRepo.ReserveVacationAsync(id, updated.EmployeeId, adoTx);
 
                 _logger.LogInformation(
-                    "VAC RE-PENDING => ReserveVacationAsync result TraceId={TraceId} VacationId={VacationId} StatusCode={StatusCode} Ok={Ok} NoOp={NoOp} Message={Message}",
+                    "VAC RE-PLANNED => ReserveVacationAsync result TraceId={TraceId} VacationId={VacationId} StatusCode={StatusCode} Ok={Ok} NoOp={NoOp} Message={Message}",
                     traceId, id, sp.StatusCode, sp.Ok, sp.NoOp, sp.Message
                 );
 
@@ -254,6 +284,252 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
             );
         });
 
+        // CORREO: fuera de la transacción y solo si cambió el estado
+        if (updated is not null && !string.Equals(oldStatus, newStatus, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation(
+                "VAC STATUS change => disparando notificación. VacationId={VacationId} Old={Old} New={New}",
+                updated.VacationId, oldStatus, newStatus
+            );
+
+            await NotifyOnStatusChangedAsync(updated, oldStatus, newStatus, ct);
+        }
+
         return updated!;
+    }
+
+    // -----------------------
+    // Notificaciones por correo
+    // -----------------------
+
+    private async Task NotifyBossOnCreateAsync(Vacations created, CancellationToken ct)
+    {
+        try
+        {
+            if (created is null) return;
+
+            await _currentUser.LoadBossAsync(ct);
+
+            var toBoss = _currentUser.BossEmail?.Trim();
+            _logger.LogInformation("VAC CREATE => BossEmail={BossEmail} VacationId={VacationId}", toBoss, created.VacationId);
+
+            if (string.IsNullOrWhiteSpace(toBoss))
+            {
+                _logger.LogWarning("VAC CREATE => BossEmail vacío. VacationId={VacationId}", created.VacationId);
+                return;
+            }
+
+            var body = GenerateEmailBodyToApproveSafe(created);
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                _logger.LogWarning("VAC CREATE => body vacío. VacationId={VacationId}", created.VacationId);
+                return;
+            }
+
+            await _emailBuilder.TryNotifyAsync(
+                EmailTemplateKey.AttendancePunch,
+                $"Vacaciones #{created.VacationId} para aprobación",
+                body,
+                to: toBoss,
+                timeoutSeconds: 15,
+                ct: ct
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "VAC CREATE => fallo notificando al jefe. VacationId={VacationId}", created?.VacationId);
+        }
+    }
+
+    private async Task NotifyOnStatusChangedAsync(Vacations updated, string oldStatus, string newStatus, CancellationToken ct)
+    {
+        try
+        {
+            if (updated is null)
+            {
+                _logger.LogWarning("VAC STATUS change => Notify skipped: updated=null. Old={OldStatus} New={NewStatus}", oldStatus, newStatus);
+                return;
+            }
+
+            oldStatus = NormalizeStatus(oldStatus);
+            newStatus = NormalizeStatus(newStatus);
+
+            _logger.LogInformation(
+                "VAC STATUS change => preparando notificación. VacationId={VacationId} Old={Old} New={New}",
+                updated.VacationId, oldStatus, newStatus
+            );
+
+            // 1) Si pasa a PLANNED: notificar al jefe (solicitud / re-solicitud)
+            if (newStatus == "PLANNED")
+            {
+                await _currentUser.LoadBossAsync(ct);
+                var toBoss = _currentUser.BossEmail?.Trim();
+
+                if (string.IsNullOrWhiteSpace(toBoss))
+                {
+                    _logger.LogWarning("VAC STATUS change => BossEmail vacío. VacationId={VacationId}", updated.VacationId);
+                    return;
+                }
+
+                var body = GenerateEmailBodyToApproveSafe(updated);
+                if (string.IsNullOrWhiteSpace(body))
+                {
+                    _logger.LogWarning("VAC STATUS change => body vacío (to boss). VacationId={VacationId}", updated.VacationId);
+                    return;
+                }
+
+                await _emailBuilder.TryNotifyAsync(
+                    EmailTemplateKey.AttendancePunch,
+                    $"Vacaciones #{updated.VacationId} para aprobación",
+                    body,
+                    to: toBoss,
+                    timeoutSeconds: 15,
+                    ct: ct
+                );
+
+                return;
+            }
+
+            // 2) Approved / Canceled / InProgress / Completed: notificar al empleado
+            if (newStatus is "APPROVED" or "CANCELED" or "INPROGRESS" or "COMPLETED")
+            {
+                var owner = await _employeeDetails.GetEmployeeDetailsAsync(updated.EmployeeId, ct);
+                var toEmployee = owner?.Email?.Trim();
+
+                if (string.IsNullOrWhiteSpace(toEmployee))
+                {
+                    _logger.LogWarning(
+                        "VAC STATUS change => email de empleado no disponible. VacationId={VacationId} EmployeeId={EmployeeId}",
+                        updated.VacationId, updated.EmployeeId
+                    );
+                    return;
+                }
+
+                var body = GenerateEmailBodyChangeStatusSafe(updated, oldStatus, newStatus);
+                if (string.IsNullOrWhiteSpace(body))
+                {
+                    _logger.LogWarning("VAC STATUS change => body vacío (to employee). VacationId={VacationId}", updated.VacationId);
+                    return;
+                }
+
+                await _emailBuilder.TryNotifyAsync(
+                    EmailTemplateKey.AttendancePunch,
+                    $"Estado de vacaciones #{updated.VacationId}: {ToDbStatusTitleCase(newStatus)}",
+                    body,
+                    to: toEmployee,
+                    timeoutSeconds: 15,
+                    ct: ct
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "VAC STATUS change => fallo notificando. VacationId={VacationId} Old={OldStatus} New={NewStatus}",
+                updated?.VacationId, oldStatus, newStatus);
+        }
+    }
+
+    // -----------------------
+    // Helpers / Status / Body
+    // -----------------------
+
+    // Normaliza hacia los estados válidos en BD:
+    // Planned | InProgress | Approved | Canceled | Completed
+    private static string NormalizeStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return "PLANNED";
+
+        var v = status.Trim().ToUpperInvariant();
+
+        // Permite variantes comunes (por si llegan desde UI/legacy)
+        if (v.Contains("PLAN")) return "PLANNED";
+        if (v.Contains("INPROG") || v.Contains("IN_PROGRESS") || v.Contains("IN PROGRESS")) return "INPROGRESS";
+        if (v.Contains("APPROV")) return "APPROVED";
+        if (v.Contains("CANCEL")) return "CANCELED";
+        if (v.Contains("COMPLET")) return "COMPLETED";
+
+        // Si llega exacto, lo mapeamos
+        return v switch
+        {
+            "PLANNED" => "PLANNED",
+            "INPROGRESS" => "INPROGRESS",
+            "APPROVED" => "APPROVED",
+            "CANCELED" => "CANCELED",
+            "COMPLETED" => "COMPLETED",
+            _ => "PLANNED"
+        };
+    }
+
+    private static string ToDbStatusTitleCase(string normalized)
+        => normalized switch
+        {
+            "PLANNED" => "Planned",
+            "INPROGRESS" => "InProgress",
+            "APPROVED" => "Approved",
+            "CANCELED" => "Canceled",
+            "COMPLETED" => "Completed",
+            _ => "Planned"
+        };
+
+    private string GenerateEmailBodyToApproveSafe(Vacations vacations)
+    {
+        try
+        {
+            return GenerateEmailBodyToApprove(vacations) ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "VAC Email body generation failed (ToApprove). VacationId={VacationId}", vacations?.VacationId);
+            return string.Empty;
+        }
+    }
+
+    private string GenerateEmailBodyChangeStatusSafe(Vacations vacations, string oldStatus, string newStatus)
+    {
+        try
+        {
+            return GenerateEmailBodyChangeStatus(vacations, oldStatus, newStatus) ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "VAC Email body generation failed (ChangeStatus). VacationId={VacationId}", vacations?.VacationId);
+            return string.Empty;
+        }
+    }
+
+    private string GenerateEmailBodyToApprove(Vacations vacations)
+    {
+        var from = vacations.StartDate;
+        var to = vacations.EndDate;
+
+        var requesterName = string.IsNullOrWhiteSpace(_currentUser.UserName)
+            ? $"Empleado #{vacations.EmployeeId}"
+            : _currentUser.UserName;
+
+        return
+            $"<p>Registro de Vacaciones.</p>" +
+            $"<ul>" +
+            $"<p>Se ha registrado una solicitud de vacaciones para su aprobación</p>" +
+            $"<li><b>Empleado:</b> {requesterName}</li>" +
+            $"<li><b>Desde:</b> {from:yyyy-MM-dd}</li>" +
+            $"<li><b>Hasta:</b> {to:yyyy-MM-dd}</li>" +
+            $"<li><b>Días:</b> {vacations.DaysTaken}</li>" +
+            $"</ul>";
+    }
+
+    private static string GenerateEmailBodyChangeStatus(Vacations vacations, string oldStatus, string newStatus)
+    {
+        var from = vacations.StartDate;
+        var to = vacations.EndDate;
+
+        return
+            $"<p>Estado de Vacaciones.</p>" +
+            $"<ul>" +
+            $"<p>El estado de la solicitud #{vacations.VacationId} cambió de <b>{ToDbStatusTitleCase(oldStatus)}</b> a <b>{ToDbStatusTitleCase(newStatus)}</b>.</p>" +
+            $"<li><b>Desde:</b> {from:yyyy-MM-dd}</li>" +
+            $"<li><b>Hasta:</b> {to:yyyy-MM-dd}</li>" +
+            $"<li><b>Días:</b> {vacations.DaysTaken}</li>" +
+            $"</ul>";
     }
 }
