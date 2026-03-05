@@ -62,21 +62,25 @@ public static class ServiceCollectionExtensions
         var headers = cors.GetSection("AllowedHeaders").Get<string[]>() ?? new[] { "content-type", "authorization" };
         var methods = cors.GetSection("AllowedMethods").Get<string[]>() ?? new[] { "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" };
 
+        // Seguridad: no permitir AllowAnyOrigin en ningún entorno.
+        // Si no hay orígenes configurados, el sistema no debe arrancar.
+        if (origins.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "[CORS] No se han configurado orígenes permitidos en la sección 'Cors:Origins' de appsettings.json. " +
+                "Agregue al menos un origen válido (ej: http://localhost:5173) para garantizar la seguridad de la API.");
+        }
+
         services.AddCors(opt =>
         {
             opt.AddPolicy(policy, p =>
             {
-                // Si hay orígenes explícitos los aplica; de lo contrario permite cualquiera (útil en dev)
-                if (origins.Length > 0)
-                    p.WithOrigins(origins);
-                else
-                    p.AllowAnyOrigin();
-
-                p.WithHeaders(headers)
+                p.WithOrigins(origins)
+                 .WithHeaders(headers)
                  .WithMethods(methods);
 
-                // AllowCredentials solo es válido cuando se especifican orígenes concretos
-                if (allowCred && origins.Length > 0)
+                // AllowCredentials solo es válido con orígenes concretos (nunca con AllowAnyOrigin)
+                if (allowCred)
                     p.AllowCredentials();
             });
         });
