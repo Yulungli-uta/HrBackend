@@ -30,5 +30,10 @@ namespace WsUtaSystem.Application.Interfaces.Services
             CancellationToken ct = default);
         Task<IEnumerable<string>> GetAvailableFacultiesAsync(
             CancellationToken ct = default);
+        /// <summary>Retorna un resultado paginado de empleados.</summary>
+        Task<PagedResult<VwEmployeeDetails>> GetPagedAsync(
+            int page,
+            int pageSize,
+            CancellationToken ct = default);
     }
 }

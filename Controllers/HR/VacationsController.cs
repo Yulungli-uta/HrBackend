@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Vacations;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Models;
@@ -19,9 +20,33 @@ public class VacationsController : ControllerBase
         _mapper = mapper;
     }
 
+    /// <summary>Lista todas las vacaciones.</summary>
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<VacationsDto>>(await _svc.GetAllAsync(ct)));
+
+    /// <summary>Retorna un resultado paginado de vacaciones.</summary>
+    [HttpGet("paged")]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] string? sortDirection = "asc",
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 200) pageSize = 20;
+
+        var pagedEntities = await _svc.GetPagedAsync(page, pageSize, ct);
+        var pagedDto = new PagedResult<VacationsDto>
+        {
+            Items = _mapper.Map<List<VacationsDto>>(pagedEntities.Items),
+            Page = pagedEntities.Page,
+            PageSize = pagedEntities.PageSize,
+            TotalCount = pagedEntities.TotalCount
+        };
+        return Ok(pagedDto);
+    }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)

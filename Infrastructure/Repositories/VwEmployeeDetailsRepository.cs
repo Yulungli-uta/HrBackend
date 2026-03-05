@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Models.Views;
@@ -105,6 +106,30 @@ namespace WsUtaSystem.Infrastructure.Repositories
 
             return await Query()
                 .FirstOrDefaultAsync(e => e.Email == normalizedEmail, ct);
+        }
+
+        public async Task<PagedResult<VwEmployeeDetails>> GetPagedAsync(
+            int page,
+            int pageSize,
+            CancellationToken ct = default)
+        {
+            var query = Query()
+                .OrderBy(e => e.FirstName)
+                .ThenBy(e => e.LastName);
+
+            var totalCount = await query.LongCountAsync(ct);
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(ct);
+
+            return new PagedResult<VwEmployeeDetails>
+            {
+                Items = items,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount
+            };
         }
     }
 }
