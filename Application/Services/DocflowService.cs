@@ -324,7 +324,7 @@ namespace WsUtaSystem.Application.Services
             if (req.AllowVisibilityOverride.HasValue)
                 rule.AllowVisibilityOverride = req.AllowVisibilityOverride.Value;
 
-            await _docRuleRepo.UpdateAsync1(rule, ct);
+            await _docRuleRepo.UpdateAsync(rule.RuleId, rule, ct);
 
             _logger.LogInformation("Regla actualizada exitosamente: {RuleId}", ruleId);
 
