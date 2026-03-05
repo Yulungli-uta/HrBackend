@@ -22,7 +22,11 @@ namespace WsUtaSystem.Application.Interfaces.Repositories
             CancellationToken ct = default);
         Task<IEnumerable<int>> GetEmployeeTypesAsync(CancellationToken ct = default);
         Task<IEnumerable<string>> GetDepartmentsAsync(CancellationToken ct = default);
-        Task<IEnumerable<string>> GetFacultiesAsync(CancellationToken ct = default);    
-    
+        Task<IEnumerable<string>> GetFacultiesAsync(CancellationToken ct = default);
+        /// <summary>Retorna un resultado paginado de empleados ordenado por nombre.</summary>
+        Task<PagedResult<VwEmployeeDetails>> GetPagedAsync(
+            int page,
+            int pageSize,
+            CancellationToken ct = default);
     }
 }

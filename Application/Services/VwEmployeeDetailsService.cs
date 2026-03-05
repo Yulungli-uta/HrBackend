@@ -1,5 +1,6 @@
 ﻿// VwEmployeeDetailsService.cs
 using System.Diagnostics;
+using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Models.Views;
@@ -217,4 +218,12 @@ public class VwEmployeeDetailsService : IvwEmployeeDetailsService
             throw;
         }
     }
+    public async Task<PagedResult<VwEmployeeDetails>> GetPagedAsync(
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        return await _repository.GetPagedAsync(page, pageSize, ct);
+    }
+
 }
