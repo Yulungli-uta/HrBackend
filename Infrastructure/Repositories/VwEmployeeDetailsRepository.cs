@@ -131,5 +131,44 @@ namespace WsUtaSystem.Infrastructure.Repositories
                 TotalCount = totalCount
             };
         }
+
+        /// <summary>
+        /// Retorna empleados paginados con búsqueda por nombre, apellido, cédula o email.
+        /// Si search es null o vacío, retorna todos sin filtro.
+        /// </summary>
+        public async Task<PagedResult<VwEmployeeDetails>> GetPagedAsync(
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken ct = default)
+        {
+            var query = Query()
+                .OrderBy(e => e.FirstName)
+                .ThenBy(e => e.LastName);
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim().ToLower();
+                query = query.Where(e =>
+                    e.FirstName.ToLower().Contains(term) ||
+                    e.LastName.ToLower().Contains(term) ||
+                    e.IDCard.ToLower().Contains(term) ||
+                    e.Email.ToLower().Contains(term));
+            }
+
+            var totalCount = await query.LongCountAsync(ct);
+            var items = await query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(ct);
+
+            return new PagedResult<VwEmployeeDetails>
+            {
+                Items = items,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount
+            };
+        }
     }
 }

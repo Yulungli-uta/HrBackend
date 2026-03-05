@@ -55,6 +55,20 @@ public interface IRepository<TEntity, TKey> where TEntity : class
         bool ascending = true,
         params Expression<Func<TEntity, object>>[] includes);
 
+    /// <summary>
+    /// Retorna un resultado paginado con soporte de filtro dinámico, ordenamiento y eager loading.
+    /// Usar cuando se requiere búsqueda por texto u otros criterios específicos de la entidad.
+    /// </summary>
+    /// <param name="predicate">Expresión de filtro (WHERE). Si es null, no aplica filtro.</param>
+    Task<PagedResult<TEntity>> GetPagedAsync(
+        Expression<Func<TEntity, bool>>? predicate,
+        int page,
+        int pageSize,
+        CancellationToken ct,
+        Expression<Func<TEntity, object>>? orderBy = null,
+        bool ascending = true,
+        params Expression<Func<TEntity, object>>[] includes);
+
     /// <summary>Obtiene una entidad por su clave primaria.</summary>
     Task<TEntity?> GetByIdAsync(TKey id, CancellationToken ct);
 

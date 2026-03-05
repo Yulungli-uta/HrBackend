@@ -95,6 +95,54 @@ public class ServiceAwareEfRepository<TEntity, TKey> : IRepository<TEntity, TKey
     }
 
     /// <inheritdoc/>
+    public async Task<PagedResult<TEntity>> GetPagedAsync(
+        Expression<Func<TEntity, bool>>? predicate,
+        int page,
+        int pageSize,
+        CancellationToken ct,
+        Expression<Func<TEntity, object>>? orderBy = null,
+        bool ascending = true,
+        params Expression<Func<TEntity, object>>[] includes)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        IQueryable<TEntity> query = _set.AsNoTracking();
+
+        // Aplicar filtro dinámico (búsqueda en servidor)
+        if (predicate is not null)
+            query = query.Where(predicate);
+
+        // Aplicar eager loading
+        foreach (var include in includes)
+            query = query.Include(include);
+
+        // Contar total después del filtro para paginación correcta
+        var totalCount = await query.LongCountAsync(ct);
+        if (totalCount == 0)
+            return PagedResult<TEntity>.Empty(page, pageSize);
+
+        // Aplicar ordenamiento
+        query = orderBy is not null
+            ? (ascending ? query.OrderBy(orderBy) : query.OrderByDescending(orderBy))
+            : query;
+
+        // Aplicar paginación
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+
+        return new PagedResult<TEntity>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount
+        };
+    }
+
+    /// <inheritdoc/>
     public Task<TEntity?> GetByIdAsync(TKey id, CancellationToken ct) =>
         _set.FindAsync(new object?[] { id }, ct).AsTask();
 

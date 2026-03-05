@@ -35,5 +35,12 @@ namespace WsUtaSystem.Application.Interfaces.Services
             int page,
             int pageSize,
             CancellationToken ct = default);
+
+        /// <summary>Retorna un resultado paginado de empleados con filtro de búsqueda.</summary>
+        Task<PagedResult<VwEmployeeDetails>> GetPagedAsync(
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken ct = default);
     }
 }

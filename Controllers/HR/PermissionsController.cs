@@ -34,6 +34,7 @@ public class PermissionsController : ControllerBase
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
         [FromQuery] string? sortBy = null,
         [FromQuery] string? sortDirection = "asc",
         CancellationToken ct = default)
@@ -41,14 +42,28 @@ public class PermissionsController : ControllerBase
         if (page < 1) page = 1;
         if (pageSize < 1 || pageSize > 200) pageSize = 20;
 
-        var pagedEntities = await _svc.GetPagedAsync(page, pageSize, ct);
-        var pagedDto = new PagedResult<PermissionsDto>
+        System.Linq.Expressions.Expression<Func<Permissions, bool>>? predicate = null;
+        if (!string.IsNullOrWhiteSpace(search))
         {
-            Items = _mapper.Map<List<PermissionsDto>>(pagedEntities.Items),
-            Page = pagedEntities.Page,
-            PageSize = pagedEntities.PageSize,
-            TotalCount = pagedEntities.TotalCount
-        };
+            var term = search.Trim().ToLower();
+            predicate = p => (p.Justification != null && p.Justification.ToLower().Contains(term)) || p.Status.ToLower().Contains(term);
+        }
+
+        var pagedEntities = predicate is not null
+            ? await _svc.GetPagedAsync(predicate, page, pageSize, ct)
+            : await _svc.GetPagedAsync(page, pageSize, ct);
+
+        return Ok(new
+        {
+            items = pagedEntities.Items,
+            page = pagedEntities.Page,
+            pageSize = pagedEntities.PageSize,
+            totalCount = pagedEntities.TotalCount,
+            totalPages = pagedEntities.TotalPages,
+            hasPreviousPage = pagedEntities.HasPreviousPage,
+            hasNextPage = pagedEntities.HasNextPage
+        });
+    };
         return Ok(pagedDto);
     }
 

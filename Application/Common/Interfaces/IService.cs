@@ -42,4 +42,18 @@ public interface IService<TEntity, TKey> where TEntity : class
         Expression<Func<TEntity, object>>? orderBy = null,
         bool ascending = true,
         params Expression<Func<TEntity, object>>[] includes);
+
+    /// <summary>
+    /// Retorna un resultado paginado con filtro dinámico para búsqueda en servidor.
+    /// Usar cuando se requiere filtrar por texto u otros criterios específicos de la entidad.
+    /// </summary>
+    /// <param name="predicate">Expresión de filtro (WHERE). Si es null, no aplica filtro.</param>
+    Task<PagedResult<TEntity>> GetPagedAsync(
+        Expression<Func<TEntity, bool>>? predicate,
+        int page,
+        int pageSize,
+        CancellationToken ct,
+        Expression<Func<TEntity, object>>? orderBy = null,
+        bool ascending = true,
+        params Expression<Func<TEntity, object>>[] includes);
 }
