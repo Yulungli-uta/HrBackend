@@ -48,6 +48,17 @@ public class Service<TEntity, TKey> : IService<TEntity, TKey> where TEntity : cl
         _repo.GetPagedAsync(page, pageSize, ct, orderBy, ascending, includes);
 
     /// <inheritdoc/>
+    public Task<PagedResult<TEntity>> GetPagedAsync(
+        Expression<Func<TEntity, bool>>? predicate,
+        int page,
+        int pageSize,
+        CancellationToken ct,
+        Expression<Func<TEntity, object>>? orderBy = null,
+        bool ascending = true,
+        params Expression<Func<TEntity, object>>[] includes) =>
+        _repo.GetPagedAsync(predicate, page, pageSize, ct, orderBy, ascending, includes);
+
+    /// <inheritdoc/>
     public async Task DeleteAsync(TKey id, CancellationToken ct)
     {
         var entity = await _repo.GetByIdAsync(id, ct)

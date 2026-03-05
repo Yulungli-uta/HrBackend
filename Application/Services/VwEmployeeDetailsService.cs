@@ -226,4 +226,13 @@ public class VwEmployeeDetailsService : IvwEmployeeDetailsService
         return await _repository.GetPagedAsync(page, pageSize, ct);
     }
 
+    /// <inheritdoc/>
+    public async Task<PagedResult<VwEmployeeDetails>> GetPagedAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        return await _repository.GetPagedAsync(search, page, pageSize, ct);
+    }
 }

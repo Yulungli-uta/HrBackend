@@ -28,5 +28,12 @@ namespace WsUtaSystem.Application.Interfaces.Repositories
             int page,
             int pageSize,
             CancellationToken ct = default);
+
+        /// <summary>Retorna un resultado paginado de empleados con filtro de búsqueda por nombre, apellido o cédula.</summary>
+        Task<PagedResult<VwEmployeeDetails>> GetPagedAsync(
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken ct = default);
     }
 }

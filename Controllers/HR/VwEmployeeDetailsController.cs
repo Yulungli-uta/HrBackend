@@ -33,6 +33,7 @@ namespace WsUtaSystem.Controllers.HR
         public async Task<IActionResult> GetPaged(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20,
+            [FromQuery] string? search = null,
             [FromQuery] string? sortBy = null,
             [FromQuery] string? sortDirection = "asc",
             CancellationToken ct = default)
@@ -40,7 +41,10 @@ namespace WsUtaSystem.Controllers.HR
             if (page < 1) page = 1;
             if (pageSize < 1 || pageSize > 200) pageSize = 20;
 
-            var paged = await _employeeDetailsService.GetPagedAsync(page, pageSize, ct);
+            var paged = !string.IsNullOrWhiteSpace(search)
+                ? await _employeeDetailsService.GetPagedAsync(search, page, pageSize, ct)
+                : await _employeeDetailsService.GetPagedAsync(page, pageSize, ct);
+
             return Ok(paged);
         }
 

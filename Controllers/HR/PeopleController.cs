@@ -35,6 +35,7 @@ public class PeopleController : ControllerBase
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
         [FromQuery] string? sortBy = null,
         [FromQuery] string? sortDirection = "asc",
         CancellationToken ct = default)
@@ -42,14 +43,28 @@ public class PeopleController : ControllerBase
         if (page < 1) page = 1;
         if (pageSize < 1 || pageSize > 200) pageSize = 20;
 
-        var pagedEntities = await _svc.GetPagedAsync(page, pageSize, ct);
-        var pagedDto = new PagedResult<PeopleDto>
+        System.Linq.Expressions.Expression<Func<People, bool>>? predicate = null;
+        if (!string.IsNullOrWhiteSpace(search))
         {
-            Items = _mapper.Map<List<PeopleDto>>(pagedEntities.Items),
-            Page = pagedEntities.Page,
-            PageSize = pagedEntities.PageSize,
-            TotalCount = pagedEntities.TotalCount
-        };
+            var term = search.Trim().ToLower();
+            predicate = p => p.FirstName.ToLower().Contains(term) || p.LastName.ToLower().Contains(term) || p.IdCard.ToLower().Contains(term) || p.Email.ToLower().Contains(term);
+        }
+
+        var pagedEntities = predicate is not null
+            ? await _svc.GetPagedAsync(predicate, page, pageSize, ct)
+            : await _svc.GetPagedAsync(page, pageSize, ct);
+
+        return Ok(new
+        {
+            items = pagedEntities.Items,
+            page = pagedEntities.Page,
+            pageSize = pagedEntities.PageSize,
+            totalCount = pagedEntities.TotalCount,
+            totalPages = pagedEntities.TotalPages,
+            hasPreviousPage = pagedEntities.HasPreviousPage,
+            hasNextPage = pagedEntities.HasNextPage
+        });
+    };
         return Ok(pagedDto);
     }
 
