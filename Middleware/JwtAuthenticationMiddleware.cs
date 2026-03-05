@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Claims;
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Services;
 
@@ -45,9 +46,6 @@ public class JwtAuthenticationMiddleware
         var method = context.Request.Method;
         var traceId = context.TraceIdentifier;
 
-        // Log inicial crítico para confirmar que el middleware está vivo
-        //_logger.LogInformation("[AUTH-MW] Request recibida: {Method} {Path} (Trace: {TraceId})", method, path, traceId);
-
         var swTotal = Stopwatch.StartNew();
 
         try
@@ -78,8 +76,7 @@ public class JwtAuthenticationMiddleware
                 return;
             }
 
-            // 4. Resolución de Servicios (IMPORTANTE: Esto evita el Deadlock)
-            // Resolvemos aquí dentro para que si hay una circularidad, podamos loguear el error exacto
+            // 4. Resolución de Servicios
             var tokenValidationService = context.RequestServices.GetRequiredService<ITokenValidationService>();
             var employeeDetailsService = context.RequestServices.GetRequiredService<IvwEmployeeDetailsService>();
 
@@ -88,7 +85,6 @@ public class JwtAuthenticationMiddleware
 
             if (!validationResult.IsValid)
             {
-                //_logger.LogWarning("[AUTH-MW] Token inválido: {Msg}", validationResult.Message);
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 await context.Response.WriteAsJsonAsync(new { error = "Token inválido", message = validationResult.Message });
                 return;
@@ -99,16 +95,15 @@ public class JwtAuthenticationMiddleware
             context.Items["UserEmail"] = validationResult.Email;
             context.Items["UserRoles"] = validationResult.Roles;
 
-            // 7. Búsqueda de EmployeeId (con guardián anti-recursión)
+            // 7. Búsqueda de EmployeeId
             int? employeeId = null;
             var skipLookup = ShouldSkipEmployeeLookup(path) || (context.Items.TryGetValue(SkipLookupFlagKey, out var f) && f is true);
 
             if (!skipLookup && !string.IsNullOrWhiteSpace(validationResult.Email))
             {
-                context.Items[SkipLookupFlagKey] = true; // Marcamos para evitar re-entrada
+                context.Items[SkipLookupFlagKey] = true;
                 try
                 {
-                    // Timeout de seguridad de 5 segundos para la DB
                     using var cts = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
                     cts.CancelAfter(TimeSpan.FromSeconds(5));
 
@@ -126,13 +121,39 @@ public class JwtAuthenticationMiddleware
             // 8. Construir el Principal para el sistema de seguridad de .NET
             context.User = BuildPrincipal(validationResult.Email, validationResult.UserId, validationResult.Roles, employeeId);
 
-            // 9. Continuar la cadena
+            // 9. NUEVO: Cargar detalles del empleado en caché para que DepartmentID esté disponible
+            if (employeeId.HasValue)
+            {
+                try
+                {
+                    var currentUserService = context.RequestServices.GetRequiredService<ICurrentUserService>();
+                    var meDetails = await currentUserService.LoadMeAsync(context.RequestAborted);
+
+                    if (meDetails is not null)
+                    {
+                        _logger.LogInformation(
+                            "[AUTH-MW] Detalles del empleado cargados: EmployeeId={EmployeeId} | Departamento={Dept} | DepartmentID={DeptId}",
+                            employeeId, meDetails.Department, meDetails.DepartmentID);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("[AUTH-MW] No se encontraron detalles para empleado {EmployeeId}", employeeId);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "[AUTH-MW] Error cargando detalles del empleado {EmployeeId}", employeeId);
+                    // No lanzar excepción aquí, permitir que continúe
+                }
+            }
+
+            // 10. Continuar la cadena
             await _next(context);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[AUTH-MW] Error crítico en el pipeline de autenticación");
-            throw; // Re-lanzar para que el middleware de excepciones lo capture
+            throw;
         }
         finally
         {

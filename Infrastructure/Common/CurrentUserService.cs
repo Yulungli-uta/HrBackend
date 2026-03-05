@@ -72,6 +72,8 @@ public sealed class CurrentUserService : ICurrentUserService
     public int? BossId => TryGetBossFromCache()?.BossId;
     public string? BossName => TryGetBossFromCache()?.FullName;
     public string? BossEmail => TryGetBossFromCache()?.Email;
+    public int? DepartmentID => TryGetMeFromCache()?.DepartmentID;
+    public string? DepartmentName => TryGetMeFromCache()?.Department;
 
     public async Task<CurrentBossInfo?> LoadBossAsync(CancellationToken ct = default)
     {
@@ -122,6 +124,14 @@ public sealed class CurrentUserService : ICurrentUserService
         ctx.Items[BossCacheKey] = bossInfo;
 
         return bossInfo;
+    }
+
+    public async Task<VwEmployeeDetails?> LoadMeAsync(CancellationToken ct = default)
+    {
+        var myId = EmployeeId;
+        if (myId is null || myId <= 0) return null;
+
+        return await GetMeDetailsAsync(myId.Value, ct);
     }
 
     private CurrentBossInfo? TryGetBossFromCache()
@@ -179,5 +189,14 @@ public sealed class CurrentUserService : ICurrentUserService
 
         var device = ctx.Request.Headers["X-Device-Info"].ToString();
         return string.IsNullOrWhiteSpace(device) ? null : device;
+    }
+
+    private VwEmployeeDetails? TryGetMeFromCache()
+    {
+        var ctx = Ctx;
+        if (ctx is null) return null;
+        return ctx.Items.TryGetValue(MeCacheKey, out var cached)
+            ? cached as VwEmployeeDetails
+            : null;
     }
 }
