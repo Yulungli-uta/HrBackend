@@ -20,6 +20,7 @@ namespace WsUtaSystem.Models.Views
         public string? Schedule { get; set; }
         [Column("ImmediateBossID")]
         public int? ImmediateBossID { get; set; }
+        public int? DepartmentID { get; set; }
         public string? Department { get; set; }
         //public string? Faculty { get; set; }
         [Column(TypeName = "decimal(18,2)")]

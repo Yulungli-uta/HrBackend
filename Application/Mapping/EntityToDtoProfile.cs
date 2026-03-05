@@ -1,9 +1,11 @@
 using AutoMapper;
+using WsUtaSystem.Application.DTOs.Docflow;
 using WsUtaSystem.Application.DTOs.VwAttendanceDay;
 using WsUtaSystem.Application.DTOs.VwEmployeeScheduleAtDate;
 using WsUtaSystem.Application.DTOs.VwLeaveWindows;
 using WsUtaSystem.Application.DTOs.VwPunchDay;
 using WsUtaSystem.Models;
+using WsUtaSystem.Models.Docflow;
 using WsUtaSystem.Models.Views;
 namespace WsUtaSystem.Application.Mapping;
 public class EntityToDtoProfile : Profile
@@ -190,6 +192,15 @@ public class EntityToDtoProfile : Profile
         CreateMap<EmailLog, WsUtaSystem.Application.DTOs.Email.EmailLayoutUpdateDto>().ReverseMap();
         CreateMap<EmailLogAttachment, WsUtaSystem.Application.DTOs.Email.EmailLogAttachmentDto>().ReverseMap();
         CreateMap<EmailLogAttachment, WsUtaSystem.Application.DTOs.Email.EmailLogAttachmentCreateDto>().ReverseMap();
-        
+
+
+        /*DOCFLOW*/
+        CreateMap<DocflowProcessHierarchy, ProcessDto>();
+        CreateMap<DocflowDocumentRule, DocumentRuleDto>();
+        CreateMap<DocflowWorkflowInstance, InstanceListItemDto>();
+        CreateMap<DocflowWorkflowInstance, InstanceDetailDto>();
+        CreateMap<DocflowDocument, DocumentDto>();
+        CreateMap<DocflowFileVersion, FileVersionDto>();
+
     }
 }

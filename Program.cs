@@ -1,573 +1,115 @@
-using DocumentFormat.OpenXml.Office2016.Drawing.ChartDrawing;
-using DocumentFormat.OpenXml.Wordprocessing;
-using FluentValidation;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using Microsoft.OpenApi.Models;
 using Serilog;
-using Serilog.Events;
-using Swashbuckle.AspNetCore.SwaggerGen;
-using System.Reflection;
-using System.Text.Json.Serialization;
-using WsUtaSystem.Application.Common.Email;
-using WsUtaSystem.Application.Common.Interfaces;
-using WsUtaSystem.Application.Common.Services;
-using WsUtaSystem.Application.Interfaces.Email;
-using WsUtaSystem.Application.Interfaces.Repositories;
-using WsUtaSystem.Application.Interfaces.Services;
-using WsUtaSystem.Application.Services;
 using WsUtaSystem.Endpoints;
-using WsUtaSystem.Filters;
-using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Infrastructure.DependencyInjection;
-using WsUtaSystem.Infrastructure.Email;
-using WsUtaSystem.Infrastructure.Filters;
-using WsUtaSystem.Infrastructure.Interceptors;
 using WsUtaSystem.Infrastructure.Jobs;
-using WsUtaSystem.Infrastructure.Repositories;
-using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Middleware;
+
+// =========================================================
+// BOOTSTRAP DE LA APLICACIÓN
+//
+// Este archivo únicamente orquesta:
+//   1. El registro de servicios (delegado a ServiceCollectionExtensions)
+//   2. La construcción del pipeline HTTP en el orden correcto
+//
+// Regla: NO debe haber lógica de negocio ni configuración inline aquí.
+// Toda la configuración de servicios vive en DependencyInjection.cs
+// =========================================================
 
 var builder = WebApplication.CreateBuilder(args);
 
-// =========================================================
-// CORS (config desde appsettings.json)
-// =========================================================
-var cors = builder.Configuration.GetSection("Cors");
-var corsName = cors["PolicyName"] ?? "Frontend";
-var origins = cors.GetSection("Origins").Get<string[]>() ?? Array.Empty<string>();
-var allowCred = bool.TryParse(cors["AllowCredentials"], out var ac) && ac;
-var headers = cors.GetSection("AllowedHeaders").Get<string[]>() ?? new[] { "content-type", "authorization" };
-var methods = cors.GetSection("AllowedMethods").Get<string[]>() ?? new[] { "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS" };
+// ── 1. Logging estructurado ──────────────────────────────────────────────────
+// Debe configurarse primero para capturar logs del resto del proceso de arranque
+builder.AddSerilogConfiguration();
 
-builder.Services.AddCors(opt =>
-{
-    opt.AddPolicy(corsName, p =>
-    {
-        if (origins.Length > 0)
-            p.WithOrigins(origins);
-        else
-            p.AllowAnyOrigin();
+// ── 2. CORS ───────────────────────────────────────────────────────────────────
+// El nombre de la política se necesita más adelante en el pipeline HTTP
+var corsPolicy = builder.Services.AddCorsConfiguration(builder.Configuration);
 
-        p.WithHeaders(headers)
-         .WithMethods(methods);
+// ── 3. Controllers + JSON ─────────────────────────────────────────────────────
+builder.Services.AddControllersConfiguration();
 
-        if (allowCred)
-            p.AllowCredentials();
-    });
-});
-// =========================================================
-// Log Directory (configuracion del directorio del log )
-// =========================================================
-//var appBase = AppContext.BaseDirectory;
-//var logDir = Path.Combine(appBase, "log");
-//Directory.CreateDirectory(logDir);
+// ── 4. Swagger / OpenAPI ──────────────────────────────────────────────────────
+builder.Services.AddSwaggerConfiguration();
 
+// ── 5. AutoMapper + FluentValidation ─────────────────────────────────────────
+builder.Services.AddMappingAndValidation();
 
-// =========================================================
-// Logging
-// =========================================================
-//builder.Services.AddLogging(loggingBuilder =>
-//{
-//    loggingBuilder.AddConsole();
-//    loggingBuilder.AddDebug();
-//});
+// ── 6. Repositorios y servicios genéricos ────────────────────────────────────
+builder.Services.AddGenericRepositories();
 
-// =========================================================
-// Serilog
-// =========================================================
-builder.Logging.ClearProviders();
-Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Information()
-    //.MinimumLevel.Override("Microsoft", LogEventLevel.Information)
-    //.MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Information)
-    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-    .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
-    .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
-    .Enrich.FromLogContext()
-    .WriteTo.Console()
-    .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day)
-    .CreateLogger();
+// ── 7. Dominio RH: todos los repositorios y servicios por entidad ─────────────
+builder.Services.AddDomainServices();
 
-builder.Host.UseSerilog();
-// =========================================================
-// Controllers + JSON + Filtro de modelo
-// =========================================================
-builder.Services.AddControllers(o => o.Filters.Add<ValidateModelFilter>())
-    .AddJsonOptions(o =>
-    {
-        o.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
-        o.JsonSerializerOptions.WriteIndented = true;
-        o.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-    });
+// ── 8. Módulo Docflow ─────────────────────────────────────────────────────────
+builder.Services.AddDocflowServices();
 
-builder.Services.AddEndpointsApiExplorer();
+// ── 9. Sistema de Email ───────────────────────────────────────────────────────
+builder.Services.AddEmailServices(builder.Configuration);
 
-// =========================================================
-// Swagger avanzado
-// =========================================================
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "WsUtaSystem API",
-        Version = "v1",
-        Description = "Sistema de Gestión de Recursos Humanos - UTA",
-        Contact = new OpenApiContact
-        {
-            Name = "Equipo de Desarrollo",
-            Email = "desarrollo@uta.edu.ec"
-        }
-    });
+// ── 10. Reportes ──────────────────────────────────────────────────────────────
+builder.Services.AddReportServices(builder.Configuration);
 
-    // Manejo de herencia / polimorfismo
-    c.UseAllOfToExtendReferenceSchemas();
-    c.UseAllOfForInheritance();
-    c.UseOneOfForPolymorphism();
+// ── 11. Permisos de usuario ───────────────────────────────────────────────────
+builder.Services.AddUserPermissionServices();
 
-    // Resolver conflictos de acciones
-    c.ResolveConflictingActions(apiDescriptions => apiDescriptions.First());
+// ── 12. Autenticación JWT + usuario actual ────────────────────────────────────
+builder.Services.AddAuthServices();
 
-    // OperationIds personalizados
-    c.CustomOperationIds(apiDesc =>
-    {
-        return apiDesc.TryGetMethodInfo(out MethodInfo methodInfo)
-            ? $"{methodInfo.DeclaringType?.Name}_{methodInfo.Name}"
-            : null;
-    });
+// ── 13. Base de datos + interceptores EF Core ────────────────────────────────
+// Debe ir después de AddAuthServices porque el interceptor de auditoría
+// depende de ICurrentUserService
+builder.Services.AddDatabaseServices(builder.Configuration, builder.Environment);
 
-    // Tags por controlador
-    c.TagActionsBy(api =>
-    {
-        var controllerName = api.ActionDescriptor.RouteValues["controller"];
-        return new[] { controllerName };
-    });
-
-    // Prefijo de ruta en Swagger para que coincida con /api/v1/rh
-    c.DocumentFilter<PathPrefixDocumentFilter>("/api/v1/rh");
-
-    // Comentarios XML
-    try
-    {
-        var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-        var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-
-        if (File.Exists(xmlPath))
-        {
-            c.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
-        }
-    }
-    catch
-    {
-        // Ignorar errores de XML comments
-    }
-});
-
-// =========================================================
-// AutoMapper & Validadores
-// =========================================================
-builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
-builder.Services.AddValidatorsFromAssemblyContaining<WsUtaSystem.Application.Mapping.EntityToDtoProfile>();
-
-// =========================================================
-// Servicios de Reportes
-// =========================================================
-builder.Services.AddSingleton(sp =>
-{
-    var config = new WsUtaSystem.Application.Services.Reports.Configuration.ReportConfiguration();
-    builder.Configuration.GetSection("Reports").Bind(config);
-    return config;
-});
-
-builder.Services.AddScoped<
-    WsUtaSystem.Application.Interfaces.Reports.IReportRepository,
-    WsUtaSystem.Infrastructure.Repositories.Reports.ReportRepository>();
-
-builder.Services.AddScoped<WsUtaSystem.Infrastructure.Repositories.Reports.ReportAuditRepository>();
-builder.Services.AddScoped<
-    WsUtaSystem.Application.Interfaces.Reports.IReportAuditService,
-    WsUtaSystem.Application.Services.Reports.ReportAuditService>();
-
-builder.Services.AddScoped<
-    WsUtaSystem.Application.Interfaces.Reports.IReportService,
-    WsUtaSystem.Application.Services.Reports.ReportService>();
-
-// =========================================================
-// Servicios de Permisos de Usuario
-// =========================================================
-builder.Services.AddScoped<
-    Application.Interfaces.Repositories.IUserPermissionRepository,
-    Infrastructure.Repositories.UserPermissionRepository>();
-
-builder.Services.AddScoped<
-    Application.Interfaces.Services.IUserPermissionService,
-    Application.Services.UserPermissionService>();
-
-// =========================================================
-// DB
-// =========================================================
-var cs = builder.Configuration.GetConnectionString("SqlServerConn")
-        ?? builder.Configuration.GetConnectionString("Sql")
-        ?? builder.Configuration.GetConnectionString("SqlServer")
-        ?? throw new InvalidOperationException("No se encontró cadena de conexión.");
-
-if (!cs.Contains("Integrated Security", StringComparison.OrdinalIgnoreCase) &&
-    !cs.Contains("Authentication", StringComparison.OrdinalIgnoreCase))
-{
-    cs += ";Integrated Security=False;Authentication=SqlPassword;";
-}
-
-// Interceptor de auditoría - agregado al DbContext - error
-//builder.Services.AddDbContext<WsUtaSystem.Data.AppDbContext>(o =>
-//    o.UseSqlServer(cs, sql => sql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null)));
-//builder.Services.AddDbContext<WsUtaSystem.Data.AppDbContext>((sp, o) =>
-//{
-//    o.UseSqlServer(cs, sql =>
-//        sql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null));
-
-//    o.AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>());
-//});
-
-// =========================================================
-// DI genérica
-// =========================================================
-builder.Services.AddScoped(typeof(IRepository<,>), typeof(ServiceAwareEfRepository<,>));
-builder.Services.AddScoped(typeof(IService<,>), typeof(Service<,>));
-
-// =========================================================
-// DI por entidad (lo que ya tenías)
-// =========================================================
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IAddressesRepository, WsUtaSystem.Infrastructure.Repositories.AddressesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IAddressesService, WsUtaSystem.Application.Services.AddressesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IAttendanceCalculationsRepository, WsUtaSystem.Infrastructure.Repositories.AttendanceCalculationsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IAttendanceCalculationsService, WsUtaSystem.Application.Services.AttendanceCalculationsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IAttendancePunchesRepository, WsUtaSystem.Infrastructure.Repositories.AttendancePunchesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IAttendancePunchesService, WsUtaSystem.Application.Services.AttendancePunchesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IAuditRepository, WsUtaSystem.Infrastructure.Repositories.AuditRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IAuditService, WsUtaSystem.Application.Services.AuditService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IBankAccountsRepository, WsUtaSystem.Infrastructure.Repositories.BankAccountsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IBankAccountsService, WsUtaSystem.Application.Services.BankAccountsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IBooksRepository, WsUtaSystem.Infrastructure.Repositories.BooksRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IBooksService, WsUtaSystem.Application.Services.BooksService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ICantonsRepository, WsUtaSystem.Infrastructure.Repositories.CantonsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ICantonsService, WsUtaSystem.Application.Services.CantonsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ICatastrophicIllnessesRepository, WsUtaSystem.Infrastructure.Repositories.CatastrophicIllnessesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ICatastrophicIllnessesService, WsUtaSystem.Application.Services.CatastrophicIllnessesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IContractsRepository, WsUtaSystem.Infrastructure.Repositories.ContractsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractsService, WsUtaSystem.Application.Services.ContractsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ICountriesRepository, WsUtaSystem.Infrastructure.Repositories.CountriesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ICountriesService, WsUtaSystem.Application.Services.CountriesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDepartmentsRepository, WsUtaSystem.Infrastructure.Repositories.DepartmentsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDepartmentsService, WsUtaSystem.Application.Services.DepartmentsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEducationLevelsRepository, WsUtaSystem.Infrastructure.Repositories.EducationLevelsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEducationLevelsService, WsUtaSystem.Application.Services.EducationLevelsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEmergencyContactsRepository, WsUtaSystem.Infrastructure.Repositories.EmergencyContactsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmergencyContactsService, WsUtaSystem.Application.Services.EmergencyContactsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEmployeeSchedulesRepository, WsUtaSystem.Infrastructure.Repositories.EmployeeSchedulesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmployeeSchedulesService, WsUtaSystem.Application.Services.EmployeeSchedulesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEmployeesRepository, WsUtaSystem.Infrastructure.Repositories.EmployeesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmployeesService, WsUtaSystem.Application.Services.EmployeesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IFacultiesRepository, WsUtaSystem.Infrastructure.Repositories.FacultiesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFacultiesService, WsUtaSystem.Application.Services.FacultiesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IFamilyBurdenRepository, WsUtaSystem.Infrastructure.Repositories.FamilyBurdenRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFamilyBurdenService, WsUtaSystem.Application.Services.FamilyBurdenService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IInstitutionsRepository, WsUtaSystem.Infrastructure.Repositories.InstitutionsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IInstitutionsService, WsUtaSystem.Application.Services.InstitutionsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IOvertimeRepository, WsUtaSystem.Infrastructure.Repositories.OvertimeRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IOvertimeService, WsUtaSystem.Application.Services.OvertimeService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IOvertimeConfigRepository, WsUtaSystem.Infrastructure.Repositories.OvertimeConfigRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IOvertimeConfigService, WsUtaSystem.Application.Services.OvertimeConfigService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPayrollRepository, WsUtaSystem.Infrastructure.Repositories.PayrollRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPayrollService, WsUtaSystem.Application.Services.PayrollService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPayrollLinesRepository, WsUtaSystem.Infrastructure.Repositories.PayrollLinesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPayrollLinesService, WsUtaSystem.Application.Services.PayrollLinesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPeopleRepository, WsUtaSystem.Infrastructure.Repositories.PeopleRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPeopleService, WsUtaSystem.Application.Services.PeopleService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPermissionTypesRepository, WsUtaSystem.Infrastructure.Repositories.PermissionTypesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPermissionTypesService, WsUtaSystem.Application.Services.PermissionTypesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPermissionsRepository, WsUtaSystem.Infrastructure.Repositories.PermissionsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPermissionsService, WsUtaSystem.Application.Services.PermissionsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPersonnelMovementsRepository, WsUtaSystem.Infrastructure.Repositories.PersonnelMovementsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPersonnelMovementsService, WsUtaSystem.Application.Services.PersonnelMovementsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IProvincesRepository, WsUtaSystem.Infrastructure.Repositories.ProvincesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IProvincesService, WsUtaSystem.Application.Services.ProvincesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPublicationsRepository, WsUtaSystem.Infrastructure.Repositories.PublicationsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPublicationsService, WsUtaSystem.Application.Services.PublicationsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPunchJustificationsRepository, WsUtaSystem.Infrastructure.Repositories.PunchJustificationsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPunchJustificationsService, WsUtaSystem.Application.Services.PunchJustificationsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IJustificationsService, WsUtaSystem.Application.Services.JustificationsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IRefTypesRepository, WsUtaSystem.Infrastructure.Repositories.RefTypesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IRefTypesService, WsUtaSystem.Application.Services.RefTypesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ISalaryHistoryRepository, WsUtaSystem.Infrastructure.Repositories.SalaryHistoryRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ISalaryHistoryService, WsUtaSystem.Application.Services.SalaryHistoryService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ISchedulesRepository, WsUtaSystem.Infrastructure.Repositories.SchedulesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ISchedulesService, WsUtaSystem.Application.Services.SchedulesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ISubrogationsRepository, WsUtaSystem.Infrastructure.Repositories.SubrogationsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ISubrogationsService, WsUtaSystem.Application.Services.SubrogationsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimeRecoveryLogsRepository, WsUtaSystem.Infrastructure.Repositories.TimeRecoveryLogsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimeRecoveryLogsService, WsUtaSystem.Application.Services.TimeRecoveryLogsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimeRecoveryPlansRepository, WsUtaSystem.Infrastructure.Repositories.TimeRecoveryPlansRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimeRecoveryPlansService, WsUtaSystem.Application.Services.TimeRecoveryPlansService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITrainingsRepository, WsUtaSystem.Infrastructure.Repositories.TrainingsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITrainingsService, WsUtaSystem.Application.Services.TrainingsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IVacationsRepository, WsUtaSystem.Infrastructure.Repositories.VacationsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVacationsService, WsUtaSystem.Application.Services.VacationsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IWorkExperiencesRepository, WsUtaSystem.Infrastructure.Repositories.WorkExperiencesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IWorkExperiencesService, WsUtaSystem.Application.Services.WorkExperiencesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IvwEmployeeCompleteRepository, WsUtaSystem.Infrastructure.Repositories.VwEmployeeCompleteRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IvwEmployeeCompleteService, WsUtaSystem.Application.Services.VwEmployeeCompleteService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IJobRepository, WsUtaSystem.Infrastructure.Repositories.JobRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IJobService, WsUtaSystem.Application.Services.JobService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimeService, WsUtaSystem.Application.Services.TimeService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IvwEmployeeDetailsRepository, WsUtaSystem.Infrastructure.Repositories.VwEmployeeDetailsRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IvwEmployeeDetailsService, WsUtaSystem.Application.Services.VwEmployeeDetailsService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IHolidayRepository, WsUtaSystem.Infrastructure.Repositories.HolidayRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimePlanningRepository, WsUtaSystem.Infrastructure.Repositories.TimePlanningRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimePlanningEmployeeRepository, WsUtaSystem.Infrastructure.Repositories.TimePlanningEmployeeRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimePlanningExecutionRepository, WsUtaSystem.Infrastructure.Repositories.TimePlanningExecutionRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IHolidayService, WsUtaSystem.Application.Services.HolidayService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimePlanningService, WsUtaSystem.Application.Services.TimePlanningService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimePlanningEmployeeService, WsUtaSystem.Application.Services.TimePlanningEmployeeService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimePlanningExecutionService, WsUtaSystem.Application.Services.TimePlanningExecutionService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IActivityService, WsUtaSystem.Application.Services.ActivityService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IAdditionalActivityService, WsUtaSystem.Application.Services.AdditionalActivityService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractTypeService, WsUtaSystem.Application.Services.ContractTypeService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDegreeService, WsUtaSystem.Application.Services.DegreeService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IOccupationalGroupService, WsUtaSystem.Application.Services.OccupationalGroupService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IJobActivityService, WsUtaSystem.Application.Services.JobActivityService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IActivityRepository, WsUtaSystem.Infrastructure.Repositories.ActivityRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IAdditionalActivityRepository, WsUtaSystem.Infrastructure.Repositories.AdditionalActivityRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IContractTypeRepository, WsUtaSystem.Infrastructure.Repositories.ContractTypeRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDegreeRepository, WsUtaSystem.Infrastructure.Repositories.DegreeRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IOccupationalGroupRepository, WsUtaSystem.Infrastructure.Repositories.OccupationalGroupRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IJobActivityRepository, WsUtaSystem.Infrastructure.Repositories.JobActivityRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractRequestService, WsUtaSystem.Application.Services.ContractRequestService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFinancialCertificationService, WsUtaSystem.Application.Services.FinancialCertificationService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IContractRequestRepository, WsUtaSystem.Infrastructure.Repositories.ContractRequestRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IFinancialCertificationRepository, WsUtaSystem.Infrastructure.Repositories.FinancialCertificationRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IParametersRepository, WsUtaSystem.Infrastructure.Repositories.ParametersRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDirectoryParametersRepository, WsUtaSystem.Infrastructure.Repositories.DirectoryParametersRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IParametersService, WsUtaSystem.Application.Services.ParametersService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDirectoryParametersService, WsUtaSystem.Application.Services.DirectoryParametersService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFileManagementService, WsUtaSystem.Application.Services.FileManagementService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IKnowledgeAreaRepository, WsUtaSystem.Infrastructure.Repositories.KnowledgeAreaRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IKnowledgeAreaService, WsUtaSystem.Application.Services.KnowledgeAreaService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimeBalancesService, WsUtaSystem.Application.Services.TimeBalancesService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimeBalancesRepository, WsUtaSystem.Infrastructure.Repositories.TimeBalancesRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IHrBalanceRepository, WsUtaSystem.Infrastructure.Repositories.HrBalanceRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IHrBalanceService, WsUtaSystem.Application.Services.HrBalanceService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IStoredFileRepository, WsUtaSystem.Infrastructure.Repositories.StoredFileRepository>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IStoredFileService, WsUtaSystem.Application.Services.StoredFileService>();
-builder.Services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDocumentOrchestratorService, WsUtaSystem.Application.Services.DocumentOrchestratorService>();
-
-////// Servicios de Email
-//builder.Services.AddScoped<IEmailLayoutsRepository, EmailLayoutsRepository>();
-//builder.Services.AddScoped<IEmailLogsRepository, EmailLogsRepository>();
-//builder.Services.AddScoped<IEmailLogAttachmentsRepository, EmailLogAttachmentsRepository>();
-//builder.Services.AddScoped<IEmailLayoutsService, EmailLayoutsService>();
-//builder.Services.AddScoped<IEmailLogsService, EmailLogsService>();
-//builder.Services.AddScoped<IEmailLogAttachmentsService, EmailLogAttachmentsService>();
-//builder.Services.AddTransient<WsUtaSystem.Application.Interfaces.Services.IEmailBuilder,
-//    WsUtaSystem.Application.Services.EmailBuilder>();
-
-//builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
-
-//builder.Services.AddSingleton<IEnvironmentCredentialProvider, EnvironmentCredentialProvider>();
-//builder.Services.AddScoped<IEmailProvider, MailKitEmailProvider>();
-//builder.Services.AddScoped<IEmailSenderService, EmailSenderService>();
-
-//builder.Services.Configure<WsUtaSystem.Application.Common.Email.EmailTemplatesOptions>(
-//    builder.Configuration.GetSection("EmailTemplates"));
-
-//// Cola de emails en background
-//builder.Services.AddSingleton<IBackgroundTaskQueue<WsUtaSystem.Application.DTOs.Email.EmailSendRequestDto>>(
-//    _ => new BackgroundTaskQueue<WsUtaSystem.Application.DTOs.Email.EmailSendRequestDto>(capacity: 1000));
-
-//builder.Services.AddSingleton<IEmailDispatcher, EmailDispatcher>();
-//builder.Services.AddHostedService<EmailQueueWorker>();
-
-//// ============================================================
-//// SERVICIOS DE EMAIL - CONFIGURACIÓN COMPLETA
-//// ============================================================
-
-// Repositories
-builder.Services.AddScoped<IEmailLayoutsRepository, EmailLayoutsRepository>();
-builder.Services.AddScoped<IEmailLogsRepository, EmailLogsRepository>();
-builder.Services.AddScoped<IEmailLogAttachmentsRepository, EmailLogAttachmentsRepository>();
-
-// Services
-builder.Services.AddScoped<IEmailLayoutsService, EmailLayoutsService>();
-builder.Services.AddScoped<IEmailLogsService, EmailLogsService>();
-builder.Services.AddScoped<IEmailLogAttachmentsService, EmailLogAttachmentsService>();
-builder.Services.AddScoped<IEmailSenderService, EmailSenderService>();
-
-// Builder (fluent interface para construir emails)
-builder.Services.AddTransient<WsUtaSystem.Application.Interfaces.Services.IEmailBuilder,
-    WsUtaSystem.Application.Services.EmailBuilder>();
-
-// Configuration Options
-builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("EmailSettings"));
-builder.Services.Configure<WsUtaSystem.Application.Common.Email.EmailTemplatesOptions>(
-    builder.Configuration.GetSection("EmailTemplates"));
-
-// Email Provider (SMTP)
-builder.Services.AddSingleton<IEnvironmentCredentialProvider, EnvironmentCredentialProvider>();
-builder.Services.AddScoped<IEmailProvider, MailKitEmailProvider>();
-
-// Background Queue Infrastructure
-builder.Services.AddSingleton<IBackgroundTaskQueue<WsUtaSystem.Application.DTOs.Email.EmailSendRequestDto>>(sp =>
-{
-    var logger = sp.GetRequiredService<ILogger<BackgroundTaskQueue<WsUtaSystem.Application.DTOs.Email.EmailSendRequestDto>>>();
-    return new BackgroundTaskQueue<WsUtaSystem.Application.DTOs.Email.EmailSendRequestDto>(
-        capacity: 1000,                           // Capacidad máxima de la cola
-        enqueueTimeout: TimeSpan.FromSeconds(2),  // Timeout si la cola está llena
-        logger: logger);                          // Logger para diagnóstico
-});
-
-
-builder.Services.AddSingleton<IEmailDispatcher, EmailDispatcher>();
-builder.Services.AddHostedService<EmailQueueWorker>();
-
-//// ============================================================
-//// FIN SERVICIOS DE EMAIL
-//// ============================================================
-
-// Vistas
-builder.Services.AddScoped<IVwEmployeeScheduleAtDateRepository, VwEmployeeScheduleAtDateRepository>();
-builder.Services.AddScoped<IVwEmployeeScheduleAtDateService, VwEmployeeScheduleAtDateService>();
-builder.Services.AddScoped<IVwPunchDayRepository, VwPunchDayRepository>();
-builder.Services.AddScoped<IVwPunchDayService, VwPunchDayService>();
-builder.Services.AddScoped<IVwLeaveWindowsRepository, VwLeaveWindowsRepository>();
-builder.Services.AddScoped<IVwLeaveWindowsService, VwLeaveWindowsService>();
-builder.Services.AddScoped<IVwAttendanceDayRepository, VwAttendanceDayRepository>();
-builder.Services.AddScoped<IVwAttendanceDayService, VwAttendanceDayService>();
-
-// Procedimientos almacenados
-builder.Services.AddScoped<IAttendanceCalculationService, AttendanceCalculationService>();
-builder.Services.AddScoped<IJustificationsService, JustificationsService>();
-builder.Services.AddScoped<IRecoveryService, RecoveryService>();
-builder.Services.AddScoped<IOvertimePriceService, OvertimePriceService>();
-builder.Services.AddScoped<IPayrollDiscountsService, PayrollDiscountsService>();
-builder.Services.AddScoped<IPayrollSubsidiesService, PayrollSubsidiesService>();
-builder.Services.AddScoped<IEncryptionService, EncryptionService>();
-
-//// Campo Auditoria
-//builder.Services.AddScoped<AuditSaveChangesInterceptor>();
-
-
-
-// Quartz jobs
+// ── 14. Jobs programados (Quartz) ─────────────────────────────────────────────
 builder.Services.AddQuartzJobs();
 
 // =========================================================
-// Configuración de autenticación JWT custom
-// =========================================================
-builder.Services.AddMemoryCache(); // cache de tokens
-builder.Services.AddHttpClient();  // llamadas HTTP al servicio de auth
-builder.Services.AddScoped<
-    WsUtaSystem.Infrastructure.Services.ITokenValidationService,
-    WsUtaSystem.Infrastructure.Services.TokenValidationService>();
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
-
-// Registrar los interceptores primero
-builder.Services.AddScoped<AuditSaveChangesInterceptor>();
-builder.Services.AddScoped<SqlErrorLoggingInterceptor>();
-
-builder.Services.AddDbContext<WsUtaSystem.Data.AppDbContext>((sp, o) =>
-{
-    o.UseSqlServer(cs, sql => 
-        sql.EnableRetryOnFailure(5, TimeSpan.FromSeconds(5), null)
-    );
-    o.AddInterceptors(
-        sp.GetRequiredService<AuditSaveChangesInterceptor>(),
-        sp.GetRequiredService<SqlErrorLoggingInterceptor>()
-    );
-    //o.EnableDetailedErrors();
-    //o.EnableSensitiveDataLogging();
-
-    if (builder.Environment.IsDevelopment())
-    {
-        o.EnableSensitiveDataLogging();
-        o.EnableDetailedErrors();
-    }
-    //// imprime Logs EF a consola: conexión y comandos
-    //o.LogTo(Console.WriteLine,
-    //   new[]
-    //   {
-    //        DbLoggerCategory.Database.Connection.Name,
-    //        DbLoggerCategory.Database.Command.Name
-    //   },
-    //   LogLevel.Information);
-});
-
-
-
-// =========================================================
-// Build app
+// CONSTRUCCIÓN DE LA APLICACIÓN
 // =========================================================
 var app = builder.Build();
 
-
-// ===== TAP GLOBAL PIPELINE (SIEMPRE VISIBLE) =====
-app.Use(async (ctx, next) =>
-{
-    //Console.WriteLine($"[PIPE] IN  {ctx.Request.Method} {ctx.Request.Path} trace={ctx.TraceIdentifier}");
-    await next();
-    //Console.WriteLine($"[PIPE] OUT {ctx.Response.StatusCode} {ctx.Request.Method} {ctx.Request.Path} trace={ctx.TraceIdentifier}");
-});
-
-
-// =========================================================
-// Orden correcto del pipeline
-// =========================================================
+// ── Pipeline: Headers de proxy inverso ───────────────────────────────────────
+// Debe ser el primero para que los middlewares posteriores lean la IP/protocolo real
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 });
-// =========================================================
-// Middleware global de errores (debe envolver todo)
-// =========================================================
+
+// ── Pipeline: Manejo global de errores ───────────────────────────────────────
+// Envuelve todo el pipeline para capturar excepciones no controladas
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
-// =========================================================
-// Static files primero (no afecta API, pero evita rarezas)
-// =========================================================
+// ── Pipeline: Archivos estáticos ─────────────────────────────────────────────
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-
-// =========================================================
-// Serilog request logging
-// =========================================================
+// ── Pipeline: Logging de requests HTTP ───────────────────────────────────────
 app.UseSerilogRequestLogging(opts =>
 {
     opts.IncludeQueryInRequestPath = true;
 });
 
-// =========================================================
-// Routing explícito (IMPORTANTE para orden con CORS + Endpoints)
-// =========================================================
+// ── Pipeline: Routing explícito ──────────────────────────────────────────────
+// DEBE ir antes de CORS y de los middlewares de autenticación
 app.UseRouting();
 
-// =========================================================
-// CORS en lugar correcto: entre Routing y Endpoints
-// =========================================================
-app.UseCors(corsName);
+// ── Pipeline: CORS ───────────────────────────────────────────────────────────
+// DEBE ir entre UseRouting y UseEndpoints
+app.UseCors(corsPolicy);
 
-// =========================================================
-// JWT custom (AQUÍ debe ejecutar SIEMPRE para /api/v1/rh/*)
-// =========================================================
+// ── Pipeline: Autenticación JWT personalizada ────────────────────────────────
+// Se ejecuta después de CORS para que las preflight requests no requieran token
 app.UseMiddleware<WsUtaSystem.Middleware.JwtAuthenticationMiddleware>();
 
-// =========================================================
-// Swagger (solo en dev)
-// =========================================================
+// ── Pipeline: Swagger UI (solo en Development) ────────────────────────────────
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-
+    //app.UseSwagger();
+    app.UseSwagger(c =>
+    {
+        c.RouteTemplate = "swagger/{documentName}/swagger.json";
+    });
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "WsUtaSystem RH API v1");
@@ -581,41 +123,35 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-//QuestPDF.Settings.EnableDebugging = true;
-//QuestPDF.Settings.EnableCaching = true;
-
-// =========================================================
-// Endpoints (Controllers + Groups) - explícito
-// =========================================================
+// ── Pipeline: Endpoints ───────────────────────────────────────────────────────
 app.UseEndpoints(endpoints =>
 {
-    // Todo bajo /api/v1/rh
-    var apiGroup = endpoints.MapGroup("/api/v1/rh");
-    apiGroup.RequireCors(corsName);
+    // Grupo base para todos los endpoints del dominio RH
+    //var apiGroup = endpoints.MapGroup("/api/v1/rh");
+    //apiGroup.RequireCors(corsPolicy);
 
-    // Controllers
-    apiGroup.MapControllers();
+    //// Controladores MVC
+    //apiGroup.MapControllers();
 
-    // Minimal APIs de reportes
-    apiGroup.MapReportEndpoints();
+    //// Minimal APIs de reportes
+    //apiGroup.MapReportEndpoints();
 
-    // Si estos endpoints deben también estar bajo /api/v1/rh, muévelos aquí.
-    // Si deben quedarse globales, déjalos fuera.
+    endpoints.MapControllers().RequireCors(corsPolicy);
+
+    // 2. MINIMAL APIs (Si no son controladores, hay que mapearlas manualmente)
+    // Para reportes de RH
+    endpoints.MapGroup("/api/v1/rh/reports")
+            .RequireCors(corsPolicy)
+            .MapReportEndpoints();
+
+    // Endpoints de permisos de usuario (fuera del grupo /rh para acceso global)
     endpoints.MapUserPermissionEndpoints();
 
-    // Root + health
+    // Redirección raíz → Swagger
     endpoints.MapGet("/", () => Results.Redirect("/swagger"));
-    endpoints.MapGet("/health", () => Results.Ok(new { ok = true, time = DateTime.Now }));
-});
 
-// =========================================================
-// TAP GLOBAL PIPELINE (SIEMPRE VISIBLE) - después (opcional)
-// =========================================================
-app.Use(async (ctx, next) =>
-{
-    Console.WriteLine($"[PIPE-B] IN  {ctx.Request.Method} {ctx.Request.Path} trace={ctx.TraceIdentifier}");
-    await next();
-    Console.WriteLine($"[PIPE-B] OUT {ctx.Response.StatusCode} {ctx.Request.Method} {ctx.Request.Path} trace={ctx.TraceIdentifier}");
+    // Health check
+    endpoints.MapGet("/health", () => Results.Ok(new { ok = true, time = DateTime.UtcNow }));
 });
 
 app.Run();

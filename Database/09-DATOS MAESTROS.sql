@@ -127,6 +127,49 @@ INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VA
 INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (125, 'PERSONAL_CONTRACT_TYPE', 'Investigador', 'Investigador', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
 INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (126, 'PERSONAL_CONTRACT_TYPE', 'No Utilizados', 'No Utilizados', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
 INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (127, 'PERSONAL_CONTRACT_TYPE', 'Profesionales', 'Servicios profesionales', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+-- Insertar categorías base para Docflow si no existen
+-- Estas categorías se usarán para poblar los catálogos del frontend
+
+IF NOT EXISTS (SELECT 1 FROM hr.ref_Types WHERE Category = 'DOCFLOW_INSTANCE_STATUSES')
+BEGIN
+    INSERT INTO hr.ref_Types (Category, Name, Description, IsActive, CreatedAt, SortOrder)
+    VALUES 
+        ('DOCFLOW_INSTANCE_STATUSES', 'Borrador', 'Expediente en borrador', 1, GETDATE(), 1),
+        ('DOCFLOW_INSTANCE_STATUSES', 'Pendiente', 'Expediente pendiente de revisión', 1, GETDATE(), 2),
+        ('DOCFLOW_INSTANCE_STATUSES', 'En Revision', 'Expediente en revisión', 1, GETDATE(), 3),
+        ('DOCFLOW_INSTANCE_STATUSES', 'Aprobado', 'Expediente aprobado', 1, GETDATE(), 4),
+        ('DOCFLOW_INSTANCE_STATUSES', 'Retornado', 'Expediente retornado para correcciones', 1, GETDATE(), 5),
+        ('DOCFLOW_INSTANCE_STATUSES', 'Finalizado', 'Expediente finalizado', 1, GETDATE(), 6);
+    
+    PRINT 'Categoría DOCFLOW_INSTANCE_STATUSES insertada';
+END
+
+GO
+
+IF NOT EXISTS (SELECT 1 FROM hr.ref_Types WHERE Category = 'DOCFLOW_MOVEMENT_TYPES')
+BEGIN
+    INSERT INTO hr.ref_Types (Category, Name, Description, IsActive, CreatedAt, SortOrder)
+    VALUES 
+        ('DOCFLOW_MOVEMENT_TYPES', 'FORWARD', 'Avanzar al siguiente estado', 1, GETDATE(), 1),
+        ('DOCFLOW_MOVEMENT_TYPES', 'RETURN', 'Retornar para correcciones', 1, GETDATE(), 2);
+    
+    PRINT 'Categoría DOCFLOW_MOVEMENT_TYPES insertada';
+END
+
+GO
+
+IF NOT EXISTS (SELECT 1 FROM hr.ref_Types WHERE Category = 'DOCFLOW_PRIORITIES')
+BEGIN
+    INSERT INTO hr.ref_Types (Category, Name, Description, IsActive, CreatedAt, SortOrder)
+    VALUES 
+        ('DOCFLOW_PRIORITIES', 'Baja', 'Prioridad baja', 1, GETDATE(), 1),
+        ('DOCFLOW_PRIORITIES', 'Media', 'Prioridad media', 1, GETDATE(), 2),
+        ('DOCFLOW_PRIORITIES', 'Alta', 'Prioridad alta', 1, GETDATE(), 3),
+        ('DOCFLOW_PRIORITIES', 'Urgente', 'Prioridad urgente', 1, GETDATE(), 4);
+    
+    PRINT 'Categoría DOCFLOW_PRIORITIES insertada';
+END
+
 GO
 SET IDENTITY_INSERT HR.ref_Types OFF
 GO

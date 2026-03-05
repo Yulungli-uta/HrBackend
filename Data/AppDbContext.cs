@@ -96,6 +96,17 @@ public class AppDbContext : DbContext
     public DbSet<EmailLayout> EmailLayouts => Set<EmailLayout>();
     public DbSet<EmailLog> EmailLogs => Set<EmailLog>();
     public DbSet<EmailLogAttachment> EmailLogAttachments => Set<EmailLogAttachment>();
+    public DbSet<ContractStatusTransition> ContractStatusTransitions => Set<ContractStatusTransition>();
+    public DbSet<ContractStatusHistory> ContractStatusHistories => Set<ContractStatusHistory>();
+
+    // Docflow
+    public DbSet<WsUtaSystem.Models.Docflow.DocflowProcessHierarchy> DocflowProcesses => Set<WsUtaSystem.Models.Docflow.DocflowProcessHierarchy>();
+    public DbSet<WsUtaSystem.Models.Docflow.DocflowProcessTransition> DocflowTransitions => Set<WsUtaSystem.Models.Docflow.DocflowProcessTransition>();
+    public DbSet<WsUtaSystem.Models.Docflow.DocflowDocumentRule> DocflowDocumentRules => Set<WsUtaSystem.Models.Docflow.DocflowDocumentRule>();
+    public DbSet<WsUtaSystem.Models.Docflow.DocflowWorkflowInstance> DocflowInstances => Set<WsUtaSystem.Models.Docflow.DocflowWorkflowInstance>();
+    public DbSet<WsUtaSystem.Models.Docflow.DocflowDocument> DocflowDocuments => Set<WsUtaSystem.Models.Docflow.DocflowDocument>();
+    public DbSet<WsUtaSystem.Models.Docflow.DocflowFileVersion> DocflowFileVersions => Set<WsUtaSystem.Models.Docflow.DocflowFileVersion>();
+    public DbSet<WsUtaSystem.Models.Docflow.DocflowWorkflowMovement> DocflowMovements => Set<WsUtaSystem.Models.Docflow.DocflowWorkflowMovement>();
 
     // Vistas de Permisos y Menús
     public DbSet<VwUserRole> VwUserRoles { get; set; }
@@ -907,5 +918,97 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.EmployeeID);
             e.Property(x => x.EmployeeID).HasColumnName("EmployeeID");
         });
+        m.Entity<ContractStatusTransition>(e => {
+            e.ToTable("tbl_contract_status_transitions", HR);
+            e.HasKey(x => x.TransitionID);
+            e.HasIndex(x => new { x.FromStatusTypeID, x.ToStatusTypeID }).IsUnique();
+            });
+
+        m.Entity<ContractStatusHistory>(e => {
+            e.ToTable("tbl_contract_status_history", HR);
+            e.HasKey(x => x.HistoryID);
+            e.HasIndex(x => new { x.ContractID, x.ChangedAt }); 
+        });
+
+        /*DOCFLOW*/
+        const string DOCFLOW = "docflow";
+
+        m.Entity<WsUtaSystem.Models.Docflow.DocflowProcessHierarchy>(e =>
+        {
+            e.ToTable("tbl_ProcessHierarchy", DOCFLOW);
+            e.HasKey(x => x.ProcessId);
+            e.Property(x => x.ProcessCode).HasMaxLength(50).IsRequired();
+            e.Property(x => x.ProcessName).HasMaxLength(200).IsRequired();
+            e.Property(x => x.IsActive).HasDefaultValue(true);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
+            e.HasIndex(x => x.ProcessCode).IsUnique();
+        });
+
+        m.Entity<WsUtaSystem.Models.Docflow.DocflowProcessTransition>(e =>
+        {
+            e.ToTable("tbl_ProcessTransitions", DOCFLOW);
+            e.HasKey(x => x.TransitionId);
+            e.Property(x => x.IsDefault).HasDefaultValue(true);
+            e.Property(x => x.AllowReturn).HasDefaultValue(true);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
+            e.HasIndex(x => new { x.FromProcessId, x.ToProcessId }).IsUnique();
+            e.HasIndex(x => new { x.FromProcessId, x.IsDefault });
+        });
+
+        m.Entity<WsUtaSystem.Models.Docflow.DocflowDocumentRule>(e =>
+        {
+            e.ToTable("tbl_DocumentRules", DOCFLOW);
+            e.HasKey(x => x.RuleId);
+            e.Property(x => x.DocumentType).HasMaxLength(100).IsRequired();
+            e.Property(x => x.IsRequired).HasDefaultValue(true);
+            e.Property(x => x.DefaultVisibility).HasDefaultValue((byte)1);
+            e.Property(x => x.AllowVisibilityOverride).HasDefaultValue(false);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
+            e.HasIndex(x => x.ProcessId);
+            e.HasIndex(x => new { x.ProcessId, x.IsRequired });
+        });
+
+        m.Entity<WsUtaSystem.Models.Docflow.DocflowWorkflowInstance>(e =>
+        {
+            e.ToTable("tbl_WorkflowInstances", DOCFLOW);
+            e.HasKey(x => x.InstanceId);
+            e.Property(x => x.CurrentStatus).HasMaxLength(50).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
+            e.HasIndex(x => new { x.CurrentDepartmentId, x.CurrentStatus, x.CreatedAt });
+            e.HasIndex(x => x.ProcessId);
+        });
+
+        m.Entity<WsUtaSystem.Models.Docflow.DocflowDocument>(e =>
+        {
+            e.ToTable("tbl_Documents", DOCFLOW);
+            e.HasKey(x => x.DocumentId);
+            e.Property(x => x.DocumentName).HasMaxLength(255).IsRequired();
+            e.Property(x => x.Visibility).HasDefaultValue((byte)1);
+            e.Property(x => x.CurrentVersion).HasDefaultValue(0);
+            e.Property(x => x.IsDeleted).HasDefaultValue(false);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
+            e.HasIndex(x => x.RuleId);
+            e.HasIndex(x => new { x.InstanceId, x.Visibility, x.CreatedByDepartmentId })
+                .HasFilter("[IsDeleted] = 0");
+        });
+
+        m.Entity<WsUtaSystem.Models.Docflow.DocflowFileVersion>(e =>
+        {
+            e.ToTable("tbl_FileVersions", DOCFLOW);
+            e.HasKey(x => x.VersionId);
+            e.Property(x => x.StoragePath).HasMaxLength(1000).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
+            e.HasIndex(x => new { x.DocumentId, x.VersionNumber }).IsUnique();
+        });
+
+        m.Entity<WsUtaSystem.Models.Docflow.DocflowWorkflowMovement>(e =>
+        {
+            e.ToTable("tbl_WorkflowMovements", DOCFLOW);
+            e.HasKey(x => x.MovementId);
+            e.Property(x => x.MovementType).HasMaxLength(10).IsRequired();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
+            e.HasIndex(x => new { x.InstanceId, x.CreatedAt });
+        });
+
     }
 }
