@@ -1,4 +1,5 @@
 ﻿using WsUtaSystem.Models.Views;
+using WsUtaSystem.Application.DTOs.Common;
 
 namespace WsUtaSystem.Application.Interfaces.Repositories
 {

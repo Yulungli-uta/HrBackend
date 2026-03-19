@@ -59,8 +59,7 @@ public class VacationsController : ControllerBase
             hasPreviousPage = pagedEntities.HasPreviousPage,
             hasNextPage = pagedEntities.HasNextPage
         });
-    };
-        return Ok(pagedDto);
+
     }
 
     [HttpGet("{id:int}")]

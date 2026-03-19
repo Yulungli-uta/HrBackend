@@ -51,8 +51,8 @@ public class ContractsController : ControllerBase
         }
 
         var pagedEntities = predicate is not null
-            ? await _svc.GetPagedAsync(predicate, page, pageSize, ct)
-            : await _svc.GetPagedAsync(page, pageSize, ct);
+       ? await _service.GetPagedAsync(predicate, page, pageSize, ct)
+       : await _service.GetPagedAsync(page, pageSize, ct);
 
         return Ok(new
         {
@@ -64,8 +64,6 @@ public class ContractsController : ControllerBase
             hasPreviousPage = pagedEntities.HasPreviousPage,
             hasNextPage = pagedEntities.HasNextPage
         });
-    };
-        return Ok(pagedDto);
     }
 
     /// <summary>Obtiene un contrato por ID.</summary>

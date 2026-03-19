@@ -142,10 +142,10 @@ namespace WsUtaSystem.Infrastructure.Repositories
             int pageSize,
             CancellationToken ct = default)
         {
-            var query = Query()
-                .OrderBy(e => e.FirstName)
-                .ThenBy(e => e.LastName);
+            // 1. Empezamos con la consulta base
+            var query = Query();
 
+            // 2. Aplicamos filtros (mantiene el tipo IQueryable)
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var term = search.Trim().ToLower();
@@ -156,8 +156,13 @@ namespace WsUtaSystem.Infrastructure.Repositories
                     e.Email.ToLower().Contains(term));
             }
 
+            // 3. Contamos antes de ordenar (es más eficiente)
             var totalCount = await query.LongCountAsync(ct);
+
+            // 4. Ordenamos y paginamos al final
             var items = await query
+                .OrderBy(e => e.FirstName)
+                .ThenBy(e => e.LastName)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync(ct);

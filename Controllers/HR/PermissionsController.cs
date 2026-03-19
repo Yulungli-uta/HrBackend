@@ -63,8 +63,7 @@ public class PermissionsController : ControllerBase
             hasPreviousPage = pagedEntities.HasPreviousPage,
             hasNextPage = pagedEntities.HasNextPage
         });
-    };
-        return Ok(pagedDto);
+
     }
 
     /// <summary>Obtiene un permiso por ID.</summary>
