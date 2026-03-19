@@ -64,8 +64,7 @@ public class PeopleController : ControllerBase
             hasPreviousPage = pagedEntities.HasPreviousPage,
             hasNextPage = pagedEntities.HasNextPage
         });
-    };
-        return Ok(pagedDto);
+   
     }
 
     /// <summary>Obtiene un registro por ID.</summary>
