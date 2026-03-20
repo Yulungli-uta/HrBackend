@@ -11,7 +11,7 @@ public static class ReportEndpoints
 {
     public static void MapReportEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/reports")
+        var group = app.MapGroup("")
             .WithTags("Reports");
             //.RequireAuthorization();
 
