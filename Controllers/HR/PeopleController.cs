@@ -1,6 +1,5 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
-using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.People;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Models;
@@ -23,12 +22,17 @@ public class PeopleController : ControllerBase
 
     /// <summary>Lista todos los registros de People.</summary>
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct) =>
-        Ok(_mapper.Map<List<PeopleDto>>(await _svc.GetAllAsync(ct)));
+    public async Task<IActionResult> GetAll(CancellationToken ct)
+    {
+        var entities = await _svc.GetAllAsync(ct);
+        var dtoList = _mapper.Map<List<PeopleDto>>(entities);
+        return Ok(dtoList);
+    }
 
     /// <summary>Retorna un resultado paginado de registros de People.</summary>
     /// <param name="page">Número de página (base 1).</param>
     /// <param name="pageSize">Cantidad de registros por página. Máximo 200.</param>
+    /// <param name="search">Texto de búsqueda por nombre, apellido, cédula o email.</param>
     /// <param name="sortBy">Campo de ordenamiento (opcional).</param>
     /// <param name="sortDirection">Dirección del orden: asc | desc (opcional).</param>
     [HttpGet("paged")]
@@ -44,19 +48,27 @@ public class PeopleController : ControllerBase
         if (pageSize < 1 || pageSize > 200) pageSize = 20;
 
         System.Linq.Expressions.Expression<Func<People, bool>>? predicate = null;
+
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToLower();
-            predicate = p => p.FirstName.ToLower().Contains(term) || p.LastName.ToLower().Contains(term) || p.IdCard.ToLower().Contains(term) || p.Email.ToLower().Contains(term);
+
+            predicate = p =>
+                (p.FirstName != null && p.FirstName.ToLower().Contains(term)) ||
+                (p.LastName != null && p.LastName.ToLower().Contains(term)) ||
+                (p.IdCard != null && p.IdCard.ToLower().Contains(term)) ||
+                (p.Email != null && p.Email.ToLower().Contains(term));
         }
 
         var pagedEntities = predicate is not null
             ? await _svc.GetPagedAsync(predicate, page, pageSize, ct)
             : await _svc.GetPagedAsync(page, pageSize, ct);
 
+        var dtoItems = _mapper.Map<List<PeopleDto>>(pagedEntities.Items);
+
         return Ok(new
         {
-            items = pagedEntities.Items,
+            items = dtoItems,
             page = pagedEntities.Page,
             pageSize = pagedEntities.PageSize,
             totalCount = pagedEntities.TotalCount,
@@ -64,35 +76,49 @@ public class PeopleController : ControllerBase
             hasPreviousPage = pagedEntities.HasPreviousPage,
             hasNextPage = pagedEntities.HasNextPage
         });
-   
     }
 
     /// <summary>Obtiene un registro por ID.</summary>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
-        var e = await _svc.GetByIdAsync(id, ct);
-        return e is null ? NotFound() : Ok(_mapper.Map<PeopleDto>(e));
+        var entity = await _svc.GetByIdAsync(id, ct);
+        if (entity is null) return NotFound();
+
+        var dto = _mapper.Map<PeopleDto>(entity);
+        return Ok(dto);
     }
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] PeopleCreateDto dto, CancellationToken ct)
     {
-        var entityObj = _mapper.Map<People>(dto);
-        var created = await _svc.CreateAsync(entityObj, ct);
+        var entity = _mapper.Map<People>(dto);
+        var created = await _svc.CreateAsync(entity, ct);
+
         var idVal = created?.GetType()?.GetProperties()
-            ?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))
+            ?.FirstOrDefault(p =>
+                p.Name.Equals("Id") ||
+                p.Name.EndsWith("Id") ||
+                p.Name.EndsWith("ID"))
             ?.GetValue(created);
-        return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<PeopleDto>(created));
+
+        return CreatedAtAction(
+            nameof(GetById),
+            new { id = idVal },
+            _mapper.Map<PeopleDto>(created)
+        );
     }
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update([FromRoute] int id, [FromBody] PeopleUpdateDto dto, CancellationToken ct)
+    public async Task<IActionResult> Update(
+        [FromRoute] int id,
+        [FromBody] PeopleUpdateDto dto,
+        CancellationToken ct)
     {
-        var entityObj = _mapper.Map<People>(dto);
-        await _svc.UpdateAsync(id, entityObj, ct);
+        var entity = _mapper.Map<People>(dto);
+        await _svc.UpdateAsync(id, entity, ct);
         return NoContent();
     }
 
