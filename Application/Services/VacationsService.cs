@@ -191,7 +191,7 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
 
             var reserveSourceId = ReserveSourceIdForVacation(id);
 
-            entity.UpdatedAt = DateTime.UtcNow;
+            entity.UpdatedAt = DateTime.Now;
 
             _logger.LogInformation(
                 "VAC UPDATE START TraceId={TraceId} VacationId={VacationId} EmpId={EmpId} OldStatus={OldStatus} NewStatus={NewStatus} SourceId={SourceId}",

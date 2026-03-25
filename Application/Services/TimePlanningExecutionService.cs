@@ -36,7 +36,7 @@ namespace WsUtaSystem.Application.Services
                 StartTime = startTime,
                 EndTime = endTime,
                 Comments = comments,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             execution.TotalMinutes = (int)(endTime - startTime).TotalMinutes;

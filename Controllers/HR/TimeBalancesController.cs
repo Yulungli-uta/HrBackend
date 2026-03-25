@@ -8,7 +8,7 @@ using WsUtaSystem.Application.DTOs.TimeBalances.TimeBalancesDTO;
 namespace WsUtaSystem.Controllers.HR;
 
 [ApiController]
-[Route("/timebalances")]
+[Route("timebalances")]
 public class TimeBalancesController : ControllerBase
 {
     private readonly ITimeBalancesService _svc;

@@ -1,4 +1,6 @@
-﻿using WsUtaSystem.Application.Interfaces.Repositories;
+﻿using WsUtaSystem.Application.DTOs.Common;
+using WsUtaSystem.Application.DTOs.Employees;
+using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Models.Views;
 
@@ -12,7 +14,7 @@ namespace WsUtaSystem.Application.Services
         {
             _repository = repository;
         }
-
+        
         public async Task<IEnumerable<VwEmployeeComplete>> GetAllEmployeesAsync()
         {
             return await _repository.GetAllAsync();
@@ -27,5 +29,35 @@ namespace WsUtaSystem.Application.Services
         {
             return await _repository.GetByDepartmentAsync(department);
         }
+
+        public async Task<PagedResult<VwEmployeeComplete>> GetPagedAsync(
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+        {
+            return await _repository.GetPagedAsync(page, pageSize, ct);
+        }
+
+        /// <inheritdoc/>
+        public async Task<PagedResult<VwEmployeeComplete>> GetPagedAsync(
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken ct = default)
+        {
+            return await _repository.GetPagedAsync(search, page, pageSize, ct);
+        }
+
+        public async Task<EmployeeCompleteStatsDto> GetStatsAsync(CancellationToken ct = default)
+        {
+            return await _repository.GetStatsAsync(ct);
+        }
+
+        public async Task<List<ContractTypeCountDto>> GetByContractTypeAsync(CancellationToken ct = default)
+        {
+            return await _repository.GetByContractTypeAsync(ct);
+        }
+
+
     }
 }

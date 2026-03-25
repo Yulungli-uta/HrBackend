@@ -151,7 +151,7 @@ app.UseEndpoints(endpoints =>
     endpoints.MapGet("/", () => Results.Redirect("/swagger"));
 
     // Health check
-    endpoints.MapGet("/health", () => Results.Ok(new { ok = true, time = DateTime.UtcNow }));
+    endpoints.MapGet("/health", () => Results.Ok(new { ok = true, time = DateTime.Now }));
 });
 
 app.Run();

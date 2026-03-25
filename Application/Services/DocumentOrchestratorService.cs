@@ -113,7 +113,7 @@ namespace WsUtaSystem.Application.Services
                         ContentType = original?.ContentType,
                         SizeBytes = pr.FileSize,
                         Status = 1,
-                        CreatedAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.Now,
 
                         // ✅ tipo aplicado al batch
                         DocumentTypeId = request.DocumentTypeId
@@ -208,7 +208,7 @@ namespace WsUtaSystem.Application.Services
                     ContentType = request.File.ContentType,
                     SizeBytes = pr.FileSize,
                     Status = 1,
-                    CreatedAt = DateTime.UtcNow,
+                    CreatedAt = DateTime.Now,
 
                     DocumentTypeId = request.DocumentTypeId
                 };
@@ -319,7 +319,7 @@ namespace WsUtaSystem.Application.Services
                         ContentType = it.File.ContentType,
                         SizeBytes = pr.FileSize,
                         Status = 1,
-                        CreatedAt = DateTime.UtcNow,
+                        CreatedAt = DateTime.Now,
 
                         DocumentTypeId = it.DocumentTypeId
                     };

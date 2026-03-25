@@ -22,7 +22,7 @@ public abstract class BaseJob : IJob
     protected DateTime GetCurrentDateTime(IJobExecutionContext context)
     {
         var tz = GetTimeZone(context);
-        return TimeZoneInfo.ConvertTime(DateTime.UtcNow, tz);
+        return TimeZoneInfo.ConvertTime(DateTime.Now, tz);
     }
 
     public async Task Execute(IJobExecutionContext context)

@@ -13,7 +13,7 @@
         public decimal? PaymentAmount { get; set; } = 0;
         public bool IsEligible { get; set; } = true;
         public string? EligibilityReason { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
 
         // Navigation properties
         //public string? EmployeeName { get; set; }
