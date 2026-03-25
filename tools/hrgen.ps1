@@ -310,7 +310,7 @@ public sealed class __JOBCLASS__(IMediator mediator) : IJob
     {
         var tzId = ctx.MergedJobDataMap.GetString("TimeZone") ?? "__TIMEZONE__";
         var tz   = TimeZoneInfo.FindSystemTimeZoneById(tzId);
-        var now  = TimeZoneInfo.ConvertTime(DateTime.UtcNow, tz);
+        var now  = TimeZoneInfo.ConvertTime(DateTime.Now, tz);
 
         // TODO: Ajustar parámetros del Command real
         var cmd = new __CMDNAME__Command();

@@ -79,7 +79,7 @@ namespace WsUtaSystem.Controllers.HR
             return Ok(new
             {
                 status = "healthy",
-                timestamp = DateTime.UtcNow,
+                timestamp = DateTime.Now,
                 service = "TimeService"
             });
         }

@@ -65,7 +65,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
             if (execution == null) return false;
 
             execution.VerifiedBy = verifiedBy;
-            execution.VerifiedAt = DateTime.UtcNow;
+            execution.VerifiedAt = DateTime.Now;
             execution.Comments = comments;
 
             _db.Set<TimePlanningExecution>().Update(execution);

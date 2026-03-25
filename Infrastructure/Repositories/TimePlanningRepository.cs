@@ -84,10 +84,10 @@ namespace WsUtaSystem.Infrastructure.Repositories
             if (approvedBy.HasValue)
             {
                 planning.ApprovedBy = approvedBy;
-                planning.ApprovedAt = DateTime.UtcNow;
+                planning.ApprovedAt = DateTime.Now;
             }
 
-            planning.UpdatedAt = DateTime.UtcNow;
+            planning.UpdatedAt = DateTime.Now;
             _db.Set<TimePlanning>().Update(planning);
 
             return await _db.SaveChangesAsync(ct) > 0;

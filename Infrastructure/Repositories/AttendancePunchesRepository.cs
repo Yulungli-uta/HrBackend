@@ -23,7 +23,7 @@ public class AttendancePunchesRepository : ServiceAwareEfRepository<AttendancePu
     public async Task<IEnumerable<AttendancePunches>> GetTodayPunchesByEmployeeAsync(int employeeId, CancellationToken ct)
     {
         //var today = DateTime.Today;
-        var today = DateTime.UtcNow.Date;
+        var today = DateTime.Now.Date;
         var tomorrow = today.AddDays(1);
 
         return await _db.Set<AttendancePunches>()

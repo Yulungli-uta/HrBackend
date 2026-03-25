@@ -69,7 +69,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
                 ?? throw new KeyNotFoundException($"Proceso con ID {processId} no encontrado.");
 
             proc.DynamicFieldMetadata = json;
-            proc.UpdatedAt = DateTime.UtcNow;
+            proc.UpdatedAt = DateTime.Now;
 
             await _db.SaveChangesAsync(ct);
         }

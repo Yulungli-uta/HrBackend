@@ -393,7 +393,7 @@ namespace WsUtaSystem.Application.Services
                 AssignedToUserId = req.AssignedToUserId,
                 DynamicMetadata = req.DynamicMetadata ?? "{}",
                 CreatedBy = userId,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.Now
             };
 
             // 6. Validar metadata dinámica contra el esquema del proceso
@@ -682,7 +682,7 @@ namespace WsUtaSystem.Application.Services
         private static string GenerateProcessCode(string name)
         {
             var prefix = name[..Math.Min(3, name.Length)].ToUpperInvariant();
-            var ticks = DateTime.UtcNow.Ticks.ToString();
+            var ticks = DateTime.Now.Ticks.ToString();
             var suffix = ticks.Length >= 10 ? ticks[^10..] : ticks;
             return $"{prefix}{suffix}";
         }

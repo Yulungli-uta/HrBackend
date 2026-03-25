@@ -138,13 +138,14 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
             );
 
             // Aplicar cambios al entity tracked (evita sobrescribir FKs con 0/null no deseados)
-            current.PermissionTypeId = entity.PermissionTypeId;
-            current.StartDate = entity.StartDate;
-            current.EndDate = entity.EndDate;
-            current.ChargedToVacation = entity.ChargedToVacation;
-            current.HourTaken = entity.HourTaken ?? 0;
+            //current.PermissionTypeId = entity.PermissionTypeId;
+            //current.StartDate = entity.StartDate;
+            //current.EndDate = entity.EndDate;
+            //current.ChargedToVacation = entity.ChargedToVacation;
+            //current.HourTaken = entity.HourTaken ?? 0;
             current.ApprovedBy = entity.ApprovedBy;
-            current.ApprovedAt = entity.ApprovedAt;
+            //current.ApprovedAt = entity.ApprovedAt;
+            current.ApprovedAt = DateTime.Now;
             current.Justification = entity.Justification ?? "";
             current.Status = entity.Status ?? current.Status;
 

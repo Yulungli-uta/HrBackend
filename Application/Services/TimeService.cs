@@ -34,7 +34,7 @@ namespace WsUtaSystem.Application.Services
         {
             _logger.LogDebug("Getting current UTC time");
 
-            var now = DateTime.UtcNow;
+            var now = DateTime.Now;
             return new TimeResponse
             {
                 DateTime = now,
@@ -53,7 +53,7 @@ namespace WsUtaSystem.Application.Services
             try
             {
                 var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-                var utcNow = DateTime.UtcNow;
+                var utcNow = DateTime.Now;
                 var zonedTime = TimeZoneInfo.ConvertTimeFromUtc(utcNow, timeZone);
 
                 return new TimeResponse

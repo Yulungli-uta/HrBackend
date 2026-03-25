@@ -1,6 +1,7 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+using System.Linq.Expressions;
 using WsUtaSystem.Application.DTOs.Employees;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
@@ -20,6 +21,55 @@ public class EmployeesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<EmployeesDto>>(await _svc.GetAllAsync(ct)));
+
+    /// <summary>
+    /// Retorna un resultado paginado de registros de Employees.
+    /// </summary>
+    /// <param name="page">Número de página (base 1).</param>
+    /// <param name="pageSize">Cantidad de registros por página. Máximo 200.</param>
+    /// <param name="search">Texto de búsqueda por nombre, apellido, cédula o email.</param>
+    /// <param name="sortBy">Campo de ordenamiento (opcional).</param>
+    /// <param name="sortDirection">Dirección del orden: asc | desc (opcional).</param>
+    [HttpGet("paged")]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 200) pageSize = 20;
+
+        Expression<Func<Employees, bool>>? predicate = null;
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+
+            predicate = e =>
+                (e.Email != null && e.Email.ToLower().Contains(term)) ||
+                e.EmployeeId.ToString().Contains(term) ||
+                e.PersonID.ToString().Contains(term) ||
+                e.EmployeeType.ToString().Contains(term) ||
+                (e.DepartmentId.HasValue && e.DepartmentId.Value.ToString().Contains(term)) ||
+                (e.ImmediateBossId.HasValue && e.ImmediateBossId.Value.ToString().Contains(term));
+        }
+
+        var paged = predicate is null
+            ? await _svc.GetPagedAsync(page, pageSize, ct)
+            : await _svc.GetPagedAsync(predicate, page, pageSize, ct);
+
+        return Ok(new
+        {
+            items = _mapper.Map<List<EmployeesDto>>(paged.Items),
+            page = paged.Page,
+            pageSize = paged.PageSize,
+            totalCount = paged.TotalCount,
+            totalPages = paged.TotalPages,
+            hasPreviousPage = paged.HasPreviousPage,
+            hasNextPage = paged.HasNextPage
+        });
+    }
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>

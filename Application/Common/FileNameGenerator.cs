@@ -25,7 +25,7 @@ namespace WsUtaSystem.Application.Common
             if (string.IsNullOrWhiteSpace(extension))
                 extension = ".bin";
 
-            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
             var shortGuid = Guid.NewGuid().ToString("N")[..8];
 
             var safePrefix = Sanitize(prefix);
