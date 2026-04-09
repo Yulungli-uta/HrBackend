@@ -562,5 +562,104 @@ GO
 ALTER TABLE HR.TBL_StoredFile
 ADD CONSTRAINT FK_StoredFile_DocumentTypeId FOREIGN KEY (DocumentTypeId) REFERENCES HR.ref_Types(TypeID);
 
+/*planificacion de cambioo de horas */
+
+	CREATE INDEX IX_SCP_ApplyDate
+	ON HR.tbl_ScheduleChangePlan (EffectiveApplyDate, StatusTypeID)
+	ON [PRIMARY]
+	GO
+
+	CREATE INDEX IX_SCP_Boss
+	ON HR.tbl_ScheduleChangePlan (RequestedByBossID)
+	ON [PRIMARY]
+	GO
+
+	CREATE INDEX IX_SCP_EffDate
+	ON HR.tbl_ScheduleChangePlan (EffectiveDate)
+	ON [PRIMARY]
+	GO
+
+	CREATE INDEX IX_SCP_Status
+	ON HR.tbl_ScheduleChangePlan (StatusTypeID)
+	ON [PRIMARY]
+	GO
+
+	ALTER TABLE HR.tbl_ScheduleChangePlan
+	ADD CONSTRAINT FK_SCP_AppliedBy FOREIGN KEY (AppliedByID) REFERENCES HR.tbl_Employees (EmployeeID)
+	GO
+
+	ALTER TABLE HR.tbl_ScheduleChangePlan
+	ADD CONSTRAINT FK_SCP_ApprovedBy FOREIGN KEY (ApprovedByID) REFERENCES HR.tbl_Employees (EmployeeID)
+	GO
+
+	ALTER TABLE HR.tbl_ScheduleChangePlan
+	ADD CONSTRAINT FK_SCP_Boss FOREIGN KEY (RequestedByBossID) REFERENCES HR.tbl_Employees (EmployeeID)
+	GO
+
+	ALTER TABLE HR.tbl_ScheduleChangePlan
+	ADD CONSTRAINT FK_SCP_NewSchedule FOREIGN KEY (NewScheduleID) REFERENCES HR.tbl_Schedules (ScheduleID)
+	GO
+
+	ALTER TABLE HR.tbl_ScheduleChangePlan
+	ADD CONSTRAINT FK_SCP_Status FOREIGN KEY (StatusTypeID) REFERENCES HR.ref_Types (TypeID)
+	GO
+
+	CREATE INDEX IX_SCPD_Employee
+	ON HR.tbl_ScheduleChangePlanDetail (EmployeeID)
+	ON [PRIMARY]
+	GO
+
+	CREATE INDEX IX_SCPD_Plan
+	ON HR.tbl_ScheduleChangePlanDetail (PlanID)
+	ON [PRIMARY]
+	GO
+
+	CREATE INDEX IX_SCPD_Status
+	ON HR.tbl_ScheduleChangePlanDetail (StatusTypeID)
+	ON [PRIMARY]
+	GO
+
+	ALTER TABLE HR.tbl_ScheduleChangePlanDetail
+	ADD CONSTRAINT FK_SCPD_ApplEmpSched FOREIGN KEY (AppliedEmpScheduleID) REFERENCES HR.tbl_EmployeeSchedules (EmpScheduleID)
+	GO
+
+	ALTER TABLE HR.tbl_ScheduleChangePlanDetail
+	ADD CONSTRAINT FK_SCPD_Employee FOREIGN KEY (EmployeeID) REFERENCES HR.tbl_Employees (EmployeeID)
+	GO
+
+	ALTER TABLE HR.tbl_ScheduleChangePlanDetail
+	ADD CONSTRAINT FK_SCPD_Plan FOREIGN KEY (PlanID) REFERENCES HR.tbl_ScheduleChangePlan (PlanID)
+	GO
+
+	ALTER TABLE HR.tbl_ScheduleChangePlanDetail
+	ADD CONSTRAINT FK_SCPD_PrevEmpSched FOREIGN KEY (PreviousEmpScheduleID) REFERENCES HR.tbl_EmployeeSchedules (EmpScheduleID)
+	GO
+
+	ALTER TABLE HR.tbl_ScheduleChangePlanDetail
+	ADD CONSTRAINT FK_SCPD_PrevSchedule FOREIGN KEY (PreviousScheduleID) REFERENCES HR.tbl_Schedules (ScheduleID)
+	GO
+
+	ALTER TABLE HR.tbl_ScheduleChangePlanDetail
+	ADD CONSTRAINT FK_SCPD_Status FOREIGN KEY (StatusTypeID) REFERENCES HR.ref_Types (TypeID)
+	GO
+
+
+
+
+ALTER TABLE HR.tbl_DepartmentAuthorities
+ADD CONSTRAINT FK_DeptAuth_AuthType FOREIGN KEY (AuthorityTypeID) REFERENCES HR.ref_Types (TypeID)
+GO
+
+ALTER TABLE HR.tbl_DepartmentAuthorities
+ADD CONSTRAINT FK_DeptAuth_Department FOREIGN KEY (DepartmentID) REFERENCES HR.tbl_Departments (DepartmentID)
+GO
+
+ALTER TABLE HR.tbl_DepartmentAuthorities
+ADD CONSTRAINT FK_DeptAuth_Employee FOREIGN KEY (EmployeeID) REFERENCES HR.tbl_Employees (EmployeeID)
+GO
+
+ALTER TABLE HR.tbl_DepartmentAuthorities
+ADD CONSTRAINT FK_DeptAuth_Job FOREIGN KEY (JobID) REFERENCES HR.tbl_jobs (JobID)
+GO
 PRINT 'TODOS LOS CONSTRAINTS CREADOS EXITOSAMENTE.';
 GO

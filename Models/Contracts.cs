@@ -66,5 +66,6 @@ public class Contracts : IAuditable{
     public DateTime? UpdatedAt { get; set; }
 
     // Concurrency (SQL: RowVersion TIMESTAMP)
-    public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+    //public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+    public byte[]? RowVersion { get; set; }
 }

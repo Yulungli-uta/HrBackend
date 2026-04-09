@@ -158,7 +158,7 @@ public sealed class TimePlanningEmployeeConfiguration : IEntityTypeConfiguration
         e.Property(x => x.PlanID).HasColumnName("PlanID");
         e.Property(x => x.EmployeeID).HasColumnName("EmployeeID");
         e.HasOne(x => x.TimePlanning)
-            .WithMany()
+            .WithMany(p => p.Employees)
             .HasForeignKey(x => x.PlanID)
             .HasConstraintName("FK_TimePlanningEmployees_Plan")
             .OnDelete(DeleteBehavior.Cascade);
@@ -230,5 +230,56 @@ public sealed class JobActivityConfiguration : IEntityTypeConfiguration<JobActiv
         e.HasKey(x => new { x.ActivitiesId, x.JobID });
         e.Property(x => x.ActivitiesId).HasColumnName("ActivitiesID");
         e.Property(x => x.JobID).HasColumnName("JobID");
+    }
+}
+
+public sealed class ScheduleChangePlanConfiguration : IEntityTypeConfiguration<ScheduleChangePlan>
+{
+    public void Configure(EntityTypeBuilder<ScheduleChangePlan> e)
+    {
+        e.ToTable("tbl_ScheduleChangePlan", "HR");
+        e.HasKey(x => x.PlanID);
+        e.Property(x => x.PlanID).HasColumnName("PlanID").ValueGeneratedOnAdd().UseIdentityColumn();
+        e.Property(x => x.RequestedByBossID).HasColumnName("RequestedByBossID");
+        e.Property(x => x.NewScheduleID).HasColumnName("NewScheduleID");
+        e.Property(x => x.StatusTypeID).HasColumnName("StatusTypeID");
+        e.Property(x => x.ApprovedByID).HasColumnName("ApprovedByID");
+        e.Property(x => x.AppliedByID).HasColumnName("AppliedByID");
+        e.Property(x => x.RowVersion).IsRowVersion().HasColumnName("RowVersion").IsConcurrencyToken();
+        e.Property(x => x.CreatedAt)
+            .HasDefaultValueSql("GETDATE()")
+            .ValueGeneratedOnAdd()
+            .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
+
+        // Columna calculada persistida en BD — solo lectura
+        e.Property(x => x.EffectiveApplyDate)
+            .ValueGeneratedOnAddOrUpdate()
+            .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
+    }
+}
+
+public sealed class ScheduleChangePlanDetailConfiguration : IEntityTypeConfiguration<ScheduleChangePlanDetail>
+{
+    public void Configure(EntityTypeBuilder<ScheduleChangePlanDetail> e)
+    {
+        e.ToTable("tbl_ScheduleChangePlanDetail", "HR");
+        e.HasKey(x => x.DetailID);
+        e.Property(x => x.DetailID).HasColumnName("DetailID").ValueGeneratedOnAdd().UseIdentityColumn();
+        e.Property(x => x.PlanID).HasColumnName("PlanID");
+        e.Property(x => x.EmployeeID).HasColumnName("EmployeeID");
+        e.Property(x => x.PreviousScheduleID).HasColumnName("PreviousScheduleID");
+        e.Property(x => x.PreviousEmpScheduleID).HasColumnName("PreviousEmpScheduleID");
+        e.Property(x => x.AppliedEmpScheduleID).HasColumnName("AppliedEmpScheduleID");
+        e.Property(x => x.StatusTypeID).HasColumnName("StatusTypeID");
+        e.Property(x => x.RowVersion).IsRowVersion().HasColumnName("RowVersion").IsConcurrencyToken();
+        e.Property(x => x.CreatedAt)
+            .HasDefaultValueSql("GETDATE()")
+            .ValueGeneratedOnAdd()
+            .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
+
+        // Índice único: un empleado no se repite en el mismo plan
+        e.HasIndex(x => new { x.PlanID, x.EmployeeID })
+            .IsUnique()
+            .HasDatabaseName("UQ_SCPD_PlanEmployee");
     }
 }

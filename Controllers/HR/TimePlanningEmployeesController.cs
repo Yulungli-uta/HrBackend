@@ -49,7 +49,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Obtiene un empleado de planificación por ID.</summary>
         [HttpGet("{id:int}")]
-        public async Task<IActionResult> GetById([FromRoute] int planId, [FromRoute] int id, CancellationToken ct)
+        public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
         {
             var planningEmployee = await _svc.GetByIdAsync(id, ct);
             return planningEmployee is null ? NotFound() : Ok(_mapper.Map<TimePlanningEmployeeResponseDTO>(planningEmployee));
@@ -61,21 +61,24 @@ namespace WsUtaSystem.Controllers.HR
         //    Ok(_mapper.Map<List<TimePlanningEmployeeResponseDTO>>(await _svc.GetByStatusAsync(statusTypeId, ct)));
 
         /// <summary>Agrega un empleado a la planificación.</summary>
+        /// <remarks>
+        /// El PlanID debe viajar dentro del body (TimePlanningEmployeeCreateDTO.PlanID).
+        /// No se acepta como parámetro de ruta porque la ruta base es /planning/employees.
+        /// </remarks>
         [HttpPost]
-        public async Task<IActionResult> AddEmployee([FromRoute] int planId, [FromBody] TimePlanningEmployeeCreateDTO dto, CancellationToken ct)
+        public async Task<IActionResult> AddEmployee([FromBody] TimePlanningEmployeeCreateDTO dto, CancellationToken ct)
         {
-            Console.WriteLine($"AddEmployee llamado con planId: {planId} empleados: {dto.PlanID}");
-           // dto.PlanID = planId; // Asegurar que el PlanID coincide con la ruta
+            Console.WriteLine($"AddEmployee llamado con PlanID en body: {dto.PlanID} empleado: {dto.EmployeeID}");
             var planningEmployee = _mapper.Map<TimePlanningEmployee>(dto);
-            Console.WriteLine($"PlanningEmployee mapeado: {planningEmployee.PlanID} " +
-                $"empl: {planningEmployee.EmployeeID} status: {planningEmployee.EmployeeStatusTypeID} ");
+            Console.WriteLine($"PlanningEmployee mapeado: PlanID={planningEmployee.PlanID} " +
+                $"EmployeeID={planningEmployee.EmployeeID} StatusID={planningEmployee.EmployeeStatusTypeID}");
             var created = await _svc.CreateAsync(planningEmployee, ct);
-            return CreatedAtAction(nameof(GetById), new { planId, id = created.PlanEmployeeID }, _mapper.Map<TimePlanningEmployeeResponseDTO>(created));
+            return CreatedAtAction(nameof(GetById), new { id = created.PlanEmployeeID }, _mapper.Map<TimePlanningEmployeeResponseDTO>(created));
         }
 
         /// <summary>Actualiza un empleado en la planificación.</summary>
         [HttpPut("{id:int}")]
-        public async Task<IActionResult> Update([FromRoute] int planId, [FromRoute] int id, [FromBody] TimePlanningEmployeeUpdateDTO dto, CancellationToken ct)
+        public async Task<IActionResult> Update([FromRoute] int id, [FromBody] TimePlanningEmployeeUpdateDTO dto, CancellationToken ct)
         {
             var planningEmployee = _mapper.Map<TimePlanningEmployee>(dto);
             await _svc.UpdateAsync(id, planningEmployee, ct);
@@ -84,7 +87,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Elimina un empleado de la planificación.</summary>
         [HttpDelete("{id:int}")]
-        public async Task<IActionResult> Delete([FromRoute] int planId, [FromRoute] int id, CancellationToken ct)
+        public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
         {
             await _svc.DeleteAsync(id, ct);
             return NoContent();

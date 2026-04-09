@@ -1,6 +1,7 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+using System.Linq.Expressions;
 using WsUtaSystem.Application.DTOs.Departments;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
@@ -28,6 +29,49 @@ public class DepartmentsController : ControllerBase
     {
         var e = await _svc.GetByIdAsync(id, ct);
         return e is null ? NotFound() : Ok(_mapper.Map<DepartmentsDto>(e));
+    }
+
+    /// <summary>Retorna un resultado paginado de registros de Departments.</summary>
+    /// <param name="page">Número de página (base 1).</param>
+    /// <param name="pageSize">Cantidad de registros por página. Máximo 200.</param>
+    /// <param name="search">Texto de búsqueda.</param>
+    [HttpGet("paged")]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 200) pageSize = 20;
+
+        Expression<Func<Departments, bool>>? predicate = null;
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+
+            predicate = d =>
+                (d.Name != null && d.Name.ToLower().Contains(term)) ||
+                (d.ShortName != null && d.ShortName.ToLower().Contains(term));
+        }
+
+        var pagedEntities = predicate is not null
+            ? await _svc.GetPagedAsync(predicate, page, pageSize, ct)
+            : await _svc.GetPagedAsync(page, pageSize, ct);
+
+        var dtoItems = _mapper.Map<List<DepartmentsDto>>(pagedEntities.Items);
+
+        return Ok(new
+        {
+            items = dtoItems,
+            page = pagedEntities.Page,
+            pageSize = pagedEntities.PageSize,
+            totalCount = pagedEntities.TotalCount,
+            totalPages = pagedEntities.TotalPages,
+            hasPreviousPage = pagedEntities.HasPreviousPage,
+            hasNextPage = pagedEntities.HasNextPage
+        });
     }
 
     /// <summary>Crea un nuevo registro.</summary>

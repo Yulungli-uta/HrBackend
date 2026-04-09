@@ -27,6 +27,8 @@ namespace WsUtaSystem.Models
         public DateTime? UpdatedAt { get; set; }
         [Timestamp]
         public byte[]? RowVersion { get; set; }
+        public ICollection<TimePlanningEmployee> Employees { get; set; } =
+            new List<TimePlanningEmployee>();
 
         // Navigation properties (opcionales, para cargar datos relacionados)
         //public string? PlanStatusName { get; set; }

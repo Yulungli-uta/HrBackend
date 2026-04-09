@@ -3,6 +3,7 @@ using System.Diagnostics;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Repositories;
 using WsUtaSystem.Models.Views;
 
 namespace WsUtaSystem.Application.Services;
@@ -234,5 +235,12 @@ public class VwEmployeeDetailsService : IvwEmployeeDetailsService
         CancellationToken ct = default)
     {
         return await _repository.GetPagedAsync(search, page, pageSize, ct);
+    }
+
+    public async Task<IEnumerable<VwEmployeeDetails>> GetSubordinatesByBossIdAsync(
+        int bossId,
+        CancellationToken ct = default)
+    {
+        return await _repository.GetByImmediateBossIdAsync(bossId, ct);
     }
 }

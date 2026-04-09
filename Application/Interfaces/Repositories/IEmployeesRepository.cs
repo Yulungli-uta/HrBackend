@@ -1,4 +1,7 @@
 using WsUtaSystem.Models;
 using WsUtaSystem.Application.Common.Interfaces;
 namespace WsUtaSystem.Application.Interfaces.Repositories;
-public interface IEmployeesRepository : IRepository<Employees, int> { }
+public interface IEmployeesRepository : IRepository<Employees, int> {
+    Task<IEnumerable<Employees>> GetSubordinatesByBossIdAsync(int bossId, CancellationToken ct = default);
+
+}

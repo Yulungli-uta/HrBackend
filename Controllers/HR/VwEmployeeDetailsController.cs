@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Diagnostics;
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.Interfaces.Services;
 
@@ -86,6 +87,15 @@ namespace WsUtaSystem.Controllers.HR
         {
             var employees = await _employeeDetailsService.GetEmployeesByDepartmentAsync(departmentName, ct);
             return Ok(employees);
+        }
+
+        [HttpGet("boss/{bossId:int}/subordinates/details")]
+        public async Task<IActionResult> GetSubordinatesDetailsByBossId(
+        int bossId,
+        CancellationToken ct)
+        {
+            var result = await _employeeDetailsService.GetSubordinatesByBossIdAsync(bossId, ct);
+            return Ok(result);
         }
 
         /// <summary>Obtiene empleados por facultad.</summary>

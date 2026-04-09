@@ -31,6 +31,64 @@ LEFT JOIN HR.tbl_Schedules ts ON ts.ScheduleID = es_current.ScheduleID
 WHERE e.IsActive = 1
 GO
 
+CREATE OR ALTER VIEW HR.vw_EmployeeDetails2 AS
+SELECT 
+    e.EmployeeID,
+    p.FirstName                                             AS FirstName,
+    p.LastName                                              AS LastName,
+    p.IDCard,
+    e.Email,
+    e.ImmediateBossID,
+
+    -- Datos del jefe inmediato
+    --p1.FirstName                                            AS BossFirstName,
+    --p1.LastName                                             AS BossLastName,
+    p1.FirstName + ' ' + p1.LastName                        AS BossCompleteName,
+    e1.Email                                                AS BossWorkEmail,
+
+    e.EmployeeType,
+    rt.Name                                                 AS ContractType,
+
+    es_current.ScheduleID,
+    CONVERT(VARCHAR(5), ts.EntryTime, 108) 
+        + ' - ' + 
+    CONVERT(VARCHAR(5), ts.ExitTime, 108)                   AS Schedule,
+
+    e.DepartmentID,
+    d.Name                                                  AS Department,
+
+    1.00                                                    AS BaseSalary,  -- TODO: reemplazar con columna real
+    e.HireDate
+
+FROM HR.tbl_People          p
+JOIN  HR.tbl_Employees      e   ON e.PersonID        = p.PersonID
+                                AND e.IsActive        = 1              -- <-- movido aquí para filtrar antes de los JOINs
+
+-- Jefe inmediato: empleado
+LEFT JOIN HR.tbl_Employees  e1  ON e1.EmployeeID     = e.ImmediateBossID
+-- Jefe inmediato: persona (nombre)
+LEFT JOIN HR.tbl_People     p1  ON p1.PersonID       = e1.PersonID
+
+LEFT JOIN HR.tbl_Departments    d   ON d.DepartmentID    = e.DepartmentID
+
+LEFT JOIN HR.ref_Types          rt  ON rt.TypeID         = e.EmployeeType
+                                   AND rt.Category       = 'CONTRACT_TYPE'
+
+-- Último horario asignado al empleado
+OUTER APPLY (
+    SELECT TOP 1
+        es.ScheduleID,
+        es.ValidFrom,
+        es.ValidTo
+    FROM HR.tbl_EmployeeSchedules es
+    WHERE es.EmployeeID = e.EmployeeID
+    ORDER BY es.ValidFrom DESC, es.EmpScheduleID DESC
+) es_current
+
+LEFT JOIN HR.tbl_Schedules  ts  ON ts.ScheduleID    = es_current.ScheduleID;
+
+GO
+
 PRINT (N'Create or alter view [HR].[vw_EmployeeComplete]')
 GO
 CREATE OR ALTER VIEW HR.vw_EmployeeComplete AS
@@ -273,3 +331,44 @@ FROM HR.tbl_Employees e
 JOIN HR.vw_Calendar c ON 1=1
 LEFT JOIN HR.vw_EmployeeScheduleAtDate s ON s.EmployeeID=e.EmployeeID AND s.D=c.D
 LEFT JOIN HR.vw_PunchDay pd ON pd.EmployeeID=e.EmployeeID AND pd.WorkDate=c.D;
+
+/*horarios vigentes del empleado */
+CREATE OR ALTER VIEW HR.Vw_EmployeeCurrentSchedule
+AS
+SELECT
+    e.EmployeeID,
+    e.PersonID,
+    e.EmployeeType,
+    e.DepartmentID,
+    e.ImmediateBossID,
+    e.HireDate,
+    e.Email,
+    e.IsActive,
+
+    es.EmpScheduleID,
+    es.ScheduleID,
+    es.ValidFrom,
+    es.ValidTo,
+    es.CreatedAt  AS ScheduleAssignedAt,
+    es.CreatedBy  AS ScheduleAssignedBy,
+
+    s.Description AS ScheduleDescription,
+    s.EntryTime,
+    s.ExitTime,
+    s.WorkingDays,
+    s.RequiredHoursPerDay,
+    s.HasLunchBreak,
+    s.LunchStart,
+    s.LunchEnd,
+    s.IsRotating,
+    s.RotationPattern
+FROM HR.tbl_Employees e
+INNER JOIN HR.tbl_EmployeeSchedules es
+    ON es.EmployeeID = e.EmployeeID
+INNER JOIN HR.tbl_Schedules s
+    ON s.ScheduleID = es.ScheduleID
+WHERE
+    e.IsActive = 1
+    AND es.ValidFrom <= CAST(GETDATE() AS DATE)
+    AND (es.ValidTo IS NULL OR es.ValidTo >= CAST(GETDATE() AS DATE));
+GO

@@ -571,6 +571,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPayrollSubsidiesService, PayrollSubsidiesService>();
         services.AddScoped<IEncryptionService, EncryptionService>();
 
+        // ── Módulo: Planificacion de cambio horario ────────────────────────────────
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IScheduleChangePlanRepository, WsUtaSystem.Infrastructure.Repositories.ScheduleChangePlanRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IScheduleChangePlanService, WsUtaSystem.Application.Services.ScheduleChangePlanService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEmployeeCurrentScheduleRepository, WsUtaSystem.Infrastructure.Repositories.EmployeeCurrentScheduleRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmployeeCurrentScheduleService, WsUtaSystem.Application.Services.EmployeeCurrentScheduleService>();
         return services;
     }
 

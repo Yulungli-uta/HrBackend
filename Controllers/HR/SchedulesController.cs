@@ -1,6 +1,7 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+using System.Linq.Expressions;
 using WsUtaSystem.Application.DTOs.Schedules;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
@@ -28,6 +29,48 @@ public class SchedulesController : ControllerBase
     {
         var e = await _svc.GetByIdAsync(id, ct);
         return e is null ? NotFound() : Ok(_mapper.Map<SchedulesDto>(e));
+    }
+
+    [HttpGet("paged")]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] string? sortDirection = "asc",
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 200) pageSize = 20;
+
+        Expression<Func<Schedules, bool>>? predicate = null;
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+
+            predicate = s =>
+                (s.Description != null && s.Description.ToLower().Contains(term)) ||
+                (s.WorkingDays != null && s.WorkingDays.ToLower().Contains(term)) ||
+                (s.RotationPattern != null && s.RotationPattern.ToLower().Contains(term));
+        }
+
+        var pagedEntities = predicate is not null
+            ? await _svc.GetPagedAsync(predicate, page, pageSize, ct)
+            : await _svc.GetPagedAsync(page, pageSize, ct);
+
+        var dtoItems = _mapper.Map<List<SchedulesDto>>(pagedEntities.Items);
+
+        return Ok(new
+        {
+            items = dtoItems,
+            page = pagedEntities.Page,
+            pageSize = pagedEntities.PageSize,
+            totalCount = pagedEntities.TotalCount,
+            totalPages = pagedEntities.TotalPages,
+            hasPreviousPage = pagedEntities.HasPreviousPage,
+            hasNextPage = pagedEntities.HasNextPage
+        });
     }
 
     /// <summary>Crea un nuevo registro.</summary>
