@@ -32,6 +32,19 @@ namespace WsUtaSystem.Controllers.HR
             return planning is null ? NotFound() : Ok(_mapper.Map<TimePlanningResponseDTO>(planning));
         }
 
+        /// <summary>
+        /// Obtiene todas las planificaciones creadas por un responsable/jefe.
+        /// Retorna lista vacía si no tiene planificaciones — nunca 404.
+        /// </summary>
+        [HttpGet("boss/{id:int}")]
+        public async Task<IActionResult> GetByCreateId([FromRoute] int id, CancellationToken ct)
+        {
+            var plannings = await _svc.GetByCreateBy(id, ct);
+            // GetByCreateBy retorna IEnumerable<TimePlanning>
+            // se debe mapear a List<TimePlanningResponseDTO>, NO a objeto singular
+            return Ok(_mapper.Map<List<TimePlanningResponseDTO>>(plannings ?? Enumerable.Empty<TimePlanning>()));
+        }
+
         /// <summary>Obtiene planificaciones por empleado.</summary>
         [HttpGet("employee/{employeeId:int}")]
         public async Task<IActionResult> GetByEmployee([FromRoute] int employeeId, CancellationToken ct) =>
@@ -52,11 +65,37 @@ namespace WsUtaSystem.Controllers.HR
         public async Task<IActionResult> Create([FromBody] TimePlanningCreateDTO dto, CancellationToken ct)
         {
             //Console.WriteLine($"************varlores recibidos timePlannings {dto.ToString}");
-            var planning = _mapper.Map<TimePlanning>(dto);
-            Console.WriteLine($"📥 DTO recibido: {System.Text.Json.JsonSerializer.Serialize(dto)}");
-            Console.WriteLine($"PlanStatusTypeID recibido: {dto.PlanStatusTypeID}");
-            var created = await _svc.CreateAsync(planning, ct);
-            return CreatedAtAction(nameof(GetById), new { id = created.PlanID }, _mapper.Map<TimePlanningResponseDTO>(created));
+            if (!ModelState.IsValid)
+                return ValidationProblem(ModelState);
+
+            var isValid = await _svc.ValidatePlanningAsync(dto, ct);
+            if (!isValid)
+            {
+                return BadRequest(new
+                {
+                    message = "La planificación no cumple las reglas de validación."
+                });
+            }
+
+            try
+            {
+                var planning = _mapper.Map<TimePlanning>(dto);
+
+                var created = await _svc.CreateWithEmployeesAsync(planning, ct);
+
+                return CreatedAtAction(
+                    nameof(GetById),
+                    new { id = created.PlanID },
+                    _mapper.Map<TimePlanningResponseDTO>(created)
+                );
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.Message
+                });
+            }
         }
 
         /// <summary>Actualiza una planificación existente.</summary>

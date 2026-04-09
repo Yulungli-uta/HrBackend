@@ -45,6 +45,17 @@ namespace WsUtaSystem.Infrastructure.Repositories
                 .ToListAsync(ct);
         }
 
+        public async Task<IEnumerable<VwEmployeeDetails>> GetByImmediateBossIdAsync(
+            int bossId,
+            CancellationToken ct = default)
+        {
+            return await Query()
+                .Where(e => e.ImmediateBossID == bossId)
+                .OrderBy(e => e.FirstName)
+                .ThenBy(e => e.LastName)
+                .ToListAsync(ct);
+        }
+
         public async Task<IEnumerable<VwEmployeeDetails>> GetByFacultyAsync(
             string facultyName,
             CancellationToken ct = default)

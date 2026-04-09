@@ -43,5 +43,9 @@ namespace WsUtaSystem.Application.Interfaces.Services
             int page,
             int pageSize,
             CancellationToken ct = default);
+
+        Task<IEnumerable<VwEmployeeDetails>> GetSubordinatesByBossIdAsync( 
+            int bossId, 
+            CancellationToken ct = default);
     }
 }

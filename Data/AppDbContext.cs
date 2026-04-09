@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Models.Views;
+using WsUtaSystem.Data.ModelConfigurations.HR;
 using WsUtaSystem.Models;
 using WsUtaSystem.Models.Docflow;
 using WsUtaSystem.Models.Views;
@@ -74,6 +75,9 @@ public class AppDbContext : DbContext
     public DbSet<Activity> Activity => Set<Activity>();
     public DbSet<AdditionalActivity> AdditionalActivity => Set<AdditionalActivity>();
     public DbSet<JobActivity> JobActivity => Set<JobActivity>();
+    public DbSet<ScheduleChangePlan> ScheduleChangePlan => Set<ScheduleChangePlan>();
+    public DbSet<ScheduleChangePlanDetail> ScheduleChangePlanDetail => Set<ScheduleChangePlanDetail>();
+
 
     // ─────────────────────────────────────────────────────────────────────────
     // DbSets - Módulo HR: Permisos y Movimientos
@@ -147,6 +151,7 @@ public class AppDbContext : DbContext
     public DbSet<VwAttendanceDay> VwAttendanceDay { get; set; }
     public DbSet<VwUserRole> VwUserRoles { get; set; }
     public DbSet<VwRoleMenuItem> VwRoleMenuItems { get; set; }
+    public DbSet<VwEmployeeCurrentSchedule> VwEmployeeCurrentSchedules => Set<VwEmployeeCurrentSchedule>();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Configuración del modelo

@@ -21,4 +21,5 @@ public class Permissions : IAuditable{
   public int? UpdatedBy { get; set; }
   public DateTime? UpdatedAt { get; set; }
   public virtual Employees Employee { get; set; }
+  public virtual PermissionTypes PermissionType { get; set; }
 }

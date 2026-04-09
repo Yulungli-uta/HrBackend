@@ -63,7 +63,6 @@ public class PermissionsController : ControllerBase
             hasPreviousPage = pagedEntities.HasPreviousPage,
             hasNextPage = pagedEntities.HasNextPage
         });
-
     }
 
     /// <summary>Obtiene un permiso por ID.</summary>
@@ -86,7 +85,24 @@ public class PermissionsController : ControllerBase
     [HttpGet("bossId/{employeeId:int}")]
     public async Task<IActionResult> GetByImmediateBossId([FromRoute] int employeeId, CancellationToken ct)
     {
-        var e = await _svc.GetByImmediateBossId(employeeId, ct);
+        //var e = await _svc.GetByImmediateBossId(employeeId, ct);
+        var e = await _svc.GetByImmediateBossIdNonMedical(employeeId, ct);
+        return e is null ? NotFound() : Ok(_mapper.Map<List<PermissionsDto>>(e));
+    }
+
+    /// <summary>Obtiene permisos NO médicos por ID del jefe inmediato.</summary>
+    [HttpGet("bossId/{employeeId:int}/non-medical")]
+    public async Task<IActionResult> GetByImmediateBossIdNonMedical([FromRoute] int employeeId, CancellationToken ct)
+    {
+        var e = await _svc.GetByImmediateBossIdNonMedical(employeeId, ct);
+        return e is null ? NotFound() : Ok(_mapper.Map<List<PermissionsDto>>(e));
+    }
+
+    /// <summary>Obtiene todos los permisos médicos pendientes.</summary>
+    [HttpGet("medical/pending")]
+    public async Task<IActionResult> GetPendingMedicalPermissions(CancellationToken ct)
+    {
+        var e = await _svc.GetPendingMedicalPermissions(ct);
         return e is null ? NotFound() : Ok(_mapper.Map<List<PermissionsDto>>(e));
     }
 
@@ -99,6 +115,7 @@ public class PermissionsController : ControllerBase
         var idVal = created?.GetType()?.GetProperties()
             ?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))
             ?.GetValue(created);
+
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<PermissionsDto>(created));
     }
 

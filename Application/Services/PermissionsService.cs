@@ -54,8 +54,23 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
     public Task<IEnumerable<Permissions>> GetByImmediateBossId(int immediateBossId, CancellationToken ct)
         => _repository.GetByImmediateBossId(immediateBossId, ct);
 
+    public Task<IEnumerable<Permissions>> GetByImmediateBossIdNonMedical(int employeeId, CancellationToken ct)
+    { 
+        //=> _repository.GetByImmediateBossIdNonMedical(employeeId, ct);
+        _logger.LogInformation("**************** accede a GetByImmediateBossIdNonMedical");
+        return _repository.GetByImmediateBossIdNonMedical(employeeId, ct);
+    }
+
+    public Task<IEnumerable<Permissions>> GetPendingMedicalPermissions(CancellationToken ct)
+    {
+        //=> _repository.GetPendingMedicalPermissions(ct);
+        _logger.LogInformation("**************** accede a GetPendingMedicalPermissions");
+        return _repository.GetPendingMedicalPermissions(ct);
+    }
+
     public async Task<Permissions> CreateWithBalanceCheckAsync(Permissions entity, CancellationToken ct)
     {
+        _logger.LogInformation("**************** accede a CreateWithBalanceCheckAsync");
         if (entity is null) throw new ArgumentNullException(nameof(entity));
         ValidateDates(entity);
 

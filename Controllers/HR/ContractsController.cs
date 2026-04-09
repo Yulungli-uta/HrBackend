@@ -51,12 +51,15 @@ public class ContractsController : ControllerBase
         }
 
         var pagedEntities = predicate is not null
-       ? await _service.GetPagedAsync(predicate, page, pageSize, ct)
-       : await _service.GetPagedAsync(page, pageSize, ct);
+           ? await _service.GetPagedAsync(predicate, page, pageSize, ct)
+           : await _service.GetPagedAsync(page, pageSize, ct);
+
+        var dtoItems = _mapper.Map<List<ContractsDto>>(pagedEntities.Items);
 
         return Ok(new
         {
-            items = pagedEntities.Items,
+            //items = pagedEntities.Items,
+            items = dtoItems,
             page = pagedEntities.Page,
             pageSize = pagedEntities.PageSize,
             totalCount = pagedEntities.TotalCount,

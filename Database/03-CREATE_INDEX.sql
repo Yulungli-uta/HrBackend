@@ -306,3 +306,27 @@ BEGIN
     ON HR.TBL_StoredFile (FileGuid);
 END
 GO
+
+CREATE INDEX IX_EmpSchedules_EmpID_ValidFrom
+      ON HR.tbl_EmployeeSchedules (EmployeeID, ValidFrom DESC, EmpScheduleID DESC)
+      INCLUDE (ScheduleID, ValidTo);
+GO
+
+CREATE INDEX IX_DeptAuth_DateRange
+ON HR.tbl_DepartmentAuthorities (StartDate, EndDate)
+INCLUDE (DepartmentID, EmployeeID, AuthorityTypeID, Denomination)
+ON [PRIMARY]
+GO
+
+CREATE INDEX IX_DeptAuth_Dept_Active
+ON HR.tbl_DepartmentAuthorities (DepartmentID, AuthorityTypeID, IsActive)
+INCLUDE (EmployeeID, Denomination, StartDate, ResolutionCode)
+WHERE ([EndDate] IS NULL AND [IsActive] = (1))
+ON [PRIMARY]
+GO
+
+CREATE INDEX IX_DeptAuth_Employee
+ON HR.tbl_DepartmentAuthorities (EmployeeID, IsActive)
+INCLUDE (DepartmentID, AuthorityTypeID, Denomination, StartDate, EndDate)
+ON [PRIMARY]
+GO

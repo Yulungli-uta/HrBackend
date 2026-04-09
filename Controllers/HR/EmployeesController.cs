@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq.Expressions;
 using WsUtaSystem.Application.DTOs.Employees;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Application.Services;
 using WsUtaSystem.Infrastructure.Controller;
 using WsUtaSystem.Models;
 
@@ -78,6 +79,15 @@ public class EmployeesController : ControllerBase
     {
         var e = await _svc.GetByIdAsync(id, ct);
         return e is null ? NotFound() : Ok(_mapper.Map<EmployeesDto>(e));
+    }
+
+    [HttpGet("boss/{bossId:int}/subordinates")]
+    public async Task<IActionResult> GetSubordinatesByBossId(
+        int bossId,
+        CancellationToken ct)
+    {
+        var result = await _svc.GetSubordinatesByBossIdAsync(bossId, ct);
+        return Ok(result);
     }
 
     /// <summary>Crea un nuevo registro.</summary>

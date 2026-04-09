@@ -9,6 +9,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
     {
         private readonly DbContext _db;
 
+
         public TimePlanningRepository(WsUtaSystem.Data.AppDbContext db) : base(db)
         {
             _db = db;
@@ -28,6 +29,14 @@ namespace WsUtaSystem.Infrastructure.Repositories
         {
             return await _db.Set<TimePlanning>()
                 .Where(tp => tp.PlanStatusTypeID == statusTypeId)
+                .OrderByDescending(tp => tp.CreatedAt)
+                .ToListAsync(ct);
+        }
+
+        public async Task<IEnumerable<TimePlanning>> GetByCreateBy(int createBy, CancellationToken ct = default)
+        {
+            return await _db.Set<TimePlanning>()
+                .Where(tp => tp.CreatedBy == createBy)
                 .OrderByDescending(tp => tp.CreatedAt)
                 .ToListAsync(ct);
         }

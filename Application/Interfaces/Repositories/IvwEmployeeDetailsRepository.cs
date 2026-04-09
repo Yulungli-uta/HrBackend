@@ -12,6 +12,10 @@ namespace WsUtaSystem.Application.Interfaces.Repositories
         //    EmployeeDetailsFilterDto filter,
         //    CancellationToken ct = default);
         Task<IEnumerable<VwEmployeeDetails>> GetAllAsync(CancellationToken ct = default);
+
+        Task<IEnumerable<VwEmployeeDetails>> GetByImmediateBossIdAsync(
+            int bossId,
+            CancellationToken ct = default);
         Task<IEnumerable<VwEmployeeDetails>> GetByDepartmentAsync(
             string departmentName,
             CancellationToken ct = default);

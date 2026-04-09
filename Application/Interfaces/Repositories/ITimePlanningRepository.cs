@@ -7,6 +7,7 @@ namespace WsUtaSystem.Application.Interfaces.Repositories
     {
         Task<IEnumerable<TimePlanning>> GetByEmployeeAsync(int employeeId, CancellationToken ct = default);
         Task<IEnumerable<TimePlanning>> GetByStatusAsync(int statusTypeId, CancellationToken ct = default);
+        Task<IEnumerable<TimePlanning>> GetByCreateBy(int createBy, CancellationToken ct = default);
         Task<IEnumerable<TimePlanning>> GetByDateRangeAsync(DateTime startDate, DateTime endDate, CancellationToken ct = default);
         //Task<IEnumerable<TimePlanning>> SearchAsync(TimePlanningSearchDTO searchDto, CancellationToken ct = default);
         Task<int> GetCountByStatusAsync(int statusTypeId, CancellationToken ct = default);

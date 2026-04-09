@@ -417,6 +417,9 @@ CREATE TABLE HR.tbl_PermissionTypes (
     RequiresApproval BIT NOT NULL DEFAULT(1),
 	AttachedFile BIT NULL DEFAULT(1),
     MaxDays INT NULL,
+	LeadTimeHours INT DEFAULT(0), 
+	IsMedical BIT NOT NULL DEFAULT(0),
+	IsActive BIT NOT NULL DEFAULT(1),
 	CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
 	CreatedBy int NULL,
     UpdatedAt datetime2 NULL,
@@ -441,6 +444,7 @@ CREATE TABLE HR.tbl_Schedules (
     LunchEnd TIME NULL,
     IsRotating BIT NOT NULL DEFAULT(0),
     RotationPattern NVARCHAR(120) NULL,
+	IsActive BIT NOT NULL DEFAULT(1),
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
 	CreatedBy int NULL,
     UpdatedAt datetime2 NULL,
@@ -1167,6 +1171,30 @@ BEGIN
         CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
         CreatedBy INT NULL
     );
+END
+GO
+
+IF OBJECT_ID('HR.tbl_DepartmentAuthorities', 'U') IS NULL
+BEGIN
+CREATE TABLE HR.tbl_DepartmentAuthorities (
+  AuthorityID INT IDENTITY
+ ,DepartmentID INT NOT NULL
+ ,EmployeeID INT NOT NULL
+ ,AuthorityTypeID INT NOT NULL
+ ,JobID INT NULL
+ ,Denomination NVARCHAR(200) NULL
+ ,StartDate DATE NOT NULL
+ ,EndDate DATE NULL
+ ,ResolutionCode NVARCHAR(100) NULL
+ ,Notes NVARCHAR(500) NULL
+ ,IsActive BIT NOT NULL DEFAULT (1)
+ ,CreatedBy INT NULL
+ ,CreatedAt DATETIME2 NOT NULL DEFAULT (GETDATE())
+ ,UpdatedBy INT NULL
+ ,UpdatedAt DATETIME2 NULL
+ ,RowVersion TIMESTAMP
+ ,CONSTRAINT PK_DeptAuth PRIMARY KEY CLUSTERED (AuthorityID)
+) ON [PRIMARY]
 END
 GO
 

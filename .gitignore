@@ -112,3 +112,5 @@ logs/
 # Opcionalmente, ignorar cualquier archivo .txt o .log en cualquier parte
 *.log
 logs/*.txt
+
+Deploy/

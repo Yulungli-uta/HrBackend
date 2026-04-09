@@ -6,4 +6,9 @@ namespace WsUtaSystem.Application.Services;
 public class SchedulesService : Service<Schedules, int>, ISchedulesService
 {
     public SchedulesService(ISchedulesRepository repo) : base(repo) { }
+
+    public Task<IEnumerable<Schedules>> GetBySheduleAcive(CancellationToken ct)
+    {
+        throw new NotImplementedException();
+    }
 }

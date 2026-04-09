@@ -20,6 +20,11 @@ public sealed class ContractsConfiguration : IEntityTypeConfiguration<Contracts>
         e.Property(x => x.JobID).HasColumnName("JobID");
         e.Property(x => x.RegistrationDateAnulCon).HasColumnName("registrationdate_anul_con");
         e.Property(x => x.WorkOf).HasColumnName("work_of");
+        e.Property(x => x.RowVersion)
+            .HasColumnName("RowVersion")
+            .IsRowVersion()
+            .IsConcurrencyToken()
+            .ValueGeneratedOnAddOrUpdate();
     }
 }
 
