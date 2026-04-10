@@ -202,5 +202,26 @@ public class EntityToDtoProfile : Profile
         CreateMap<DocflowDocument, DocumentDto>();
         CreateMap<DocflowFileVersion, FileVersionDto>();
 
+        // ── DepartmentAuthority ──────────────────────────────────────────────
+        CreateMap<WsUtaSystem.Models.DepartmentAuthority, WsUtaSystem.Application.DTOs.DepartmentAuthority.DepartmentAuthorityDto>()
+            .ForMember(d => d.DepartmentName,   o => o.MapFrom(s => s.Department != null ? s.Department.Name : null))
+            .ForMember(d => d.DepartmentCode,   o => o.MapFrom(s => s.Department != null ? s.Department.Code : null))
+            .ForMember(d => d.EmployeeFullName, o => o.MapFrom(s =>
+                s.Employee != null && s.Employee.People != null
+                    ? $"{s.Employee.People.FirstName} {s.Employee.People.LastName}".Trim()
+                    : null))
+            .ForMember(d => d.EmployeeIdCard,   o => o.MapFrom(s =>
+                s.Employee != null && s.Employee.People != null ? s.Employee.People.IdCard : null))
+            .ForMember(d => d.EmployeeEmail,    o => o.MapFrom(s =>
+                s.Employee != null && s.Employee.People != null
+                    ? s.Employee.People.Email
+                    : s.Employee != null ? s.Employee.Email : null))
+            .ForMember(d => d.AuthorityTypeName, o => o.MapFrom(s => s.AuthorityType != null ? s.AuthorityType.Name : null))
+            .ForMember(d => d.JobName,          o => o.MapFrom(s => s.Job != null ? s.Job.Name : null));
+        CreateMap<WsUtaSystem.Application.DTOs.DepartmentAuthority.DepartmentAuthorityCreateDto,
+                  WsUtaSystem.Models.DepartmentAuthority>();
+        CreateMap<WsUtaSystem.Application.DTOs.DepartmentAuthority.DepartmentAuthorityUpdateDto,
+                  WsUtaSystem.Models.DepartmentAuthority>();
+
     }
 }

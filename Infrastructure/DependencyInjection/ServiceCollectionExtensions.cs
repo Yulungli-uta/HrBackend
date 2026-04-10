@@ -394,15 +394,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IContractTypeRepository, WsUtaSystem.Infrastructure.Repositories.ContractTypeRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractTypeService, WsUtaSystem.Application.Services.ContractTypeService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IContractRequestRepository, WsUtaSystem.Infrastructure.Repositories.ContractRequestRepository>();
-        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractRequestService, WsUtaSystem.Application.Services.ContractRequestService>();
-
-        // ── Módulo: Departamentos / Facultades ────────────────────────────────
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractRequestService, WsUtaSystem.Application.Services.ContractRequestService>();        // ── Módulo: Departamentos / Facultades ────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDepartmentsRepository, WsUtaSystem.Infrastructure.Repositories.DepartmentsRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDepartmentsService, WsUtaSystem.Application.Services.DepartmentsService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IFacultiesRepository, WsUtaSystem.Infrastructure.Repositories.FacultiesRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFacultiesService, WsUtaSystem.Application.Services.FacultiesService>();
-
-        // ── Módulo: Educación ─────────────────────────────────────────────────
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDepartmentAuthorityRepository, WsUtaSystem.Infrastructure.Repositories.DepartmentAuthorityRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDepartmentAuthorityService, WsUtaSystem.Application.Services.DepartmentAuthorityService>();    // ── Módulo: Educación ─────────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEducationLevelsRepository, WsUtaSystem.Infrastructure.Repositories.EducationLevelsRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEducationLevelsService, WsUtaSystem.Application.Services.EducationLevelsService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDegreeRepository, WsUtaSystem.Infrastructure.Repositories.DegreeRepository>();
