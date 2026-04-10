@@ -15,9 +15,18 @@ public sealed class EmployeesConfiguration : IEntityTypeConfiguration<Employees>
         e.ToTable("tbl_Employees", "HR");
         e.HasKey(x => x.EmployeeId);
         e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
+        e.Property(x => x.PersonID).HasColumnName("PersonID");
         e.Property(x => x.EmployeeType).HasColumnName("EmployeeType");
         e.Property(x => x.DepartmentId).HasColumnName("DepartmentID");
         e.Property(x => x.ImmediateBossId).HasColumnName("ImmediateBossID");
+
+        // Relación con People: un empleado tiene una persona asociada
+        e.HasOne(x => x.People)
+            .WithMany()
+            .HasForeignKey(x => x.PersonID)
+            .HasPrincipalKey(p => p.PersonId)
+            .HasConstraintName("FK_Employees_People")
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 

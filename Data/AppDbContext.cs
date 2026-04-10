@@ -39,6 +39,7 @@ public class AppDbContext : DbContext
     public DbSet<Job> Jobs => Set<Job>();
     public DbSet<OccupationalGroup> OccupationalGroup => Set<OccupationalGroup>();
     public DbSet<Degree> Degree => Set<Degree>();
+    public DbSet<DepartmentAuthority> DepartmentAuthorities => Set<DepartmentAuthority>();
 
     // ─────────────────────────────────────────────────────────────────────────
     // DbSets - Módulo HR: Contratos y Nómina
