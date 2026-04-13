@@ -108,6 +108,10 @@ public sealed class AttendanceSummaryReportSource : IReportSource
         var subtitle = BuildSubtitle(filter);
         var generatedBy = context.User.Identity?.Name ?? "anonymous";
 
+        // Este reporte tiene 15 columnas: se usa Landscape por defecto.
+        // Si el frontend envía orientation="portrait", se respeta.
+        var orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape;
+
         return new ReportDefinition
         {
             Title       = "Reporte de Resumen de Asistencia",
@@ -116,7 +120,8 @@ public sealed class AttendanceSummaryReportSource : IReportSource
             GeneratedBy = generatedBy,
             GeneratedAt = DateTime.UtcNow,
             Columns     = _columns,
-            Rows        = rows
+            Rows        = rows,
+            Orientation = orientation
         };
     }
 

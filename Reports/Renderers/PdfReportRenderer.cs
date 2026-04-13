@@ -64,11 +64,17 @@ public sealed class PdfReportRenderer : IReportRenderer
             definition.Rows?.Count ?? 0,
             definition.Columns.Count);
 
+        // Seleccionar tamaño de página según la orientación definida en el ReportDefinition.
+        // Portrait: A4 210×297 mm | Landscape: A4 297×210 mm
+        var pageSize = definition.Orientation == PageOrientation.Landscape
+            ? PageSizes.A4.Landscape()
+            : PageSizes.A4;
+
         var pdfBytes = Document.Create(container =>
         {
             container.Page(page =>
             {
-                page.Size(PageSizes.A4.Landscape());
+                page.Size(pageSize);
                 page.Margin(1.5f, Unit.Centimetre);
                 page.DefaultTextStyle(x => x.FontSize(9));
 
