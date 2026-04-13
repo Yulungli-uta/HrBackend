@@ -330,3 +330,15 @@ ON HR.tbl_DepartmentAuthorities (EmployeeID, IsActive)
 INCLUDE (DepartmentID, AuthorityTypeID, Denomination, StartDate, EndDate)
 ON [PRIMARY]
 GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'UX_tbl_TimePlanningEmployees_PlanID_EmployeeID'
+      AND object_id = OBJECT_ID('HR.tbl_TimePlanningEmployees')
+)
+BEGIN
+    CREATE UNIQUE NONCLUSTERED INDEX UX_tbl_TimePlanningEmployees_PlanID_EmployeeID
+        ON HR.tbl_TimePlanningEmployees (PlanID, EmployeeID);
+END
+GO

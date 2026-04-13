@@ -24,7 +24,7 @@ namespace WsUtaSystem.Application.Services
             return await _repository.GetByEmployeeIdAsync(employeeId, ct);
         }
 
-        public async Task<TimePlanningEmployee> GetByPlanAndEmployeeAsync(int planId, int employeeId, CancellationToken ct = default)
+        public async Task<TimePlanningEmployee?> GetByPlanAndEmployeeAsync(int planId, int employeeId, CancellationToken ct = default)
         {
             return await _repository.GetByPlanAndEmployeeAsync(planId, employeeId, ct);
         }
@@ -43,10 +43,34 @@ namespace WsUtaSystem.Application.Services
             return await _repository.BulkUpdateStatusAsync(planId, statusTypeId, ct);
         }
 
-        public async Task<bool> ValidateEmployeeEligibilityAsync(int employeeId, DateTime startDate, DateTime endDate, CancellationToken ct = default)
+        public async Task<bool> ValidateEmployeeEligibilityAsync(
+            int employeeId,
+            DateTime startDate,
+            DateTime endDate,
+            TimeSpan startTime,
+            TimeSpan endTime,
+            int? excludePlanId = null,
+            CancellationToken ct = default)
         {
-            // Implementar lógica de validación según requerimientos
-            return true;
+            if (employeeId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(employeeId));
+
+            if (endDate.Date < startDate.Date)
+                throw new InvalidOperationException("El rango de fechas es inválido.");
+
+            if (endTime <= startTime)
+                throw new InvalidOperationException("El rango de horas es inválido.");
+
+            var existsOverlap = await _repository.ExistsOverlapAsync(
+                employeeId,
+                startDate,
+                endDate,
+                startTime,
+                endTime,
+                excludePlanId,
+                ct);
+
+            return !existsOverlap;
         }
     }
 }

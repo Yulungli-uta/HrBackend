@@ -153,20 +153,32 @@ public sealed class TimePlanningEmployeeConfiguration : IEntityTypeConfiguration
     public void Configure(EntityTypeBuilder<TimePlanningEmployee> e)
     {
         e.ToTable("tbl_TimePlanningEmployees", "HR");
+
         e.HasKey(x => x.PlanEmployeeID);
-        e.Property(x => x.PlanEmployeeID).HasColumnName("PlanEmployeeID");
+
+        e.Property(x => x.PlanEmployeeID)
+            .HasColumnName("PlanEmployeeID")
+            .ValueGeneratedOnAdd()
+            .UseIdentityColumn();
+
         e.Property(x => x.PlanID).HasColumnName("PlanID");
         e.Property(x => x.EmployeeID).HasColumnName("EmployeeID");
+
         e.HasOne(x => x.TimePlanning)
             .WithMany(p => p.Employees)
             .HasForeignKey(x => x.PlanID)
             .HasConstraintName("FK_TimePlanningEmployees_Plan")
             .OnDelete(DeleteBehavior.Cascade);
+
         e.HasOne(x => x.Employees)
             .WithMany()
             .HasForeignKey(x => x.EmployeeID)
             .HasConstraintName("FK_TimePlanningEmployees_Employee")
             .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasIndex(x => new { x.PlanID, x.EmployeeID })
+            .IsUnique()
+            .HasDatabaseName("UX_tbl_TimePlanningEmployees_PlanID_EmployeeID");
     }
 }
 
