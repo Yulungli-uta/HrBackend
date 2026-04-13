@@ -1,6 +1,18 @@
 namespace WsUtaSystem.Reports.Core;
 
 /// <summary>
+/// Orientación de página para el reporte PDF.
+/// </summary>
+public enum PageOrientation
+{
+    /// <summary>Vertical (A4 210×297 mm). Valor por defecto.</summary>
+    Portrait = 0,
+
+    /// <summary>Horizontal (A4 297×210 mm). Recomendado para reportes con muchas columnas.</summary>
+    Landscape = 1
+}
+
+/// <summary>
 /// Modelo genérico e inmutable que representa la definición completa de un reporte.
 /// </summary>
 /// <remarks>
@@ -60,6 +72,20 @@ public sealed class ReportDefinition
     /// a los valores de <see cref="ReportColumn.Key"/> definidos en <see cref="Columns"/>.
     /// </summary>
     public IReadOnlyList<IReadOnlyDictionary<string, object?>> Rows { get; init; } = [];
+
+    /// <summary>
+    /// Orientación de página del reporte PDF.
+    /// <para>
+    /// Los renderers PDF deben respetar este valor al configurar el tamaño de página.
+    /// El renderer Excel ignora esta propiedad (ajusta columnas automáticamente).
+    /// </para>
+    /// <para>
+    /// Cada <see cref="Abstractions.IReportSource"/> establece la orientación
+    /// según la cantidad de columnas de su reporte. El frontend puede sobreescribir
+    /// este valor enviando el campo <c>orientation</c> en el filtro.
+    /// </para>
+    /// </summary>
+    public PageOrientation Orientation { get; init; } = PageOrientation.Portrait;
 
     /// <summary>
     /// Número total de registros antes de aplicar paginación o límites.
