@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Reports;
+using WsUtaSystem.Reports.Abstractions;
+using WsUtaSystem.Reports.Core;
+using WsUtaSystem.Reports.Helpers;
 
 namespace WsUtaSystem.Endpoints;
 
@@ -350,5 +353,85 @@ public static class ReportEndpoints
         .WithName("GetReportAudits")
         .WithSummary("Obtiene el historial de auditoría de reportes generados")
         .Produces<IEnumerable<ReportAuditDto>>(StatusCodes.Status200OK, "application/json");
+
+        // ==================== V2 GENÉRICOS ====================
+        // Reemplazan los 12 endpoints v1 específicos.
+        // Para agregar un nuevo reporte: solo registrar un nuevo IReportSource en DI.
+        // Rutas: POST /api/v1/rh/reports/v2/{reportType}/preview|pdf/download|excel
+
+        group.MapPost("/v2/{reportType}/preview", async (
+            [FromRoute] string reportType,
+            [FromBody] ReportFilterDto filter,
+            [FromServices] IReportServiceV2 reportServiceV2,
+            HttpContext context) =>
+        {
+            if (!ReportTypeMapper.TryParse(reportType, out var type))
+            {
+                var slugs = string.Join(", ", ReportTypeMapper.GetRegisteredSlugs());
+                return Results.BadRequest(ReportPreviewResponseBuilder.BuildError(
+                    $"Tipo de reporte no reconocido: '{reportType}'. Valores válidos: {slugs}"));
+            }
+
+            var pdfBytes = await reportServiceV2.GeneratePdfAsync(type, filter, context);
+
+            if (pdfBytes is null || pdfBytes.Length == 0)
+                return Results.Ok(ReportPreviewResponseBuilder.BuildError(
+                    $"No se pudo generar la vista previa del reporte '{reportType}'."));
+
+            var tempDefinition = new ReportDefinition
+            {
+                Title      = reportType,
+                FilePrefix = $"Reporte_{reportType}"
+            };
+            return Results.Ok(ReportPreviewResponseBuilder.BuildSuccess(pdfBytes, tempDefinition));
+        })
+        .WithName("V2PreviewReport")
+        .WithSummary("[v2] Vista previa genérica del reporte en PDF")
+        .Produces<PreviewResponseDto>(StatusCodes.Status200OK, "application/json")
+        .Produces<PreviewResponseDto>(StatusCodes.Status400BadRequest, "application/json");
+
+        group.MapPost("/v2/{reportType}/pdf/download", async (
+            [FromRoute] string reportType,
+            [FromBody] ReportFilterDto filter,
+            [FromServices] IReportServiceV2 reportServiceV2,
+            HttpContext context) =>
+        {
+            if (!ReportTypeMapper.TryParse(reportType, out var type))
+            {
+                var slugs = string.Join(", ", ReportTypeMapper.GetRegisteredSlugs());
+                return Results.BadRequest(new { error = $"Tipo de reporte no reconocido: '{reportType}'. Valores válidos: {slugs}" });
+            }
+
+            var pdfBytes = await reportServiceV2.GeneratePdfAsync(type, filter, context);
+            var fileName = ReportFileNameBuilder.Build($"Reporte_{reportType}", ReportFormat.Pdf);
+            context.Response.Headers.Append("Content-Disposition", $"attachment; filename=\"{fileName}\"");
+            return Results.File(pdfBytes, ReportFileNameBuilder.GetMimeType(ReportFormat.Pdf), fileName);
+        })
+        .WithName("V2DownloadReportPdf")
+        .WithSummary("[v2] Descarga genérica del reporte en PDF")
+        .Produces<FileResult>(StatusCodes.Status200OK, "application/pdf")
+        .Produces(StatusCodes.Status400BadRequest);
+
+        group.MapPost("/v2/{reportType}/excel", async (
+            [FromRoute] string reportType,
+            [FromBody] ReportFilterDto filter,
+            [FromServices] IReportServiceV2 reportServiceV2,
+            HttpContext context) =>
+        {
+            if (!ReportTypeMapper.TryParse(reportType, out var type))
+            {
+                var slugs = string.Join(", ", ReportTypeMapper.GetRegisteredSlugs());
+                return Results.BadRequest(new { error = $"Tipo de reporte no reconocido: '{reportType}'. Valores válidos: {slugs}" });
+            }
+
+            var excelBytes = await reportServiceV2.GenerateExcelAsync(type, filter, context);
+            var fileName   = ReportFileNameBuilder.Build($"Reporte_{reportType}", ReportFormat.Excel);
+            context.Response.Headers.Append("Content-Disposition", $"attachment; filename=\"{fileName}\"");
+            return Results.File(excelBytes, ReportFileNameBuilder.GetMimeType(ReportFormat.Excel), fileName);
+        })
+        .WithName("V2DownloadReportExcel")
+        .WithSummary("[v2] Descarga genérica del reporte en Excel")
+        .Produces<FileResult>(StatusCodes.Status200OK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        .Produces(StatusCodes.Status400BadRequest);
     }
 }

@@ -299,6 +299,27 @@ public static class ServiceCollectionExtensions
             WsUtaSystem.Application.Interfaces.Reports.IReportService,
             WsUtaSystem.Application.Services.Reports.ReportService>();
 
+        // ── Reportes v2: arquitectura genérica (OCP / DIP) ────────────────────────
+        // IReportSource: cada implementación sabe cómo construir un ReportDefinition.
+        // IReportRenderer: cada implementación sabe cómo renderizar en un formato.
+        // IReportServiceV2: orquestador que une source + renderer.
+        // Para agregar un nuevo reporte: solo registrar un nuevo IReportSource aquí.
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.AttendanceSummaryReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportRenderer,
+            WsUtaSystem.Reports.Renderers.PdfReportRenderer>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportRenderer,
+            WsUtaSystem.Reports.Renderers.ExcelReportRenderer>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportServiceV2,
+            WsUtaSystem.Reports.Services.ReportServiceV2>();
+
         return services;
     }
 
