@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Data;
@@ -16,7 +19,14 @@ namespace WsUtaSystem.Infrastructure.Repositories;
 public class DepartmentAuthorityRepository
     : ServiceAwareEfRepository<DepartmentAuthority, int>, IDepartmentAuthorityRepository
 {
-    public DepartmentAuthorityRepository(AppDbContext db) : base(db) { }
+    private readonly ILogger<DepartmentAuthorityRepository> _logger;
+    public DepartmentAuthorityRepository(
+        AppDbContext db,
+        ILogger<DepartmentAuthorityRepository> logger
+        ) : base(db) 
+    {
+        _logger = logger;        
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Consulta base con eager loading
@@ -84,6 +94,40 @@ public class DepartmentAuthorityRepository
         string idCard,
         CancellationToken ct)
     {
+
+        DateOnly hoy = DateOnly.FromDateTime(DateTime.Now);
+
+        //DepartmentAuthority? authority = await _db.DepartmentAuthorities.AsNoTracking()
+        //    .Include(a => a.Department)
+        //    .Include(a => a.AuthorityType)
+        //    .Include(a => a.Job)
+        //    .Include(a => a.Employee)
+        //        .ThenInclude(e => e!.People)
+        //    .Where(a =>
+        //         a.IsActive &&
+        //         a.Employee.IsActive &&
+        //         a.Employee.People.IsActive &&
+        //         a.Employee.People.IdCard == idCard &&
+        //         a.StartDate <= hoy &&
+        //         (a.EndDate == null || (a.EndDate >= a.StartDate && a.EndDate >= hoy)))
+        //    .OrderByDescending(a => a.StartDate)
+        //    .FirstOrDefaultAsync(ct);
+
+        //var options = new JsonSerializerOptions
+        //{
+        //    WriteIndented = true,
+        //    ReferenceHandler = ReferenceHandler.IgnoreCycles
+        //};
+
+        //string jsonAuthority = JsonSerializer.Serialize(authority, options);
+
+        //_logger.LogInformation($"*************Datos Autoridad encontrado: " +
+        //    $"{authority.Employee.People.FirstName}, " +
+        //    $" cedula: {authority.Employee.People.IdCard}," +
+        //    $" json: {jsonAuthority}");
+
+        //return authority;
+
         // Join: People → Employees → DepartmentAuthorities (solo la autoridad activa más reciente)
         return await _db.DepartmentAuthorities
             .AsNoTracking()
@@ -92,12 +136,13 @@ public class DepartmentAuthorityRepository
             .Include(a => a.Job)
             .Include(a => a.Employee)
                 .ThenInclude(e => e!.People)
-            .Where(a =>
-                a.IsActive &&
-                a.EndDate == null &&
-                a.Employee != null &&
-                a.Employee.People != null &&
-                a.Employee.People.IdCard == idCard)
+             .Where(a =>
+                 a.IsActive &&
+                 a.Employee.IsActive &&
+                 a.Employee.People.IsActive &&
+                 a.Employee.People.IdCard == idCard &&
+                 a.StartDate <= hoy &&
+                 (a.EndDate == null || (a.EndDate >= a.StartDate && a.EndDate >= hoy)))
             .OrderByDescending(a => a.StartDate)
             .FirstOrDefaultAsync(ct);
     }

@@ -116,20 +116,6 @@ namespace WsUtaSystem.Application.Services
             return true;
         }
 
-        /// <summary>
-        /// Crea la cabecera de planificación y sus empleados en una única transacción
-        /// compatible con <see cref="SqlServerRetryingExecutionStrategy"/>.
-        ///
-        /// <para>
-        /// <b>¿Por qué no usar <c>TransactionScope</c>?</b><br/>
-        /// EF Core con <c>SqlServerRetryingExecutionStrategy</c> (resilience/retry)
-        /// no permite transacciones iniciadas por el usuario mediante <c>TransactionScope</c>
-        /// porque la estrategia de reintento necesita controlar el ciclo de vida completo
-        /// de la operación. La solución canónica es envolver todo en
-        /// <c>Database.CreateExecutionStrategy().ExecuteAsync()</c> y usar
-        /// <c>Database.BeginTransactionAsync()</c> dentro del delegate.
-        /// </para>
-        /// </summary>
         public async Task<TimePlanning> CreateWithEmployeesAsync(TimePlanning entity, CancellationToken ct = default)
         {
             if (entity == null)
@@ -137,73 +123,120 @@ namespace WsUtaSystem.Application.Services
 
             ValidateEntity(entity);
 
-            // IExecutionStrategy obtenido del DbContext — compatible con SqlServerRetryingExecutionStrategy
-            var strategy = _db.Database.CreateExecutionStrategy();
+            var employees = entity.Employees?.ToList() ?? new List<TimePlanningEmployee>();
 
+            if (!employees.Any())
+                throw new InvalidOperationException("La planificación debe contener al menos un empleado.");
+
+            ValidateDuplicatedEmployeesInRequest(employees);
+
+            // Evita que EF Core inserte también el grafo de hijos al crear la cabecera
+            entity.Employees = new List<TimePlanningEmployee>();
+
+            var strategy = _db.Database.CreateExecutionStrategy();
             TimePlanning createdPlan = null!;
 
             await strategy.ExecuteAsync(async () =>
             {
-                // Transacción EF Core — NO usar TransactionScope externo
                 await using var transaction = await _db.Database.BeginTransactionAsync(
                     System.Data.IsolationLevel.ReadCommitted, ct);
 
                 try
                 {
-                    // 1. Crear cabecera
                     createdPlan = await base.CreateAsync(entity, ct);
 
-                    // 2. Crear empleados hijos asignando el PlanID recién generado
-                    if (entity.Employees != null && entity.Employees.Any())
+                    foreach (var emp in employees)
                     {
-                        foreach (var emp in entity.Employees)
-                        {
-                            // Sobreescribir PlanID con el ID real creado en el paso anterior
-                            emp.PlanID = createdPlan.PlanID;
+                        NormalizeEmployeeDetail(emp, createdPlan);
 
-                            if (emp.EmployeeID <= 0)
-                                throw new InvalidOperationException("EmployeeID inválido en detalle.");
+                        await ValidateEmployeeDetailAsync(createdPlan, emp, ct);
 
-                            if (emp.EmployeeStatusTypeID <= 0)
-                                throw new InvalidOperationException(
-                                    $"EmployeeStatusTypeID inválido para EmployeeID={emp.EmployeeID}.");
-
-                            if (createdPlan.PlanType == "Overtime")
-                            {
-                                if ((emp.AssignedHours ?? 0) <= 0)
-                                    throw new InvalidOperationException(
-                                        $"AssignedHours debe ser mayor a 0 para EmployeeID={emp.EmployeeID}.");
-
-                                emp.AssignedMinutes = null;
-                            }
-                            else if (createdPlan.PlanType == "Recovery")
-                            {
-                                if ((emp.AssignedMinutes ?? 0) <= 0)
-                                    throw new InvalidOperationException(
-                                        $"AssignedMinutes debe ser mayor a 0 para EmployeeID={emp.EmployeeID}.");
-
-                                emp.AssignedHours = null;
-                            }
-
-                            emp.ActualHours ??= 0;
-                            emp.ActualMinutes ??= 0;
-                            emp.IsEligible = true;
-
-                            await _timePlanningEmployeeService.CreateAsync(emp, ct);
-                        }
+                        await _timePlanningEmployeeService.CreateAsync(emp, ct);
                     }
 
                     await transaction.CommitAsync(ct);
                 }
                 catch
                 {
-                    // Rollback explícito ante cualquier fallo — EF Core no lo hace automáticamente
                     await transaction.RollbackAsync(ct);
                     throw;
                 }
             });
 
             return createdPlan;
+        }
+
+        private async Task ValidateEmployeeDetailAsync(
+            TimePlanning plan,
+            TimePlanningEmployee employee,
+            CancellationToken ct)
+        {
+            if (employee.EmployeeID <= 0)
+                throw new InvalidOperationException("EmployeeID inválido en detalle.");
+
+            if (employee.EmployeeStatusTypeID <= 0)
+                throw new InvalidOperationException(
+                    $"EmployeeStatusTypeID inválido para EmployeeID={employee.EmployeeID}.");
+
+            var isEligible = await _timePlanningEmployeeService.ValidateEmployeeEligibilityAsync(
+                employee.EmployeeID,
+                plan.StartDate,
+                plan.EndDate,
+                plan.StartTime,
+                plan.EndTime,
+                excludePlanId: null,
+                ct);
+
+            if (!isEligible)
+            {
+                throw new InvalidOperationException(
+                    $"El empleado {employee.EmployeeID} ya tiene otra planificación en el mismo rango de fecha y hora.");
+            }
+
+            if (plan.PlanType == "Overtime")
+            {
+                if ((employee.AssignedHours ?? 0m) <= 0m)
+                    throw new InvalidOperationException(
+                        $"AssignedHours debe ser mayor a 0 para EmployeeID={employee.EmployeeID}.");
+
+                employee.AssignedMinutes = null;
+            }
+            else if (plan.PlanType == "Recovery")
+            {
+                if ((employee.AssignedMinutes ?? 0) <= 0)
+                    throw new InvalidOperationException(
+                        $"AssignedMinutes debe ser mayor a 0 para EmployeeID={employee.EmployeeID}.");
+
+                employee.AssignedHours = null;
+            }
+        }
+
+        private static void NormalizeEmployeeDetail(TimePlanningEmployee employee, TimePlanning createdPlan)
+        {
+            employee.PlanEmployeeID = 0;
+            employee.PlanID = createdPlan.PlanID;
+            employee.TimePlanning = null;
+
+            employee.ActualHours ??= 0m;
+            employee.ActualMinutes ??= 0;
+            employee.PaymentAmount ??= 0m;
+            employee.IsEligible = true;
+            employee.CreatedAt = DateTime.Now;
+        }
+
+        private static void ValidateDuplicatedEmployeesInRequest(IEnumerable<TimePlanningEmployee> employees)
+        {
+            var duplicateEmployees = employees
+                .GroupBy(x => x.EmployeeID)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+
+            if (duplicateEmployees.Any())
+            {
+                throw new InvalidOperationException(
+                    $"Existen empleados repetidos en la misma solicitud: {string.Join(", ", duplicateEmployees)}");
+            }
         }
 
         private static void ValidateEntity(TimePlanning entity)

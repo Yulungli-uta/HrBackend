@@ -7,9 +7,17 @@ namespace WsUtaSystem.Application.Interfaces.Services
     {
         Task<IEnumerable<TimePlanningEmployee>> GetByPlanIdAsync(int planId, CancellationToken ct = default);
         Task<IEnumerable<TimePlanningEmployee>> GetByEmployeeIdAsync(int employeeId, CancellationToken ct = default);
-        Task<TimePlanningEmployee> GetByPlanAndEmployeeAsync(int planId, int employeeId, CancellationToken ct = default);
+        Task<TimePlanningEmployee?> GetByPlanAndEmployeeAsync(int planId, int employeeId, CancellationToken ct = default);
         Task<TimePlanningEmployee> UpdateEmployeeStatusAsync(int planEmployeeId, int statusTypeId, CancellationToken ct = default);
         Task<bool> BulkUpdateEmployeeStatusAsync(int planId, int statusTypeId, CancellationToken ct = default);
-        Task<bool> ValidateEmployeeEligibilityAsync(int employeeId, DateTime startDate, DateTime endDate, CancellationToken ct = default);
+
+        Task<bool> ValidateEmployeeEligibilityAsync(
+            int employeeId,
+            DateTime startDate,
+            DateTime endDate,
+            TimeSpan startTime,
+            TimeSpan endTime,
+            int? excludePlanId = null,
+            CancellationToken ct = default);
     }
 }

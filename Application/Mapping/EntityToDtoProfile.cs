@@ -1,4 +1,5 @@
 using AutoMapper;
+using WsUtaSystem.Application.DTOs.DepartmentAuthority;
 using WsUtaSystem.Application.DTOs.Docflow;
 using WsUtaSystem.Application.DTOs.VwAttendanceDay;
 using WsUtaSystem.Application.DTOs.VwEmployeeScheduleAtDate;
@@ -203,25 +204,43 @@ public class EntityToDtoProfile : Profile
         CreateMap<DocflowFileVersion, FileVersionDto>();
 
         // ── DepartmentAuthority ──────────────────────────────────────────────
-        CreateMap<WsUtaSystem.Models.DepartmentAuthority, WsUtaSystem.Application.DTOs.DepartmentAuthority.DepartmentAuthorityDto>()
-            .ForMember(d => d.DepartmentName,   o => o.MapFrom(s => s.Department != null ? s.Department.Name : null))
-            .ForMember(d => d.DepartmentCode,   o => o.MapFrom(s => s.Department != null ? s.Department.Code : null))
+        CreateMap<WsUtaSystem.Models.DepartmentAuthority, DepartmentAuthorityDto>()
+            // 1. Mapeo de IDs directos (Ya existen en la entidad, no hace falta navegar)
+            .ForMember(d => d.DepartmentId, o => o.MapFrom(s => s.DepartmentId))
+            .ForMember(d => d.EmployeeId, o => o.MapFrom(s => s.EmployeeId))
+            .ForMember(d => d.AuthorityTypeId, o => o.MapFrom(s => s.AuthorityTypeId))
+            .ForMember(d => d.JobId, o => o.MapFrom(s => s.JobId))
+
+            // 2. Mapeo de nombres con navegación segura
+            .ForMember(d => d.DepartmentName, o => o.MapFrom(s => s.Department != null ? s.Department.Name : null))
+
+            // 3. Nombre Completo (Concatenación segura)
             .ForMember(d => d.EmployeeFullName, o => o.MapFrom(s =>
-                s.Employee != null && s.Employee.People != null
+                (s.Employee != null && s.Employee.People != null)
                     ? $"{s.Employee.People.FirstName} {s.Employee.People.LastName}".Trim()
                     : null))
-            .ForMember(d => d.EmployeeIdCard,   o => o.MapFrom(s =>
-                s.Employee != null && s.Employee.People != null ? s.Employee.People.IdCard : null))
-            .ForMember(d => d.EmployeeEmail,    o => o.MapFrom(s =>
-                s.Employee != null && s.Employee.People != null
+
+            // 4. Datos de Identidad y Contacto
+            .ForMember(d => d.EmployeeIdCard, o => o.MapFrom(s =>
+                (s.Employee != null && s.Employee.People != null) ? s.Employee.People.IdCard : null))
+
+            .ForMember(d => d.EmployeeEmail, o => o.MapFrom(s =>
+                (s.Employee != null && s.Employee.People != null)
                     ? s.Employee.People.Email
-                    : s.Employee != null ? s.Employee.Email : null))
+                    : (s.Employee != null ? s.Employee.Email : null)))
+
+            // 5. Tipo de Autoridad y Cargo
             .ForMember(d => d.AuthorityTypeName, o => o.MapFrom(s => s.AuthorityType != null ? s.AuthorityType.Name : null))
-            .ForMember(d => d.JobName,          o => o.MapFrom(s => s.Job != null ? s.Job.Name : null));
-        CreateMap<WsUtaSystem.Application.DTOs.DepartmentAuthority.DepartmentAuthorityCreateDto,
-                  WsUtaSystem.Models.DepartmentAuthority>();
-        CreateMap<WsUtaSystem.Application.DTOs.DepartmentAuthority.DepartmentAuthorityUpdateDto,
-                  WsUtaSystem.Models.DepartmentAuthority>();
+            .ForMember(d => d.JobDescription, o => o.MapFrom(s => s.Job != null ? s.Job.Description : null));
+
+        // Mapeos para Creación y Actualización (Entrada -> Modelo)
+        CreateMap<DepartmentAuthorityCreateDto, WsUtaSystem.Models.DepartmentAuthority>()
+            .ForMember(dest => dest.AuthorityId, opt => opt.Ignore())
+            .ForMember(dest => dest.RowVersion, opt => opt.Ignore());
+
+        CreateMap<DepartmentAuthorityUpdateDto, WsUtaSystem.Models.DepartmentAuthority>()
+            .ForMember(dest => dest.AuthorityId, opt => opt.Ignore())
+            .ForMember(dest => dest.RowVersion, opt => opt.Ignore());
 
     }
 }

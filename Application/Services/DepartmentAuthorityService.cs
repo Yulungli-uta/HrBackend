@@ -1,5 +1,6 @@
 using AutoMapper;
 using WsUtaSystem.Application.Common;
+using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.DepartmentAuthority;
 using WsUtaSystem.Application.Interfaces.Repositories;
@@ -15,17 +16,22 @@ namespace WsUtaSystem.Application.Services;
 /// Principio OCP: abierto para extensión mediante la interfaz, cerrado para modificación.
 /// </summary>
 public class DepartmentAuthorityService
-    : BaseService<DepartmentAuthority, int>, IDepartmentAuthorityService
+    : Service<DepartmentAuthority, int>, IDepartmentAuthorityService
 {
     private readonly IDepartmentAuthorityRepository _authorityRepository;
     private readonly IMapper _mapper;
+    private readonly ILogger<DepartmentAuthorityService> _logger;
 
     public DepartmentAuthorityService(
         IDepartmentAuthorityRepository repository,
-        IMapper mapper) : base(repository)
+        IMapper mapper,
+        ILogger<DepartmentAuthorityService> logger
+        ) : base(repository)        
     {
         _authorityRepository = repository;
         _mapper = mapper;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
     }
 
     /// <inheritdoc/>
@@ -59,8 +65,9 @@ public class DepartmentAuthorityService
         if (string.IsNullOrWhiteSpace(idCard))
             return null;
 
+        _logger.LogInformation($"Consultado GetDenominationByIdCardAsync cedula: {idCard}");
         var authority = await _authorityRepository.GetActiveAuthorityByIdCardAsync(idCard.Trim(), ct);
-
+        _logger.LogInformation($"Consultado GetDenominationByIdCardAsync authority: {authority}");
         // Si no hay autoridad activa, buscamos al empleado de todas formas para retornar sus datos básicos
         if (authority == null)
         {

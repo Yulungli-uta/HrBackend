@@ -7,11 +7,20 @@ namespace WsUtaSystem.Application.Interfaces.Repositories
     {
         Task<IEnumerable<TimePlanningEmployee>> GetByPlanIdAsync(int planId, CancellationToken ct = default);
         Task<IEnumerable<TimePlanningEmployee>> GetByEmployeeIdAsync(int employeeId, CancellationToken ct = default);
-        Task<TimePlanningEmployee> GetByPlanAndEmployeeAsync(int planId, int employeeId, CancellationToken ct = default);
+        Task<TimePlanningEmployee?> GetByPlanAndEmployeeAsync(int planId, int employeeId, CancellationToken ct = default);
         Task<IEnumerable<TimePlanningEmployee>> GetByStatusAsync(int statusTypeId, CancellationToken ct = default);
         Task<int> GetEmployeeCountByPlanAsync(int planId, CancellationToken ct = default);
         Task<bool> UpdateEmployeeStatusAsync(int planEmployeeId, int newStatusTypeId, CancellationToken ct = default);
         Task<bool> BulkUpdateStatusAsync(int planId, int newStatusTypeId, CancellationToken ct = default);
+
+        Task<bool> ExistsOverlapAsync(
+            int employeeId,
+            DateTime startDate,
+            DateTime endDate,
+            TimeSpan startTime,
+            TimeSpan endTime,
+            int? excludePlanId = null,
+            CancellationToken ct = default);
     }
 
 }
