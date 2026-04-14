@@ -1,6 +1,7 @@
 ﻿// VwEmployeeDetailsService.cs
 using System.Diagnostics;
 using WsUtaSystem.Application.DTOs.Common;
+using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Repositories;
@@ -242,5 +243,59 @@ public class VwEmployeeDetailsService : IvwEmployeeDetailsService
         CancellationToken ct = default)
     {
         return await _repository.GetByImmediateBossIdAsync(bossId, ct);
+    }
+
+    public async Task<IEnumerable<VwEmployeeDetails>> GetByFiltersAsync(
+    int? departmentId,
+    int? employeeType,
+    CancellationToken ct = default)
+    {
+        try
+        {
+            return await _repository.GetByFiltersAsync(departmentId, employeeType, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[EMP-SVC] Error getting employees by filters. DepartmentId={DepartmentId}, EmployeeType={EmployeeType}",
+                departmentId, employeeType);
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<DepartmentContractCountDto>> GetDepartmentContractCountsAsync(
+        int? departmentId,
+        int? employeeType,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            return await _repository.GetDepartmentContractCountsAsync(departmentId, employeeType, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[EMP-SVC] Error getting department-contract counts. DepartmentId={DepartmentId}, EmployeeType={EmployeeType}",
+                departmentId, employeeType);
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<ScheduleContractCountDto>> GetScheduleContractCountsAsync(
+        int? departmentId,
+        int? employeeType,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            return await _repository.GetScheduleContractCountsAsync(departmentId, employeeType, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[EMP-SVC] Error getting schedule-contract counts. DepartmentId={DepartmentId}, EmployeeType={EmployeeType}",
+                departmentId, employeeType);
+            throw;
+        }
     }
 }

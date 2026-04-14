@@ -87,7 +87,8 @@ namespace WsUtaSystem.Infrastructure.Repositories
                     (e.LastName != null && e.LastName.ToLower().Contains(term)) ||
                     (e.FullName != null && e.FullName.ToLower().Contains(term)) ||
                     (e.IDCard != null && e.IDCard.ToLower().Contains(term)) ||
-                    (e.Email != null && e.Email.ToLower().Contains(term)));
+                    (e.Email != null && e.Email.ToLower().Contains(term)) ||
+                    (e.Department != null && e.Department.ToLower().Contains(term)));
             }
 
             var totalCount = await query.LongCountAsync(ct);

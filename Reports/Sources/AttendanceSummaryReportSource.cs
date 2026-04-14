@@ -43,39 +43,39 @@ public sealed class AttendanceSummaryReportSource : IReportSource
     private const string ColEmployeeId    = "employee_id";
     private const string ColIdCard        = "id_card";
     private const string ColFullName      = "full_name";
-    private const string ColEmployeeType  = "employee_type";
+    //private const string ColEmployeeType  = "employee_type";
     private const string ColContractType  = "contract_type";
     private const string ColWorkDate      = "work_date";
     private const string ColTotalWorked   = "total_worked_min";
     private const string ColRegular       = "regular_min";
-    private const string ColOvertime      = "overtime_min";
-    private const string ColNight         = "night_min";
-    private const string ColHoliday       = "holiday_min";
+    //private const string ColOvertime      = "overtime_min";
+    //private const string ColNight         = "night_min";
+    //private const string ColHoliday       = "holiday_min";
     private const string ColWorkday       = "workday_min";
     private const string ColLate          = "late_min";
     private const string ColFood          = "food_subsidy";
-    private const string ColJustification = "justification_min";
+    //private const string ColJustification = "justification_min";
 
     /// <summary>
     /// Columnas del reporte en el orden exacto del generador original.
     /// </summary>
     private static readonly IReadOnlyList<ReportColumn> _columns =
     [
-        new(ColEmployeeId,   "ID Empleado",      Width: 25f, Alignment: ColumnAlignment.Right),
-        new(ColIdCard,       "Cédula",            Width: 35f),
+        new(ColEmployeeId,   "ID Emp",      Width: 25f, Alignment: ColumnAlignment.Right),
+        new(ColIdCard,       "Cédula",            Width: 45f),
         new(ColFullName,     "Nombre Completo",   Width: 70f),
-        new(ColEmployeeType, "Tipo Empleado",     Width: 40f),
+        //new(ColEmployeeType, "Tipo Empleado",     Width: 40f),
         new(ColContractType, "Tipo Contrato",     Width: 45f),
-        new(ColWorkDate,     "Fecha Trabajo",     Width: 35f, Alignment: ColumnAlignment.Center),
+        new(ColWorkDate,     "Fecha Trabajo",     Width: 45f, Alignment: ColumnAlignment.Center),
         new(ColTotalWorked,  "Min. Trabajados",   Width: 35f, Alignment: ColumnAlignment.Right),
         new(ColRegular,      "Min. Regulares",    Width: 35f, Alignment: ColumnAlignment.Right),
-        new(ColOvertime,     "Min. Extra",        Width: 30f, Alignment: ColumnAlignment.Right),
-        new(ColNight,        "Min. Nocturnos",    Width: 35f, Alignment: ColumnAlignment.Right),
-        new(ColHoliday,      "Min. Feriado",      Width: 30f, Alignment: ColumnAlignment.Right),
-        new(ColWorkday,      "Min. Jornada",      Width: 30f, Alignment: ColumnAlignment.Right),
-        new(ColLate,         "Atrasos (min)",     Width: 30f, Alignment: ColumnAlignment.Right),
-        new(ColFood,         "Subsidio Alim.",    Width: 35f, Alignment: ColumnAlignment.Right),
-        new(ColJustification,"Min. Justificados", Width: 40f, Alignment: ColumnAlignment.Right)
+        //new(ColOvertime,     "Min. Extra",        Width: 30f, Alignment: ColumnAlignment.Right),
+        //new(ColNight,        "Min. Nocturnos",    Width: 35f, Alignment: ColumnAlignment.Right),
+        //new(ColHoliday,      "Min. Feriado",      Width: 30f, Alignment: ColumnAlignment.Right),
+        new(ColWorkday,      "Min. Jornada",      Width: 34f, Alignment: ColumnAlignment.Right),
+        new(ColLate,         "Atrasos (min)",     Width: 34f, Alignment: ColumnAlignment.Right),
+        new(ColFood,         "Subsidio Alim.",    Width: 35f, Alignment: ColumnAlignment.Right)
+        //new(ColJustification,"Min. Justificados", Width: 40f, Alignment: ColumnAlignment.Right)
     ];
 
     public AttendanceSummaryReportSource(
@@ -118,7 +118,7 @@ public sealed class AttendanceSummaryReportSource : IReportSource
             FilePrefix  = "Reporte_Resumen_Asistencia",
             Subtitle    = subtitle,
             GeneratedBy = generatedBy,
-            GeneratedAt = DateTime.UtcNow,
+            GeneratedAt = DateTime.Now,
             Columns     = _columns,
             Rows        = rows,
             Orientation = orientation
@@ -142,18 +142,18 @@ public sealed class AttendanceSummaryReportSource : IReportSource
                 [ColEmployeeId]    = att.EmployeeID,
                 [ColIdCard]        = att.IDCard,
                 [ColFullName]      = att.NombreCompleto,
-                [ColEmployeeType]  = MapEmployeeType(att.EmployeeType),
+                //[ColEmployeeType]  = MapEmployeeType(att.EmployeeType),
                 [ColContractType]  = string.IsNullOrWhiteSpace(att.ContractType) ? "N/A" : att.ContractType,
                 [ColWorkDate]      = att.WorkDate.ToString("dd/MM/yyyy"),
                 [ColTotalWorked]   = att.TotalWorkedMinutes,
                 [ColRegular]       = att.RegularMinutes,
-                [ColOvertime]      = att.OvertimeMinutes,
-                [ColNight]         = att.NightMinutes,
-                [ColHoliday]       = att.MinFeriado,
+                //[ColOvertime]      = att.OvertimeMinutes,
+                //[ColNight]         = att.NightMinutes,
+                //[ColHoliday]       = att.MinFeriado,
                 [ColWorkday]       = att.MinTotLaboral,
                 [ColLate]          = att.Atrazos,
-                [ColFood]          = att.Alimentacion.ToString("N2"),
-                [ColJustification] = att.MinJustificacion
+                [ColFood]          = att.Alimentacion.ToString("N2")
+                //[ColJustification] = att.MinJustificacion
             });
         }
 

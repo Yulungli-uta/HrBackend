@@ -101,7 +101,7 @@ ALTER TABLE HR.tbl_Permissions ADD CONSTRAINT PK_Permissions PRIMARY KEY (Permis
 -- Tablas de asistencia
 ALTER TABLE HR.tbl_AttendancePunches ADD CONSTRAINT PK_AttendancePunches PRIMARY KEY (PunchID);
 ALTER TABLE HR.tbl_PunchJustifications ADD CONSTRAINT PK_PunchJustifications PRIMARY KEY (PunchJustID);
-ALTER TABLE HR.tbl_AttendanceCalculations ADD CONSTRAINT PK_AttendanceCalculations PRIMARY KEY (CalculationID);
+-- ALTER TABLE HR.tbl_AttendanceCalculations ADD CONSTRAINT PK_AttendanceCalculations PRIMARY KEY (CalculationID);
 
 -- Tablas de horas extra y recuperación
 ALTER TABLE HR.tbl_Overtime ADD CONSTRAINT PK_Overtime PRIMARY KEY (OvertimeID);
@@ -176,8 +176,8 @@ ALTER TABLE HR.tbl_PunchJustifications
 ADD CONSTRAINT CK_PunchJustifications_Status CHECK (Status IN ('PENDING','APPROVED','REJECTED','APPLIED'));
 
 -- Check constraints para tbl_AttendanceCalculations
-ALTER TABLE HR.tbl_AttendanceCalculations 
-ADD CONSTRAINT CK_AttendanceCalculations_Status CHECK (Status IN ('Pending','Approved'));
+-- ALTER TABLE HR.tbl_AttendanceCalculations 
+-- ADD CONSTRAINT CK_AttendanceCalculations_Status CHECK (Status IN ('Pending','Approved'));
 
 -- Check constraints para tbl_Overtime
 ALTER TABLE HR.tbl_Overtime 
@@ -419,8 +419,8 @@ ADD CONSTRAINT FK_PunchJustifications_Employee FOREIGN KEY (EmployeeID) REFERENC
 	CONSTRAINT FK_PunchJustifications_PunchType FOREIGN KEY (PunchTypeID) REFERENCES HR.ref_Types(TypeID),
     CONSTRAINT FK_PunchJustifications_CreatedBy FOREIGN KEY (CreatedBy) REFERENCES HR.tbl_Employees(EmployeeID);
 
-ALTER TABLE HR.tbl_AttendanceCalculations
-ADD CONSTRAINT FK_AttendanceCalculations_Employee FOREIGN KEY (EmployeeID) REFERENCES HR.tbl_Employees(EmployeeID);
+-- ALTER TABLE HR.tbl_AttendanceCalculations
+-- ADD CONSTRAINT FK_AttendanceCalculations_Employee FOREIGN KEY (EmployeeID) REFERENCES HR.tbl_Employees(EmployeeID);
 
 -- 10. FOREIGN KEYS PARA TABLAS DE HORAS EXTRA Y RECUPERACIÓN
 ALTER TABLE HR.tbl_Overtime
@@ -662,4 +662,164 @@ ALTER TABLE HR.tbl_DepartmentAuthorities
 ADD CONSTRAINT FK_DeptAuth_Job FOREIGN KEY (JobID) REFERENCES HR.tbl_jobs (JobID)
 GO
 PRINT 'TODOS LOS CONSTRAINTS CREADOS EXITOSAMENTE.';
+GO
+
+
+/* =========================================================
+   CONSTRAINTS: HR.tbl_AttendanceCalculations
+   ========================================================= */
+
+-- PRIMARY KEY
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT PK_AttendanceCalculations
+PRIMARY KEY (CalculationID);
+GO
+
+-- FOREIGN KEYS
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT FK_AttendanceCalculations_Employee
+    FOREIGN KEY (EmployeeID) REFERENCES HR.tbl_Employees(EmployeeID);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT FK_AttendanceCalculations_AppliedSchedule
+    FOREIGN KEY (AppliedScheduleID) REFERENCES HR.tbl_Schedules(ScheduleID);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT FK_AttendanceCalculations_CreatedBy
+    FOREIGN KEY (CreatedBy) REFERENCES HR.tbl_Employees(EmployeeID);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT FK_AttendanceCalculations_UpdatedBy
+    FOREIGN KEY (UpdatedBy) REFERENCES HR.tbl_Employees(EmployeeID);
+GO
+
+-- CHECKS DE ESTADO
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_Status
+CHECK (Status IN ('Pending', 'Calculated', 'Approved', 'Rejected', 'Reprocessed'));
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_CalculationSource
+CHECK (CalculationSource IN ('System', 'ManualAdjustment', 'Reprocess'));
+GO
+
+-- CHECKS DE FECHAS / VERSIONES
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_CalculationVersion
+CHECK (CalculationVersion >= 1);
+GO
+
+-- CHECKS DE VALORES NO NEGATIVOS
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_TotalWorkedMinutes
+CHECK (TotalWorkedMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_RegularMinutes
+CHECK (RegularMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_OvertimeMinutes
+CHECK (OvertimeMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_NightMinutes
+CHECK (NightMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_HolidayMinutes
+CHECK (HolidayMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_RequiredMinutes
+CHECK (RequiredMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_ScheduledWorkedMin
+CHECK (ScheduledWorkedMin >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_OffScheduleMin
+CHECK (OffScheduleMin >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_AbsentMinutes
+CHECK (AbsentMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_MinutesLate
+CHECK (MinutesLate >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_TardinessMin
+CHECK (TardinessMin >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_EarlyLeaveMinutes
+CHECK (EarlyLeaveMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_PermissionMinutes
+CHECK (PermissionMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_VacationMinutes
+CHECK (VacationMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_JustificationMinutes
+CHECK (JustificationMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_MedicalLeaveMinutes
+CHECK (MedicalLeaveMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_PaidLeaveMinutes
+CHECK (PaidLeaveMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_UnpaidLeaveMinutes
+CHECK (UnpaidLeaveMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_VacationDeductedMinutes
+CHECK (VacationDeductedMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_RecoveredMinutes
+CHECK (RecoveredMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_ScheduledMinutes
+CHECK (ScheduledMinutes >= 0);
+GO
+
+ALTER TABLE HR.tbl_AttendanceCalculations
+ADD CONSTRAINT CK_AttendanceCalculations_FoodSubsidy
+CHECK (FoodSubsidy IN (0,1));
 GO

@@ -101,12 +101,12 @@ CREATE INDEX IX_AttendancePunches_EmployeeDate ON HR.tbl_AttendancePunches(Emplo
 CREATE INDEX IX_AttendancePunches_Type ON HR.tbl_AttendancePunches(PunchType);
 CREATE INDEX IX_AttendancePunches_EmployeeDateTime ON HR.tbl_AttendancePunches(EmployeeID, PunchTime);
 
--- 6. ÍNDICES PARA TABLA DE CÁLCULOS DE ASISTENCIA
-PRINT '6. Creando índices para HR.tbl_AttendanceCalculations...';
-CREATE INDEX IX_AttendanceCalculations_Employee ON HR.tbl_AttendanceCalculations(EmployeeID);
-CREATE INDEX IX_AttendanceCalculations_WorkDate ON HR.tbl_AttendanceCalculations(WorkDate);
-CREATE INDEX IX_AttendanceCalculations_EmployeeDate ON HR.tbl_AttendanceCalculations(EmployeeID, WorkDate);
-CREATE INDEX IX_AttendanceCalculations_Status ON HR.tbl_AttendanceCalculations(Status);
+-- -- 6. ÍNDICES PARA TABLA DE CÁLCULOS DE ASISTENCIA
+-- PRINT '6. Creando índices para HR.tbl_AttendanceCalculations...';
+-- CREATE INDEX IX_AttendanceCalculations_Employee ON HR.tbl_AttendanceCalculations(EmployeeID);
+-- CREATE INDEX IX_AttendanceCalculations_WorkDate ON HR.tbl_AttendanceCalculations(WorkDate);
+-- CREATE INDEX IX_AttendanceCalculations_EmployeeDate ON HR.tbl_AttendanceCalculations(EmployeeID, WorkDate);
+-- CREATE INDEX IX_AttendanceCalculations_Status ON HR.tbl_AttendanceCalculations(Status);
 
 -- 7. ÍNDICES PARA TABLA DE JUSTIFICACIONES
 PRINT '7. Creando índices para HR.tbl_PunchJustifications...';
@@ -342,3 +342,112 @@ BEGIN
         ON HR.tbl_TimePlanningEmployees (PlanID, EmployeeID);
 END
 GO
+
+
+/* =========================================================
+   ÍNDICES: HR.tbl_AttendanceCalculations
+   ========================================================= */
+
+-- Unicidad por empleado y día
+CREATE UNIQUE INDEX UX_AttendanceCalculations_Employee_WorkDate
+ON HR.tbl_AttendanceCalculations(EmployeeID, WorkDate);
+GO
+
+-- Consultas por empleado
+CREATE INDEX IX_AttendanceCalculations_Employee
+ON HR.tbl_AttendanceCalculations(EmployeeID);
+GO
+
+-- Consultas por fecha
+CREATE INDEX IX_AttendanceCalculations_WorkDate
+ON HR.tbl_AttendanceCalculations(WorkDate);
+GO
+
+-- Consultas por estado
+CREATE INDEX IX_AttendanceCalculations_Status
+ON HR.tbl_AttendanceCalculations(Status);
+GO
+
+-- Consultas por horario aplicado
+CREATE INDEX IX_AttendanceCalculations_AppliedSchedule
+ON HR.tbl_AttendanceCalculations(AppliedScheduleID);
+GO
+
+-- Consultas para reportes de novedades
+CREATE INDEX IX_AttendanceCalculations_Novelties
+ON HR.tbl_AttendanceCalculations(WorkDate, EmployeeID)
+INCLUDE
+(
+    PermissionMinutes,
+    VacationMinutes,
+    JustificationMinutes,
+    MedicalLeaveMinutes,
+    PaidLeaveMinutes,
+    UnpaidLeaveMinutes,
+    VacationDeductedMinutes,
+    HasPermission,
+    HasVacation,
+    HasJustification,
+    HasMedicalLeave
+);
+GO
+
+-- Consultas para reportes de cumplimiento y atrasos
+CREATE INDEX IX_AttendanceCalculations_Compliance
+ON HR.tbl_AttendanceCalculations(WorkDate, EmployeeID)
+INCLUDE
+(
+    RequiredMinutes,
+    ScheduledWorkedMin,
+    OffScheduleMin,
+    AbsentMinutes,
+    MinutesLate,
+    TardinessMin,
+    EarlyLeaveMinutes,
+    FoodSubsidy
+);
+GO
+
+-- Consultas para procesos/reproceso
+CREATE INDEX IX_AttendanceCalculations_CalculatedAt
+ON HR.tbl_AttendanceCalculations(CalculatedAt);
+GO
+
+/*INIDICES PARA MEJORAR EL PERFORMANCE DE CALCULO DE ASISTENCIA*/
+-- FIX 1: Índice crítico en tbl_AttendancePunches
+-- Cubre exactamente el WHERE del SP: EmployeeID + rango de PunchTime
+-- INCLUDE de PunchType evita el key lookup al fetch de columnas
+CREATE NONCLUSTERED INDEX IX_AttendancePunches_Employee_PunchTime
+ON HR.tbl_AttendancePunches (EmployeeID ASC, PunchTime ASC)
+INCLUDE (PunchType)
+WITH (ONLINE = ON, FILLFACTOR = 85);
+-- FIX 2: Índices en tbl_Permissions para el SP de Leaves
+-- El SP filtra: EmployeeID + Status='Approved' + solapamiento de fechas
+CREATE NONCLUSTERED INDEX IX_Permissions_Employee_Status_Dates
+ON HR.tbl_Permissions (EmployeeID ASC, Status ASC, StartDate ASC, EndDate ASC)
+INCLUDE (PermissionTypeID, ChargedToVacation, HourTaken)
+WITH (ONLINE = ON);
+
+-- FIX 3: Índice en tbl_Vacations
+-- El SP filtra: EmployeeID + Status IN (...) + WorkDate BETWEEN StartDate AND EndDate
+CREATE NONCLUSTERED INDEX IX_Vacations_Employee_Status_Dates
+ON HR.tbl_Vacations (EmployeeID ASC, Status ASC, StartDate ASC, EndDate ASC)
+WITH (ONLINE = ON);
+
+-- FIX 4: Índice en tbl_PunchJustifications
+-- El SP filtra: EmployeeID + Status IN (...) + fechas
+CREATE NONCLUSTERED INDEX IX_PunchJustifications_Employee_Status
+ON HR.tbl_PunchJustifications (EmployeeID ASC, Status ASC)
+INCLUDE (JustificationDate, StartDate, EndDate, HoursRequested)
+WITH (ONLINE = ON);
+
+-- FIX 5: Índice en tbl_TimeRecoveryPlans + Logs
+CREATE NONCLUSTERED INDEX IX_TimeRecoveryPlans_Employee
+ON HR.tbl_TimeRecoveryPlans (EmployeeID ASC)
+INCLUDE (RecoveryPlanID)
+WITH (ONLINE = ON);
+
+CREATE NONCLUSTERED INDEX IX_TimeRecoveryLogs_PlanID_Date
+ON HR.tbl_TimeRecoveryLogs (RecoveryPlanID ASC, ExecutedDate ASC)
+INCLUDE (MinutesRecovered)
+WITH (ONLINE = ON);

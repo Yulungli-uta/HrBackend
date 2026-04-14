@@ -131,9 +131,10 @@ public class JwtAuthenticationMiddleware
 
                     if (meDetails is not null)
                     {
-                        _logger.LogInformation(
-                            "[AUTH-MW] Detalles del empleado cargados: EmployeeId={EmployeeId} | Departamento={Dept} | DepartmentID={DeptId}",
-                            employeeId, meDetails.Department, meDetails.DepartmentID);
+                        if (_enableLogging)
+                            _logger.LogInformation(
+                                "[AUTH-MW] Detalles del empleado cargados: EmployeeId={EmployeeId} | Departamento={Dept} | DepartmentID={DeptId}",
+                                employeeId, meDetails.Department, meDetails.DepartmentID);
                     }
                     else
                     {

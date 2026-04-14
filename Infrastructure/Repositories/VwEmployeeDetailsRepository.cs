@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Application.DTOs.Common;
+using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Models.Views;
@@ -186,5 +187,99 @@ namespace WsUtaSystem.Infrastructure.Repositories
                 TotalCount = totalCount
             };
         }
+
+        public async Task<IEnumerable<VwEmployeeDetails>> GetByFiltersAsync(
+    int? departmentId,
+    int? employeeType,
+    CancellationToken ct = default)
+        {
+            var query = Query();
+
+            if (departmentId.HasValue && departmentId.Value > 0)
+                query = query.Where(e => e.DepartmentID == departmentId.Value);
+
+            if (employeeType.HasValue && employeeType.Value > 0)
+                query = query.Where(e => e.EmployeeType == employeeType.Value);
+
+            return await query
+                .OrderBy(e => e.Department)
+                .ThenBy(e => e.FirstName)
+                .ThenBy(e => e.LastName)
+                .ToListAsync(ct);
+        }
+
+        public async Task<IEnumerable<DepartmentContractCountDto>> GetDepartmentContractCountsAsync(
+            int? departmentId,
+            int? employeeType,
+            CancellationToken ct = default)
+        {
+            var query = Query();
+
+            if (departmentId.HasValue && departmentId.Value > 0)
+                query = query.Where(e => e.DepartmentID == departmentId.Value);
+
+            if (employeeType.HasValue && employeeType.Value > 0)
+                query = query.Where(e => e.EmployeeType == employeeType.Value);
+
+            return await query
+                .GroupBy(e => new
+                {
+                    e.DepartmentID,
+                    e.Department,
+                    e.ContractType
+                })
+                .Select(g => new DepartmentContractCountDto
+                {
+                    DepartmentID = g.Key.DepartmentID,
+                    Department = string.IsNullOrWhiteSpace(g.Key.Department)
+                        ? "Sin dependencia"
+                        : g.Key.Department,
+                    ContractType = string.IsNullOrWhiteSpace(g.Key.ContractType)
+                        ? "Sin contrato"
+                        : g.Key.ContractType,
+                    TotalEmployees = g.Count()
+                })
+                .OrderBy(x => x.Department)
+                .ThenBy(x => x.ContractType)
+                .ToListAsync(ct);
+        }
+
+        public async Task<IEnumerable<ScheduleContractCountDto>> GetScheduleContractCountsAsync(
+            int? departmentId,
+            int? employeeType,
+            CancellationToken ct = default)
+        {
+            var query = Query();
+
+            if (departmentId.HasValue && departmentId.Value > 0)
+                query = query.Where(e => e.DepartmentID == departmentId.Value);
+
+            if (employeeType.HasValue && employeeType.Value > 0)
+                query = query.Where(e => e.EmployeeType == employeeType.Value);
+
+            return await query
+                .GroupBy(e => new
+                {
+                    e.ScheduleID,
+                    e.Schedule,
+                    e.ContractType
+                })
+                .Select(g => new ScheduleContractCountDto
+                {
+                    ScheduleID = g.Key.ScheduleID,
+                    Schedule = string.IsNullOrWhiteSpace(g.Key.Schedule)
+                        ? "Sin horario"
+                        : g.Key.Schedule,
+                    ContractType = string.IsNullOrWhiteSpace(g.Key.ContractType)
+                        ? "Sin contrato"
+                        : g.Key.ContractType,
+                    TotalEmployees = g.Count()
+                })
+                .OrderBy(x => x.Schedule)
+                .ThenBy(x => x.ContractType)
+                .ToListAsync(ct);
+        }
     }
+
+
 }
