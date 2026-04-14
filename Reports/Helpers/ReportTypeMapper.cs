@@ -41,7 +41,11 @@ public static class ReportTypeMapper
             ["departments"]     = ReportType.Departments,
             // El frontend envía "attendancesumary" (un solo 'm') — se mantiene por compatibilidad
             ["attendancesumary"]  = ReportType.AttendanceSummary,
-            ["attendancesummary"] = ReportType.AttendanceSummary
+            ["attendancesummary"] = ReportType.AttendanceSummary,
+
+            ["employees-by-department"] = ReportType.EmployeesByDepartment,
+            ["department-contract-summary"] = ReportType.DepartmentContractSummary,
+            ["schedule-contract-summary"] = ReportType.ScheduleContractSummary
         };
 
     /// <summary>

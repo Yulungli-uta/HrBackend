@@ -680,28 +680,28 @@ CREATE TABLE HR.tbl_PunchJustifications (
     Status NVARCHAR(20) NOT NULL DEFAULT('PENDING')
 );
 
-CREATE TABLE HR.tbl_AttendanceCalculations (
-    CalculationID INT IDENTITY(1,1) NOT NULL,
-    EmployeeID INT NOT NULL,
-    WorkDate DATE NOT NULL,
-    FirstPunchIn DATETIME2 NULL,                      -- CAMBIADO A DATETIME2
-    LastPunchOut DATETIME2 NULL,                      -- CAMBIADO A DATETIME2
-    TotalWorkedMinutes INT NOT NULL DEFAULT(0),
-    RegularMinutes INT NOT NULL DEFAULT(0),
-    OvertimeMinutes INT NOT NULL DEFAULT(0),
-    NightMinutes INT NOT NULL DEFAULT(0),
-    HolidayMinutes INT NOT NULL DEFAULT(0),
-	RequiredMinutes INT NOT NULL CONSTRAINT DF_AttCalc_RequiredMinutes DEFAULT (0),
-	TardinessMin INT NOT NULL CONSTRAINT DF_AttCalc_TardinessMin DEFAULT (0),
-	AbsentMinutes INT NOT NULL CONSTRAINT DF_AttCalc_AbsentMinutes DEFAULT (0),
-	MinutesLate INT NOT NULL CONSTRAINT DF_AttCalc_MinutesLate DEFAULT (0),
-	ScheduledWorkedMin INT NOT NULL CONSTRAINT DF_AttCalc_SchedWorked DEFAULT(0),
-	OffScheduleMin INT NOT NULL CONSTRAINT DF_AttCalc_OffSched DEFAULT(0),
-	JustificationApply BIT NOT NULL DEFAULT(0),
-	FoodSubsidy INT NOT NULL DEFAULT(0),     --verifica si cuenta subcidio o no 1 cuando cumple la jornada completa y 0 si no tiene la jornada completa ,
-	recoveredMinutes INT NOT NULL DEFAULT(0), --minutos de recuperacion 
-	JustificationMinutes INT NOT NULL DEFAULT(0)  --minutos que se aplico la justificiacion 
-);
+-- CREATE TABLE HR.tbl_AttendanceCalculations (
+    -- CalculationID INT IDENTITY(1,1) NOT NULL,
+    -- EmployeeID INT NOT NULL,
+    -- WorkDate DATE NOT NULL,
+    -- FirstPunchIn DATETIME2 NULL,                      -- CAMBIADO A DATETIME2
+    -- LastPunchOut DATETIME2 NULL,                      -- CAMBIADO A DATETIME2
+    -- TotalWorkedMinutes INT NOT NULL DEFAULT(0),
+    -- RegularMinutes INT NOT NULL DEFAULT(0),
+    -- OvertimeMinutes INT NOT NULL DEFAULT(0),
+    -- NightMinutes INT NOT NULL DEFAULT(0),
+    -- HolidayMinutes INT NOT NULL DEFAULT(0),
+	-- RequiredMinutes INT NOT NULL CONSTRAINT DF_AttCalc_RequiredMinutes DEFAULT (0),
+	-- TardinessMin INT NOT NULL CONSTRAINT DF_AttCalc_TardinessMin DEFAULT (0),
+	-- AbsentMinutes INT NOT NULL CONSTRAINT DF_AttCalc_AbsentMinutes DEFAULT (0),
+	-- MinutesLate INT NOT NULL CONSTRAINT DF_AttCalc_MinutesLate DEFAULT (0),
+	-- ScheduledWorkedMin INT NOT NULL CONSTRAINT DF_AttCalc_SchedWorked DEFAULT(0),
+	-- OffScheduleMin INT NOT NULL CONSTRAINT DF_AttCalc_OffSched DEFAULT(0),
+	-- JustificationApply BIT NOT NULL DEFAULT(0),
+	-- FoodSubsidy INT NOT NULL DEFAULT(0),     --verifica si cuenta subcidio o no 1 cuando cumple la jornada completa y 0 si no tiene la jornada completa ,
+	-- recoveredMinutes INT NOT NULL DEFAULT(0), --minutos de recuperacion 
+	-- JustificationMinutes INT NOT NULL DEFAULT(0)  --minutos que se aplico la justificiacion 
+-- );
 
 
 
@@ -1198,8 +1198,123 @@ CREATE TABLE HR.tbl_DepartmentAuthorities (
 END
 GO
 
+/* =========================================================
+   TABLA: HR.tbl_AttendanceCalculations
+   DESCRIPCIÓN:
+   Consolidado diario de asistencia por empleado y fecha.
+   Guarda:
+     - marcaciones extremas del día
+     - minutos trabajados y clasificados
+     - atrasos y ausencias
+     - novedades aplicadas (permisos, vacaciones, justificaciones)
+     - snapshot del horario aplicado al cálculo
+     - trazabilidad del proceso de cálculo
+   ========================================================= */
+
+IF OBJECT_ID('HR.tbl_AttendanceCalculations', 'U') IS NOT NULL
+BEGIN
+    DROP TABLE HR.tbl_AttendanceCalculations;
+END
+GO
+
+CREATE TABLE HR.tbl_AttendanceCalculations
+(
+    CalculationID INT IDENTITY(1,1) NOT NULL,
+
+    /* =========================
+       IDENTIFICACIÓN
+       ========================= */
+    EmployeeID INT NOT NULL,
+    WorkDate DATE NOT NULL,
+
+    /* =========================
+       MARCACIONES EXTREMAS DEL DÍA
+       ========================= */
+    FirstPunchIn DATETIME2 NULL,
+    LastPunchOut DATETIME2 NULL,
+
+    /* =========================
+       RESULTADO GENERAL DEL CÁLCULO
+       ========================= */
+    TotalWorkedMinutes INT NOT NULL DEFAULT (0),     -- Total neto trabajado del día
+    RegularMinutes INT NOT NULL DEFAULT (0),         -- Minutos regulares reconocidos
+    OvertimeMinutes INT NOT NULL DEFAULT (0),        -- Horas extra reconocidas
+    NightMinutes INT NOT NULL DEFAULT (0),           -- Minutos nocturnos
+    HolidayMinutes INT NOT NULL DEFAULT (0),         -- Minutos trabajados en feriado o fin de semana
+
+    /* =========================
+       JORNADA ESPERADA / CUMPLIMIENTO
+       ========================= */
+    RequiredMinutes INT NOT NULL DEFAULT (0),        -- Minutos requeridos para la jornada
+    ScheduledWorkedMin INT NOT NULL DEFAULT (0),     -- Minutos trabajados dentro del horario
+    OffScheduleMin INT NOT NULL DEFAULT (0),         -- Minutos trabajados fuera del horario
+    AbsentMinutes INT NOT NULL DEFAULT (0),          -- Minutos faltantes respecto a lo requerido
+
+    /* =========================
+       ATRASOS / INCUMPLIMIENTOS
+       ========================= */
+    MinutesLate INT NOT NULL DEFAULT (0),            -- Atraso bruto a la entrada (sin gracia)
+    TardinessMin INT NOT NULL DEFAULT (0),           -- Atraso neto descontando gracia
+    EarlyLeaveMinutes INT NOT NULL DEFAULT (0),      -- Salida anticipada respecto al fin de jornada
+
+    /* =========================
+       NOVEDADES APLICADAS
+       ========================= */
+    PermissionMinutes INT NOT NULL DEFAULT (0),          -- Minutos cubiertos por permisos
+    VacationMinutes INT NOT NULL DEFAULT (0),            -- Minutos cubiertos por vacaciones
+    JustificationMinutes INT NOT NULL DEFAULT (0),       -- Minutos cubiertos por justificación
+    MedicalLeaveMinutes INT NOT NULL DEFAULT (0),        -- Minutos cubiertos por permiso/licencia médica
+    PaidLeaveMinutes INT NOT NULL DEFAULT (0),           -- Minutos cubiertos por novedad remunerada
+    UnpaidLeaveMinutes INT NOT NULL DEFAULT (0),         -- Minutos cubiertos por novedad no remunerada
+    VacationDeductedMinutes INT NOT NULL DEFAULT (0),    -- Minutos que descuentan saldo de vacaciones
+    RecoveredMinutes INT NOT NULL DEFAULT (0),           -- Minutos recuperados por planificación
+
+    /* =========================
+       BANDERAS DE APOYO / REPORTE
+       ========================= */
+    JustificationApply BIT NOT NULL DEFAULT (0),     -- Indica si se aplicó una justificación al cálculo
+    HasPermission BIT NOT NULL DEFAULT (0),
+    HasVacation BIT NOT NULL DEFAULT (0),
+    HasJustification BIT NOT NULL DEFAULT (0),
+    HasMedicalLeave BIT NOT NULL DEFAULT (0),
+    HasManualAdjustment BIT NOT NULL DEFAULT (0),
+
+    /* =========================
+       BENEFICIOS / REGLAS DE NEGOCIO
+       ========================= */
+    FoodSubsidy INT NOT NULL DEFAULT (0),            -- 1 = aplica subsidio, 0 = no aplica
+
+    /* =========================
+       SNAPSHOT DEL HORARIO APLICADO
+       ========================= */
+    AppliedScheduleID INT NULL,                      -- Horario usado para el cálculo
+    ScheduledEntryTime TIME NULL,                    -- Hora de entrada programada
+    ScheduledExitTime TIME NULL,                     -- Hora de salida programada
+    ScheduledLunchStart TIME NULL,                   -- Inicio de almuerzo programado
+    ScheduledLunchEnd TIME NULL,                     -- Fin de almuerzo programado
+    ScheduledHasLunchBreak BIT NOT NULL DEFAULT (0), -- Indica si el horario tiene almuerzo
+    ScheduledMinutes INT NOT NULL DEFAULT (0),       -- Minutos teóricos programados del día
+
+    /* =========================
+       ESTADO Y TRAZABILIDAD
+       ========================= */
+    Status NVARCHAR(20) NOT NULL DEFAULT ('Pending'),
+    CalculatedAt DATETIME2 NOT NULL DEFAULT (GETDATE()),
+    CalculationVersion INT NOT NULL DEFAULT (1),
+    CalculationSource NVARCHAR(30) NOT NULL DEFAULT ('System'),
+    CreatedAt DATETIME2 NOT NULL DEFAULT (GETDATE()),
+    CreatedBy INT NULL,
+    UpdatedAt DATETIME2 NULL,
+    UpdatedBy INT NULL,
+
+    RowVersion ROWVERSION
+);
+GO
+
 
 PRINT 'TODAS LAS TABLAS CREADAS EXITOSAMENTE CON FECHAS LOCALES.';
 GO
+
+
 
 

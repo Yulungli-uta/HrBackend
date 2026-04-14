@@ -46,27 +46,27 @@ public static class QuartzConfiguration
             //    .WithDescription("Ejecuta el cálculo de minutos nocturnos diariamente a las 3:00 AM")
             //    .UsingJobData("TimeZone", timeZone));
 
-            // 2. Cálculo de minutos nocturnos - 2:00 AM
-            var overtimeRecoveryKey = new JobKey("DailyOvertimeRecoveryCalculation");
-            q.AddJob<DailyOvertimeRecoveryCalculation>(opts => opts.WithIdentity(overtimeRecoveryKey));
-            q.AddTrigger(opts => opts
-                .ForJob(overtimeRecoveryKey)
-                .WithIdentity("DailyOvertimeRecoveryCalculationTrigger")
-                .WithCronSchedule("0 0 2 * * ?", x => x
-                    .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-                .WithDescription("Ejecuta el cálculo de minutos Horas extras y Recuperacion diariamente a las 2:00 AM")
-                .UsingJobData("TimeZone", timeZone));
+            //// 2. Cálculo de minutos nocturnos - 2:00 AM
+            //var overtimeRecoveryKey = new JobKey("DailyOvertimeRecoveryCalculation");
+            //q.AddJob<DailyOvertimeRecoveryCalculation>(opts => opts.WithIdentity(overtimeRecoveryKey));
+            //q.AddTrigger(opts => opts
+            //    .ForJob(overtimeRecoveryKey)
+            //    .WithIdentity("DailyOvertimeRecoveryCalculationTrigger")
+            //    .WithCronSchedule("0 0 2 * * ?", x => x
+            //        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
+            //    .WithDescription("Ejecuta el cálculo de minutos Horas extras y Recuperacion diariamente a las 2:00 AM")
+            //    .UsingJobData("TimeZone", timeZone));
 
-            // 3. Aplicar justificaciones - 2:30 AM
-            var justificationsKey = new JobKey("DailyJustificationsJob");
-            q.AddJob<DailyJustificationsJob>(opts => opts.WithIdentity(justificationsKey));
-            q.AddTrigger(opts => opts
-                .ForJob(justificationsKey)
-                .WithIdentity("DailyJustificationsTrigger")
-                .WithCronSchedule("0 30 2 * * ?", x => x
-                    .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-                .WithDescription("Aplica justificaciones aprobadas diariamente a las 2:30 AM")
-                .UsingJobData("TimeZone", timeZone));
+            //// 3. Aplicar justificaciones - 2:30 AM
+            //var justificationsKey = new JobKey("DailyJustificationsJob");
+            //q.AddJob<DailyJustificationsJob>(opts => opts.WithIdentity(justificationsKey));
+            //q.AddTrigger(opts => opts
+            //    .ForJob(justificationsKey)
+            //    .WithIdentity("DailyJustificationsTrigger")
+            //    .WithCronSchedule("0 30 2 * * ?", x => x
+            //        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
+            //    .WithDescription("Aplica justificaciones aprobadas diariamente a las 2:30 AM")
+            //    .UsingJobData("TimeZone", timeZone));
 
             //4.Acreditacion de vacaciones -Día 1 del mes a las 00:30
             var accrueVacation = new JobKey("MonthlyAccrueVacationBalanceJob");

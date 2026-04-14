@@ -1,5 +1,6 @@
-﻿using WsUtaSystem.Models.Views;
-using WsUtaSystem.Application.DTOs.Common;
+﻿using WsUtaSystem.Application.DTOs.Common;
+using WsUtaSystem.Application.DTOs.Reports;
+using WsUtaSystem.Models.Views;
 
 namespace WsUtaSystem.Application.Interfaces.Services
 {
@@ -46,6 +47,22 @@ namespace WsUtaSystem.Application.Interfaces.Services
 
         Task<IEnumerable<VwEmployeeDetails>> GetSubordinatesByBossIdAsync( 
             int bossId, 
+            CancellationToken ct = default);
+
+        /*report source*/
+        Task<IEnumerable<VwEmployeeDetails>> GetByFiltersAsync(
+            int? departmentId,
+            int? employeeType,
+            CancellationToken ct = default);
+
+        Task<IEnumerable<DepartmentContractCountDto>> GetDepartmentContractCountsAsync(
+            int? departmentId,
+            int? employeeType,
+            CancellationToken ct = default);
+
+        Task<IEnumerable<ScheduleContractCountDto>> GetScheduleContractCountsAsync(
+            int? departmentId,
+            int? employeeType,
             CancellationToken ct = default);
     }
 }

@@ -15,6 +15,7 @@ public record ReportFilterDto
     public string? EmployeeType { get; init; }
     public bool? IsActive { get; init; }
     public bool? IncludeInactive { get; init; }
+    public int? EmployeeTypeId { get; init; }
 
     /// <summary>
     /// Orientación de página para el PDF generado.

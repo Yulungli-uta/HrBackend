@@ -309,6 +309,18 @@ public static class ServiceCollectionExtensions
             WsUtaSystem.Reports.Sources.AttendanceSummaryReportSource>();
 
         services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.EmployeesByDepartmentReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.DepartmentContractSummaryReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.ScheduleContractSummaryReportSource>();
+
+        services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportRenderer,
             WsUtaSystem.Reports.Renderers.PdfReportRenderer>();
 

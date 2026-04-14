@@ -156,41 +156,120 @@ public sealed class PdfReportRenderer : IReportRenderer
         });
     }
 
+    //private void ComposeContent(IContainer container, ReportDefinition definition)
+    //{
+    //    container.PaddingTop(10).Table(table =>
+    //    {
+    //        // ── Definición de columnas ──────────────────────────────────────
+    //        table.ColumnsDefinition(cols =>
+    //        {
+    //            foreach (var col in definition.Columns)
+    //            {
+    //                if (col.Width > 0f)
+    //                    cols.ConstantColumn(col.Width);
+    //                else
+    //                    cols.RelativeColumn();
+    //            }
+    //        });
+
+    //        // ── Fila de cabecera ────────────────────────────────────────────
+    //        foreach (var col in definition.Columns)
+    //        {
+    //            table.Header(header =>
+    //            {
+    //                foreach (var c in definition.Columns)
+    //                {
+    //                    header.Cell()
+    //                        .Background(_config.Colors.Primary)
+    //                        .Padding(5)
+    //                        .AlignCenter()
+    //                        .Text(c.Header)
+    //                        .FontSize(9).Bold().FontColor(Colors.White);
+    //                }
+    //            });
+    //            break; // header se llama una sola vez
+    //        }
+
+    //        // ── Filas de datos ──────────────────────────────────────────────
+    //        if (definition.Rows is null || definition.Rows.Count == 0)
+    //        {
+    //            table.Cell()
+    //                .ColumnSpan((uint)definition.Columns.Count)
+    //                .Padding(10)
+    //                .AlignCenter()
+    //                .Text("No se encontraron registros para los filtros aplicados.")
+    //                .FontSize(10).Italic().FontColor(_config.Colors.TextSecondary);
+    //            return;
+    //        }
+
+    //        var rowIndex = 0;
+    //        foreach (var row in definition.Rows)
+    //        {
+    //            var isEven = rowIndex % 2 == 0;
+    //            var bgColor = isEven ? Colors.White : Colors.Grey.Lighten5;
+
+    //            foreach (var col in definition.Columns)
+    //            {
+    //                var value = row.TryGetValue(col.Key, out var v) ? v?.ToString() ?? string.Empty : string.Empty;
+
+    //                var alignment = col.Alignment switch
+    //                {
+    //                    ColumnAlignment.Center => (Action<IContainer>)(c => c
+    //                        .Background(bgColor).Padding(4).AlignCenter()
+    //                        .Text(value).FontSize(8).FontColor(Colors.Black)),
+    //                    ColumnAlignment.Right => (Action<IContainer>)(c => c
+    //                        .Background(bgColor).Padding(4).AlignRight()
+    //                        .Text(value).FontSize(8).FontColor(Colors.Black)),
+    //                    _ => (Action<IContainer>)(c => c
+    //                        .Background(bgColor).Padding(4).AlignLeft()
+    //                        .Text(value).FontSize(8).FontColor(Colors.Black))
+    //                };
+
+    //                table.Cell().Element(alignment);
+    //            }
+
+    //            rowIndex++;
+    //        }
+    //    });
+    //}
+
     private void ComposeContent(IContainer container, ReportDefinition definition)
     {
         container.PaddingTop(10).Table(table =>
         {
             // ── Definición de columnas ──────────────────────────────────────
+            // Width ahora es OPCIONAL.
+            // Si viene informado, se interpreta como peso relativo.
+            // Si no viene o es <= 0, se usa 1f por defecto.
             table.ColumnsDefinition(cols =>
             {
                 foreach (var col in definition.Columns)
                 {
-                    if (col.Width > 0f)
-                        cols.ConstantColumn(col.Width);
-                    else
-                        cols.RelativeColumn();
+                    var relativeWidth = col.Width > 0f ? col.Width : 1f;
+                    cols.RelativeColumn(relativeWidth);
                 }
             });
 
             // ── Fila de cabecera ────────────────────────────────────────────
-            foreach (var col in definition.Columns)
+            table.Header(header =>
             {
-                table.Header(header =>
+                foreach (var c in definition.Columns)
                 {
-                    foreach (var c in definition.Columns)
-                    {
-                        header.Cell()
-                            .Background(_config.Colors.Primary)
-                            .Padding(5)
-                            .AlignCenter()
-                            .Text(c.Header)
-                            .FontSize(9).Bold().FontColor(Colors.White);
-                    }
-                });
-                break; // header se llama una sola vez
-            }
+                    header.Cell()
+                        .Background(_config.Colors.Primary)
+                        .Border(0.5f)
+                        .BorderColor(Colors.Grey.Lighten2)
+                        .PaddingVertical(5)
+                        .PaddingHorizontal(4)
+                        .AlignCenter()
+                        .Text(c.Header)
+                        .FontSize(9)
+                        .Bold()
+                        .FontColor(Colors.White);
+                }
+            });
 
-            // ── Filas de datos ──────────────────────────────────────────────
+            // ── Sin datos ───────────────────────────────────────────────────
             if (definition.Rows is null || definition.Rows.Count == 0)
             {
                 table.Cell()
@@ -198,11 +277,16 @@ public sealed class PdfReportRenderer : IReportRenderer
                     .Padding(10)
                     .AlignCenter()
                     .Text("No se encontraron registros para los filtros aplicados.")
-                    .FontSize(10).Italic().FontColor(_config.Colors.TextSecondary);
+                    .FontSize(10)
+                    .Italic()
+                    .FontColor(_config.Colors.TextSecondary);
+
                 return;
             }
 
+            // ── Filas de datos ──────────────────────────────────────────────
             var rowIndex = 0;
+
             foreach (var row in definition.Rows)
             {
                 var isEven = rowIndex % 2 == 0;
@@ -210,29 +294,36 @@ public sealed class PdfReportRenderer : IReportRenderer
 
                 foreach (var col in definition.Columns)
                 {
-                    var value = row.TryGetValue(col.Key, out var v) ? v?.ToString() ?? string.Empty : string.Empty;
+                    var value = row.TryGetValue(col.Key, out var v)
+                        ? v?.ToString() ?? string.Empty
+                        : string.Empty;
 
-                    var alignment = col.Alignment switch
+                    table.Cell().Element(cell =>
                     {
-                        ColumnAlignment.Center => (Action<IContainer>)(c => c
-                            .Background(bgColor).Padding(4).AlignCenter()
-                            .Text(value).FontSize(8).FontColor(Colors.Black)),
-                        ColumnAlignment.Right => (Action<IContainer>)(c => c
-                            .Background(bgColor).Padding(4).AlignRight()
-                            .Text(value).FontSize(8).FontColor(Colors.Black)),
-                        _ => (Action<IContainer>)(c => c
-                            .Background(bgColor).Padding(4).AlignLeft()
-                            .Text(value).FontSize(8).FontColor(Colors.Black))
-                    };
+                        var styledCell = cell
+                            .Background(bgColor)
+                            .BorderBottom(0.5f)
+                            .BorderColor(Colors.Grey.Lighten2)
+                            .PaddingVertical(4)
+                            .PaddingHorizontal(4);
 
-                    table.Cell().Element(alignment);
+                        styledCell = col.Alignment switch
+                        {
+                            ColumnAlignment.Center => styledCell.AlignCenter(),
+                            ColumnAlignment.Right => styledCell.AlignRight(),
+                            _ => styledCell.AlignLeft()
+                        };
+
+                        styledCell.Text(value)
+                            .FontSize(8)
+                            .FontColor(Colors.Black);
+                    });
                 }
 
                 rowIndex++;
             }
         });
     }
-
     private void ComposeFooter(IContainer container)
     {
         container.Column(column =>
