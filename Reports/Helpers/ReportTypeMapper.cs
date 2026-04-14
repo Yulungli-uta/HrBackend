@@ -45,7 +45,12 @@ public static class ReportTypeMapper
 
             ["employees-by-department"] = ReportType.EmployeesByDepartment,
             ["department-contract-summary"] = ReportType.DepartmentContractSummary,
-            ["schedule-contract-summary"] = ReportType.ScheduleContractSummary
+            ["schedule-contract-summary"] = ReportType.ScheduleContractSummary,
+
+            // ── Reportes v2 — AttendanceCalculations ─────────────────────────
+            ["lateness"]          = ReportType.Lateness,
+            ["overtime"]          = ReportType.Overtime,
+            ["attendance-cross"]  = ReportType.AttendanceCross,
         };
 
     /// <summary>
