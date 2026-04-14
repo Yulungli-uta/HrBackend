@@ -19,10 +19,14 @@ public enum ReportType
     AttendanceSummary = 4,
     /// <summary>Reporte detallado de empleados filtrado por dependencia.</summary>
     EmployeesByDepartment = 5,
-
     /// <summary>Reporte resumen agrupado por dependencia y tipo de contrato.</summary>
     DepartmentContractSummary = 6,
-
     /// <summary>Reporte resumen agrupado por horario asignado y tipo de contrato.</summary>
-    ScheduleContractSummary = 7
+    ScheduleContractSummary = 7,
+    /// <summary>Reporte de atrasos por empleado en un período determinado.</summary>
+    Lateness = 8,
+    /// <summary>Reporte de horas extras (ordinarias, nocturnas, feriado y fuera de horario).</summary>
+    Overtime = 9,
+    /// <summary>Reporte cruzado de asistencia: horas trabajadas, permisos, vacaciones, justificaciones y licencias.</summary>
+    AttendanceCross = 10
 }

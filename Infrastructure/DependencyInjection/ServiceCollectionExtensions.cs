@@ -320,6 +320,27 @@ public static class ServiceCollectionExtensions
             WsUtaSystem.Reports.Abstractions.IReportSource,
             WsUtaSystem.Reports.Sources.ScheduleContractSummaryReportSource>();
 
+        // ── Reportes v2: AttendanceCalculations (Atrasos, Horas Extras, Cruzado) ──────────
+        services.AddScoped<
+            WsUtaSystem.Application.Interfaces.Repositories.IAttendanceCalculationsReportRepository,
+            WsUtaSystem.Infrastructure.Repositories.AttendanceCalculationsReportRepository>();
+
+        services.AddScoped<
+            WsUtaSystem.Application.Interfaces.Services.IAttendanceCalculationsReportService,
+            WsUtaSystem.Application.Services.AttendanceCalculationsReportService>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.LatenessReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.OvertimeReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.AttendanceCrossReportSource>();
+
         services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportRenderer,
             WsUtaSystem.Reports.Renderers.PdfReportRenderer>();
