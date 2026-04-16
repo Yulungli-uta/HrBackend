@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Application.Services;
 using WsUtaSystem.Reports.Abstractions;
 using WsUtaSystem.Reports.Core;
 
@@ -19,15 +20,17 @@ public sealed class ScheduleContractSummaryReportSource : IReportSource
 
     public ReportType ReportType => ReportType.ScheduleContractSummary;
 
+    private const string ColDepartament = "departament";
     private const string ColSchedule = "schedule";
     private const string ColContractType = "contract_type";
     private const string ColTotal = "total_employees";
 
     private static readonly IReadOnlyList<ReportColumn> _columns =
     [
-        new(ColSchedule,     "Horario",         Width: 2.2f),
-        new(ColContractType, "Tipo Contrato",   Width: 2.0f),
-        new(ColTotal,        "Total",           Width: 1.0f, Alignment: ColumnAlignment.Right)
+        new(ColDepartament,  "Departamento",    Width: 2.2f, Alignment: ColumnAlignment.Left),
+        new(ColSchedule,     "Horario",         Width: 1.2f, Alignment: ColumnAlignment.Center),
+        new(ColContractType, "Tipo Contrato",   Width: 2.0f, Alignment: ColumnAlignment.Center),
+        new(ColTotal,        "Total",           Width: 1.0f, Alignment: ColumnAlignment.Center)
     ];
 
     public ScheduleContractSummaryReportSource(
@@ -52,7 +55,7 @@ public sealed class ScheduleContractSummaryReportSource : IReportSource
             filter.DepartmentId,
             filter.EmployeeTypeId,
             CancellationToken.None)).ToList();
-
+      
         _logger.LogInformation(
             "ScheduleContractSummary report: {Count} grouped records retrieved.",
             summary.Count);
@@ -79,6 +82,7 @@ public sealed class ScheduleContractSummaryReportSource : IReportSource
         {
             rows.Add(new Dictionary<string, object?>
             {
+                [ColDepartament] = string.IsNullOrWhiteSpace(item.DepartmentName) ? "Sin dependencia" : item.DepartmentName,
                 [ColSchedule] = item.Schedule,
                 [ColContractType] = item.ContractType,
                 [ColTotal] = item.TotalEmployees

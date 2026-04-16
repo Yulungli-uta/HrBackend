@@ -260,12 +260,18 @@ namespace WsUtaSystem.Infrastructure.Repositories
             return await query
                 .GroupBy(e => new
                 {
+                    e.DepartmentID,
+                    e.Department,
                     e.ScheduleID,
                     e.Schedule,
                     e.ContractType
                 })
                 .Select(g => new ScheduleContractCountDto
                 {
+                    DepartmentID = g.Key.DepartmentID,
+                    DepartmentName = string.IsNullOrWhiteSpace(g.Key.Department)
+                        ? "Sin dependencia"
+                        : g.Key.Department,
                     ScheduleID = g.Key.ScheduleID,
                     Schedule = string.IsNullOrWhiteSpace(g.Key.Schedule)
                         ? "Sin horario"
@@ -275,11 +281,10 @@ namespace WsUtaSystem.Infrastructure.Repositories
                         : g.Key.ContractType,
                     TotalEmployees = g.Count()
                 })
-                .OrderBy(x => x.Schedule)
+                .OrderBy(x => x.DepartmentName)
+                .ThenBy(x => x.Schedule)
                 .ThenBy(x => x.ContractType)
                 .ToListAsync(ct);
         }
     }
-
-
 }
