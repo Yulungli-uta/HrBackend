@@ -50,7 +50,9 @@ builder.Services.AddEmailServices(builder.Configuration);
 // ── 10. Reportes ──────────────────────────────────────────────────────────────
 builder.Services.AddReportServices(builder.Configuration);
 
-// ── 11. Permisos de usuario ───────────────────────────────────────────────────
+// ── 11. Motor Documental Institucional ───────────────────────────────────────
+builder.Services.AddDocumentEngineServices();
+// ── 12. Permisos de usuario ───────────────────────────────────────────────────
 builder.Services.AddUserPermissionServices();
 
 // ── 12. Autenticación JWT + usuario actual ────────────────────────────────────

@@ -145,7 +145,8 @@ public static class ServiceCollectionExtensions
                 options.Conventions.Add(new ApiPrefixByNamespaceConvention("api/v1", new Dictionary<string, string>
                 {
                     { "WsUtaSystem.Controllers.HR", "rh" },
-                    { "WsUtaSystem.Controllers.Docflow", "docflow" }
+                    { "WsUtaSystem.Controllers.Docflow", "docflow" },
+                    { "WsUtaSystem.Controllers.Documents", "documents" }
                 }));
             })
             .AddJsonOptions(options =>
@@ -808,6 +809,70 @@ public static class ServiceCollectionExtensions
                 options.EnableDetailedErrors();
             }
         });
+
+        return services;
+    }
+
+    // =========================================================
+    // MOTOR DOCUMENTAL INSTITUCIONAL
+    // Plantillas HTML, resolución de campos, renderizado PDF
+    // y gestión de acciones de personal.
+    // =========================================================
+    /// <summary>
+    /// Registra todos los componentes del Motor Documental Institucional:
+    /// repositorios de plantillas y documentos generados, motor de sustitución,
+    /// renderizador PDF, resolver de campos y servicios de orquestación.
+    /// </summary>
+    public static IServiceCollection AddDocumentEngineServices(this IServiceCollection services)
+    {
+        // ── Repositorios ─────────────────────────────────────────────────────────
+        services.AddScoped<
+            WsUtaSystem.Application.Interfaces.Repositories.Documents.IDocumentTemplateRepository,
+            WsUtaSystem.Infrastructure.Repositories.Documents.DocumentTemplateRepository>();
+
+        services.AddScoped<
+            WsUtaSystem.Application.Interfaces.Repositories.Documents.IDocumentTemplateFieldRepository,
+            WsUtaSystem.Infrastructure.Repositories.Documents.DocumentTemplateFieldRepository>();
+
+        services.AddScoped<
+            WsUtaSystem.Application.Interfaces.Repositories.Documents.IGeneratedDocumentRepository,
+            WsUtaSystem.Infrastructure.Repositories.Documents.GeneratedDocumentRepository>();
+
+        services.AddScoped<
+            WsUtaSystem.Application.Interfaces.Repositories.Documents.IPersonnelActionRepository,
+            WsUtaSystem.Infrastructure.Repositories.Documents.PersonnelActionRepository>();
+
+        // ── Motor de plantillas (sustitución de tokens {{CAMPO}}) ─────────────────
+        services.AddSingleton<
+            WsUtaSystem.Documents.Abstractions.IDocumentTemplateEngine,
+            WsUtaSystem.Documents.Engine.DocumentTemplateEngine>();
+
+        // ── Resolver de campos (Employee, Contract, Movement, System, Manual) ─────
+        services.AddScoped<
+            WsUtaSystem.Documents.Abstractions.IDocumentFieldResolver,
+            WsUtaSystem.Documents.Engine.DocumentFieldResolver>();
+
+        // ── Renderizador PDF institucional ────────────────────────────────────────
+        services.AddScoped<
+            WsUtaSystem.Documents.Abstractions.IDocumentRenderer,
+            WsUtaSystem.Documents.Renderers.InstitutionalDocumentRenderer>();
+
+        // ── Servicios de aplicación ───────────────────────────────────────────────
+        services.AddScoped<
+            WsUtaSystem.Application.Interfaces.Services.Documents.IDocumentTemplateService,
+            WsUtaSystem.Application.Services.Documents.DocumentTemplateService>();
+
+        services.AddScoped<
+            WsUtaSystem.Application.Interfaces.Services.Documents.IDocumentTemplateFieldService,
+            WsUtaSystem.Application.Services.Documents.DocumentTemplateFieldService>();
+
+        services.AddScoped<
+            WsUtaSystem.Application.Interfaces.Services.Documents.IDocumentGenerationService,
+            WsUtaSystem.Application.Services.Documents.DocumentGenerationService>();
+
+        services.AddScoped<
+            WsUtaSystem.Application.Interfaces.Services.Documents.IPersonnelActionService,
+            WsUtaSystem.Application.Services.Documents.PersonnelActionService>();
 
         return services;
     }
