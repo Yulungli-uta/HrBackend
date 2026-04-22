@@ -141,6 +141,16 @@ public class AppDbContext : DbContext
     public DbSet<DocflowWorkflowMovement> DocflowMovements => Set<DocflowWorkflowMovement>();
 
     // ─────────────────────────────────────────────────────────────────────────
+    // DbSets - Motor Documental Institucional
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public DbSet<DocumentTemplate> DocumentTemplates => Set<DocumentTemplate>();
+    public DbSet<DocumentTemplateField> DocumentTemplateFields => Set<DocumentTemplateField>();
+    public DbSet<GeneratedDocument> GeneratedDocuments => Set<GeneratedDocument>();
+    public DbSet<GeneratedDocumentField> GeneratedDocumentFields => Set<GeneratedDocumentField>();
+    public DbSet<PersonnelAction> PersonnelActions => Set<PersonnelAction>();
+
+    // ─────────────────────────────────────────────────────────────────────────
     // DbSets - Vistas (sin clave primaria)
     // ─────────────────────────────────────────────────────────────────────────
 
