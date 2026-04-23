@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="DOCUMENT_TITLE" content="ACCIÓN DE PERSONAL"/>
+<meta name="ACTION_NUMBER" content="{{DOC_NUMBER}}"/>
+<style>
+  /* ── Reset y base ── */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 8.5pt;
+    color: #000;
+    background: #fff;
+    width: 210mm;
+    margin: 0 auto;
+  }
+
+  /* ── Página ── */
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 12mm 14mm 10mm 14mm;
+    page-break-after: always;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  /* ── Utilidades de tabla ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  td, th {
+    border: 1px solid #000;
+    padding: 2px 4px;
+    vertical-align: top;
+  }
+  .no-border td, .no-border th { border: none; }
+  .bold   { font-weight: bold; }
+  .center { text-align: center; }
+  .right  { text-align: right; }
+  .small  { font-size: 7pt; }
+  .label  { font-weight: bold; font-size: 7.5pt; }
+  .value  { font-size: 8.5pt; }
+  .bg-gray { background-color: #d9d9d9; }
+
+  /* ── Bloque 1: Encabezado ── */
+  .header-table td { border: 1px solid #000; }
+  .header-logo { width: 60mm; vertical-align: middle; padding: 4px 6px; }
+  .header-institution { text-align: center; font-weight: bold; font-size: 9pt; line-height: 1.5; }
+  .header-right { width: 70mm; }
+  .header-title {
+    font-size: 13pt;
+    font-weight: bold;
+    text-align: center;
+    padding: 4px 6px;
+    border-bottom: 1px solid #000;
+  }
+  .header-nro-row td { padding: 2px 6px; font-size: 8pt; }
+  .header-fecha-label {
+    font-weight: bold;
+    font-size: 8pt;
+    text-align: center;
+    background-color: #d9d9d9;
+    border-top: 1px solid #000;
+    border-bottom: 1px solid #000;
+    padding: 2px 4px;
+  }
+  .header-fecha-value { text-align: center; font-size: 8.5pt; padding: 2px 4px; }
+
+  /* ── Bloque 2/3: Datos del servidor ── */
+  .section-title {
+    font-weight: bold;
+    font-size: 8pt;
+    text-align: center;
+    background-color: #d9d9d9;
+    padding: 2px 4px;
+  }
+
+  /* ── Bloque 4: Checkboxes ── */
+  .checkbox-grid td { border: none; padding: 1px 4px; font-size: 7.5pt; }
+  .checkbox-grid .cb-label { padding-left: 2px; }
+  .cb { display: inline-block; width: 9px; height: 9px; border: 1px solid #000; margin-right: 3px; vertical-align: middle; }
+  .cb.checked::after { content: "●"; font-size: 7pt; line-height: 9px; display: block; text-align: center; }
+
+  /* ── Bloque 6: Motivación ── */
+  .motivation-box {
+    border: 1px solid #000;
+    min-height: 28mm;
+    padding: 3px 5px;
+    font-size: 8pt;
+    line-height: 1.4;
+    margin-top: 1px;
+  }
+
+  /* ── Bloque 7: Situación actual / propuesta ── */
+  .situation-header {
+    font-weight: bold;
+    font-size: 8.5pt;
+    text-align: center;
+    background-color: #d9d9d9;
+    border: 1px solid #000;
+    padding: 2px 4px;
+  }
+  .situation-row td { border: 1px solid #000; padding: 2px 4px; font-size: 7.5pt; min-height: 7mm; }
+  .situation-label { font-weight: bold; font-size: 7pt; }
+  .situation-value { font-size: 8pt; }
+
+  /* ── Bloque 8: Posesión ── */
+  .possession-box { border: 1px solid #000; padding: 3px 5px; font-size: 7.5pt; }
+  .signature-line { border-bottom: 1px solid #000; min-width: 40mm; display: inline-block; height: 12px; }
+  .signature-area { min-height: 14mm; }
+
+  /* ── Bloque 9/10/11: Responsables ── */
+  .responsables-header {
+    font-weight: bold;
+    text-align: center;
+    background-color: #d9d9d9;
+    padding: 2px 4px;
+    font-size: 8pt;
+  }
+  .firma-cell { min-height: 16mm; vertical-align: bottom; font-size: 7.5pt; padding: 3px 5px; }
+
+  /* ── Bloque 12: Uso exclusivo ── */
+  .uso-exclusivo-box {
+    border: 1px solid #000;
+    padding: 5px 8px;
+    margin-top: 4mm;
+    font-size: 7.5pt;
+    line-height: 1.4;
+  }
+  .uso-title {
+    font-weight: bold;
+    text-align: center;
+    font-size: 8.5pt;
+    border-bottom: 1px dashed #000;
+    padding-bottom: 3px;
+    margin-bottom: 4px;
+    letter-spacing: 2px;
+  }
+  .uso-separator { border-top: 1px dashed #000; margin: 4px 0; }
+
+  /* ── Separador entre bloques ── */
+  .mt1 { margin-top: 1mm; }
+  .mt2 { margin-top: 2mm; }
+  .mt3 { margin-top: 3mm; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     PÁGINA 1
+     ════════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- ── BLOQUE 1: Encabezado institucional ── -->
+  <table class="header-table">
+    <tr>
+      <!-- Columna izquierda: Logo + nombre institución -->
+      <td class="header-logo" rowspan="3" style="width:55%">
+        <table class="no-border" style="width:100%">
+          <tr>
+            <td style="width:22mm; border:none; vertical-align:middle; padding:0">
+              <!-- Logo UTA: en producción reemplazar por <img src="{{LOGO_URL}}" width="55" /> -->
+              <div style="width:55px;height:55px;border:2px solid #8B1A1A;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11pt;color:#8B1A1A;">UTA</div>
+            </td>
+            <td style="border:none; vertical-align:middle; padding-left:6px">
+              <div class="header-institution">
+                UNIVERSIDAD TÉCNICA DE AMBATO<br/>
+                DIRECCIÓN DE TALENTO HUMANO
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+      <!-- Columna derecha: Título ACCIÓN DE PERSONAL -->
+      <td class="header-right" style="width:45%; border-left:1px solid #000; padding:0">
+        <div class="header-title">ACCIÓN DE PERSONAL</div>
+        <table style="width:100%; border-collapse:collapse; border:none">
+          <tr>
+            <td style="border:none; border-right:1px solid #000; padding:2px 5px; font-size:7.5pt; width:18mm">Nro</td>
+            <td style="border:none; padding:2px 5px; font-size:8pt; font-weight:bold">{{DOC_NUMBER}}</td>
+          </tr>
+          <tr>
+            <td colspan="2" class="header-fecha-label">FECHA DE ELABORACIÓN</td>
+          </tr>
+          <tr>
+            <td colspan="2" class="header-fecha-value">{{ELABORATION_DATE}}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ── BLOQUE 2: Apellidos / Nombres / Rige ── -->
+  <table class="mt1">
+    <tr>
+      <td style="width:30%" class="section-title">APELLIDOS</td>
+      <td style="width:30%" class="value">{{EMPLOYEE_LASTNAME}}</td>
+      <td style="width:20%" class="section-title">NOMBRES</td>
+      <td style="width:20%" class="value">{{EMPLOYEE_FIRSTNAME}}</td>
+    </tr>
+    <tr>
+      <td colspan="2"></td>
+      <td colspan="2" class="section-title center">RIGE:</td>
+    </tr>
+    <tr>
+      <td class="label">DOCUMENTO DE IDENTIFICACIÓN</td>
+      <td class="label center">NRO. DE IDENTIFICACIÓN</td>
+      <td class="label center">DESDE (dd-mm-aaaa)</td>
+      <td class="label center">HASTA (dd-mm-aaaa) (cuando aplica)</td>
+    </tr>
+    <tr>
+      <td class="value center">{{ID_TYPE}}</td>
+      <td class="value center">{{EMPLOYEE_IDCARD}}</td>
+      <td class="value center">{{EFFECTIVE_FROM}}</td>
+      <td class="value center">{{EFFECTIVE_TO}}</td>
+    </tr>
+  </table>
+
+  <!-- ── BLOQUE 4: Tipo de acción ── -->
+  <table class="mt1">
+    <tr>
+      <td colspan="4" style="font-size:7.5pt; padding:2px 4px; border-bottom:none">
+        Escoja una opción (según lo estipulado en el artículo 21 del Reglamento General a la Ley Orgánica del Servicio Público):
+      </td>
+    </tr>
+  </table>
+  <table>
+    <tr>
+      <td style="width:25%; border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_INGRESO}}"></span>INGRESO
+      </td>
+      <td style="width:25%; border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_TRASPASO}}"></span>TRASPASO
+      </td>
+      <td style="width:25%; border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_INCREMENTO_RMU}}"></span>INCREMENTO RMU
+      </td>
+      <td style="width:25%; border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_REVISION_CLASI}}"></span>REVISIÓN CLASI. PUESTO
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_REINGRESO}}"></span>REINGRESO
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_CAMBIO_ADMIN}}"></span>CAMBIO ADMINISTRATIVO
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_SUBROGACION}}"></span>SUBROGACIÓN
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_OTRO}}"></span>OTRO (DETALLAR): {{ACTION_OTHER_DETAIL}}
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_RESTITUCION}}"></span>RESTITUCIÓN
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_INTERCAMBIO}}"></span>INTERCAMBIO VOLUNTARIO
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_ENCARGO}}"></span>ENCARGO
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        {{ACTION_ENCARGO_DETAIL}}
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_REINGRESO2}}"></span>REINGRESO
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_LICENCIA}}"></span>LICENCIA
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_CESACION}}"></span>CESACIÓN DE FUNCIONES
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt"></td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_ASCENSO}}"></span>ASCENSO
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_COMISION}}"></span>COMISIÓN DE SERVICIOS
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_DESTITUCION}}"></span>DESTITUCIÓN
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt"></td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_TRASLADO}}"></span>TRASLADO
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_SANCIONES}}"></span>SANCIONES
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt">
+        <span class="cb {{CB_VACACIONES}}"></span>VACACIONES
+      </td>
+      <td style="border:1px solid #000; padding:1px 4px; font-size:7.5pt"></td>
+    </tr>
+  </table>
+
+  <!-- ── BLOQUE 5: Declaración jurada ── -->
+  <table class="mt1">
+    <tr>
+      <td style="width:70%; font-size:7.5pt; padding:2px 4px">
+        * PRESENTÓ LA DECLARACIÓN JURADA (número 2 del art. 3 RLOSEP)
+      </td>
+      <td style="width:10%; text-align:center; font-size:7.5pt; font-weight:bold">SI</td>
+      <td style="width:20%; text-align:center; font-size:7.5pt; font-weight:bold">
+        NO APLICA {{DECLARACION_JURADA_MARK}}
+      </td>
+    </tr>
+  </table>
+
+  <!-- ── BLOQUE 6: Motivación ── -->
+  <table class="mt1">
+    <tr>
+      <td style="font-size:7.5pt; font-weight:bold; padding:2px 4px; background-color:#d9d9d9">
+        MOTIVACIÓN: (adjuntar anexo si lo posee)
+      </td>
+    </tr>
+    <tr>
+      <td class="motivation-box" style="min-height:30mm; font-size:8pt; line-height:1.4; padding:4px 6px">
+        {{MOTIVATION_TEXT}}
+      </td>
+    </tr>
+  </table>
+
+  <!-- ── BLOQUE 7: Situación Actual / Situación Propuesta ── -->
+  <table class="mt2">
+    <tr>
+      <td style="width:50%" class="situation-header">SITUACIÓN ACTUAL</td>
+      <td style="width:50%" class="situation-header">SITUACIÓN PROPUESTA</td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt">
+        <div class="situation-label">PROCESO INSTITUCIONAL:</div>
+        <div class="situation-value">{{CURRENT_INSTITUTIONAL_PROCESS}}</div>
+      </td>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt">
+        <div class="situation-label">PROCESO INSTITUCIONAL:</div>
+        <div class="situation-value">{{PROPOSED_INSTITUTIONAL_PROCESS}}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt; min-height:8mm">
+        <div class="situation-label">NIVEL DE GESTIÓN:</div>
+        <div class="situation-value">{{CURRENT_MANAGEMENT_LEVEL}}</div>
+      </td>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt; min-height:8mm">
+        <div class="situation-label">NIVEL DE GESTIÓN:</div>
+        <div class="situation-value">{{PROPOSED_MANAGEMENT_LEVEL}}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt; min-height:8mm">
+        <div class="situation-label">UNIDAD ADMINISTRATIVA:</div>
+        <div class="situation-value">{{CURRENT_ADMIN_UNIT}}</div>
+      </td>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt; min-height:8mm">
+        <div class="situation-label">UNIDAD ADMINISTRATIVA:</div>
+        <div class="situation-value">{{PROPOSED_ADMIN_UNIT}}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt">
+        <div class="situation-label">Lugar DE TRABAJO:</div>
+        <div class="situation-value">{{CURRENT_WORKPLACE}}</div>
+      </td>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt">
+        <div class="situation-label">Lugar DE TRABAJO:</div>
+        <div class="situation-value">{{PROPOSED_WORKPLACE}}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt; min-height:9mm">
+        <div class="situation-label">DENOMINACIÓN DEL PUESTO:</div>
+        <div class="situation-value">{{CURRENT_JOB_TITLE}}</div>
+      </td>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt; min-height:9mm">
+        <div class="situation-label">DENOMINACIÓN DEL PUESTO:</div>
+        <div class="situation-value">{{PROPOSED_JOB_TITLE}}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt">
+        <div class="situation-label">GRUPO OCUPACIONAL:</div>
+        <div class="situation-value">{{CURRENT_OCCUPATIONAL_GROUP}}</div>
+      </td>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt">
+        <div class="situation-label">GRUPO OCUPACIONAL:</div>
+        <div class="situation-value">{{PROPOSED_OCCUPATIONAL_GROUP}}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt">
+        <div class="situation-label">GRADO:</div>
+        <div class="situation-value">{{CURRENT_GRADE}}</div>
+      </td>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt">
+        <div class="situation-label">GRADO:</div>
+        <div class="situation-value">{{PROPOSED_GRADE}}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt">
+        <div class="situation-label">REMUNERACIÓN MENSUAL:</div>
+        <div class="situation-value">{{CURRENT_SALARY}}</div>
+      </td>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt">
+        <div class="situation-label">REMUNERACIÓN MENSUAL:</div>
+        <div class="situation-value">{{PROPOSED_SALARY}}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt">
+        <div class="situation-label">PARTIDA INDIVIDUAL:</div>
+        <div class="situation-value">{{CURRENT_BUDGET_CODE}}</div>
+      </td>
+      <td style="border:1px solid #000; padding:2px 4px; font-size:7.5pt">
+        <div class="situation-label">PARTIDA INDIVIDUAL:</div>
+        <div class="situation-value">{{PROPOSED_BUDGET_CODE}}</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ── BLOQUE 8: Posesión del puesto ── -->
+  <table class="mt1">
+    <tr>
+      <td style="width:55%; border:1px solid #000; padding:3px 5px; font-size:7.5pt; vertical-align:top">
+        <div class="bold">POSESIÓN DEL PUESTO</div>
+        <div class="mt1">YO,</div>
+        <div>JURO LEALTAD AL ESTADO ECUATORIANO</div>
+        <div class="mt1">
+          LUGAR: <span style="display:inline-block;width:35mm;border-bottom:1px solid #000">&nbsp;</span>
+          &nbsp;&nbsp;FECHA: <span style="display:inline-block;width:25mm;border-bottom:1px solid #000">&nbsp;</span>
+        </div>
+        <div class="mt1" style="font-size:7pt">** (EN CASO DE GANADOR DE CONCURSO DE MÉRITOS Y OPOSICIÓN)</div>
+        <div class="signature-area mt2"></div>
+        <div style="border-top:1px solid #000; width:60%; margin-top:2px">
+          <div class="center" style="font-size:7pt">FIRMA</div>
+        </div>
+      </td>
+      <td style="width:45%; border:1px solid #000; padding:3px 5px; font-size:7.5pt; vertical-align:top">
+        <div class="bold">CON NRO. DE DOCUMENTO DE IDENTIFICACIÓN:</div>
+        <div class="mt1">{{EMPLOYEE_IDCARD}}</div>
+        <div class="signature-area mt2" style="min-height:16mm"></div>
+        <div style="border-top:1px solid #000; width:70%; margin-top:2px">
+          <div class="center" style="font-size:7pt">SERVIDOR PÚBLICO</div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ── BLOQUE 9: Responsables de aprobación ── -->
+  <table class="mt1">
+    <tr>
+      <td colspan="3" class="responsables-header">
+        NRO. ACTA FINAL: {{ACTA_NUMBER}} &nbsp;&nbsp;&nbsp; FECHA: {{APPROVAL_DATE}} &nbsp;&nbsp;&nbsp; SERVIDOR PÚBLICO: {{EMPLOYEE_FULLNAME}}
+      </td>
+    </tr>
+    <tr>
+      <td colspan="3" class="responsables-header">RESPONSABLES DE APROBACIÓN</td>
+    </tr>
+    <tr>
+      <td style="width:50%; border:1px solid #000; padding:2px 4px; font-size:7.5pt; font-weight:bold; background-color:#d9d9d9">
+        DIRECTOR (A) O RESPONSABLE DE TALENTO HUMANO
+      </td>
+      <td colspan="2" style="width:50%; border:1px solid #000; padding:2px 4px; font-size:7.5pt; font-weight:bold; background-color:#d9d9d9">
+        AUTORIDAD NOMINADORA O SU DELEGADO
+      </td>
+    </tr>
+    <tr>
+      <td class="firma-cell" style="border:1px solid #000; min-height:18mm; vertical-align:bottom">
+        <div style="min-height:14mm"></div>
+        <div style="border-top:1px solid #000; padding-top:2px">
+          <div>FIRMA</div>
+          <div>NOMBRE: {{DTH_DIRECTOR_NAME}}</div>
+          <div>PUESTO: {{DTH_DIRECTOR_TITLE}}</div>
+        </div>
+      </td>
+      <td colspan="2" class="firma-cell" style="border:1px solid #000; min-height:18mm; vertical-align:bottom">
+        <div style="min-height:14mm"></div>
+        <div style="border-top:1px solid #000; padding-top:2px">
+          <div>FIRMA</div>
+          <div>NOMBRE: {{AUTHORITY_NAME}}</div>
+          <div>PUESTO: {{AUTHORITY_TITLE}}</div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+</div><!-- fin página 1 -->
+
+
+<!-- ════════════════════════════════════════════════════════════
+     PÁGINA 2
+     ════════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- ── BLOQUE 10: Responsables de firmas ── -->
+  <table>
+    <tr>
+      <td colspan="2" class="responsables-header">RESPONSABLES DE FIRMAS</td>
+    </tr>
+    <tr>
+      <td style="width:55%; border:1px solid #000; padding:2px 4px; font-size:7.5pt; font-weight:bold; background-color:#d9d9d9">
+        ACEPTACIÓN Y/O RECEPCIÓN DEL SERVIDOR PÚBLICO
+      </td>
+      <td style="width:45%; border:1px solid #000; padding:2px 4px; font-size:7.5pt; font-weight:bold; background-color:#d9d9d9">
+        EN CASO DE NEGATIVA DE LA RECEPCIÓN (TESTIGO)
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:3px 5px; font-size:7.5pt; min-height:22mm; vertical-align:bottom">
+        <div style="min-height:16mm"></div>
+        <div style="border-top:1px solid #000; padding-top:2px">
+          <div>FIRMA</div>
+          <div>NOMBRE: {{EMPLOYEE_FULLNAME}}</div>
+          <div>FECHA: {{EMPLOYEE_SIGNATURE_DATE}}</div>
+          <div>HORA: {{EMPLOYEE_SIGNATURE_HOUR}}</div>
+        </div>
+      </td>
+      <td style="border:1px solid #000; padding:3px 5px; font-size:7.5pt; min-height:22mm; vertical-align:bottom">
+        <div style="min-height:10mm"></div>
+        <div style="border-top:1px solid #000; padding-top:2px">
+          <div>FIRMA</div>
+          <div>NOMBRE: {{WITNESS_NAME}}</div>
+          <div>FECHA: {{WITNESS_DATE}}</div>
+          <div style="font-size:7pt; margin-top:3px">
+            RAZÓN: En presencia del testigo se deja constancia de que la o el servidor
+            público tiene la negativa de recibir la comunicación de registro de esta acción
+            de personal.
+          </div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ── BLOQUE 11: Responsables de elaboración ── -->
+  <table class="mt2">
+    <tr>
+      <td style="width:33.33%; border:1px solid #000; padding:2px 4px; font-size:7.5pt; font-weight:bold; background-color:#d9d9d9; text-align:center">
+        RESPONSABLE DE ELABORACIÓN
+      </td>
+      <td style="width:33.33%; border:1px solid #000; padding:2px 4px; font-size:7.5pt; font-weight:bold; background-color:#d9d9d9; text-align:center">
+        RESPONSABLE DE REVISIÓN
+      </td>
+      <td style="width:33.33%; border:1px solid #000; padding:2px 4px; font-size:7.5pt; font-weight:bold; background-color:#d9d9d9; text-align:center">
+        RESPONSABLE DE REGISTRO Y CONTROL
+      </td>
+    </tr>
+    <tr>
+      <td style="border:1px solid #000; padding:3px 5px; font-size:7.5pt; min-height:20mm; vertical-align:bottom">
+        <div style="min-height:14mm"></div>
+        <div style="border-top:1px solid #000; padding-top:2px">
+          <div>FIRMA</div>
+          <div>NOMBRE: {{ELABORATOR_NAME}}</div>
+          <div>PUESTO: {{ELABORATOR_TITLE}}</div>
+        </div>
+      </td>
+      <td style="border:1px solid #000; padding:3px 5px; font-size:7.5pt; min-height:20mm; vertical-align:bottom">
+        <div style="min-height:14mm"></div>
+        <div style="border-top:1px solid #000; padding-top:2px">
+          <div>FIRMA</div>
+          <div>NOMBRE: {{REVIEWER_NAME}}</div>
+          <div>PUESTO: {{REVIEWER_TITLE}}</div>
+        </div>
+      </td>
+      <td style="border:1px solid #000; padding:3px 5px; font-size:7.5pt; min-height:20mm; vertical-align:bottom">
+        <div style="min-height:14mm"></div>
+        <div style="border-top:1px solid #000; padding-top:2px">
+          <div>FIRMA</div>
+          <div>NOMBRE: {{REGISTRAR_NAME}}</div>
+          <div>PUESTO: {{REGISTRAR_TITLE}}</div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ── BLOQUE 12: Uso exclusivo Talento Humano ── -->
+  <div class="uso-exclusivo-box mt3">
+    <div class="uso-title">* * U S O &nbsp; E X C L U S I V O &nbsp; P A R A &nbsp; T A L E N T O &nbsp; H U M A N O</div>
+    <div class="uso-separator"></div>
+
+    <p style="margin-bottom:4px">
+      <strong>PROTECCIÓN DE DATOS.-</strong> En cumplimiento con la Ley Orgánica de Protección de Datos Personales y su normativa conexa, la
+      Universidad Técnica de Ambato, en calidad de responsable del tratamiento, informa al titular de los datos personales que, la información
+      proporcionada a la Institución será objeto de tratamiento con las siguientes finalidades:
+    </p>
+    <p style="margin-bottom:2px">• Cumplir con obligaciones contractuales legales, tributarias y de seguridad social.</p>
+    <p style="margin-bottom:2px">• Generación de reportes específicos internos o que sean solicitados por una institución pública que rige a esta IES.</p>
+    <p style="margin-bottom:4px">• Generar bases de datos de acceso público.</p>
+    <p style="margin-bottom:4px">
+      El titular de los datos personales autoriza expresamente, al momento de proporcionar su información, el tratamiento de los mismos en
+      conformidad con la Ley Orgánica de Protección de Datos Personales en Ecuador. En caso de tratarse de datos sensibles, el consentimiento
+      será solicitado y recabado de manera explícita y fehaciente.
+    </p>
+
+    <div class="uso-separator"></div>
+
+    <p style="margin-bottom:4px">
+      REGISTRO DE NOTIFICACIÓN AL SERVIDOR PÚBLICO DE LA ACCIÓN DE PERSONAL (primer inciso del art. 22 RGLOSEP,
+      art. 101 COA, art. 66 y 126 ERJAFE)
+    </p>
+
+    <div class="uso-separator"></div>
+
+    <p style="margin-bottom:3px"><strong>COMUNICACIÓN ELECTRÓNICA</strong></p>
+    <table class="no-border" style="width:60%; margin-bottom:4px">
+      <tr>
+        <td style="border:none; padding:1px 4px; font-size:7.5pt; width:30mm">FECHA:</td>
+        <td style="border:none; padding:1px 4px; font-size:7.5pt">{{NOTIFICATION_DATE}}</td>
+        <td style="border:none; padding:1px 4px; font-size:7.5pt; width:20mm">HORA:</td>
+        <td style="border:none; padding:1px 4px; font-size:7.5pt">{{NOTIFICATION_HOUR}}</td>
+      </tr>
+    </table>
+    <p style="margin-bottom:12mm">* * MEDIO: {{NOTIFICATION_MEDIUM}}</p>
+
+    <table class="no-border" style="width:60%; margin:0 auto">
+      <tr>
+        <td style="border:none; border-top:1px solid #000; text-align:center; padding-top:2px; font-size:7.5pt">
+          FIRMA DEL RESPONSABLE QUE NOTIFICÓ
+        </td>
+      </tr>
+      <tr>
+        <td style="border:none; text-align:center; font-size:7.5pt">
+          NOMBRE: {{DTH_DIRECTOR_NAME}}
+        </td>
+      </tr>
+      <tr>
+        <td style="border:none; text-align:center; font-size:7.5pt">
+          PUESTO: {{DTH_DIRECTOR_TITLE}}
+        </td>
+      </tr>
+    </table>
+
+    <p class="mt2" style="font-size:7pt">
+      ** Si la comunicación fue electrónica se deberá colocar el medio por el cual se notificó al servidor; así como, el número del documento.
+    </p>
+  </div>
+
+</div><!-- fin página 2 -->
+
+</body>
+</html>
