@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="DOCUMENT_TITLE" content="CONTRATO PROFESOR/A OCASIONAL"/>
+<meta name="CONTRACT_NUMBER" content="{{CONTRACT_NUMBER}}"/>
+<style>
+  /* ── Reset y base ── */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: "Times New Roman", Times, serif;
+    font-size: 11pt;
+    color: #000;
+    background: #fff;
+    width: 210mm;
+    margin: 0 auto;
+  }
+
+  /* ── Página ── */
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 20mm 25mm 20mm 25mm;
+    page-break-after: always;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  /* ── Encabezado institucional ── */
+  .header-band {
+    width: 100%;
+    height: 18mm;
+    background: linear-gradient(135deg, #8B1A1A 0%, #C0392B 40%, #8B1A1A 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0;
+  }
+  .header-logo-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 0 6px 0;
+    border-bottom: 2px solid #8B1A1A;
+    margin-bottom: 6px;
+  }
+  .logo-circle {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: #8B1A1A;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: bold;
+    font-size: 14pt;
+    font-family: Arial, sans-serif;
+    border: 3px solid #fff;
+    box-shadow: 0 0 0 2px #8B1A1A;
+  }
+  .institution-name {
+    text-align: center;
+    font-family: "Small Caps", "Times New Roman", serif;
+    font-size: 13pt;
+    letter-spacing: 3px;
+    color: #000;
+    margin-top: 4px;
+    font-variant: small-caps;
+  }
+
+  /* ── Títulos del documento ── */
+  .doc-title {
+    text-align: center;
+    font-size: 12pt;
+    font-weight: bold;
+    margin-top: 18px;
+    margin-bottom: 6px;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+  .doc-number {
+    text-align: center;
+    font-size: 11pt;
+    font-weight: bold;
+    margin-bottom: 20px;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  /* ── Párrafos de texto ── */
+  p {
+    text-align: justify;
+    line-height: 1.5;
+    margin-bottom: 12px;
+    font-size: 11pt;
+  }
+  .clause-title {
+    font-weight: bold;
+    display: inline;
+  }
+
+  /* ── Tablas de contenido ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 14px;
+    font-size: 10pt;
+  }
+  th {
+    border: 1px solid #000;
+    padding: 4px 6px;
+    background-color: #f0f0f0;
+    font-weight: bold;
+    text-align: left;
+    font-size: 10pt;
+  }
+  td {
+    border: 1px solid #000;
+    padding: 3px 6px;
+    vertical-align: top;
+    font-size: 10pt;
+  }
+
+  /* ── Sección de firmas ── */
+  .signatures-section {
+    margin-top: 30px;
+  }
+  .signatures-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 50px;
+  }
+  .signature-block {
+    width: 45%;
+    text-align: center;
+    font-size: 10.5pt;
+    line-height: 1.6;
+  }
+  .signature-line {
+    border-bottom: 1px solid #000;
+    margin: 0 auto 4px auto;
+    width: 80%;
+    height: 1px;
+  }
+  .elaborado-por {
+    margin-top: 30px;
+    font-size: 9.5pt;
+    font-style: italic;
+  }
+
+  /* ── Declaraciones juradas ── */
+  .declaration-block {
+    margin-bottom: 30px;
+  }
+  .declaration-text {
+    font-weight: bold;
+    font-size: 11pt;
+    line-height: 1.5;
+    text-align: justify;
+    margin-bottom: 20px;
+  }
+  .firma-declaracion {
+    margin-left: 35%;
+    margin-bottom: 30px;
+  }
+  .firma-declaracion-line {
+    border-bottom: 1px solid #000;
+    width: 60mm;
+    height: 1px;
+    margin-bottom: 2px;
+  }
+  .firma-declaracion-label {
+    font-size: 10pt;
+  }
+
+  /* ── Certificación DTH ── */
+  .dth-section {
+    margin-top: 20px;
+  }
+  .dth-title {
+    font-weight: bold;
+    font-size: 11pt;
+    margin-bottom: 12px;
+  }
+  .dth-signature {
+    text-align: center;
+    margin-top: 50px;
+    font-size: 10.5pt;
+  }
+  .dth-signature-line {
+    border-bottom: 1px solid #000;
+    width: 70mm;
+    margin: 0 auto 4px auto;
+    height: 1px;
+  }
+
+  /* ── Pie de página ── */
+  .page-footer {
+    position: fixed;
+    bottom: 10mm;
+    left: 25mm;
+    right: 25mm;
+    font-size: 8.5pt;
+    color: #555;
+    border-top: 1px solid #ccc;
+    padding-top: 3px;
+  }
+
+  /* ── Utilidades ── */
+  .mt10 { margin-top: 10px; }
+  .mt20 { margin-top: 20px; }
+  .center { text-align: center; }
+  .bold { font-weight: bold; }
+  .uppercase { text-transform: uppercase; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     PÁGINAS 1-4: CUERPO DEL CONTRATO
+     ════════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- ── Encabezado institucional ── -->
+  <div style="background: linear-gradient(135deg, #8B1A1A 0%, #C0392B 50%, #8B1A1A 100%); height:16mm; width:100%; margin-bottom:0;"></div>
+  <div class="header-logo-container">
+    <!-- Logo UTA: en producción reemplazar por <img src="{{LOGO_URL}}" height="50" /> -->
+    <div class="logo-circle">UTA</div>
+  </div>
+  <div class="institution-name">Universidad Técnica de Ambato</div>
+
+  <!-- ── Títulos ── -->
+  <div class="doc-title">CONTRATO PROFESOR/A OCASIONAL</div>
+  <div class="doc-number">{{CONTRACT_NUMBER}}</div>
+
+  <!-- ── Párrafo introductorio ── -->
+  <p>
+    En la ciudad de Ambato, a los <span class="bold">{{CONTRACT_DATE_DAY_WORDS}}</span> días del mes de
+    <span class="bold">{{CONTRACT_DATE_MONTH}}</span> de <span class="bold">{{CONTRACT_DATE_YEAR_WORDS}}</span>,
+    comparecen: por una parte la Universidad Técnica de Ambato, representada por el/la señor/a
+    <span class="bold">{{FACULTY_ROLE}}</span> de la Facultad de
+    <span class="bold">{{FACULTY_NAME}}</span>,
+    <span class="bold">{{AUTHORITY_TITLE}} {{AUTHORITY_FULLNAME}}</span>,
+    por delegación de la señora Rectora de la indicada Institución,
+    <span class="bold">{{RECTOR_FULLNAME}}</span>,
+    mediante <span class="bold">{{DELEGATION_RESOLUTION}}</span>, con fecha <span class="bold">{{DELEGATION_DATE}}</span>,
+    a la que en adelante y para efectos del presente contrato se le podrá llamar como El Contratante,
+    o La Universidad; y por otra parte
+    <span class="bold">{{EMPLOYEE_TITLE}} {{EMPLOYEE_FULLNAME}}</span>,
+    a quien así mismo para efectos del presente contrato se le podrá invocar por sus propios nombres
+    que son los que quedan ya señalados, o el/la
+    <span class="bold">{{EMPLOYEE_CONTRACT_ROLE}}</span>,
+    quienes por los derechos a los que se representa y por el suyo propio, respectivamente, capaces,
+    libre y voluntariamente convienen en celebrar el presente Contrato de Prestación de Servicios de
+    Profesor/a Ocasional, al amparo de lo previsto en el Art. 147 y 153, de la Ley Orgánica de
+    Educación Superior, en concordancia con el Art. 25 y Art. 26 del Reglamento de Carrera y Escalafón
+    del Personal Académico del Sistema de Educación Superior, así como también a lo estipulado en el
+    Art. 83 literal m) de la Ley Orgánica de Servicio Público, al tenor de las siguientes cláusulas y
+    estipulaciones que se determinan a continuación:
+  </p>
+
+  <!-- ── PRIMERA ── -->
+  <p>
+    <span class="clause-title">PRIMERA.- ANTECEDENTES.-</span>
+    En el Estatuto de la Universidad Técnica de Ambato en su Art. 10.- Objetivos.- La Universidad
+    Técnica de Ambato tiene los siguientes objetivos: a) Formar talento humano de grado y posgrado a
+    través de diferentes modalidades, con liderazgo, responsabilidad social y ambiental, con sólidos
+    conocimientos científicos, tecnológicos y culturales, que interpreten y comprendan la realidad
+    socioeconómica del Ecuador, de Latinoamérica y del mundo, y que, emprendan de manera autónoma en
+    iniciativas que propicien el desarrollo socioeconómico de la provincia, la región y el país. y,
+    Art. 35 del Reglamento de Carrera y Escalafón del Personal Académico de la Universidad Técnica
+    de Ambato.
+  </p>
+
+  <p>
+    2) La suscripción del presente contrato procede conforme a lo preceptuado en el Art. 52 del
+    Reglamento de Carrera y Escalafón del Personal Académico del Sistema de Educación Superior en
+    función de lo resuelto mediante Resolución Nro: <span class="bold">{{CAU_RESOLUTION_NUMBER}}</span>,
+    con fecha <span class="bold">{{CAU_RESOLUTION_DATE}}</span> por medio de la cual el Consejo
+    Académico Universitario tuvo a bien aprobar el distributivo de trabajo del personal académico;
+    concomitantemente, con memorando Nro. <span class="bold">{{RECTOR_MEMO_NUMBER}}</span>, con
+    fecha: <span class="bold">{{RECTOR_MEMO_DATE}}</span> en la que el Rectorado de la Universidad
+    Técnica de Ambato autoriza el presente Contrato de Prestación de Servicios de
+    <span class="bold">{{EMPLOYEE_CONTRACT_ROLE}}</span>
+    con el/la <span class="bold">{{EMPLOYEE_TITLE}} {{EMPLOYEE_FULLNAME}}</span>.
+  </p>
+
+  <!-- ── SEGUNDA ── -->
+  <p>
+    <span class="clause-title">SEGUNDA.-</span>
+    Por los antecedentes que quedan expuestos, el/la señor/a
+    <span class="bold">{{FACULTY_ROLE}}</span> de la Facultad de
+    <span class="bold">{{FACULTY_NAME}}</span>,
+    <span class="bold">{{AUTHORITY_TITLE}} {{AUTHORITY_FULLNAME}}</span>,
+    conforme queda señalado en líneas anteriores, tiene a bien contratar a
+    <span class="bold">{{EMPLOYEE_TITLE}} {{EMPLOYEE_FULLNAME}}</span>,
+    conforme al siguiente distributivo de trabajo del personal docente:
+  </p>
+
+  <!-- ── Tabla distributivo de trabajo (dinámica) ── -->
+  {{WORK_DISTRIBUTION_TABLE}}
+
+  <!-- ── TERCERA ── -->
+  <p>
+    <span class="clause-title">TERCERA.-</span>
+    El presente contrato tendrá vigencia del
+    <span class="bold">{{CONTRACT_START_DATE}}</span> al
+    <span class="bold">{{CONTRACT_END_DATE}}</span>.
+  </p>
+  <p>
+    Una vez cumplida la vigencia del presente contrato, automáticamente se da por terminado el mismo,
+    sin que sea menester formalidad o notificación alguna.
+  </p>
+
+  <!-- ── CUARTA ── -->
+  <p>
+    <span class="clause-title">CUARTA.-</span>
+    La Universidad Técnica de Ambato, por su parte, pagará a el/la
+    <span class="bold">{{EMPLOYEE_TITLE}} {{EMPLOYEE_FULLNAME}}</span>,
+    en concepto de remuneración por los servicios a prestar, la suma total de
+    <span class="bold">{{SALARY_WORDS}}</span>
+    DOLARES de los Estados Unidos de Norteamérica
+    (USD <span class="bold">{{SALARY_AMOUNT}}</span>) más beneficios de ley, pago que se efectuará
+    en forma mensual. El egreso se aplicará a la partida presupuestaria
+    Nº <span class="bold">{{BUDGET_CODE}}</span>.
+  </p>
+
+  <!-- ── QUINTA ── -->
+  <p>
+    <span class="clause-title">QUINTA.-</span>
+    "El/la Profesional" desempeñará las actividades inherentes a
+    <span class="bold">{{EMPLOYEE_CONTRACT_ROLE}}</span>
+    y que se hace referencia a la cláusula segunda del presente contrato:
+  </p>
+
+  <!-- ── Tabla horario semanal (dinámica) ── -->
+  {{SCHEDULE_TABLE}}
+
+  <!-- ── SEXTA ── -->
+  <p>
+    <span class="clause-title">SEXTA.- NATURALEZA JURÍDICA DEL CONTRATO.-</span>
+    El presente contrato estará sujeto a la Ley Orgánica de Educación Superior, Reglamento de Carrera
+    y Escalafón del Personal Académico del Sistema de Educación Superior y Reglamento de Carrera y
+    Escalafón del Personal Académico de la Universidad Técnica de Ambato. De existir modificaciones
+    en el Distributivo relacionado con la planificación y/o carga horaria en función de los
+    requerimientos de las Unidades Académicas; se entenderá incorporado en el presente contrato.
+  </p>
+
+  <!-- ── SÉPTIMA ── -->
+  <p>
+    <span class="clause-title">SÉPTIMA.-</span>
+    Conforme queda señalado en la cláusula tercera del presente contrato y por lo mismo una vez
+    vencido el plazo estipulado, automáticamente se dará por terminado el mismo, sin que sea menester
+    formalidad o notificación alguna, o se podrá dar por terminado anticipadamente mediante una
+    notificación realizada por el representante legal de la Universidad, o su delegado, o por
+    solicitud expresa del contratado.
+  </p>
+
+  <!-- ── OCTAVA ── -->
+  <p>
+    <span class="clause-title">OCTAVA.-</span>
+    Salvo circunstancia de fuerza mayor o caso fortuito debidamente comprobados por parte de el/la
+    <span class="bold">{{EMPLOYEE_CONTRACT_ROLE}}</span>
+    contratado/a, el retraso o incumplimiento de sus obligaciones contractuales dará lugar al pago de
+    la indemnización de los daños y perjuicios ocasionados o que llegare a ocasionar a la Universidad,
+    cuando aquello obedezca a causas que no tengan justificación alguna.
+  </p>
+
+  <!-- ── NOVENA ── -->
+  <p>
+    <span class="clause-title">NOVENA.- CONTROVERSIA.-</span>
+    Para el evento de producirse controversias derivadas de la falta de cumplimiento del presente
+    contrato, que no puedan o que no deban superarse por la vía amigable y sobre la base de los
+    principios de buena fe, las partes contratantes se someterán a la vía alternativa de solución de
+    conflictos sea medición o arbitraje ante el Centro de Mediación y Arbitraje de la Procuraduría
+    General del Estado.
+  </p>
+
+  <!-- ── DÉCIMA ── -->
+  <p>
+    <span class="clause-title">DÉCIMA.- PROTECCIÓN DE DATOS.-</span>
+    En cumplimiento con la Ley Orgánica de Protección de Datos Personales y su normativa conexa, la
+    Universidad Técnica de Ambato, en calidad de responsable del tratamiento, informa al titular de
+    los datos personales que, la información proporcionada a la Institución será objeto de tratamiento
+    con las siguientes finalidades:
+  </p>
+  <p style="margin-left:10mm">
+    • Cumplir con obligaciones contractuales legales, tributarias y de seguridad social.<br/>
+    • Generación de reportes específicos internos o que sean solicitados por una institución pública
+    que rige a esta IES.<br/>
+    • Generar bases de datos de acceso público.
+  </p>
+  <p>
+    El titular de los datos personales autoriza expresamente, al momento de proporcionar su
+    información, el tratamiento de los mismos en conformidad con la Ley Orgánica de Protección de
+    Datos Personales en Ecuador. En caso de tratarse de datos sensibles, el consentimiento será
+    solicitado y recabado de manera explícita y fehaciente.
+  </p>
+
+  <!-- ── Párrafo de cierre ── -->
+  <p>
+    Para constancia de su total acuerdo y conformidad con todas y cada una de las cláusulas del
+    presente contrato, las partes suscriben en original y dos copias del mismo tenor y efecto.
+  </p>
+
+  <!-- ── Sección de firmas ── -->
+  <div class="signatures-section">
+    <div class="signatures-row">
+      <!-- Columna izquierda: El Contratante -->
+      <div class="signature-block">
+        <div class="signature-line"></div>
+        <div><span class="bold">{{AUTHORITY_TITLE}} {{AUTHORITY_FULLNAME}}</span></div>
+        <div>{{AUTHORITY_IDCARD}}</div>
+        <div>{{AUTHORITY_ROLE}}</div>
+      </div>
+      <!-- Columna derecha: El Contratado -->
+      <div class="signature-block">
+        <div class="signature-line"></div>
+        <div><span class="bold">{{EMPLOYEE_TITLE}} {{EMPLOYEE_FULLNAME}}</span></div>
+        <div>{{EMPLOYEE_IDCARD}}</div>
+        <div>{{EMPLOYEE_CONTRACT_ROLE}}</div>
+      </div>
+    </div>
+    <div class="elaborado-por mt20">
+      Elaborado por: {{ELABORATOR_FULLNAME}}
+    </div>
+  </div>
+
+</div><!-- fin página cuerpo del contrato -->
+
+
+<!-- ════════════════════════════════════════════════════════════
+     PÁGINA FINAL: DECLARACIONES JURADAS + CERTIFICACIÓN DTH
+     ════════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- ── Título de la página ── -->
+  <p class="bold" style="margin-bottom:20px">
+    CONTRATO PROFESOR/A OCASIONAL (DELEGACIÓN) Nº {{CONTRACT_NUMBER}}
+  </p>
+
+  <!-- ── Declaración 1 ── -->
+  <div class="declaration-block">
+    <p class="declaration-text">
+      DECLARO BAJO JURAMENTO QUE NO LABORO EN OTRA INSTITUCIÓN PÚBLICA, NI HE RECIBIDO
+      INDEMNIZACIÓN POR VENTA DE RENUNCIA O POR SUPRESIÓN DE PUESTO DE TRABAJO EN EL
+      SECTOR PÚBLICO.
+    </p>
+    <div class="firma-declaracion">
+      <div class="firma-declaracion-line"></div>
+      <div class="firma-declaracion-label">f)</div>
+    </div>
+  </div>
+
+  <!-- ── Declaración 2 ── -->
+  <div class="declaration-block">
+    <p class="declaration-text">
+      DECLARO QUE ADEMAS DEL CARGO PARA EL QUE ESTOY SIENDO DESIGNADO(A), DESEMPEÑO EL
+      PUESTO DE....................................... EN ...............................,
+      SEGÚN EL HORARIO ADJUNTO.
+    </p>
+    <div class="firma-declaracion">
+      <div class="firma-declaracion-line"></div>
+      <div class="firma-declaracion-label">f)</div>
+    </div>
+  </div>
+
+  <!-- ── Declaración 3 ── -->
+  <div class="declaration-block">
+    <p class="declaration-text">
+      DECLARO BAJO JURAMENTO QUE NO TENGO NINGÚN PARENTESCO HASTA EL CUARTO GRADO DE
+      CONSANGUINIDAD, NI HASTA EL SEGUNDO GRADO DE AFINIDAD CON LA MÁXIMA AUTORIDAD DE
+      LA UNIVERSIDAD TÉCNICA DE AMBATO.
+    </p>
+    <div class="firma-declaracion">
+      <div class="firma-declaracion-line"></div>
+      <div class="firma-declaracion-label">f)</div>
+    </div>
+  </div>
+
+  <!-- ── Certificación DTH ── -->
+  <div class="dth-section">
+    <p class="dth-title">DIRECCIÓN DE TALENTO HUMANO - UNIVERSIDAD TÉCNICA DE AMBATO</p>
+
+    <p>
+      Certifico que el/la <span class="bold">{{EMPLOYEE_TITLE}} {{EMPLOYEE_FULLNAME}}</span>
+      registró el presente contrato con el N° <span class="bold">{{DTH_REGISTRY_NUMBER}}</span>
+      el <span class="bold">{{DTH_REGISTRY_DATE_LONG}}</span>.
+    </p>
+
+    <p class="center mt20">AMBATO:</p>
+
+    <div class="dth-signature">
+      <div class="dth-signature-line"></div>
+      <div><span class="bold">{{DTH_DIRECTOR_FULLNAME}}</span></div>
+      <div>DIRECTOR</div>
+    </div>
+  </div>
+
+</div><!-- fin página declaraciones -->
+
+</body>
+</html>
