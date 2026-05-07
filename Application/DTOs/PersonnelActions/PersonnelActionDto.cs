@@ -1,4 +1,4 @@
-namespace WsUtaSystem.Application.DTOs.Documents.PersonnelActions;
+namespace WsUtaSystem.Application.DTOs.PersonnelActions;
 
 // ── Respuestas ───────────────────────────────────────────────────────────────────
 
@@ -58,11 +58,35 @@ public sealed record PersonnelActionDetailDto(
     string? Observations,
     string Status,
 
+    // Clasificación de la acción
+    bool SwornDeclaration,
+    int? InstitutionalProcess,
+    string? InstitutionalProcessName,
+    int? ManagementLevel,
+    string? ManagementLevelName,
+
     // Relaciones
     int? GeneratedDocumentId,
     string? GeneratedDocumentFileName,
     int? ContractId,
     int? MovementId,
+
+    // Responsables del documento (ID + nombre completo + cargo)
+    int? DthDirectorId,
+    string? DthDirectorName,
+    string? DthDirectorTitle,
+    int? AuthorityNominatorId,
+    string? AuthorityNominatorName,
+    string? AuthorityNominatorTitle,
+    int? ElaboratorId,
+    string? ElaboratorName,
+    string? ElaboratorTitle,
+    int? ReviewerId,
+    string? ReviewerName,
+    string? ReviewerTitle,
+    int? RegistrarId,
+    string? RegistrarName,
+    string? RegistrarTitle,
 
     // Auditoría
     DateTime? CreatedAt,
@@ -75,6 +99,7 @@ public sealed record PersonnelActionDetailDto(
 
 /// <summary>Solicitud para crear una nueva acción de personal.</summary>
 public sealed record CreatePersonnelActionRequest(
+    int personId,
     int EmployeeId,
     int ActionTypeId,
     string? ActionNumber,
@@ -105,6 +130,18 @@ public sealed record CreatePersonnelActionRequest(
     int? ContractId,
     int? MovementId,
 
+    // Clasificación de la acción
+    bool SwornDeclaration,
+    int? InstitutionalProcess,
+    int? ManagementLevel,
+
+    // Responsables del documento
+    int? DthDirectorId,
+    int? AuthorityNominatorId,
+    int? ElaboratorId,
+    int? ReviewerId,
+    int? RegistrarId,
+
     // Generación automática del documento PDF
     bool GenerateDocument = false,
     Dictionary<string, string>? DocumentOverrides = null
@@ -126,7 +163,19 @@ public sealed record UpdatePersonnelActionRequest(
     decimal? NewRmu,
     string? LegalBasis,
     string? Reason,
-    string? Observations
+    string? Observations,
+
+    // Clasificación de la acción
+    bool SwornDeclaration,
+    int? InstitutionalProcess,
+    int? ManagementLevel,
+
+    // Responsables del documento
+    int? DthDirectorId,
+    int? AuthorityNominatorId,
+    int? ElaboratorId,
+    int? ReviewerId,
+    int? RegistrarId
 );
 
 /// <summary>Solicitud para aprobar y ejecutar una acción de personal.</summary>
@@ -163,4 +212,34 @@ public sealed record CreatePersonnelActionResponse(
     int? GeneratedDocumentId,
     string? PdfBase64,
     string? FileName
+);
+
+/// <summary>Solicitud para subir el documento firmado físicamente.</summary>
+public sealed record UploadSignedDocumentRequest(
+    /// <summary>ID del archivo físico previamente almacenado en tbl_StoredFiles.</summary>
+    int StoredFileId,
+    string? Comment
+);
+
+/// <summary>Solicitud para anular una acción de personal.</summary>
+public sealed record CancelPersonnelActionRequest(
+    string Reason
+);
+
+/// <summary>Solicitud de previsualización del documento sin guardar en BD.</summary>
+public sealed record PreviewPersonnelActionRequest(
+    int EmployeeId,
+    Dictionary<string, string>? Overrides
+);
+
+/// <summary>DTO de una entrada del historial de estados.</summary>
+public sealed record PersonnelActionStatusHistoryDto(
+    int HistoryId,
+    int ActionId,
+    int? StatusTypeId,
+    string? FromStatus,
+    string StatusCode,
+    string? Comment,
+    int? ChangedBy,
+    DateTime ChangedAt
 );

@@ -5,11 +5,15 @@ SELECT
     p.LastName, 
     p.IDCard, 
     e.Email,
-	e.ImmediateBossID,
+	  p.Email           AS PersonnelEmail,
+	  e.ImmediateBossID,
     e.EmployeeType    AS EmployeeType,
     rt.Name           AS ContractType,
+    e.JobID,
+    j.Description     AS JobName,           
     es_current.ScheduleID AS ScheduleID,
     CAST(ts.EntryTime AS VARCHAR(5)) + ' - ' + CAST(ts.ExitTime AS VARCHAR(5)) AS Schedule,
+	d.DepartmentID
     d.Name            AS Department,
     1.00              AS BaseSalary,
     e.HireDate
@@ -18,6 +22,7 @@ JOIN HR.tbl_Employees e ON e.PersonID = p.PersonID
 LEFT JOIN HR.tbl_Departments d ON d.DepartmentID = e.DepartmentID
 LEFT JOIN HR.ref_Types rt ON rt.TypeID = e.EmployeeType 
                           AND rt.Category = 'CONTRACT_TYPE'
+LEFT JOIN HR.tbl_jobs j ON j.JobID = e.JobID
 OUTER APPLY (
     SELECT TOP 1 
         es.ScheduleID,
@@ -696,3 +701,88 @@ WHEN DATEPART(WEEKDAY, D) IN (1, 7) THEN 1
 ELSE 0
 END AS IsWeekend
 FROM Dates;
+
+
+
+-- =============================================
+-- VISTA 1: Departamentos con descripción del tipo
+-- =============================================
+CREATE OR ALTER VIEW HR.vw_Departments_WithType AS
+SELECT 
+    d.DepartmentID,
+    d.Code,
+    d.Name                          AS DepartmentName,
+    d.ShortName,
+    d.ParentID,
+    dp.Name                         AS ParentDepartmentName,
+
+    rt.TypeID                       AS DepartmentTypeID,
+    rt.Name                         AS DepartmentTypeName,
+    rt.Description                  AS DepartmentTypeDescription,
+
+    rs.TypeID                       AS DepartmentScopeID,
+    rs.Name                         AS DepartmentScopeName,
+    rs.Description                  AS DepartmentScopeDescription,
+
+    d.Email,
+    d.Phone,
+    d.Location,
+    d.DeanDirector,
+    d.BudgetCode,
+    d.IsActive,
+    d.CreatedAt
+FROM HR.tbl_Departments d
+INNER JOIN HR.ref_Types rt 
+    ON d.DepartmentType = rt.TypeID
+LEFT JOIN HR.ref_Types rs
+    ON d.DepartmentScope = rs.TypeID
+LEFT JOIN HR.tbl_Departments dp 
+    ON d.ParentID = dp.DepartmentID;
+	
+	
+-- =============================================
+-- VISTA 2: Cargos con sus grados y grupos ocupacionales
+-- =============================================
+CREATE VIEW HR.vw_Jobs_WithDegreeAndGroup AS
+SELECT 
+    j.JobID,
+    CAST(j.Description AS NVARCHAR(500))    AS JobDescription,
+    rt.Name                                  AS JobTypeName,
+    og.GroupID,
+    og.Description                           AS OccupationalGroup,
+    og.RMU,
+    d.DegreeID,
+    d.Description                            AS Degree,
+    d.IsActive                               AS DegreeIsActive
+FROM hr.tbl_jobs j
+INNER JOIN hr.ref_Types rt 
+    ON j.JobTypeID = rt.TypeID
+INNER JOIN hr.tbl_Occupational_Groups og 
+    ON j.GroupID = og.GroupID
+INNER JOIN hr.tbl_Degrees d 
+    ON og.DegreeID = d.DegreeID;
+
+
+-- =============================================
+-- VISTA 3: Actividades correspondientes al cargo
+-- =============================================
+CREATE VIEW HR.vw_Job_Activities AS
+SELECT 
+    j.JobID,
+    CAST(j.Description AS NVARCHAR(500))    AS JobDescription,
+    rt.Name                                  AS JobTypeName,
+    og.Description                           AS OccupationalGroup,
+    a.ActivitiesID,
+    CAST(a.Description AS NVARCHAR(1000))    AS ActivityDescription,
+    a.ActivitiesType,
+    ja.IsActive                              AS ActivityAssignmentActive
+FROM hr.tbl_JobActivities ja
+INNER JOIN hr.tbl_jobs j 
+    ON ja.JobID = j.JobID
+INNER JOIN hr.tbl_Activities a 
+    ON ja.ActivitiesID = a.ActivitiesID
+INNER JOIN hr.ref_Types rt 
+    ON j.JobTypeID = rt.TypeID
+INNER JOIN hr.tbl_Occupational_Groups og 
+    ON j.GroupID = og.GroupID;
+

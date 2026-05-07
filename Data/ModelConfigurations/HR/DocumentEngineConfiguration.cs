@@ -28,11 +28,11 @@ public sealed class DocumentTemplateConfiguration : IEntityTypeConfiguration<Doc
         e.Property(x => x.CssStyles).HasColumnType("NVARCHAR(MAX)");
         e.Property(x => x.MetaJson).HasColumnType("NVARCHAR(MAX)");
 
-        // Enum → string en BD (columna VARCHAR(20))
+        // Enum → string en BD: PascalCase → SCREAMING_SNAKE_CASE (ej: StructuredForm ↔ STRUCTURED_FORM)
         e.Property(x => x.LayoutType)
             .HasConversion(
-                v => v.ToString().ToUpperInvariant().Replace("TEXT", "_TEXT"),
-                v => Enum.Parse<LayoutType>(v.Replace("_TEXT", "TEXT"), true))
+                v => System.Text.RegularExpressions.Regex.Replace(v.ToString(), "(?<=.)([A-Z])", "_$1").ToUpperInvariant(),
+                v => Enum.Parse<LayoutType>(v.Replace("_", ""), true))
             .HasMaxLength(20)
             .HasDefaultValue(LayoutType.FlowText);
 
@@ -102,8 +102,10 @@ public sealed class GeneratedDocumentConfiguration : IEntityTypeConfiguration<Ge
         e.Property(x => x.StoredFileId).HasColumnName("StoredFileID");
         e.Property(x => x.DocumentNumber).HasMaxLength(50);
         e.Property(x => x.FileName).HasMaxLength(255).IsRequired();
-        e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("DRAFT");
+        e.Property(x => x.Status).HasMaxLength(30).HasDefaultValue("GENERATED");
         e.Property(x => x.Notes).HasMaxLength(1000);
+        e.Property(x => x.TemplateVersion).HasMaxLength(10);
+        e.Property(x => x.HtmlSnapshot).HasColumnType("NVARCHAR(MAX)");
 
         e.Property(x => x.EntityType)
             .HasConversion(
@@ -140,38 +142,3 @@ public sealed class GeneratedDocumentFieldConfiguration : IEntityTypeConfigurati
     }
 }
 
-// ── PersonnelAction ──────────────────────────────────────────────────────────────
-public sealed class PersonnelActionConfiguration : IEntityTypeConfiguration<PersonnelAction>
-{
-    public void Configure(EntityTypeBuilder<PersonnelAction> e)
-    {
-        e.ToTable("tbl_PersonnelActions", "HR");
-        e.HasKey(x => x.ActionId);
-
-        e.Property(x => x.ActionId).HasColumnName("ActionID");
-        e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
-        e.Property(x => x.ActionTypeId).HasColumnName("ActionTypeID");
-        e.Property(x => x.GeneratedDocumentId).HasColumnName("GeneratedDocumentID");
-        e.Property(x => x.ContractId).HasColumnName("ContractID");
-        e.Property(x => x.MovementId).HasColumnName("MovementID");
-        e.Property(x => x.ActionNumber).HasMaxLength(50);
-        e.Property(x => x.OriginBudgetCode).HasMaxLength(50);
-        e.Property(x => x.DestinationBudgetCode).HasMaxLength(50);
-        e.Property(x => x.LegalBasis).HasMaxLength(500);
-        e.Property(x => x.Reason).HasMaxLength(1000);
-        e.Property(x => x.Observations).HasMaxLength(1000);
-        e.Property(x => x.Status).HasMaxLength(20).HasDefaultValue("DRAFT");
-        e.Property(x => x.PreviousRmu).HasColumnType("DECIMAL(10,2)");
-        e.Property(x => x.NewRmu).HasColumnType("DECIMAL(10,2)");
-
-        e.HasIndex(x => new { x.EmployeeId, x.ActionDate });
-        e.HasIndex(x => x.Status);
-        e.HasIndex(x => x.ActionNumber);
-
-        // Relación con GeneratedDocument
-        e.HasOne(x => x.GeneratedDocument)
-            .WithMany()
-            .HasForeignKey(x => x.GeneratedDocumentId)
-            .OnDelete(DeleteBehavior.SetNull);
-    }
-}

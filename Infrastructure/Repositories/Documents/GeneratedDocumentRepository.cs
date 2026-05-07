@@ -248,4 +248,16 @@ public sealed class GeneratedDocumentRepository : IGeneratedDocumentRepository
                 .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
             ct);
     }
+
+    /// <inheritdoc/>
+    public async Task UpdateTemplateSnapshotAsync(int documentId, string templateVersion, string htmlSnapshot, CancellationToken ct = default)
+    {
+        await _db.GeneratedDocuments
+            .Where(d => d.DocumentId == documentId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(d => d.TemplateVersion, templateVersion)
+                .SetProperty(d => d.HtmlSnapshot, htmlSnapshot)
+                .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
+            ct);
+    }
 }

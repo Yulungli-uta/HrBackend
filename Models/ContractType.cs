@@ -12,6 +12,24 @@ namespace WsUtaSystem.Models
         public string Status { get; set; } = null!;
         public string? ContractText { get; set; }
         public string? ContractCode { get; set; }
+
+        /// <summary>Familia documental asociada a este tipo (ref_Types DOCUMENT_TEMPLATE_TYPE).</summary>
+        public int? DocumentTemplateTypeId { get; set; }
+
+        /// <summary>Plantilla activa por defecto para generar documentos de este tipo de contrato.</summary>
+        public int? DefaultTemplateId { get; set; }
+
+        public DocumentTemplate? DefaultTemplate { get; set; }
+
+        /// <summary>Prefijo para numeración de documentos (ej: "CONT-OCAS", "CONT-TITU").</summary>
+        public string? NumberingPrefix { get; set; }
+
+        /// <summary>Año del ciclo de numeración actual. Se reinicia la secuencia al cambiar de año.</summary>
+        public int NumberingYear { get; set; } = DateTime.Now.Year;
+
+        /// <summary>Último número de secuencia emitido para el año actual.</summary>
+        public int NumberingLastSequence { get; set; } = 0;
+
         public DateTime? CreatedAt { get; set; }
         public int? CreatedBy { get; set; }
         public DateTime? UpdatedAt { get; set; }

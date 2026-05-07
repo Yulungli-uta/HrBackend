@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
-using WsUtaSystem.Application.DTOs.Documents.PersonnelActions;
+using WsUtaSystem.Application.DTOs.PersonnelActions;
 using WsUtaSystem.Application.Interfaces.Repositories.Documents;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
 
-namespace WsUtaSystem.Infrastructure.Repositories.Documents;
+// ReSharper disable MethodHasAsyncOverload
+
+namespace WsUtaSystem.Infrastructure.Repositories;
 
 /// <summary>
 /// Implementación de <see cref="IPersonnelActionRepository"/> usando EF Core + LINQ.
@@ -29,8 +31,8 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                         on action.EmployeeId equals emp.EmployeeId
                     join person in _db.People.AsNoTracking()
                         on emp.PersonID equals person.PersonId
-                    join actionType in _db.RefTypes.AsNoTracking()
-                        on action.ActionTypeId equals actionType.TypeId
+                    join actionType in _db.PersonnelActionTypes.AsNoTracking()
+                        on action.ActionTypeId equals actionType.PersonnelActionTypeId
                     select new { action, emp, person, actionType };
 
         if (filter.EmployeeId.HasValue)
@@ -88,8 +90,8 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             join dept in _db.Departments.AsNoTracking()
                 on emp.DepartmentId equals dept.DepartmentId into deptJoin
             from dept in deptJoin.DefaultIfEmpty()
-            join actionType in _db.RefTypes.AsNoTracking()
-                on action.ActionTypeId equals actionType.TypeId
+            join actionType in _db.PersonnelActionTypes.AsNoTracking()
+                on action.ActionTypeId equals actionType.PersonnelActionTypeId
             where action.ActionId == actionId
             select new { action, emp, person, dept, actionType }
         ).FirstOrDefaultAsync(ct);
@@ -132,6 +134,28 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 .FirstOrDefaultAsync(ct)
             : null;
 
+        // Resolver nombres y cargos de responsables desde la vista de empleados
+        var dthDirector        = await ResolveEmployeeAsync(result.action.DthDirectorId, ct);
+        var authorityNominator = await ResolveEmployeeAsync(result.action.AuthorityNominatorId, ct);
+        var elaborator         = await ResolveEmployeeAsync(result.action.ElaboratorId, ct);
+        var reviewer           = await ResolveEmployeeAsync(result.action.ReviewerId, ct);
+        var registrar          = await ResolveEmployeeAsync(result.action.RegistrarId, ct);
+
+        // Resolver nombres de ref_Types para clasificación de la acción
+        var instProcessName = result.action.InstitutionalProcess.HasValue
+            ? await _db.RefTypes.AsNoTracking()
+                .Where(r => r.TypeId == result.action.InstitutionalProcess.Value)
+                .Select(r => r.Name)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var mgmtLevelName = result.action.ManagementLevel.HasValue
+            ? await _db.RefTypes.AsNoTracking()
+                .Where(r => r.TypeId == result.action.ManagementLevel.Value)
+                .Select(r => r.Name)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
         return new PersonnelActionDetailDto(
             result.action.ActionId,
             result.action.EmployeeId,
@@ -161,10 +185,30 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             result.action.Reason,
             result.action.Observations,
             result.action.Status,
+            result.action.SwornDeclaration,
+            result.action.InstitutionalProcess,
+            instProcessName,
+            result.action.ManagementLevel,
+            mgmtLevelName,
             result.action.GeneratedDocumentId,
             generatedDocFileName,
             result.action.ContractId,
             result.action.MovementId,
+            result.action.DthDirectorId,
+            dthDirector.Name,
+            dthDirector.JobTitle,
+            result.action.AuthorityNominatorId,
+            authorityNominator.Name,
+            authorityNominator.JobTitle,
+            result.action.ElaboratorId,
+            elaborator.Name,
+            elaborator.JobTitle,
+            result.action.ReviewerId,
+            reviewer.Name,
+            reviewer.JobTitle,
+            result.action.RegistrarId,
+            registrar.Name,
+            registrar.JobTitle,
             result.action.CreatedAt,
             result.action.CreatedBy,
             result.action.UpdatedAt,
@@ -186,8 +230,8 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 on action.EmployeeId equals emp.EmployeeId
             join person in _db.People.AsNoTracking()
                 on emp.PersonID equals person.PersonId
-            join actionType in _db.RefTypes.AsNoTracking()
-                on action.ActionTypeId equals actionType.TypeId
+            join actionType in _db.PersonnelActionTypes.AsNoTracking()
+                on action.ActionTypeId equals actionType.PersonnelActionTypeId
             where action.EmployeeId == employeeId
             orderby action.ActionDate descending
             select new PersonnelActionSummaryDto(
@@ -226,12 +270,20 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
     }
 
     /// <inheritdoc/>
-    public async Task UpdateStatusAsync(int actionId, string status, CancellationToken ct = default)
+    public async Task UpdateStatusAsync(int actionId, string statusCode, CancellationToken ct = default)
     {
+        // Resuelve el StatusTypeId desde catálogo para mantener consistencia con ref_Types
+        var statusTypeId = await _db.RefTypes
+            .AsNoTracking()
+            .Where(r => r.Category == "PERSONNEL_ACTION_STATUS" && r.Name == statusCode && r.IsActive)
+            .Select(r => (int?)r.TypeId)
+            .FirstOrDefaultAsync(ct);
+
         await _db.PersonnelActions
             .Where(a => a.ActionId == actionId)
             .ExecuteUpdateAsync(s => s
-                .SetProperty(a => a.Status, status)
+                .SetProperty(a => a.Status, statusCode)
+                .SetProperty(a => a.StatusTypeId, statusTypeId)
                 .SetProperty(a => a.UpdatedAt, DateTime.UtcNow),
             ct);
     }
@@ -245,5 +297,80 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 .SetProperty(a => a.GeneratedDocumentId, documentId)
                 .SetProperty(a => a.UpdatedAt, DateTime.UtcNow),
             ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task LinkSignedDocumentAsync(int actionId, int storedFileId, CancellationToken ct = default)
+    {
+        await _db.PersonnelActions
+            .Where(a => a.ActionId == actionId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(a => a.SignedDocumentStoredFileId, storedFileId)
+                .SetProperty(a => a.UpdatedAt, DateTime.UtcNow),
+            ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task AddStatusHistoryAsync(PersonnelActionStatusHistory entry, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        // Resuelve StatusTypeId desde catálogo si no fue establecido previamente
+        if (!entry.StatusTypeId.HasValue && !string.IsNullOrWhiteSpace(entry.StatusCode))
+        {
+            var typeId = await _db.RefTypes
+                .AsNoTracking()
+                .Where(r => r.Category == "PERSONNEL_ACTION_STATUS"
+                         && r.Name == entry.StatusCode
+                         && r.IsActive)
+                .Select(r => (int?)r.TypeId)
+                .FirstOrDefaultAsync(ct);
+
+            entry.StatusTypeId = typeId;
+        }
+
+        _db.PersonnelActionStatusHistories.Add(entry);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<PersonnelActionStatusHistoryDto>> GetStatusHistoryAsync(int actionId, CancellationToken ct = default)
+    {
+        return await _db.PersonnelActionStatusHistories
+            .AsNoTracking()
+            .Where(h => h.ActionId == actionId)
+            .OrderByDescending(h => h.ChangedAt)
+            .Select(h => new PersonnelActionStatusHistoryDto(
+                h.HistoryId,
+                h.ActionId,
+                h.StatusTypeId,
+                h.FromStatus,
+                h.StatusCode,
+                h.Comment,
+                h.ChangedBy,
+                h.ChangedAt))
+            .ToListAsync(ct);
+    }
+
+    private async Task<(string? Name, string? JobTitle)> ResolveEmployeeAsync(int? employeeId, CancellationToken ct)
+    {
+        if (!employeeId.HasValue) return (null, null);
+
+        var row = await (
+            from emp in _db.Employees.AsNoTracking()
+            join person in _db.People.AsNoTracking()
+                on emp.PersonID equals person.PersonId
+            join job in _db.Jobs.AsNoTracking()
+                on emp.JobId equals job.JobID into jobJoin
+            from job in jobJoin.DefaultIfEmpty()
+            where emp.EmployeeId == employeeId.Value
+            select new
+            {
+                Name     = person.FirstName + " " + person.LastName,
+                JobTitle = (string?)job.Description
+            }
+        ).FirstOrDefaultAsync(ct);
+
+        return row is null ? (null, null) : (row.Name, row.JobTitle);
     }
 }

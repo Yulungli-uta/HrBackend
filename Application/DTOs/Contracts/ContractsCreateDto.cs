@@ -53,4 +53,7 @@ public class ContractsCreateDto
 
     public string? Competition { get; set; }
     public DateTime? CompetitionDate { get; set; }
+    public bool GenerateDocument { get; set; } = false;
+
+    public Dictionary<string, string>? DocumentOverrides { get; set; }
 }

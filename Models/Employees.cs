@@ -10,6 +10,7 @@ public class Employees : IAuditable
     public int EmployeeType { get; set; }
     public int? DepartmentId { get; set; }
     public int? ImmediateBossId { get; set; }
+    public int? JobId { get; set; }
     public DateOnly HireDate { get; set; }
     public string? Email { get; set; }
     public bool IsActive { get; set; } = true;
@@ -24,4 +25,7 @@ public class Employees : IAuditable
 
     /// <summary>Persona asociada al empleado (join por PersonID → PersonId).</summary>
     public virtual People? People { get; set; }
+
+    public virtual Job? Job { get; set; }
 }
+

@@ -12,31 +12,46 @@ public class FileManagementService : IFileManagementService
     private readonly IDirectoryParametersService _directoryService;
     private readonly IEncryptionService _encryptionService;
     private readonly FileManagementSettings _settings;
+    private readonly ILogger<FileManagementService> _logger;
 
     public FileManagementService(
         IDirectoryParametersService directoryService,
         IEncryptionService encryptionService,
-        IOptions<FileManagementSettings> settings)
+        IOptions<FileManagementSettings> settings,
+        ILogger<FileManagementService> logger)
     {
         _directoryService = directoryService;
         _encryptionService = encryptionService;
         _settings = settings.Value;
+        _logger = logger;
     }
 
     public async Task<FileUploadResponseDto> UploadFileAsync(FileUploadRequestDto request, CancellationToken ct = default)
     {
+        _logger.LogInformation(
+            "[Upload] Inicio. DirectoryCode={DirectoryCode} FileName={FileName} Size={Size}B",
+            request.DirectoryCode, request.FileName, request.File?.Length ?? 0);
+
         try
         {
             // 1. Buscar DirectoryParameters por Code
+            _logger.LogDebug("[Upload] Paso 1 — buscando DirectoryParameters para '{Code}'", request.DirectoryCode);
             var directory = await _directoryService.GetByCodeAsync(request.DirectoryCode, ct);
             if (directory == null)
             {
+                _logger.LogWarning("[Upload] DirectoryParameters no encontrado para '{Code}'", request.DirectoryCode);
                 return CreateErrorResponse("Directory not found", request.FileName);
             }
+
+            _logger.LogDebug(
+                "[Upload] Paso 1 OK — PhysicalPath='{Path}' MaxSizeMb={Max} Extension='{Ext}'",
+                directory.PhysicalPath, directory.MaxSizeMb, directory.Extension);
 
             // 2. Validar extensión del archivo
             var originalFileName = Path.GetFileName(request.FileName);
             var fileExtension = Path.GetExtension(originalFileName).ToLowerInvariant();
+            _logger.LogDebug("[Upload] Paso 2 — extensión detectada: '{Ext}'", fileExtension);
+
             if (!string.IsNullOrEmpty(directory.Extension))
             {
                 var allowedExtensions = directory.Extension.Split(',')
@@ -44,6 +59,9 @@ public class FileManagementService : IFileManagementService
                     .ToList();
                 if (!allowedExtensions.Contains(fileExtension))
                 {
+                    _logger.LogWarning(
+                        "[Upload] Extensión rechazada. Recibida='{Ext}' Permitidas='{Allowed}'",
+                        fileExtension, directory.Extension);
                     return CreateErrorResponse(
                         $"File extension '{fileExtension}' is not allowed. Allowed: {directory.Extension}",
                         originalFileName);
@@ -52,8 +70,13 @@ public class FileManagementService : IFileManagementService
 
             // 3. Validar tamaño del archivo
             var fileSizeInMb = request.File.Length / (1024.0 * 1024.0);
+            _logger.LogDebug("[Upload] Paso 3 — tamaño {Size:F2} MB", fileSizeInMb);
+
             if (directory.MaxSizeMb.HasValue && fileSizeInMb > directory.MaxSizeMb.Value)
             {
+                _logger.LogWarning(
+                    "[Upload] Tamaño excedido. Recibido={Size:F2}MB Máximo={Max}MB",
+                    fileSizeInMb, directory.MaxSizeMb);
                 return CreateErrorResponse(
                     $"File size ({fileSizeInMb:F2} MB) exceeds maximum ({directory.MaxSizeMb} MB)",
                     originalFileName);
@@ -63,17 +86,38 @@ public class FileManagementService : IFileManagementService
             int currentYear = DateTime.Now.Year;
             var relativePath = request.RelativePath.TrimStart('/').TrimEnd('/');
             var folderPath = Path.Combine(directory.PhysicalPath, relativePath, currentYear.ToString());
-            //var sanitizedFileName = Path.GetFileName(request.FileName);
-            //var fullPath = Path.Combine(folderPath, sanitizedFileName);
 
-            // ✅ Generar nombre físico seguro y único (NO usar el del usuario)
             var storedFileName = FileNameGenerator.Generate(originalFileName, request.DirectoryCode);
             var fullPath = Path.Combine(folderPath, storedFileName);
 
+            _logger.LogDebug(
+                "[Upload] Paso 4 — rutas preparadas. FolderPath='{Folder}' FullPath='{Full}'",
+                folderPath, fullPath);
+
+            // 4b. Verificar accesibilidad de la ruta base (timeout 8 s para no bloquear en red inaccesible)
+            _logger.LogDebug("[Upload] Paso 4b — verificando accesibilidad de '{BasePath}'", directory.PhysicalPath);
+            bool pathOk = await IsPathAccessibleAsync(directory.PhysicalPath, ct);
+            if (!pathOk)
+            {
+                var shareRoot = (Path.GetPathRoot(directory.PhysicalPath) ?? directory.PhysicalPath).TrimEnd('\\', '/');
+                _logger.LogError(
+                    "[Upload] Share raíz no accesible: '{Share}'. " +
+                    "Verifica montaje de red (net use), credenciales (UseImpersonation) o permisos de la cuenta de servicio.",
+                    shareRoot);
+                return CreateErrorResponse(
+                    $"El share de red '{shareRoot}' no está accesible desde el servidor. " +
+                    "Verifica la conexión al NAS o habilita UseImpersonation con credenciales válidas.",
+                    originalFileName);
+            }
+            _logger.LogDebug("[Upload] Paso 4b OK — ruta base accesible.");
+
             // 5. Ejecutar operación con o sin impersonation según configuración
+            _logger.LogDebug(
+                "[Upload] Paso 5 — guardando archivo. UseImpersonation={Imp}",
+                _settings.UseImpersonation);
+
             if (_settings.UseImpersonation)
             {
-                // CON CREDENCIALES (NAS remoto con autenticación)
                 var (username, password, domain) = DecryptCredentials();
                 using var impersonation = new WindowsImpersonation();
 
@@ -84,23 +128,14 @@ public class FileManagementService : IFileManagementService
             }
             else
             {
-                // SIN CREDENCIALES (punto de montaje local o acceso directo)
                 await SaveFileAsync(folderPath, fullPath, request.File, ct);
             }
 
-            // 6. Retornar respuesta exitosa
-            //var relativePathResult = $"/{relativePath}/{currentYear}/{sanitizedFileName}";
+            _logger.LogInformation(
+                "[Upload] Archivo guardado exitosamente. FullPath='{Full}' Size={Size}B",
+                fullPath, request.File.Length);
 
-            //return new FileUploadResponseDto
-            //{
-            //    Success = true,
-            //    Message = "File uploaded successfully.",
-            //    FullPath = fullPath,
-            //    RelativePath = relativePathResult,
-            //    FileName = sanitizedFileName,
-            //    FileSize = request.File.Length,
-            //    Year = currentYear
-            //};
+            // 6. Retornar respuesta exitosa
             var relativePathResult = $"/{relativePath}/{currentYear}/{storedFileName}";
 
             return new FileUploadResponseDto
@@ -109,21 +144,34 @@ public class FileManagementService : IFileManagementService
                 Message = "File uploaded successfully.",
                 FullPath = fullPath,
                 RelativePath = relativePathResult,
-                FileName = storedFileName,     // ✅ nombre físico guardado
+                FileName = storedFileName,
                 FileSize = request.File.Length,
                 Year = currentYear
             };
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning(
+                "[Upload] Cancelado por el cliente. DirectoryCode={Code} FileName={File}",
+                request.DirectoryCode, request.FileName);
+            return CreateErrorResponse("La operación fue cancelada (timeout del cliente).", request.FileName);
+        }
         catch (PlatformNotSupportedException ex)
         {
+            _logger.LogError(ex, "[Upload] PlatformNotSupported. DirectoryCode={Code}", request.DirectoryCode);
             return CreateErrorResponse($"Platform not supported: {ex.Message}", request.FileName);
         }
         catch (InvalidOperationException ex)
         {
+            _logger.LogError(ex, "[Upload] Autenticación fallida. DirectoryCode={Code}", request.DirectoryCode);
             return CreateErrorResponse($"Authentication failed: {ex.Message}", request.FileName);
         }
         catch (Exception ex)
         {
+            _logger.LogError(
+                ex,
+                "[Upload] Error inesperado. DirectoryCode={Code} FileName={File}",
+                request.DirectoryCode, request.FileName);
             return CreateErrorResponse($"Error uploading file: {ex.Message}", request.FileName);
         }
     }
@@ -200,8 +248,11 @@ public class FileManagementService : IFileManagementService
 
             return (fileBytes, contentType, fileName);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex,
+                "Download failed. DirectoryCode={DirectoryCode}, FilePath={FilePath}",
+                directoryCode, filePath);
             return null;
         }
     }
@@ -298,15 +349,13 @@ public class FileManagementService : IFileManagementService
     #region Private Helper Methods
 
     /// <summary>
-    /// Guarda un archivo en el sistema de archivos
+    /// Guarda un archivo en el sistema de archivos.
+    /// Crea la estructura de carpetas automáticamente si no existe.
     /// </summary>
     private static async Task SaveFileAsync(string folderPath, string fullPath, Microsoft.AspNetCore.Http.IFormFile file, CancellationToken ct)
     {
-        // Crear carpeta si no existe
-        if (!Directory.Exists(folderPath))
-        {
-            Directory.CreateDirectory(folderPath);
-        }
+        // Crear árbol de carpetas si no existe (operación síncrona en thread pool)
+        await Task.Run(() => Directory.CreateDirectory(folderPath), ct);
 
         // Guardar archivo
         using var stream = new FileStream(fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, true);
@@ -342,6 +391,47 @@ public class FileManagementService : IFileManagementService
         // Eliminar archivo (usar Task.Run para operación síncrona)
         await Task.Run(() => File.Delete(fullPath), ct);
         return true;
+    }
+
+    /// <summary>
+    /// Verifica que el share raíz es accesible con timeout de 8 s.
+    /// Para rutas UNC (\\server\share\sub\dir) solo comprueba \\server\share —
+    /// los subdirectorios no necesitan existir porque Directory.CreateDirectory los crea.
+    /// </summary>
+    private async Task<bool> IsPathAccessibleAsync(string basePath, CancellationToken ct)
+    {
+        // Para rutas UNC extraer solo \\server\share; para rutas locales usar la raíz (C:\)
+        var root = Path.GetPathRoot(basePath) ?? basePath;
+        var checkPath = root.StartsWith(@"\\", StringComparison.Ordinal)
+            ? root.TrimEnd('\\', '/')
+            : root;
+
+        _logger.LogDebug(
+            "[Upload] Verificando accesibilidad en share raíz '{Check}' (ruta completa: '{Full}')",
+            checkPath, basePath);
+
+        try
+        {
+            return await Task.Run(() =>
+            {
+                try { return Directory.Exists(checkPath); }
+                catch { return false; }
+            }).WaitAsync(TimeSpan.FromSeconds(8), ct);
+        }
+        catch (TimeoutException)
+        {
+            _logger.LogWarning("[Upload] Timeout verificando share raíz '{Path}' (>8 s)", checkPath);
+            return false;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[Upload] Excepción al verificar share raíz '{Path}'", checkPath);
+            return false;
+        }
     }
 
     /// <summary>

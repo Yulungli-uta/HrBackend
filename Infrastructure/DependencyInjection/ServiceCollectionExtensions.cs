@@ -24,6 +24,9 @@ using WsUtaSystem.Infrastructure.Interceptors;
 using WsUtaSystem.Infrastructure.Jobs;
 using WsUtaSystem.Infrastructure.Repositories;
 using WsUtaSystem.Infrastructure.Security;
+using WsUtaSystem.Reports.Abstractions;
+using WsUtaSystem.Reports.Engine;
+using WsUtaSystem.Reports.Renderers;
 
 namespace WsUtaSystem.Infrastructure.DependencyInjection;
 
@@ -354,6 +357,8 @@ public static class ServiceCollectionExtensions
             WsUtaSystem.Reports.Abstractions.IReportServiceV2,
             WsUtaSystem.Reports.Services.ReportServiceV2>();
 
+        services.AddScoped<HtmlDocumentRenderer>();
+
         return services;
     }
 
@@ -449,7 +454,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IContractTypeRepository, WsUtaSystem.Infrastructure.Repositories.ContractTypeRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractTypeService, WsUtaSystem.Application.Services.ContractTypeService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IContractRequestRepository, WsUtaSystem.Infrastructure.Repositories.ContractRequestRepository>();
-        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractRequestService, WsUtaSystem.Application.Services.ContractRequestService>();        // ── Módulo: Departamentos / Facultades ────────────────────────────────────────
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractRequestService, WsUtaSystem.Application.Services.ContractRequestService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPersonnelActionTypeRepository, WsUtaSystem.Infrastructure.Repositories.PersonnelActionTypeRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPersonnelActionTypeService, WsUtaSystem.Application.Services.PersonnelActionTypeService>();        // ── Módulo: Departamentos / Facultades ────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDepartmentsRepository, WsUtaSystem.Infrastructure.Repositories.DepartmentsRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDepartmentsService, WsUtaSystem.Application.Services.DepartmentsService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IFacultiesRepository, WsUtaSystem.Infrastructure.Repositories.FacultiesRepository>();
@@ -500,6 +507,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IJobActivityService, WsUtaSystem.Application.Services.JobActivityService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IOccupationalGroupRepository, WsUtaSystem.Infrastructure.Repositories.OccupationalGroupRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IOccupationalGroupService, WsUtaSystem.Application.Services.OccupationalGroupService>();
+
+        // ── Módulo: Vistas de solo lectura ───────────────────────────────────
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IVwDepartmentWithTypeRepository, WsUtaSystem.Infrastructure.Repositories.VwDepartmentWithTypeRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVwDepartmentWithTypeService, WsUtaSystem.Application.Services.VwDepartmentWithTypeService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IVwJobWithDegreeAndGroupRepository, WsUtaSystem.Infrastructure.Repositories.VwJobWithDegreeAndGroupRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVwJobWithDegreeAndGroupService, WsUtaSystem.Application.Services.VwJobWithDegreeAndGroupService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IVwJobActivityRepository, WsUtaSystem.Infrastructure.Repositories.VwJobActivityRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVwJobActivityService, WsUtaSystem.Application.Services.VwJobActivityService>();
 
         // ── Módulo: Actividades ───────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IActivityRepository, WsUtaSystem.Infrastructure.Repositories.ActivityRepository>();
@@ -840,22 +855,19 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<
             WsUtaSystem.Application.Interfaces.Repositories.Documents.IPersonnelActionRepository,
-            WsUtaSystem.Infrastructure.Repositories.Documents.PersonnelActionRepository>();
+            PersonnelActionRepository>();
 
         // ── Motor de plantillas (sustitución de tokens {{CAMPO}}) ─────────────────
-        services.AddSingleton<
-            WsUtaSystem.Documents.Abstractions.IDocumentTemplateEngine,
-            WsUtaSystem.Documents.Engine.DocumentTemplateEngine>();
+        services.AddSingleton<IDocumentTemplateEngine, DocumentTemplateEngine>();
 
         // ── Resolver de campos (Employee, Contract, Movement, System, Manual) ─────
-        services.AddScoped<
-            WsUtaSystem.Documents.Abstractions.IDocumentFieldResolver,
-            WsUtaSystem.Documents.Engine.DocumentFieldResolver>();
+        services.AddScoped<IDocumentFieldResolver, DocumentFieldResolver>();
 
         // ── Renderizador PDF institucional ────────────────────────────────────────
-        services.AddScoped<
-            WsUtaSystem.Documents.Abstractions.IDocumentRenderer,
-            WsUtaSystem.Documents.Renderers.InstitutionalDocumentRenderer>();
+        //services.AddScoped<IDocumentRenderer, InstitutionalDocumentRenderer>();
+        services.AddScoped<InstitutionalDocumentRenderer>();
+        services.AddScoped<PersonalActionDocumentRenderer>();
+        services.AddScoped<IDocumentRendererFactory, DocumentRendererFactory>();
 
         // ── Servicios de aplicación ───────────────────────────────────────────────
         services.AddScoped<
@@ -872,7 +884,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<
             WsUtaSystem.Application.Interfaces.Services.Documents.IPersonnelActionService,
-            WsUtaSystem.Application.Services.Documents.PersonnelActionService>();
+            PersonnelActionService>();
 
         return services;
     }

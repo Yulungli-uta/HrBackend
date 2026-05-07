@@ -9,6 +9,7 @@
         public string Status { get; set; } = null!;
         public string? ContractText { get; set; }
         public string? ContractCode { get; set; }
-
+        public int? DefaultTemplateId { get; set; }
+        public string? NumberingPrefix { get; set; }
     }
 }

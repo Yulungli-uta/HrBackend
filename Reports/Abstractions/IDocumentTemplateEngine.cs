@@ -1,4 +1,4 @@
-namespace WsUtaSystem.Documents.Abstractions;
+namespace WsUtaSystem.Reports.Abstractions;
 
 /// <summary>
 /// Motor de sustitución de placeholders en plantillas HTML.

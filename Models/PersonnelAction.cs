@@ -70,17 +70,55 @@ public sealed class PersonnelAction : IAuditable
     /// <summary>Observaciones adicionales.</summary>
     public string? Observations { get; set; }
 
-    /// <summary>Estado de la acción (DRAFT, APPROVED, EXECUTED, CANCELLED).</summary>
-    public string Status { get; set; } = "DRAFT";
+    /// <summary>
+    /// Código de estado legible (BORRADOR, GENERADO, PENDIENTE_FIRMAS, FIRMADO_CARGADO, FINALIZADO, ANULADO).
+    /// Se mantiene en sincronía con <see cref="StatusTypeId"/> en cada transición.
+    /// </summary>
+    public string Status { get; set; } = "BORRADOR";
+
+    /// <summary>
+    /// FK a <c>HR.ref_Types</c> (Category = 'PERSONNEL_ACTION_STATUS').
+    /// Fuente de verdad para el estado; permite obtener nombre display y metadatos desde catálogo.
+    /// </summary>
+    public int? StatusTypeId { get; set; }
 
     /// <summary>FK al documento PDF generado para esta acción.</summary>
     public int? GeneratedDocumentId { get; set; }
+
+    /// <summary>FK al archivo físico del documento firmado cargado.</summary>
+    public int? SignedDocumentStoredFileId { get; set; }
 
     /// <summary>FK al contrato relacionado con la acción (si aplica).</summary>
     public int? ContractId { get; set; }
 
     /// <summary>FK al movimiento de personal relacionado (si aplica).</summary>
     public int? MovementId { get; set; }
+
+    // ── Clasificación de la acción ───────────────────────────────────────────────
+    /// <summary>Indica si el empleado presentó declaración juramentada de no nepotismo.</summary>
+    public bool SwornDeclaration { get; set; }
+
+    /// <summary>FK a ref_Types (Category = 'AP_PROCESO_INSTITUCIONAL'). Proceso institucional de la acción.</summary>
+    public int? InstitutionalProcess { get; set; }
+
+    /// <summary>FK a ref_Types (Category = 'AP_NIVEL_GESTION'). Nivel de gestión de la acción.</summary>
+    public int? ManagementLevel { get; set; }
+
+    // ── Responsables del documento ───────────────────────────────────────────────
+    /// <summary>FK al empleado que actúa como Director de Talento Humano.</summary>
+    public int? DthDirectorId { get; set; }
+
+    /// <summary>FK al empleado que actúa como Autoridad Nominadora.</summary>
+    public int? AuthorityNominatorId { get; set; }
+
+    /// <summary>FK al empleado Responsable de Elaboración.</summary>
+    public int? ElaboratorId { get; set; }
+
+    /// <summary>FK al empleado Responsable de Revisión.</summary>
+    public int? ReviewerId { get; set; }
+
+    /// <summary>FK al empleado Responsable de Registro y Control del Proceso Institucional.</summary>
+    public int? RegistrarId { get; set; }
 
     // ── IAuditable ──────────────────────────────────────────────────────────────
     public DateTime? CreatedAt { get; set; }
@@ -91,4 +129,10 @@ public sealed class PersonnelAction : IAuditable
     // ── Navegación ──────────────────────────────────────────────────────────────
     /// <summary>Documento PDF generado para esta acción.</summary>
     public GeneratedDocument? GeneratedDocument { get; set; }
+
+    /// <summary>Estado actual desde catálogo.</summary>
+    public RefTypes? StatusType { get; set; }
+
+    /// <summary>Historial de estados de la acción.</summary>
+    public ICollection<PersonnelActionStatusHistory> StatusHistory { get; set; } = [];
 }

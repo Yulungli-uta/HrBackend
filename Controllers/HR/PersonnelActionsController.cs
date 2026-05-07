@@ -4,10 +4,10 @@
 // ============================================================
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Common.Interfaces;
-using WsUtaSystem.Application.DTOs.Documents.PersonnelActions;
+using WsUtaSystem.Application.DTOs.PersonnelActions;
 using WsUtaSystem.Application.Interfaces.Services.Documents;
 
-namespace WsUtaSystem.Controllers.Documents;
+namespace WsUtaSystem.Controllers.HR;
 
 /// <summary>
 /// Expone los endpoints REST para la gestión del ciclo de vida completo
@@ -186,10 +186,7 @@ public sealed class PersonnelActionsController : ControllerBase
     {
         var generatedBy = _currentUser.EmployeeId ?? 0;
         var result = await _personnelActionService.GenerateDocumentAsync(
-            id,
-            request?.Overrides,
-            generatedBy,
-            ct);
+            id, request?.Overrides, generatedBy, ct);
 
         _logger.LogInformation(
             "Documento PDF generado/regenerado para Acción Id={ActionId} por EmployeeId={UserId}",
@@ -197,15 +194,149 @@ public sealed class PersonnelActionsController : ControllerBase
 
         return Ok(result);
     }
+
+    /// <summary>
+    /// Genera un PDF de previsualización sin guardar ningún registro en la BD.
+    /// Permite al usuario ver el aspecto del documento antes de crear la acción.
+    /// </summary>
+    /// <param name="request">EmployeeId y overrides del formulario.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    [HttpPost("preview-document")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> PreviewDocument(
+        [FromBody] PreviewPersonnelActionRequest request,
+        CancellationToken ct)
+    {
+        _logger.LogInformation(
+            "Preview Acción Personal request. EmployeeId={EmployeeId}, Overrides={Overrides}",
+            request.EmployeeId,
+            request.Overrides == null
+                ? "NULL"
+                : string.Join("; ", request.Overrides.Select(x => $"{x.Key}={x.Value}")));
+
+        var (pdfBase64, fileName) = await _personnelActionService.PreviewDocumentAsync(
+            request.EmployeeId,
+            request.Overrides ?? new Dictionary<string, string>(),
+            ct);
+
+        _logger.LogInformation(
+            "Previsualización de documento generada para EmployeeId={EmpId}.", request.EmployeeId);
+
+        return Ok(new { pdfBase64, fileName });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // FLUJO DE ESTADOS
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Transición GENERADO → PENDIENTE_FIRMAS.
+    /// Indica que el documento fue impreso y está esperando firma física.
+    /// </summary>
+    [HttpPost("{id:int}/mark-pending-signatures")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> MarkPendingSignatures(
+        [FromRoute] int id,
+        [FromBody] CommentRequest? request,
+        CancellationToken ct)
+    {
+        var updatedBy = _currentUser.EmployeeId ?? 0;
+        await _personnelActionService.MarkPendingSignaturesAsync(id, request?.Comment, updatedBy, ct);
+
+        _logger.LogInformation(
+            "Acción Id={ActionId} marcada PENDIENTE_FIRMAS por EmployeeId={UserId}", id, updatedBy);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Transición PENDIENTE_FIRMAS → FIRMADO_CARGADO.
+    /// Adjunta el archivo del documento firmado escaneado.
+    /// </summary>
+    [HttpPost("{id:int}/upload-signed-document")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UploadSignedDocument(
+        [FromRoute] int id,
+        [FromBody] UploadSignedDocumentRequest request,
+        CancellationToken ct)
+    {
+        var updatedBy = _currentUser.EmployeeId ?? 0;
+        await _personnelActionService.UploadSignedDocumentAsync(id, request, updatedBy, ct);
+
+        _logger.LogInformation(
+            "Documento firmado cargado para Acción Id={ActionId} StoredFileId={FileId} por EmployeeId={UserId}",
+            id, request.StoredFileId, updatedBy);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Transición FIRMADO_CARGADO → FINALIZADO.
+    /// Cierra el ciclo de vida de la acción de personal.
+    /// </summary>
+    [HttpPost("{id:int}/finalize")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Finalize(
+        [FromRoute] int id,
+        [FromBody] CommentRequest? request,
+        CancellationToken ct)
+    {
+        var updatedBy = _currentUser.EmployeeId ?? 0;
+        await _personnelActionService.FinalizeAsync(id, request?.Comment, updatedBy, ct);
+
+        _logger.LogInformation(
+            "Acción Id={ActionId} FINALIZADA por EmployeeId={UserId}", id, updatedBy);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Anula una acción de personal. Requiere motivo obligatorio.
+    /// No aplicable si ya está FINALIZADA.
+    /// </summary>
+    [HttpPost("{id:int}/cancel")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Cancel(
+        [FromRoute] int id,
+        [FromBody] CancelPersonnelActionRequest request,
+        CancellationToken ct)
+    {
+        var updatedBy = _currentUser.EmployeeId ?? 0;
+        await _personnelActionService.CancelAsync(id, request, updatedBy, ct);
+
+        _logger.LogInformation(
+            "Acción Id={ActionId} ANULADA por EmployeeId={UserId}. Razón: {Reason}",
+            id, updatedBy, request.Reason);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Obtiene el historial completo de cambios de estado de una acción de personal.
+    /// </summary>
+    [HttpGet("{id:int}/history")]
+    [ProducesResponseType(typeof(IReadOnlyList<PersonnelActionStatusHistoryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetHistory([FromRoute] int id, CancellationToken ct)
+    {
+        var history = await _personnelActionService.GetStatusHistoryAsync(id, ct);
+        return Ok(history);
+    }
 }
 
-/// <summary>
-/// Request para sobreescrituras de campos al generar el documento de una acción de personal.
-/// </summary>
-/// <param name="Overrides">
-/// Diccionario opcional de sobreescrituras: clave = nombre del campo (ej: "CARGO"),
-/// valor = texto que reemplazará al valor resuelto automáticamente.
-/// </param>
+/// <summary>Request para sobreescrituras de campos al generar el documento.</summary>
 public sealed record GenerateDocumentOverridesRequest(
     Dictionary<string, string>? Overrides
 );
+
+/// <summary>Request genérico que acepta un comentario opcional.</summary>
+public sealed record CommentRequest(string? Comment);

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Acción de Personal</title>
+
+    <!-- Metadatos consumidos por PersonalActionDocumentRenderer -->
+    <meta name="DOCUMENT_CODE" content="PERSONAL_ACTION" />
+    <meta name="DOCUMENT_TITLE" content="ACCIÓN DE PERSONAL" />
+
+    <!-- Márgenes en cm -->
+    <meta name="MARGIN_TOP_CM" content="1.20" />
+    <meta name="MARGIN_RIGHT_CM" content="1.20" />
+    <meta name="MARGIN_BOTTOM_CM" content="1.20" />
+    <meta name="MARGIN_LEFT_CM" content="1.20" />
+
+    <!-- Encabezado -->
+    <meta name="INSTITUTION_NAME" content="{{INSTITUTION_NAME}}" />
+    <meta name="INSTITUTION_DEPARTMENT" content="DIRECCIÓN DE TALENTO HUMANO" />
+    <meta name="ACTION_NUMBER" content="{{ACTION_NUMBER}}" />
+    <meta name="ELABORATION_DATE" content="{{ELABORATION_DATE}}" />
+
+    <!-- Identificación -->
+    <meta name="EMPLOYEE_LASTNAME" content="{{EMPLOYEE_LASTNAME}}" />
+    <meta name="EMPLOYEE_FIRSTNAME" content="{{EMPLOYEE_FIRSTNAME}}" />
+    <meta name="EMPLOYEE_FULLNAME" content="{{EMPLOYEE_FULLNAME}}" />
+    <meta name="EMPLOYEE_IDCARD" content="{{EMPLOYEE_IDCARD}}" />
+    <meta name="VALID_FROM" content="{{VALID_FROM}}" />
+    <meta name="VALID_TO" content="{{VALID_TO}}" />
+
+    <!-- Tipo de acción (usar X, SI, 1 o true para marcar) -->
+    <meta name="CHK_INGRESO" content="{{CHK_INGRESO}}" />
+    <meta name="CHK_REINGRESO" content="{{CHK_REINGRESO}}" />
+    <meta name="CHK_RESTITUCION" content="{{CHK_RESTITUCION}}" />
+    <meta name="CHK_ASCENSO" content="{{CHK_ASCENSO}}" />
+    <meta name="CHK_TRASLADO" content="{{CHK_TRASLADO}}" />
+    <meta name="CHK_TRASPASO" content="{{CHK_TRASPASO}}" />
+    <meta name="CHK_CAMBIO_ADMINISTRATIVO" content="{{CHK_CAMBIO_ADMINISTRATIVO}}" />
+    <meta name="CHK_INTERCAMBIO_VOLUNTARIO" content="{{CHK_INTERCAMBIO_VOLUNTARIO}}" />
+    <meta name="CHK_LICENCIA" content="{{CHK_LICENCIA}}" />
+    <meta name="CHK_COMISION_SERVICIOS" content="{{CHK_COMISION_SERVICIOS}}" />
+    <meta name="CHK_SANCIONES" content="{{CHK_SANCIONES}}" />
+    <meta name="CHK_INCREMENTO_RMU" content="{{CHK_INCREMENTO_RMU}}" />
+    <meta name="CHK_REVISION_CLAS_PUESTO" content="{{CHK_REVISION_CLAS_PUESTO}}" />
+    <meta name="CHK_SUBROGACION" content="{{CHK_SUBROGACION}}" />
+    <meta name="CHK_ENCARGO" content="{{CHK_ENCARGO}}" />
+    <meta name="CHK_CESACION_FUNCIONES" content="{{CHK_CESACION_FUNCIONES}}" />
+    <meta name="CHK_DESTITUCION" content="{{CHK_DESTITUCION}}" />
+    <meta name="CHK_VACACIONES" content="{{CHK_VACACIONES}}" />
+    <meta name="CHK_OTRO" content="{{CHK_OTRO}}" />
+    <meta name="OTHER_ACTION_TEXT" content="{{OTHER_ACTION_TEXT}}" />
+
+    <!-- Declaración jurada -->
+    <meta name="HAS_SWORN_DECLARATION" content="{{HAS_SWORN_DECLARATION}}" />
+
+    <!-- Motivación -->
+    <meta name="MOTIVATION_TEXT" content="{{MOTIVATION_TEXT}}" />
+
+    <!-- Situación actual -->
+    <meta name="CURRENT_INSTITUTIONAL_PROCESS" content="{{CURRENT_INSTITUTIONAL_PROCESS}}" />
+    <meta name="CURRENT_ADJECTIVE" content="{{CURRENT_ADJECTIVE}}" />
+    <meta name="CURRENT_MANAGEMENT_LEVEL" content="{{CURRENT_MANAGEMENT_LEVEL}}" />
+    <meta name="CURRENT_ADMIN_UNIT" content="{{CURRENT_ADMIN_UNIT}}" />
+    <meta name="CURRENT_WORKPLACE" content="{{CURRENT_WORKPLACE}}" />
+    <meta name="CURRENT_JOB_TITLE" content="{{CURRENT_JOB_TITLE}}" />
+    <meta name="CURRENT_OCCUPATIONAL_GROUP" content="{{CURRENT_OCCUPATIONAL_GROUP}}" />
+    <meta name="CURRENT_GRADE" content="{{CURRENT_GRADE}}" />
+    <meta name="CURRENT_MONTHLY_RMU" content="{{CURRENT_MONTHLY_RMU}}" />
+    <meta name="CURRENT_BUDGET_ITEM" content="{{CURRENT_BUDGET_ITEM}}" />
+
+    <!-- Situación propuesta -->
+    <meta name="PROPOSED_INSTITUTIONAL_PROCESS" content="{{PROPOSED_INSTITUTIONAL_PROCESS}}" />
+    <meta name="PROPOSED_ADJECTIVE" content="{{PROPOSED_ADJECTIVE}}" />
+    <meta name="PROPOSED_MANAGEMENT_LEVEL" content="{{PROPOSED_MANAGEMENT_LEVEL}}" />
+    <meta name="PROPOSED_ADMIN_UNIT" content="{{PROPOSED_ADMIN_UNIT}}" />
+    <meta name="PROPOSED_WORKPLACE" content="{{PROPOSED_WORKPLACE}}" />
+    <meta name="PROPOSED_JOB_TITLE" content="{{PROPOSED_JOB_TITLE}}" />
+    <meta name="PROPOSED_OCCUPATIONAL_GROUP" content="{{PROPOSED_OCCUPATIONAL_GROUP}}" />
+    <meta name="PROPOSED_GRADE" content="{{PROPOSED_GRADE}}" />
+    <meta name="PROPOSED_MONTHLY_RMU" content="{{PROPOSED_MONTHLY_RMU}}" />
+    <meta name="PROPOSED_BUDGET_ITEM" content="{{PROPOSED_BUDGET_ITEM}}" />
+
+    <!-- Posesión del puesto -->
+    <meta name="POSSESSION_NAME" content="{{POSSESSION_NAME}}" />
+    <meta name="POSSESSION_IDCARD" content="{{POSSESSION_IDCARD}}" />
+    <meta name="POSSESSION_LOCATION" content="{{POSSESSION_LOCATION}}" />
+    <meta name="POSSESSION_DATE" content="{{POSSESSION_DATE}}" />
+    <meta name="FINAL_RECORD_NUMBER" content="{{FINAL_RECORD_NUMBER}}" />
+    <meta name="APPROVAL_DATE" content="{{APPROVAL_DATE}}" />
+
+    <!-- Responsables de aprobación -->
+    <meta name="HR_RESPONSIBLE_NAME" content="{{HR_RESPONSIBLE_NAME}}" />
+    <meta name="HR_RESPONSIBLE_POSITION" content="{{HR_RESPONSIBLE_POSITION}}" />
+    <meta name="NOMINATING_AUTHORITY_NAME" content="{{NOMINATING_AUTHORITY_NAME}}" />
+    <meta name="NOMINATING_AUTHORITY_POSITION" content="{{NOMINATING_AUTHORITY_POSITION}}" />
+
+    <!-- Página 2: recepción / firmas -->
+    <meta name="RECEPTION_SIGNATURE_NAME" content="{{RECEPTION_SIGNATURE_NAME}}" />
+    <meta name="RECEPTION_DATE" content="{{RECEPTION_DATE}}" />
+    <meta name="RECEPTION_TIME" content="{{RECEPTION_TIME}}" />
+    <meta name="WITNESS_NAME" content="{{WITNESS_NAME}}" />
+    <meta name="WITNESS_DATE" content="{{WITNESS_DATE}}" />
+    <meta name="WITNESS_REASON" content="{{WITNESS_REASON}}" />
+
+    <meta name="ELABORATED_BY_NAME" content="{{ELABORATED_BY_NAME}}" />
+    <meta name="ELABORATED_BY_POSITION" content="{{ELABORATED_BY_POSITION}}" />
+    <meta name="REVIEWED_BY_NAME" content="{{REVIEWED_BY_NAME}}" />
+    <meta name="REVIEWED_BY_POSITION" content="{{REVIEWED_BY_POSITION}}" />
+    <meta name="CONTROL_BY_NAME" content="{{CONTROL_BY_NAME}}" />
+    <meta name="CONTROL_BY_POSITION" content="{{CONTROL_BY_POSITION}}" />
+
+    <!-- Protección de datos / notificación -->
+    <meta name="DATA_PROTECTION_TEXT" content="{{DATA_PROTECTION_TEXT}}" />
+    <meta name="NOTIFICATION_DATE" content="{{NOTIFICATION_DATE}}" />
+    <meta name="NOTIFICATION_TIME" content="{{NOTIFICATION_TIME}}" />
+    <meta name="NOTIFICATION_MEDIUM" content="{{NOTIFICATION_MEDIUM}}" />
+    <meta name="NOTIFIED_BY_NAME" content="{{NOTIFIED_BY_NAME}}" />
+    <meta name="NOTIFIED_BY_POSITION" content="{{NOTIFIED_BY_POSITION}}" />
+</head>
+<body>
+    <!--
+        Plantilla base para Acción de Personal.
+        El renderer PersonalActionDocumentRenderer.cs consume los <meta>
+        y dibuja el PDF final con layout fijo en QuestPDF.
+
+        Puedes guardar este HTML en Reports/Templates.
+        Los placeholders {{...}} son reemplazados por DocumentTemplateEngine.
+    -->
+</body>
+</html>

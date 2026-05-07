@@ -354,6 +354,7 @@ ADD CONSTRAINT FK_contract_type_PersonalContractType FOREIGN KEY (PersonalContra
 ALTER TABLE HR.tbl_Departments
 ADD CONSTRAINT FK_Departments_Parent FOREIGN KEY (ParentID) REFERENCES HR.tbl_Departments(DepartmentID),
     CONSTRAINT FK_Departments_DepartmentType FOREIGN KEY (DepartmentType) REFERENCES HR.ref_Types(TypeID),
+	CONSTRAINT FK_Departments_DepartmentScope FOREIGN KEY (DepartmentScope) REFERENCES HR.ref_Types(TypeID),
     CONSTRAINT FK_Departments_DeanDirector FOREIGN KEY (DeanDirector) REFERENCES HR.tbl_Employees(EmployeeID);
 
 -- 5. FOREIGN KEYS PARA TABLA DE EMPLEADOS (DEPENDE DE PERSONAS, DEPARTAMENTOS Y REF_TYPES)
@@ -361,6 +362,7 @@ ALTER TABLE HR.tbl_Employees
 ADD CONSTRAINT FK_Employees_Person FOREIGN KEY (PersonID) REFERENCES HR.tbl_People(PersonID),
     CONSTRAINT FK_Employees_Department FOREIGN KEY (DepartmentID) REFERENCES HR.tbl_Departments(DepartmentID),
     CONSTRAINT FK_Employees_EmployeeType FOREIGN KEY (EmployeeType) REFERENCES HR.ref_Types(TypeID),
+	CONSTRAINT FK_Employees_JobID FOREIGN KEY (JobID) REFERENCES HR.tbl_jobs(JobID),
     CONSTRAINT FK_Employees_Boss FOREIGN KEY (ImmediateBossID) REFERENCES HR.tbl_Employees(EmployeeID),
     CONSTRAINT FK_Employees_CreatedBy FOREIGN KEY (CreatedBy) REFERENCES HR.tbl_Employees(EmployeeID),
     CONSTRAINT FK_Employees_UpdatedBy FOREIGN KEY (UpdatedBy) REFERENCES HR.tbl_Employees(EmployeeID);
@@ -822,4 +824,26 @@ GO
 ALTER TABLE HR.tbl_AttendanceCalculations
 ADD CONSTRAINT CK_AttendanceCalculations_FoodSubsidy
 CHECK (FoodSubsidy IN (0,1));
+GO
+
+ALTER TABLE hr.tbl_personnel_action_type
+ADD CONSTRAINT PK_tbl_personnel_action_type
+PRIMARY KEY (PersonnelActionTypeId);
+GO
+
+ALTER TABLE hr.tbl_personnel_action_type
+ADD CONSTRAINT UX_tbl_personnel_action_type_Code
+UNIQUE (Code);
+GO
+
+CREATE INDEX IX_tbl_personnel_action_type_IsActive
+ON hr.tbl_personnel_action_type(IsActive);
+GO
+
+CREATE INDEX IX_tbl_personnel_action_type_TemplateCode
+ON hr.tbl_personnel_action_type(TemplateCode);
+GO
+
+CREATE INDEX IX_tbl_personnel_action_type_Numbering
+ON hr.tbl_personnel_action_type(NumberingYear, NumberingPrefix);
 GO

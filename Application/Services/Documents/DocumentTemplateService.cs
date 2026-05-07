@@ -3,8 +3,8 @@ using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Application.DTOs.Documents.Templates;
 using WsUtaSystem.Application.Interfaces.Repositories.Documents;
 using WsUtaSystem.Application.Interfaces.Services.Documents;
-using WsUtaSystem.Documents.Abstractions;
 using WsUtaSystem.Models;
+using WsUtaSystem.Reports.Abstractions;
 
 namespace WsUtaSystem.Application.Services.Documents;
 

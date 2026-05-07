@@ -68,4 +68,19 @@ public class Contracts : IAuditable{
     // Concurrency (SQL: RowVersion TIMESTAMP)
     //public byte[] RowVersion { get; set; } = Array.Empty<byte>();
     public byte[]? RowVersion { get; set; }
+
+    /// <summary>FK al documento institucional generado para este contrato.</summary>
+    public int? GeneratedDocumentId { get; set; }
+
+    /// <summary>Versión de plantilla usada al momento de generar el documento.</summary>
+    public int? TemplateVersionUsed { get; set; }
+
+    /// <summary>Indica si el documento fue emitido y no debe regenerarse automáticamente.</summary>
+    public bool IsDocumentFrozen { get; set; } = false;
+
+    public int? SignedDocumentStoredFileId { get; set; }
+
+    public Contracts? Parent { get; set; }
+    public ICollection<Contracts> Addendums { get; set; } = [];
+    public FinancialCertification? Certification { get; set; }
 }

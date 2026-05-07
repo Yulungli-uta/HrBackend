@@ -90,6 +90,15 @@ public class EmployeesController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("person/{personId:int}")]
+    public async Task<IActionResult> GetByPersonId(
+        int personId,
+        CancellationToken ct)
+    {
+        //var result = await _svc.GetByPersonIdAsync(personId, ct);
+        return Ok(_mapper.Map<List<EmployeesDto>>(await _svc.GetByPersonIdAsync(personId, ct)));
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] EmployeesCreateDto dto, CancellationToken ct)

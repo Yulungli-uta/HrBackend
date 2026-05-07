@@ -1,7 +1,7 @@
 using WsUtaSystem.Application.DTOs.Documents.GeneratedDocuments;
-using WsUtaSystem.Application.DTOs.Documents.PersonnelActions;
 using WsUtaSystem.Application.DTOs.Documents.Templates;
 using WsUtaSystem.Application.Common.Enums;
+using WsUtaSystem.Application.DTOs.PersonnelActions;
 
 namespace WsUtaSystem.Application.Interfaces.Services.Documents;
 
@@ -82,6 +82,12 @@ public interface IDocumentGenerationService
 
     /// <summary>Actualiza el estado de un documento.</summary>
     Task UpdateStatusAsync(int documentId, UpdateDocumentStatusRequest request, int updatedBy, CancellationToken ct = default);
+
+    /// <summary>
+    /// Genera un PDF de previsualización sin guardar ningún registro en la BD.
+    /// Útil para revisar el aspecto del documento antes de crear la acción.
+    /// </summary>
+    Task<string> PreviewAsync(int templateId, int employeeId, Dictionary<string, string> overrides, CancellationToken ct = default);
 }
 
 // ── IPersonnelActionService ──────────────────────────────────────────────────────
@@ -115,4 +121,38 @@ public interface IPersonnelActionService
 
     /// <summary>Genera o regenera el documento PDF de una acción de personal.</summary>
     Task<CreatePersonnelActionResponse> GenerateDocumentAsync(int actionId, Dictionary<string, string>? overrides, int generatedBy, CancellationToken ct = default);
+
+    /// <summary>
+    /// Transición GENERADO → PENDIENTE_FIRMAS.
+    /// Indica que el documento fue impreso y está pendiente de firma física.
+    /// </summary>
+    Task MarkPendingSignaturesAsync(int actionId, string? comment, int updatedBy, CancellationToken ct = default);
+
+    /// <summary>
+    /// Transición PENDIENTE_FIRMAS → FIRMADO_CARGADO.
+    /// Adjunta el documento firmado escaneado y actualiza el estado.
+    /// </summary>
+    Task UploadSignedDocumentAsync(int actionId, UploadSignedDocumentRequest request, int updatedBy, CancellationToken ct = default);
+
+    /// <summary>
+    /// Transición FIRMADO_CARGADO → FINALIZADO.
+    /// Cierra el ciclo de vida de la acción de personal.
+    /// </summary>
+    Task FinalizeAsync(int actionId, string? comment, int updatedBy, CancellationToken ct = default);
+
+    /// <summary>
+    /// Transición cualquier estado activo → ANULADO.
+    /// No se puede anular una acción ya FINALIZADA.
+    /// </summary>
+    Task CancelAsync(int actionId, CancelPersonnelActionRequest request, int updatedBy, CancellationToken ct = default);
+
+    /// <summary>Obtiene el historial de cambios de estado de una acción.</summary>
+    Task<IReadOnlyList<PersonnelActionStatusHistoryDto>> GetStatusHistoryAsync(int actionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Genera un PDF de previsualización sin guardar la acción en la BD.
+    /// Usa la plantilla ACCION_PERSONAL publicada con los overrides del formulario.
+    /// </summary>
+    Task<(string PdfBase64, string FileName)> PreviewDocumentAsync(
+        int employeeId, Dictionary<string, string> overrides, CancellationToken ct = default);
 }

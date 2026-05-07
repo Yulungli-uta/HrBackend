@@ -12,6 +12,9 @@ public class PersonnelMovements {
   public string? DocumentLocation { get; set; }
   public string? Reason { get; set; }
   public bool IsActive { get; set; }
+  /// <summary>FK a la acción de personal que originó este movimiento.</summary>
+  public int? PersonnelActionId { get; set; }
+
   public int? CreatedBy { get; set; }
   public DateTime CreatedAt { get; set; }
 }

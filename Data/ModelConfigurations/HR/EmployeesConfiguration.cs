@@ -19,6 +19,7 @@ public sealed class EmployeesConfiguration : IEntityTypeConfiguration<Employees>
         e.Property(x => x.EmployeeType).HasColumnName("EmployeeType");
         e.Property(x => x.DepartmentId).HasColumnName("DepartmentID");
         e.Property(x => x.ImmediateBossId).HasColumnName("ImmediateBossID");
+        e.Property(x => x.JobId).HasColumnName("JobID");
 
         // Relación con People: un empleado tiene una persona asociada
         e.HasOne(x => x.People)
@@ -26,6 +27,14 @@ public sealed class EmployeesConfiguration : IEntityTypeConfiguration<Employees>
             .HasForeignKey(x => x.PersonID)
             .HasPrincipalKey(p => p.PersonId)
             .HasConstraintName("FK_Employees_People")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Relación con Job: un empleado tiene un Job asociada
+        e.HasOne(x => x.Job)
+            .WithMany()
+            .HasForeignKey(x => x.JobId)
+            .HasPrincipalKey(p => p.JobID)
+            .HasConstraintName("FK_Employees_JobID")
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
@@ -83,3 +92,5 @@ public sealed class DegreeConfiguration : IEntityTypeConfiguration<Degree>
         e.Property(x => x.DegreeId).HasColumnName("DegreeID");
     }
 }
+
+

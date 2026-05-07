@@ -117,7 +117,10 @@ namespace WsUtaSystem.Infrastructure.Repositories
             var normalizedEmail = (email ?? "").Trim();
 
             return await Query()
-                .FirstOrDefaultAsync(e => e.Email == normalizedEmail, ct);
+                .FirstOrDefaultAsync(e =>
+                    e.Email == normalizedEmail ||
+                    e.PersonnelEmail == normalizedEmail,
+                    ct);
         }
 
         public async Task<PagedResult<VwEmployeeDetails>> GetPagedAsync(

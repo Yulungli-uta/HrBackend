@@ -60,4 +60,8 @@ public class ContractsDto
     public DateTime? UpdatedAt { get; set; }
 
     public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+
+    public int? GeneratedDocumentId { get; set; }
+    public int? TemplateVersionUsed { get; set; }
+    public bool IsDocumentFrozen { get; set; }
 }

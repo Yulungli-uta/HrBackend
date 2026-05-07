@@ -30,11 +30,14 @@ public sealed class VwEmployeeDetailsConfiguration : IEntityTypeConfiguration<Vw
         e.Property(x => x.LastName).HasColumnName("LastName");
         e.Property(x => x.IDCard).HasColumnName("IDCard");
         e.Property(x => x.Email).HasColumnName("Email");
+        e.Property(x => x.PersonnelEmail).HasColumnName("PersonnelEmail");
         e.Property(x => x.EmployeeType).HasColumnName("EmployeeType");
         e.Property(x => x.ContractType).HasColumnName("ContractType");
         e.Property(x => x.ImmediateBossID).HasColumnName("ImmediateBossID");
         e.Property(x => x.ScheduleID).HasColumnName("ScheduleID");
         e.Property(x => x.Schedule).HasColumnName("Schedule");
+        e.Property(x => x.JobId).HasColumnName("JobID");
+        e.Property(x => x.DepartmentID).HasColumnName("DepartmentID");        
         e.Property(x => x.Department).HasColumnName("Department");
         e.Property(x => x.BaseSalary).HasColumnName("BaseSalary");
         e.Property(x => x.HireDate).HasColumnName("HireDate");
@@ -92,6 +95,33 @@ public sealed class VwRoleMenuItemConfiguration : IEntityTypeConfiguration<VwRol
     {
         e.HasNoKey();
         e.ToView("vw_RoleMenuItems", "dbo");
+    }
+}
+
+public sealed class VwDepartmentWithTypeConfiguration : IEntityTypeConfiguration<VwDepartmentWithType>
+{
+    public void Configure(EntityTypeBuilder<VwDepartmentWithType> e)
+    {
+        e.HasNoKey();
+        e.ToView("vw_Departments_WithType", "HR");
+    }
+}
+
+public sealed class VwJobWithDegreeAndGroupConfiguration : IEntityTypeConfiguration<VwJobWithDegreeAndGroup>
+{
+    public void Configure(EntityTypeBuilder<VwJobWithDegreeAndGroup> e)
+    {
+        e.HasNoKey();
+        e.ToView("vw_Jobs_WithDegreeAndGroup", "HR");
+    }
+}
+
+public sealed class VwJobActivityConfiguration : IEntityTypeConfiguration<VwJobActivity>
+{
+    public void Configure(EntityTypeBuilder<VwJobActivity> e)
+    {
+        e.HasNoKey();
+        e.ToView("vw_Job_Activities", "HR");
     }
 }
 

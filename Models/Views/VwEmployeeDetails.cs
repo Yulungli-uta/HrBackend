@@ -11,6 +11,7 @@ namespace WsUtaSystem.Models.Views
         public string LastName { get; set; } = string.Empty;     
         public string IDCard { get; set; } = string.Empty;   
         public string Email { get; set; } = string.Empty;
+        public string PersonnelEmail { get; set; } = string.Empty;
         public int EmployeeType { get; set; }
         [Column("ContractType")]
         public string? ContractType { get; set; }
@@ -22,6 +23,8 @@ namespace WsUtaSystem.Models.Views
         public int? ImmediateBossID { get; set; }
         public int? DepartmentID { get; set; }
         public string? Department { get; set; }
+        public int? JobId { get; set; }
+        public string? JobName { get; set; }
         //public string? Faculty { get; set; }
         [Column(TypeName = "decimal(18,2)")]
         public decimal? BaseSalary { get; set; }     

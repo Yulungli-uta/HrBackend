@@ -75,5 +75,6 @@ public sealed class PersonnelMovementsConfiguration : IEntityTypeConfiguration<P
         e.Property(x => x.MovementType).HasMaxLength(30);
         e.Property(x => x.DocumentLocation).HasMaxLength(255);
         e.Property(x => x.Reason).HasMaxLength(500);
+        e.Property(x => x.PersonnelActionId).HasColumnName("PersonnelActionID");
     }
 }

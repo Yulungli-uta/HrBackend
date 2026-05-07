@@ -11,11 +11,16 @@ public class EmployeesService : Service<Employees, int>, IEmployeesService
     {        
         _Repo = repo;
     }
-
+    
     public async Task<IEnumerable<Employees>> GetSubordinatesByBossIdAsync(
         int bossId,
         CancellationToken ct = default)
     {
         return await _Repo.GetSubordinatesByBossIdAsync(bossId, ct);
+    }
+
+    public async Task<IEnumerable<Employees>> GetByPersonIdAsync(int personId, CancellationToken ct = default)
+    {
+        return await _Repo.GetByPersonIdAsync(personId, ct);
     }
 }

@@ -6,6 +6,7 @@ public class EmployeesUpdateDto
     public int EmployeeType { get; set; }
     public int? DepartmentId { get; set; }
     public int? ImmediateBossId { get; set; }
+    public int? JobId { get; set; }
     public DateOnly HireDate { get; set; }
     public string? Email { get; set; }
     public bool IsActive { get; set; } = true;

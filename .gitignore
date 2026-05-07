@@ -114,3 +114,15 @@ logs/
 logs/*.txt
 
 Deploy/
+
+# Claude local config
+.claude/
+.claude/*
+!.claude/settings.local.json
+
+# Archivos de Claude
+CLAUDE.md
+.claudeignore
+
+# VariablesEntorno
+VariablesEntorno.txt

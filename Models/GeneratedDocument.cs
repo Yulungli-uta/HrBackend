@@ -63,6 +63,12 @@ public sealed class GeneratedDocument : IAuditable
     /// <summary>ID del usuario que aprobó el documento.</summary>
     public int? ApprovedBy { get; set; }
 
+    /// <summary>Versión de la plantilla usada al momento de la generación (snapshot).</summary>
+    public string? TemplateVersion { get; set; }
+
+    /// <summary>HTML completamente renderizado en el momento de la generación (snapshot inmutable).</summary>
+    public string? HtmlSnapshot { get; set; }
+
     // ── IAuditable ──────────────────────────────────────────────────────────────
     public DateTime? CreatedAt { get; set; }
     public int? CreatedBy { get; set; }

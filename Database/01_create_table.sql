@@ -291,6 +291,7 @@ CREATE TABLE HR.tbl_Departments (
     Name NVARCHAR(120) NOT NULL,
     ShortName NVARCHAR(50) NULL,
     DepartmentType INT NOT NULL,
+	DepartmentScope    INT NULL,
     Email NVARCHAR(100) NULL,
     Phone NVARCHAR(20) NULL,
     Location NVARCHAR(200) NULL,
@@ -371,11 +372,43 @@ CREATE TABLE hr.tbl_contract_type (
 	Status VARCHAR(1) NOT NULL,
 	ContractText NVARCHAR(MAX) NULL,	 
 	ContractCode NVARCHAR(30) NULL,	 --UNIQUE
+	DocumentTemplateTypeID  INT NULL,
+	DefaultTemplateID       INT NULL;
+	NumberingPrefix NVARCHAR(50) NULL,
+    NumberingYear INT NOT NULL 
+        CONSTRAINT DF_tbl_contract_type_NumberingYear DEFAULT (YEAR(GETDATE())),
+    NumberingLastSequence INT NOT NULL 
+        CONSTRAINT DF_tbl_contract_type_NumberingLastSequence DEFAULT (0),
 	CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
 	CreatedBy int NULL,
     UpdatedAt datetime2 NULL,
     UpdatedBy int NULL
 );
+
+CREATE TABLE hr.tbl_personnel_action_type
+(
+    PersonnelActionTypeId INT IDENTITY(1,1) NOT NULL,
+    [Name] NVARCHAR(150) NOT NULL,
+    Code NVARCHAR(50) NOT NULL,
+    [Description] NVARCHAR(300) NULL,
+
+    NumberingPrefix NVARCHAR(30) NOT NULL,
+    NumberingYear INT NOT NULL
+        CONSTRAINT DF_tbl_personnel_action_type_NumberingYear DEFAULT (YEAR(GETDATE())),
+    NumberingLastSequence INT NOT NULL
+        CONSTRAINT DF_tbl_personnel_action_type_NumberingLastSequence DEFAULT (0),
+
+    TemplateCode NVARCHAR(80) NULL,
+    IsActive BIT NOT NULL
+        CONSTRAINT DF_tbl_personnel_action_type_IsActive DEFAULT (1),
+
+    CreatedAt DATETIME2(7) NULL
+        CONSTRAINT DF_tbl_personnel_action_type_CreatedAt DEFAULT (GETDATE()),
+    CreatedBy INT NULL,
+    UpdatedAt DATETIME2(7) NULL,
+    UpdatedBy INT NULL
+);
+GO
 
 
 CREATE TABLE HR.tbl_AdditionalActivities (
@@ -400,6 +433,7 @@ CREATE TABLE HR.tbl_Employees (
     ImmediateBossID INT NULL,
     HireDate DATE NOT NULL,
     Email NVARCHAR(150) NULL,
+	JobID INT NULL,
     IsActive BIT NOT NULL DEFAULT(1),
     CreatedBy INT NULL,
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
@@ -588,6 +622,10 @@ CREATE TABLE HR.tbl_Contracts (
 	  internalreportdate_inv_con DATETIME NULL,      -- Fecha de informe interno de aprobación DTH
 	  office_inv_con VARCHAR(50) NULL,               -- Número de oficio para investigador (DIDE)
 	*/
+	
+	GeneratedDocumentID     INT NULL,
+	TemplateVersionUsed     INT NULL,
+	IsDocumentFrozen        BIT NOT NULL DEFAULT(0),
     CreatedBy INT NULL,
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
     UpdatedBy INT NULL,

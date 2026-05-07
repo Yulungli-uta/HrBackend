@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
-using WsUtaSystem.Documents.Abstractions;
+using WsUtaSystem.Reports.Abstractions;
 
-namespace WsUtaSystem.Documents.Engine;
+namespace WsUtaSystem.Reports.Engine;
 
 /// <summary>
 /// Motor de sustitución de placeholders en plantillas HTML.

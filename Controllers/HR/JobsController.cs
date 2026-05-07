@@ -34,6 +34,52 @@ namespace WsUtaSystem.Controllers.HR
             return e is null ? NotFound() : Ok(_mapper.Map<JobDto>(e));
         }
 
+        /// <summary>Retorna un resultado paginado de registros de Jobs.</summary>
+        /// <param name="page">Número de página (base 1).</param>
+        /// <param name="pageSize">Cantidad de registros por página. Máximo 200.</param>
+        /// <param name="search">Texto de búsqueda por título.</param>
+        /// <param name="sortBy">Campo de ordenamiento (opcional).</param>
+        /// <param name="sortDirection">Dirección del orden: asc | desc (opcional).</param>
+        [HttpGet("paged")]
+        public async Task<IActionResult> GetPaged(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20,
+            [FromQuery] string? search = null,
+            [FromQuery] string? sortBy = null,
+            [FromQuery] string? sortDirection = "asc",
+            CancellationToken ct = default)
+        {
+            if (page < 1) page = 1;
+            if (pageSize < 1 || pageSize > 200) pageSize = 20;
+
+            System.Linq.Expressions.Expression<Func<Job, bool>>? predicate = null;
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim().ToLower();
+
+                predicate = j =>
+                    j.Description != null && j.Description.Contains(term);
+            }
+
+            var pagedEntities = predicate is not null
+                ? await _svc.GetPagedAsync(predicate, page, pageSize, ct)
+                : await _svc.GetPagedAsync(page, pageSize, ct);
+
+            var dtoItems = _mapper.Map<List<JobDto>>(pagedEntities.Items);
+
+            return Ok(new
+            {
+                items = dtoItems,
+                page = pagedEntities.Page,
+                pageSize = pagedEntities.PageSize,
+                totalCount = pagedEntities.TotalCount,
+                totalPages = pagedEntities.TotalPages,
+                hasPreviousPage = pagedEntities.HasPreviousPage,
+                hasNextPage = pagedEntities.HasNextPage
+            });
+        }
+
         /// <summary>Crea un nuevo registro.</summary>
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateJobDto dto, CancellationToken ct)

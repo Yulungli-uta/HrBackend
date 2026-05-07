@@ -3,10 +3,10 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using WsUtaSystem.Application.Services.Reports.Configuration;
-using WsUtaSystem.Documents.Abstractions;
 using WsUtaSystem.Models;
+using WsUtaSystem.Reports.Abstractions;
 
-namespace WsUtaSystem.Documents.Renderers;
+namespace WsUtaSystem.Reports.Renderers;
 
 /// <summary>
 /// Renderer de documentos institucionales (Acción de Personal, Contratos, Oficios)
@@ -150,7 +150,7 @@ public sealed class InstitutionalDocumentRenderer : IDocumentRenderer
         var bodyStart = htmlContent.IndexOf("<body>", StringComparison.OrdinalIgnoreCase);
         var bodyEnd   = htmlContent.IndexOf("</body>", StringComparison.OrdinalIgnoreCase);
 
-        var body = (bodyStart >= 0 && bodyEnd > bodyStart)
+        var body = bodyStart >= 0 && bodyEnd > bodyStart
             ? htmlContent[(bodyStart + 6)..bodyEnd]
             : htmlContent;
 

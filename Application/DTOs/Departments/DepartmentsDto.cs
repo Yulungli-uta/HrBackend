@@ -7,6 +7,7 @@ public class DepartmentsDto
     public string Name { get; set; } = null!;
     public string? ShortName { get; set; }
     public int DepartmentType { get; set; }
+    public int? DepartmentScope { get; set; }
     public string? Email { get; set; }
     public string? Phone { get; set; }
     public string? Location { get; set; }

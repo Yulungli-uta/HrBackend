@@ -11,7 +11,7 @@ public class EmployeesRepository : ServiceAwareEfRepository<Employees, int>, IEm
     {
         _db = db;
     }
-
+    
     public async Task<IEnumerable<Employees>> GetSubordinatesByBossIdAsync(
         int bossId,
         CancellationToken ct = default)
@@ -22,4 +22,15 @@ public class EmployeesRepository : ServiceAwareEfRepository<Employees, int>, IEm
             .OrderBy(e => e.EmployeeId)
             .ToListAsync(ct);
     }
+
+    public async Task<IEnumerable<Employees>> GetByPersonIdAsync(int personId, CancellationToken ct = default)
+    {
+        return await _db.Set<Employees>()
+             .AsNoTracking()
+             .Where(e => e.PersonID == personId && e.IsActive)
+             .OrderBy(e => e.EmployeeId)
+             .ToListAsync(ct);
+    }
+
+
 }

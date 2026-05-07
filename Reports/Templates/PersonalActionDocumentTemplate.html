@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="DOCUMENT_TITLE" content="ACCIÓN DE PERSONAL"/>
+<meta name="ACTION_NUMBER" content="{{DOC_NUMBER}}"/>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; color: #000; background: #fff; width: 210mm; margin: 0 auto; }
+.page { width: 210mm; min-height: 297mm; padding: 12mm 14mm 10mm 14mm; page-break-after: always; }
+.page:last-child { page-break-after: auto; }
+table { width: 100%; border-collapse: collapse; }
+td, th { border: 1px solid #000; padding: 2px 4px; vertical-align: top; }
+.no-border td, .no-border th { border: none; }
+.bold { font-weight: bold; }
+.center { text-align: center; }
+.bg-gray { background-color: #d9d9d9; }
+.section-title { font-weight: bold; font-size: 8pt; text-align: center; background-color: #d9d9d9; padding: 2px 4px; }
+.situation-label { font-weight: bold; font-size: 7pt; }
+.situation-value { font-size: 8pt; }
+.responsables-header { font-weight: bold; text-align: center; background-color: #d9d9d9; padding: 2px 4px; font-size: 8pt; }
+.firma-cell { min-height: 16mm; vertical-align: bottom; font-size: 7.5pt; padding: 3px 5px; }
+.motivation-box { border: 1px solid #000; min-height: 28mm; padding: 3px 5px; font-size: 8pt; line-height: 1.4; margin-top: 1px; }
+.situation-header { font-weight: bold; font-size: 8.5pt; text-align: center; background-color: #d9d9d9; border: 1px solid #000; padding: 2px 4px; }
+.uso-exclusivo-box { border: 1px solid #000; padding: 5px 8px; margin-top: 4mm; font-size: 7.5pt; line-height: 1.4; }
+.uso-title { font-weight: bold; text-align: center; font-size: 8.5pt; border-bottom: 1px dashed #000; padding-bottom: 3px; margin-bottom: 4px; letter-spacing: 2px; }
+.uso-separator { border-top: 1px dashed #000; margin: 4px 0; }
+.cb { display: inline-block; width: 9px; height: 9px; border: 1px solid #000; margin-right: 3px; vertical-align: middle; }
+.mt1 { margin-top: 1mm; } .mt2 { margin-top: 2mm; } .mt3 { margin-top: 3mm; }
+
+.situation-clean-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #000;
+}
+
+.situation-clean-table td {
+  border: none !important;
+  padding: 2px 4px;
+  vertical-align: top;
+  font-size: 7.5pt;
+}
+
+.situation-clean-table .situation-clean-header {
+  font-weight: bold;
+  font-size: 8.5pt;
+  text-align: center;
+  background-color: #d9d9d9;
+  border-bottom: 1px solid #000 !important;
+  padding: 2px 4px;
+}
+
+.situation-clean-table .situation-clean-current {
+  width: 50%;
+}
+
+.situation-clean-table tr.situation-clean-body-row > td.situation-clean-proposed {
+  width: 50%;
+  border-left: 1px solid #000 !important;
+}
+
+.situation-clean-label {
+  font-weight: bold;
+  font-size: 7pt;
+  margin-top: 2px;
+}
+
+.situation-clean-value {
+  font-size: 8pt;
+  margin-bottom: 3px;
+}
+
+
+.action-clean-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #000;
+}
+
+.action-clean-table td {
+  border: none !important;
+  padding: 1px 4px;
+  vertical-align: top;
+  font-size: 7.5pt;
+}
+
+.action-clean-table tr:first-child td {
+  border-bottom: 1px solid #000 !important;
+}
+
+.action-clean-col {
+  width: 25%;
+}
+
+.action-clean-option {
+  display: block;
+  margin-bottom: 2px;
+}
+
+</style>
+</head>
+<body>
+<div class="page">
+<table>
+<tr>
+<td style="width:55%;border:1px solid #000;padding:4px 6px;vertical-align:middle">
+<table class="no-border" style="width:100%"><tr>
+<td style="border:none;width:22mm;vertical-align:middle;padding:0"><div style="width:55px;height:55px;border:2px solid #8B1A1A;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11pt;color:#8B1A1A;">UTA</div></td>
+<td style="border:none;vertical-align:middle;padding-left:6px"><div style="text-align:center;font-weight:bold;font-size:9pt;line-height:1.5">UNIVERSIDAD TÉCNICA DE AMBATO<br/>DIRECCIÓN DE TALENTO HUMANO</div></td>
+</tr></table>
+</td>
+<td style="width:45%;border:1px solid #000;padding:0;vertical-align:top">
+<div style="font-size:13pt;font-weight:bold;text-align:center;padding:4px 6px;border-bottom:1px solid #000">ACCIÓN DE PERSONAL</div>
+<table style="width:100%;border-collapse:collapse;border:none"><tr>
+<td style="border:none;border-right:1px solid #000;padding:2px 5px;font-size:7.5pt;width:18mm">Nro</td>
+<td style="border:none;padding:2px 5px;font-size:8pt;font-weight:bold">{{DOC_NUMBER}}</td>
+</tr><tr>
+<td colspan="2" style="font-weight:bold;font-size:8pt;text-align:center;background-color:#d9d9d9;border-top:1px solid #000;border-bottom:1px solid #000;padding:2px 4px">FECHA DE ELABORACIÓN</td>
+</tr><tr>
+<td colspan="2" style="text-align:center;font-size:8.5pt;padding:2px 4px">{{ELABORATION_DATE}}</td>
+</tr></table>
+</td>
+</tr>
+</table>
+<table class="mt1"><tr>
+<td style="width:30%" class="section-title">APELLIDOS</td><td style="width:30%">{{EMPLOYEE_LASTNAME}}</td>
+<td style="width:20%" class="section-title">NOMBRES</td><td style="width:20%">{{EMPLOYEE_FIRSTNAME}}</td>
+</tr><tr>
+<td colspan="2"></td><td colspan="2" class="section-title center">RIGE:</td>
+</tr><tr>
+<td style="font-weight:bold;font-size:7.5pt">DOCUMENTO DE IDENTIFICACIÓN</td>
+<td style="font-weight:bold;font-size:7.5pt;text-align:center">NRO. DE IDENTIFICACIÓN</td>
+<td style="font-weight:bold;font-size:7.5pt;text-align:center">DESDE (dd-mm-aaaa)</td>
+<td style="font-weight:bold;font-size:7.5pt;text-align:center">HASTA (dd-mm-aaaa) (cuando aplica)</td>
+</tr><tr>
+<td style="text-align:center">{{ID_TYPE}}</td><td style="text-align:center">{{EMPLOYEE_IDCARD}}</td>
+<td style="text-align:center">{{EFFECTIVE_FROM}}</td><td style="text-align:center">{{EFFECTIVE_TO}}</td>
+</tr></table>
+<table class="action-clean-table mt1">
+<tr>
+<td colspan="4" style="font-size:7.5pt;padding:2px 4px">
+Escoja una opción (según lo estipulado en el artículo 21 del Reglamento General a la Ley Orgánica del Servicio Público):
+</td>
+</tr>
+<tr>
+<td class="action-clean-col">
+<span class="action-clean-option"><span class="cb {{CB_INGRESO}}"></span>INGRESO</span>
+<span class="action-clean-option"><span class="cb {{CB_REINGRESO}}"></span>REINGRESO</span>
+<span class="action-clean-option"><span class="cb {{CB_RESTITUCION}}"></span>RESTITUCIÓN</span>
+<span class="action-clean-option"><span class="cb {{CB_REINGRESO2}}"></span>REINGRESO</span>
+<span class="action-clean-option"><span class="cb {{CB_ASCENSO}}"></span>ASCENSO</span>
+<span class="action-clean-option"><span class="cb {{CB_TRASLADO}}"></span>TRASLADO</span>
+</td>
+<td class="action-clean-col">
+<span class="action-clean-option"><span class="cb {{CB_TRASPASO}}"></span>TRASPASO</span>
+<span class="action-clean-option"><span class="cb {{CB_CAMBIO_ADMIN}}"></span>CAMBIO ADMINISTRATIVO</span>
+<span class="action-clean-option"><span class="cb {{CB_INTERCAMBIO}}"></span>INTERCAMBIO VOLUNTARIO</span>
+<span class="action-clean-option"><span class="cb {{CB_LICENCIA}}"></span>LICENCIA</span>
+<span class="action-clean-option"><span class="cb {{CB_COMISION}}"></span>COMISIÓN DE SERVICIOS</span>
+<span class="action-clean-option"><span class="cb {{CB_SANCIONES}}"></span>SANCIONES</span>
+</td>
+<td class="action-clean-col">
+<span class="action-clean-option"><span class="cb {{CB_INCREMENTO_RMU}}"></span>INCREMENTO RMU</span>
+<span class="action-clean-option"><span class="cb {{CB_SUBROGACION}}"></span>SUBROGACIÓN</span>
+<span class="action-clean-option"><span class="cb {{CB_ENCARGO}}"></span>ENCARGO</span>
+<span class="action-clean-option"><span class="cb {{CB_CESACION}}"></span>CESACIÓN DE FUNCIONES</span>
+<span class="action-clean-option"><span class="cb {{CB_DESTITUCION}}"></span>DESTITUCIÓN</span>
+<span class="action-clean-option"><span class="cb {{CB_VACACIONES}}"></span>VACACIONES</span>
+</td>
+<td class="action-clean-col">
+<span class="action-clean-option"><span class="cb {{CB_REVISION_CLASI}}"></span>REVISIÓN CLASI. PUESTO</span>
+<span class="action-clean-option"><span class="cb {{CB_OTRO}}"></span>OTRO (DETALLAR):</span>
+<span class="action-clean-option">{{ACTION_OTHER_DETAIL}}</span>
+<span class="action-clean-option">{{ACTION_ENCARGO_DETAIL}}</span>
+</td>
+</tr>
+</table>
+<table class="mt1"><tr>
+<td style="width:70%;font-size:7.5pt;padding:2px 4px">* PRESENTÓ LA DECLARACIÓN JURADA (número 2 del art. 3 RLOSEP)</td>
+<td style="width:10%;text-align:center;font-size:7.5pt;font-weight:bold">SI</td>
+<td style="width:20%;text-align:center;font-size:7.5pt;font-weight:bold">NO APLICA {{DECLARACION_JURADA_MARK}}</td>
+</tr></table>
+<table class="mt1"><tr><td style="font-size:7.5pt;font-weight:bold;padding:2px 4px;background-color:#d9d9d9">MOTIVACIÓN: (adjuntar anexo si lo posee)</td></tr>
+<tr><td class="motivation-box">{{MOTIVATION_TEXT}}</td></tr></table>
+<table class="situation-clean-table mt2">
+<tr>
+<td class="situation-clean-header situation-clean-current">SITUACIÓN ACTUAL</td>
+<td class="situation-clean-header situation-clean-proposed">SITUACIÓN PROPUESTA</td>
+</tr>
+
+<tr class="situation-clean-body-row">
+<td class="situation-clean-current">
+<div class="situation-clean-label">PROCESO INSTITUCIONAL:</div>
+<div class="situation-clean-value">{{CURRENT_INSTITUTIONAL_PROCESS}}</div>
+
+<div class="situation-clean-label">NIVEL DE GESTIÓN:</div>
+<div class="situation-clean-value">{{CURRENT_MANAGEMENT_LEVEL}}</div>
+
+<div class="situation-clean-label">UNIDAD ADMINISTRATIVA:</div>
+<div class="situation-clean-value">{{CURRENT_ADMIN_UNIT}}</div>
+
+<div class="situation-clean-label">Lugar DE TRABAJO:</div>
+<div class="situation-clean-value">{{CURRENT_WORKPLACE}}</div>
+
+<div class="situation-clean-label">DENOMINACIÓN DEL PUESTO:</div>
+<div class="situation-clean-value">{{CURRENT_JOB_TITLE}}</div>
+
+<div class="situation-clean-label">GRUPO OCUPACIONAL:</div>
+<div class="situation-clean-value">{{CURRENT_OCCUPATIONAL_GROUP}}</div>
+
+<div class="situation-clean-label">GRADO:</div>
+<div class="situation-clean-value">{{CURRENT_GRADE}}</div>
+
+<div class="situation-clean-label">REMUNERACIÓN MENSUAL:</div>
+<div class="situation-clean-value">{{CURRENT_SALARY}}</div>
+
+<div class="situation-clean-label">PARTIDA INDIVIDUAL:</div>
+<div class="situation-clean-value">{{CURRENT_BUDGET_CODE}}</div>
+</td>
+
+<td class="situation-clean-proposed">
+<div class="situation-clean-label">PROCESO INSTITUCIONAL:</div>
+<div class="situation-clean-value">{{PROPOSED_INSTITUTIONAL_PROCESS}}</div>
+
+<div class="situation-clean-label">NIVEL DE GESTIÓN:</div>
+<div class="situation-clean-value">{{PROPOSED_MANAGEMENT_LEVEL}}</div>
+
+<div class="situation-clean-label">UNIDAD ADMINISTRATIVA:</div>
+<div class="situation-clean-value">{{PROPOSED_ADMIN_UNIT}}</div>
+
+<div class="situation-clean-label">Lugar DE TRABAJO:</div>
+<div class="situation-clean-value">{{PROPOSED_WORKPLACE}}</div>
+
+<div class="situation-clean-label">DENOMINACIÓN DEL PUESTO:</div>
+<div class="situation-clean-value">{{PROPOSED_JOB_TITLE}}</div>
+
+<div class="situation-clean-label">GRUPO OCUPACIONAL:</div>
+<div class="situation-clean-value">{{PROPOSED_OCCUPATIONAL_GROUP}}</div>
+
+<div class="situation-clean-label">GRADO:</div>
+<div class="situation-clean-value">{{PROPOSED_GRADE}}</div>
+
+<div class="situation-clean-label">REMUNERACIÓN MENSUAL:</div>
+<div class="situation-clean-value">{{PROPOSED_SALARY}}</div>
+
+<div class="situation-clean-label">PARTIDA INDIVIDUAL:</div>
+<div class="situation-clean-value">{{PROPOSED_BUDGET_CODE}}</div>
+</td>
+</tr>
+</table>
+<table class="mt1">
+<tr>
+<td style="width:55%;border:1px solid #000;padding:3px 5px;font-size:7.5pt;vertical-align:top">
+<div class="bold">POSESIÓN DEL PUESTO</div>
+<div class="mt1">YO,</div><div>JURO LEALTAD AL ESTADO ECUATORIANO</div>
+<div class="mt1">LUGAR: <span style="display:inline-block;width:35mm;border-bottom:1px solid #000">&nbsp;</span>&nbsp;&nbsp;FECHA: <span style="display:inline-block;width:25mm;border-bottom:1px solid #000">&nbsp;</span></div>
+<div class="mt1" style="font-size:7pt">** (EN CASO DE GANADOR DE CONCURSO DE MÉRITOS Y OPOSICIÓN)</div>
+<div style="min-height:14mm"></div>
+<div style="border-top:1px solid #000;width:60%;margin-top:2px"><div class="center" style="font-size:7pt">FIRMA</div></div>
+</td>
+<td style="width:45%;border:1px solid #000;padding:3px 5px;font-size:7.5pt;vertical-align:top">
+<div class="bold">CON NRO. DE DOCUMENTO DE IDENTIFICACIÓN:</div>
+<div class="mt1">{{EMPLOYEE_IDCARD}}</div>
+<div style="min-height:16mm"></div>
+<div style="border-top:1px solid #000;width:70%;margin-top:2px"><div class="center" style="font-size:7pt">SERVIDOR PÚBLICO</div></div>
+</td>
+</tr>
+</table>
+<table class="mt1">
+<tr><td colspan="3" class="responsables-header">NRO. ACTA FINAL: {{ACTA_NUMBER}} &nbsp;&nbsp; FECHA: {{APPROVAL_DATE}} &nbsp;&nbsp; SERVIDOR PÚBLICO: {{EMPLOYEE_FULLNAME}}</td></tr>
+<tr><td colspan="3" class="responsables-header">RESPONSABLES DE APROBACIÓN</td></tr>
+<tr>
+<td style="width:50%;border:1px solid #000;padding:2px 4px;font-size:7.5pt;font-weight:bold;background-color:#d9d9d9">DIRECTOR (A) O RESPONSABLE DE TALENTO HUMANO</td>
+<td colspan="2" style="width:50%;border:1px solid #000;padding:2px 4px;font-size:7.5pt;font-weight:bold;background-color:#d9d9d9">AUTORIDAD NOMINADORA O SU DELEGADO</td>
+</tr>
+<tr>
+<td class="firma-cell" style="border:1px solid #000;min-height:18mm;vertical-align:bottom">
+<div style="min-height:14mm"></div>
+<div style="border-top:1px solid #000;padding-top:2px"><div>FIRMA</div><div>NOMBRE: {{DTH_DIRECTOR_NAME}}</div><div>PUESTO: {{DTH_DIRECTOR_TITLE}}</div></div>
+</td>
+<td colspan="2" class="firma-cell" style="border:1px solid #000;min-height:18mm;vertical-align:bottom">
+<div style="min-height:14mm"></div>
+<div style="border-top:1px solid #000;padding-top:2px"><div>FIRMA</div><div>NOMBRE: {{AUTHORITY_NAME}}</div><div>PUESTO: {{AUTHORITY_TITLE}}</div></div>
+</td>
+</tr>
+</table>
+</div>
+<div class="page">
+<table>
+<tr><td colspan="2" class="responsables-header">RESPONSABLES DE FIRMAS</td></tr>
+<tr>
+<td style="width:55%;border:1px solid #000;padding:2px 4px;font-size:7.5pt;font-weight:bold;background-color:#d9d9d9">ACEPTACIÓN Y/O RECEPCIÓN DEL SERVIDOR PÚBLICO</td>
+<td style="width:45%;border:1px solid #000;padding:2px 4px;font-size:7.5pt;font-weight:bold;background-color:#d9d9d9">EN CASO DE NEGATIVA DE LA RECEPCIÓN (TESTIGO)</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:3px 5px;font-size:7.5pt;min-height:22mm;vertical-align:bottom">
+<div style="min-height:16mm"></div>
+<div style="border-top:1px solid #000;padding-top:2px"><div>FIRMA</div><div>NOMBRE: {{EMPLOYEE_FULLNAME}}</div><div>FECHA: {{EMPLOYEE_SIGNATURE_DATE}}</div><div>HORA: {{EMPLOYEE_SIGNATURE_HOUR}}</div></div>
+</td>
+<td style="border:1px solid #000;padding:3px 5px;font-size:7.5pt;min-height:22mm;vertical-align:bottom">
+<div style="min-height:10mm"></div>
+<div style="border-top:1px solid #000;padding-top:2px"><div>FIRMA</div><div>NOMBRE: {{WITNESS_NAME}}</div><div>FECHA: {{WITNESS_DATE}}</div>
+<div style="font-size:7pt;margin-top:3px">RAZÓN: En presencia del testigo se deja constancia de que la o el servidor público tiene la negativa de recibir la comunicación de registro de esta acción de personal.</div>
+</div>
+</td>
+</tr>
+</table>
+<table class="mt2">
+<tr>
+<td style="width:33.33%;border:1px solid #000;padding:2px 4px;font-size:7.5pt;font-weight:bold;background-color:#d9d9d9;text-align:center">RESPONSABLE DE ELABORACIÓN</td>
+<td style="width:33.33%;border:1px solid #000;padding:2px 4px;font-size:7.5pt;font-weight:bold;background-color:#d9d9d9;text-align:center">RESPONSABLE DE REVISIÓN</td>
+<td style="width:33.33%;border:1px solid #000;padding:2px 4px;font-size:7.5pt;font-weight:bold;background-color:#d9d9d9;text-align:center">RESPONSABLE DE REGISTRO Y CONTROL</td>
+</tr>
+<tr>
+<td style="border:1px solid #000;padding:3px 5px;font-size:7.5pt;min-height:20mm;vertical-align:bottom"><div style="min-height:14mm"></div><div style="border-top:1px solid #000;padding-top:2px"><div>FIRMA</div><div>NOMBRE: {{ELABORATOR_NAME}}</div><div>PUESTO: {{ELABORATOR_TITLE}}</div></div></td>
+<td style="border:1px solid #000;padding:3px 5px;font-size:7.5pt;min-height:20mm;vertical-align:bottom"><div style="min-height:14mm"></div><div style="border-top:1px solid #000;padding-top:2px"><div>FIRMA</div><div>NOMBRE: {{REVIEWER_NAME}}</div><div>PUESTO: {{REVIEWER_TITLE}}</div></div></td>
+<td style="border:1px solid #000;padding:3px 5px;font-size:7.5pt;min-height:20mm;vertical-align:bottom"><div style="min-height:14mm"></div><div style="border-top:1px solid #000;padding-top:2px"><div>FIRMA</div><div>NOMBRE: {{REGISTRAR_NAME}}</div><div>PUESTO: {{REGISTRAR_TITLE}}</div></div></td>
+</tr>
+</table>
+<div class="uso-exclusivo-box mt3">
+<div class="uso-title">* * U S O &nbsp; E X C L U S I V O &nbsp; P A R A &nbsp; T A L E N T O &nbsp; H U M A N O</div>
+<div class="uso-separator"></div>
+<p style="margin-bottom:4px"><strong>PROTECCIÓN DE DATOS.-</strong> En cumplimiento con la Ley Orgánica de Protección de Datos Personales y su normativa conexa, la Universidad Técnica de Ambato, en calidad de responsable del tratamiento, informa al titular de los datos personales que, la información proporcionada a la Institución será objeto de tratamiento con las siguientes finalidades:</p>
+<p style="margin-bottom:2px">• Cumplir con obligaciones contractuales legales, tributarias y de seguridad social.</p>
+<p style="margin-bottom:2px">• Generación de reportes específicos internos o que sean solicitados por una institución pública que rige a esta IES.</p>
+<p style="margin-bottom:4px">• Generar bases de datos de acceso público.</p>
+<p style="margin-bottom:4px">El titular de los datos personales autoriza expresamente, al momento de proporcionar su información, el tratamiento de los mismos en conformidad con la Ley Orgánica de Protección de Datos Personales en Ecuador. En caso de tratarse de datos sensibles, el consentimiento será solicitado y recabado de manera explícita y fehaciente.</p>
+<div class="uso-separator"></div>
+<p style="margin-bottom:4px">REGISTRO DE NOTIFICACIÓN AL SERVIDOR PÚBLICO DE LA ACCIÓN DE PERSONAL (primer inciso del art. 22 RGLOSEP, art. 101 COA, art. 66 y 126 ERJAFE)</p>
+<div class="uso-separator"></div>
+<p style="margin-bottom:3px"><strong>COMUNICACIÓN ELECTRÓNICA</strong></p>
+<table class="no-border" style="width:60%;margin-bottom:4px">
+<tr><td style="border:none;padding:1px 4px;font-size:7.5pt;width:30mm">FECHA:</td><td style="border:none;padding:1px 4px;font-size:7.5pt">{{NOTIFICATION_DATE}}</td><td style="border:none;padding:1px 4px;font-size:7.5pt;width:20mm">HORA:</td><td style="border:none;padding:1px 4px;font-size:7.5pt">{{NOTIFICATION_HOUR}}</td></tr>
+</table>
+<p style="margin-bottom:12mm">* * MEDIO: {{NOTIFICATION_MEDIUM}}</p>
+<table class="no-border" style="width:60%;margin:0 auto">
+<tr><td style="border:none;border-top:1px solid #000;text-align:center;padding-top:2px;font-size:7.5pt">FIRMA DEL RESPONSABLE QUE NOTIFICÓ</td></tr>
+<tr><td style="border:none;text-align:center;font-size:7.5pt">NOMBRE: {{DTH_DIRECTOR_NAME}}</td></tr>
+<tr><td style="border:none;text-align:center;font-size:7.5pt">PUESTO: {{DTH_DIRECTOR_TITLE}}</td></tr>
+</table>
+<p class="mt2" style="font-size:7pt">** Si la comunicación fue electrónica se deberá colocar el medio por el cual se notificó al servidor; así como, el número del documento.</p>
+</div>
+</div>
+</body>
+</html>

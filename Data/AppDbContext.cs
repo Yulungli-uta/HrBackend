@@ -149,6 +149,8 @@ public class AppDbContext : DbContext
     public DbSet<GeneratedDocument> GeneratedDocuments => Set<GeneratedDocument>();
     public DbSet<GeneratedDocumentField> GeneratedDocumentFields => Set<GeneratedDocumentField>();
     public DbSet<PersonnelAction> PersonnelActions => Set<PersonnelAction>();
+    public DbSet<PersonnelActionStatusHistory> PersonnelActionStatusHistories => Set<PersonnelActionStatusHistory>();
+    public DbSet<PersonnelActionType> PersonnelActionTypes => Set<PersonnelActionType>();
 
     // ─────────────────────────────────────────────────────────────────────────
     // DbSets - Vistas (sin clave primaria)
@@ -163,6 +165,9 @@ public class AppDbContext : DbContext
     public DbSet<VwUserRole> VwUserRoles { get; set; }
     public DbSet<VwRoleMenuItem> VwRoleMenuItems { get; set; }
     public DbSet<VwEmployeeCurrentSchedule> VwEmployeeCurrentSchedules => Set<VwEmployeeCurrentSchedule>();
+    public DbSet<VwDepartmentWithType> VwDepartmentWithType { get; set; }
+    public DbSet<VwJobWithDegreeAndGroup> VwJobWithDegreeAndGroup { get; set; }
+    public DbSet<VwJobActivity> VwJobActivity { get; set; }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Configuración del modelo

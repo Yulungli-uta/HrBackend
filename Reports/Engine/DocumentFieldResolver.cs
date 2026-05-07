@@ -1,11 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Data;
-using WsUtaSystem.Documents.Abstractions;
 using WsUtaSystem.Models;
+using WsUtaSystem.Reports.Abstractions;
 
-namespace WsUtaSystem.Documents.Engine;
+namespace WsUtaSystem.Reports.Engine;
 
 /// <summary>
 /// Resuelve los valores de los campos de una plantilla documental consultando
@@ -25,11 +26,13 @@ namespace WsUtaSystem.Documents.Engine;
 public sealed class DocumentFieldResolver : IDocumentFieldResolver
 {
     private readonly AppDbContext _db;
+    private readonly IConfiguration _config;
     private readonly ILogger<DocumentFieldResolver> _logger;
 
-    public DocumentFieldResolver(AppDbContext db, ILogger<DocumentFieldResolver> logger)
+    public DocumentFieldResolver(AppDbContext db, IConfiguration config, ILogger<DocumentFieldResolver> logger)
     {
         _db     = db     ?? throw new ArgumentNullException(nameof(db));
+        _config = config ?? throw new ArgumentNullException(nameof(config));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -136,7 +139,7 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
 
     // ── Resolución individual por campo ─────────────────────────────────────────
 
-    private static string? ResolveField(
+    private string? ResolveField(
         DocumentTemplateField field,
         Employees employee,
         Contracts? contract,
@@ -145,14 +148,13 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
         Job? job,
         PersonnelMovements? movement)
     {
-        // FieldSourceType es enum real → switch directo sin Enum.TryParse
         return field.SourceType switch
         {
             FieldSourceType.Employee => ResolveEmployeeField(field.FieldName, employee),
             FieldSourceType.Contract => ResolveContractField(field.FieldName, contract, contractType, department, job),
             FieldSourceType.Movement => ResolveMovementField(field.FieldName, movement),
-            FieldSourceType.System   => ResolveSystemField(field.FieldName),
-            FieldSourceType.Manual   => null, // Se espera override manual
+            FieldSourceType.System   => ResolveSystemField(field.FieldName, _config),
+            FieldSourceType.Manual   => null,
             _                        => null
         };
     }
@@ -160,18 +162,29 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
     private static string? ResolveEmployeeField(string fieldName, Employees employee)
     {
         var p = employee.People;
+
+        // Mapear IdentType (int) al texto del documento de identidad
+        static string? IdentTypeLabel(int? v) => v switch
+        {
+            1 => "CÉDULA",
+            2 => "PASAPORTE",
+            3 => "RUC",
+            _ => null
+        };
+
         return fieldName.ToUpperInvariant() switch
         {
             "EMPLOYEE_ID"        => employee.EmployeeId.ToString(),
-            "EMPLOYEE_FULLNAME"  => p is not null ? $"{p.FirstName} {p.LastName}" : null,
-            "EMPLOYEE_FIRSTNAME" => p?.FirstName,
-            "EMPLOYEE_LASTNAME"  => p?.LastName,
+            "EMPLOYEE_FULLNAME"  => p is not null ? $"{p.FirstName} {p.LastName}".ToUpperInvariant() : null,
+            "EMPLOYEE_FIRSTNAME" => p?.FirstName?.ToUpperInvariant(),
+            "EMPLOYEE_LASTNAME"  => p?.LastName?.ToUpperInvariant(),
             "EMPLOYEE_IDCARD"    => p?.IdCard,
             "EMPLOYEE_EMAIL"     => employee.Email ?? p?.Email,
             "EMPLOYEE_PHONE"     => p?.Phone,
             "EMPLOYEE_ADDRESS"   => p?.Address,
             "EMPLOYEE_BIRTHDATE" => p?.BirthDate?.ToString("dd/MM/yyyy"),
             "EMPLOYEE_HIREDATE"  => employee.HireDate.ToString("dd/MM/yyyy"),
+            "ID_TYPE"            => IdentTypeLabel(p?.IdentType),
             _                    => null
         };
     }
@@ -192,12 +205,16 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
             "CONTRACT_STARTDATE"   => contract.StartDate.ToString("dd/MM/yyyy"),
             "CONTRACT_ENDDATE"     => contract.EndDate.ToString("dd/MM/yyyy"),
             "CONTRACT_DESCRIPTION" => contract.ContractDescription,
-            "CONTRACT_RMU"         => null, // Se obtiene de SalaryHistory si se necesita
+            "CONTRACT_RMU"         => null,
             "DEPARTMENT_NAME"      => department?.Name,
             "DEPARTMENT_CODE"      => department?.Code,
             "DEPARTMENT_SHORTNAME" => department?.ShortName ?? department?.Name,
             "JOB_DESCRIPTION"      => job?.Description,
             "BUDGET_CODE"          => department?.BudgetCode,
+            // Aliases que la plantilla de acciones de personal usa
+            "CURRENT_ADMIN_UNIT"   => department?.Name?.ToUpperInvariant(),
+            "CURRENT_JOB_TITLE"    => job?.Description?.ToUpperInvariant(),
+            "CURRENT_BUDGET_CODE"  => department?.BudgetCode,
             _                      => null
         };
     }
@@ -215,19 +232,38 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
         };
     }
 
-    private static string? ResolveSystemField(string fieldName)
+    private static string? ResolveSystemField(string fieldName, IConfiguration config)
     {
         var now = DateTime.Now;
+
+        // Leer config institucional (sección InstitutionalConfig en appsettings.json)
+        string Cfg(string key) => config[$"InstitutionalConfig:{key}"] ?? string.Empty;
+
         return fieldName.ToUpperInvariant() switch
         {
-            "SYSTEM_DATE"       => now.ToString("dd/MM/yyyy"),
-            "SYSTEM_DATETIME"   => now.ToString("dd/MM/yyyy HH:mm"),
-            "SYSTEM_YEAR"       => now.Year.ToString(),
-            "SYSTEM_MONTH"      => now.Month.ToString("00"),
-            "SYSTEM_DAY"        => now.Day.ToString("00"),
-            "INSTITUTION_NAME"  => "Universidad Técnica de Ambato",
-            "INSTITUTION_SHORT" => "UTA",
-            _                   => null
+            "SYSTEM_DATE"         => now.ToString("dd/MM/yyyy"),
+            "SYSTEM_DATETIME"     => now.ToString("dd/MM/yyyy HH:mm"),
+            "SYSTEM_YEAR"         => now.Year.ToString(),
+            "SYSTEM_MONTH"        => now.Month.ToString("00"),
+            "SYSTEM_DAY"          => now.Day.ToString("00"),
+            "INSTITUTION_NAME"    => "Universidad Técnica de Ambato",
+            "INSTITUTION_SHORT"   => "UTA",
+            // Fechas del documento
+            "APPROVAL_DATE"       => now.ToString("dd/MM/yyyy"),
+            "NOTIFICATION_DATE"   => now.ToString("dd/MM/yyyy"),
+            "NOTIFICATION_HOUR"   => now.ToString("HH:mm"),
+            // Responsables institucionales (leídos de configuración)
+            "DTH_DIRECTOR_NAME"   => Cfg("DthDirectorName"),
+            "DTH_DIRECTOR_TITLE"  => Cfg("DthDirectorTitle"),
+            "AUTHORITY_NAME"      => Cfg("AuthorityName"),
+            "AUTHORITY_TITLE"     => Cfg("AuthorityTitle"),
+            "ELABORATOR_NAME"     => Cfg("ElaboratorName"),
+            "ELABORATOR_TITLE"    => Cfg("ElaboratorTitle"),
+            "REVIEWER_NAME"       => Cfg("ReviewerName"),
+            "REVIEWER_TITLE"      => Cfg("ReviewerTitle"),
+            "REGISTRAR_NAME"      => Cfg("RegistrarName"),
+            "REGISTRAR_TITLE"     => Cfg("RegistrarTitle"),
+            _                     => null
         };
     }
 }

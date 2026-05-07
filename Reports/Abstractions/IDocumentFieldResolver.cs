@@ -1,7 +1,7 @@
 using WsUtaSystem.Application.DTOs.Documents.Templates;
 using WsUtaSystem.Models;
 
-namespace WsUtaSystem.Documents.Abstractions;
+namespace WsUtaSystem.Reports.Abstractions;
 
 /// <summary>
 /// Resuelve los valores de los campos de una plantilla documental

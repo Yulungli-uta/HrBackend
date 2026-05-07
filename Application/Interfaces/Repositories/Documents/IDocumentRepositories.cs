@@ -1,7 +1,7 @@
 using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Application.DTOs.Documents.GeneratedDocuments;
-using WsUtaSystem.Application.DTOs.Documents.PersonnelActions;
 using WsUtaSystem.Application.DTOs.Documents.Templates;
+using WsUtaSystem.Application.DTOs.PersonnelActions;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Application.Interfaces.Repositories.Documents;
@@ -105,6 +105,9 @@ public interface IGeneratedDocumentRepository
 
     /// <summary>Actualiza el StoredFileId después de guardar el PDF.</summary>
     Task UpdateStoredFileAsync(int documentId, int storedFileId, string fileName, CancellationToken ct = default);
+
+    /// <summary>Guarda el snapshot de versión y HTML en el documento generado.</summary>
+    Task UpdateTemplateSnapshotAsync(int documentId, string templateVersion, string htmlSnapshot, CancellationToken ct = default);
 }
 
 // ── IPersonnelActionRepository ───────────────────────────────────────────────────
@@ -132,9 +135,18 @@ public interface IPersonnelActionRepository
     /// <summary>Actualiza los datos de una acción de personal.</summary>
     Task UpdateAsync(PersonnelAction action, CancellationToken ct = default);
 
-    /// <summary>Actualiza el estado de una acción.</summary>
-    Task UpdateStatusAsync(int actionId, string status, CancellationToken ct = default);
+    /// <summary>Actualiza el estado de una acción sincronizando Status (string) y StatusTypeId (FK ref_Types).</summary>
+    Task UpdateStatusAsync(int actionId, string statusCode, CancellationToken ct = default);
 
     /// <summary>Vincula un documento generado a una acción de personal.</summary>
     Task LinkDocumentAsync(int actionId, int documentId, CancellationToken ct = default);
+
+    /// <summary>Vincula el archivo físico del documento firmado cargado.</summary>
+    Task LinkSignedDocumentAsync(int actionId, int storedFileId, CancellationToken ct = default);
+
+    /// <summary>Escribe una entrada en el historial de estados.</summary>
+    Task AddStatusHistoryAsync(PersonnelActionStatusHistory entry, CancellationToken ct = default);
+
+    /// <summary>Obtiene el historial completo de estados de una acción.</summary>
+    Task<IReadOnlyList<PersonnelActionStatusHistoryDto>> GetStatusHistoryAsync(int actionId, CancellationToken ct = default);
 }

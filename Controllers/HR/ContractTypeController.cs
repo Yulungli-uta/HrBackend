@@ -1,10 +1,8 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
-using System.ComponentModel.DataAnnotations;
-using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.ContractType;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Models;
-using WsUtaSystem.Infrastructure.Controller;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -56,5 +54,46 @@ public class ContractTypeController : ControllerBase
     {
         await _svc.DeleteAsync(id, ct);
         return NoContent();
+    }
+
+    /// <summary>
+    /// Obtiene un tipo de contrato con la información de su plantilla documental por defecto.
+    /// </summary>
+    [HttpGet("{id:int}/template")]
+    [ProducesResponseType(typeof(ContractTypeWithTemplateDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetWithTemplate([FromRoute] int id, CancellationToken ct)
+    {
+        var result = await _svc.GetWithDefaultTemplateAsync(id, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    /// <summary>
+    /// Asigna o quita la plantilla documental por defecto de un tipo de contrato.
+    /// Enviar <c>templateId: null</c> para desvincular la plantilla.
+    /// </summary>
+    [HttpPatch("{id:int}/default-template")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetDefaultTemplate(
+        [FromRoute] int id,
+        [FromBody] SetDefaultTemplateRequest request,
+        CancellationToken ct)
+    {
+        await _svc.SetDefaultTemplateAsync(id, request.TemplateId, ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Genera y reserva el siguiente número de documento para el tipo de contrato indicado.
+    /// El número tiene el formato {prefix}-{year}-{seq:D3} (ej: CONT-OCAS-2026-001).
+    /// </summary>
+    [HttpPost("{id:int}/next-number")]
+    [ProducesResponseType(typeof(ContractNextNumberDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> NextNumber([FromRoute] int id, CancellationToken ct)
+    {
+        var result = await _svc.GetNextNumberAsync(id, ct);
+        return Ok(result);
     }
 }

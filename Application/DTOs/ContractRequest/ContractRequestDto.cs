@@ -16,6 +16,31 @@ namespace WsUtaSystem.Application.DTOs.ContractRequest
         public int? UpdatedBy { get; set; }
 
         public int? Status { get; set; }
+
+        /// <summary>Personas pendientes de contratar (calculado: NumberOfPeopleToHire - TotalPeopleHired).</summary>
+        public int PendingCount { get; set; }
+
+        /// <summary>Nombre del estado desde ref_Types (CONTRACT_REQUEST_STATUS).</summary>
+        public string? StatusName { get; set; }
     }
 }
+
+/// <summary>Filtros para consultar solicitudes de contrato.</summary>
+public sealed record ContractRequestQueryFilter(
+    string? StatusName,
+    int? DepartmentId,
+    int? WorkModalityId,
+    string? Search,
+    int Page = 1,
+    int PageSize = 20
+);
+
+/// <summary>Resultado paginado de solicitudes de contrato.</summary>
+public sealed record PagedContractRequestResult(
+    IReadOnlyList<WsUtaSystem.Application.DTOs.ContractRequest.ContractRequestDto> Items,
+    int TotalCount,
+    int Page,
+    int PageSize,
+    int TotalPages
+);
 

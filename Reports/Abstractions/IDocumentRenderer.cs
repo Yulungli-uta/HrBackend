@@ -1,4 +1,4 @@
-namespace WsUtaSystem.Documents.Abstractions;
+namespace WsUtaSystem.Reports.Abstractions;
 
 /// <summary>
 /// Convierte el HTML final (con placeholders ya sustituidos) en un archivo PDF.
