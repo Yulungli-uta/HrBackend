@@ -64,4 +64,7 @@ public class ContractsDto
     public int? GeneratedDocumentId { get; set; }
     public int? TemplateVersionUsed { get; set; }
     public bool IsDocumentFrozen { get; set; }
+
+    public int? AuthorityNominatorId { get; set; }
+    public int? DthDirectorId { get; set; }
 }

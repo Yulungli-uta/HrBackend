@@ -15,6 +15,8 @@ public class Schedules : IAuditable{
   public bool IsRotating { get; set; } = false;
   public string? RotationPattern { get; set; }
   public bool IsActive { get; set; } = true;
+  public string? ScheduleCode { get; set; }
+  public bool CrossesMidnight { get; set; }
   public int? CreatedBy { get; set; }
   public DateTime? CreatedAt { get; set; }
   public int? UpdatedBy { get; set; }

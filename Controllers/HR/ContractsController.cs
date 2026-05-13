@@ -122,15 +122,23 @@ public class ContractsController : ControllerBase
 
         if (dto.GenerateDocument)
         {
-            var generatedBy = _currentUser.EmployeeId ?? 0;
+            try
+            {
+                var generatedBy = _currentUser.EmployeeId ?? 0;
 
-            document = await _service.GenerateDocumentAsync(
-                created.ContractID,
-                new GenerateContractDocumentRequest(dto.DocumentOverrides, false),
-                generatedBy,
-                ct);
+                document = await _service.GenerateDocumentAsync(
+                    created.ContractID,
+                    new GenerateContractDocumentRequest(dto.DocumentOverrides, false),
+                    generatedBy,
+                    ct);
 
-            created = await _service.GetByIdAsync(created.ContractID, ct) ?? created;
+                created = await _service.GetByIdAsync(created.ContractID, ct) ?? created;
+            }
+            catch
+            {
+                await _service.DeleteAsync(created.ContractID, ct);
+                throw;
+            }
         }
 
         return CreatedAtAction(

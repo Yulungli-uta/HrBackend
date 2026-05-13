@@ -3,6 +3,7 @@ using Models.Views;
 using WsUtaSystem.Data.ModelConfigurations.HR;
 using WsUtaSystem.Models;
 using WsUtaSystem.Models.Docflow;
+using WsUtaSystem.Models.Guards;
 using WsUtaSystem.Models.Views;
 
 namespace WsUtaSystem.Data;
@@ -50,6 +51,8 @@ public class AppDbContext : DbContext
     public DbSet<ContractType> ContractType => Set<ContractType>();
     public DbSet<ContractRequest> ContractRequest => Set<ContractRequest>();
     public DbSet<FinancialCertification> FinancialCertification => Set<FinancialCertification>();
+    public DbSet<ContractRequestPerson> ContractRequestPersons => Set<ContractRequestPerson>();
+    public DbSet<FinancialCertificationRejectionHistory> FinancialCertificationRejectionHistories => Set<FinancialCertificationRejectionHistory>();
     public DbSet<ContractStatusTransition> ContractStatusTransitions => Set<ContractStatusTransition>();
     public DbSet<ContractStatusHistory> ContractStatusHistories => Set<ContractStatusHistory>();
     public DbSet<Payroll> Payroll => Set<Payroll>();
@@ -153,6 +156,22 @@ public class AppDbContext : DbContext
     public DbSet<PersonnelActionType> PersonnelActionTypes => Set<PersonnelActionType>();
 
     // ─────────────────────────────────────────────────────────────────────────
+    // DbSets - Módulo Guardias Rotativos
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public DbSet<GuardServiceLocation> GuardServiceLocations => Set<GuardServiceLocation>();
+    public DbSet<GuardRotationGroup> GuardRotationGroups => Set<GuardRotationGroup>();
+    public DbSet<GuardRotationGroupEmployee> GuardRotationGroupEmployees => Set<GuardRotationGroupEmployee>();
+    public DbSet<RotationPattern> RotationPatterns => Set<RotationPattern>();
+    public DbSet<RotationPatternDetail> RotationPatternDetails => Set<RotationPatternDetail>();
+    public DbSet<GuardGroupRotationPattern> GuardGroupRotationPatterns => Set<GuardGroupRotationPattern>();
+    public DbSet<GuardShiftCoverageRequirement> GuardShiftCoverageRequirements => Set<GuardShiftCoverageRequirement>();
+    public DbSet<GuardShiftPlanning> GuardShiftPlannings => Set<GuardShiftPlanning>();
+    public DbSet<GuardShiftChange> GuardShiftChanges => Set<GuardShiftChange>();
+    public DbSet<EmployeeAvailabilityBlock> EmployeeAvailabilityBlocks => Set<EmployeeAvailabilityBlock>();
+    public DbSet<GuardAssignmentValidation> GuardAssignmentValidations => Set<GuardAssignmentValidation>();
+
+    // ─────────────────────────────────────────────────────────────────────────
     // DbSets - Vistas (sin clave primaria)
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -168,6 +187,7 @@ public class AppDbContext : DbContext
     public DbSet<VwDepartmentWithType> VwDepartmentWithType { get; set; }
     public DbSet<VwJobWithDegreeAndGroup> VwJobWithDegreeAndGroup { get; set; }
     public DbSet<VwJobActivity> VwJobActivity { get; set; }
+    public DbSet<VwAuthority> VwAuthority { get; set; }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Configuración del modelo

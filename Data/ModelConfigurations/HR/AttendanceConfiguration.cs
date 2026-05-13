@@ -87,6 +87,11 @@ public sealed class AttendanceCalculationsConfiguration : IEntityTypeConfigurati
         e.Property(x => x.CalculationId).HasColumnName("CalculationID");
         e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
         e.Property(x => x.Status).HasMaxLength(12);
+        e.Property(x => x.GuardShiftPlanningId).HasColumnName("GuardShiftPlanningID");
+        e.Property(x => x.GuardShiftChangeId).HasColumnName("GuardShiftChangeID");
+        e.Property(x => x.OriginalEmployeeId).HasColumnName("OriginalEmployeeID");
+        e.Property(x => x.EffectiveEmployeeId).HasColumnName("EffectiveEmployeeID");
+        e.Property(x => x.IsReplacement).HasDefaultValue(false);
     }
 }
 

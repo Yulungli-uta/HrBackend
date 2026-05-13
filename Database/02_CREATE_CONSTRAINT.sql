@@ -847,3 +847,276 @@ GO
 CREATE INDEX IX_tbl_personnel_action_type_Numbering
 ON hr.tbl_personnel_action_type(NumberingYear, NumberingPrefix);
 GO
+
+ ALTER TABLE HR.tbl_contractRequest
+    ADD CONSTRAINT CK_contractRequest_Dates
+    CHECK (
+        StartDate IS NULL 
+        OR EndDate IS NULL 
+        OR EndDate >= StartDate
+		
+
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_FinancialCertification_RejectionType'
+)
+BEGIN
+    ALTER TABLE HR.tbl_FinancialCertification
+    ADD CONSTRAINT FK_FinancialCertification_RejectionType
+    FOREIGN KEY (RejectionTypeID)
+    REFERENCES HR.ref_Types(TypeID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_contractRequestPerson_Request'
+)
+BEGIN
+    ALTER TABLE HR.tbl_contractRequestPerson
+    ADD CONSTRAINT FK_contractRequestPerson_Request
+    FOREIGN KEY (RequestID)
+    REFERENCES HR.tbl_contractRequest(RequestID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_contractRequestPerson_Person'
+)
+BEGIN
+    ALTER TABLE HR.tbl_contractRequestPerson
+    ADD CONSTRAINT FK_contractRequestPerson_Person
+    FOREIGN KEY (PersonID)
+    REFERENCES HR.tbl_People(PersonID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_contractRequestPerson_Job'
+)
+BEGIN
+    ALTER TABLE HR.tbl_contractRequestPerson
+    ADD CONSTRAINT FK_contractRequestPerson_Job
+    FOREIGN KEY (JobID)
+    REFERENCES HR.tbl_jobs(JobID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_contractRequestPerson_EntrySource'
+)
+BEGIN
+    ALTER TABLE HR.tbl_contractRequestPerson
+    ADD CONSTRAINT FK_contractRequestPerson_EntrySource
+    FOREIGN KEY (EntrySourceID)
+    REFERENCES HR.ref_Types(TypeID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_contractRequestPerson_Contract'
+)
+BEGIN
+    ALTER TABLE HR.tbl_contractRequestPerson
+    ADD CONSTRAINT FK_contractRequestPerson_Contract
+    FOREIGN KEY (ContractID)
+    REFERENCES HR.tbl_Contracts(ContractID);
+END;
+GO
+
+-- IF NOT EXISTS (
+    -- SELECT 1
+    -- FROM sys.foreign_keys
+    -- WHERE name = 'FK_contractRequestPerson_HiredBy'
+-- )
+-- BEGIN
+    -- ALTER TABLE HR.tbl_contractRequestPerson
+    -- ADD CONSTRAINT FK_contractRequestPerson_HiredBy
+    -- FOREIGN KEY (HiredBy)
+    -- REFERENCES HR.tbl_Employees(EmployeeID);
+-- END;
+-- GO
+
+-- IF NOT EXISTS (
+    -- SELECT 1
+    -- FROM sys.foreign_keys
+    -- WHERE name = 'FK_contractRequestPerson_InactiveBy'
+-- )
+-- BEGIN
+    -- ALTER TABLE HR.tbl_contractRequestPerson
+    -- ADD CONSTRAINT FK_contractRequestPerson_InactiveBy
+    -- FOREIGN KEY (InactiveBy)
+    -- REFERENCES HR.tbl_Employees(EmployeeID);
+-- END;
+-- GO
+
+-- IF NOT EXISTS (
+    -- SELECT 1
+    -- FROM sys.foreign_keys
+    -- WHERE name = 'FK_contractRequestPerson_CreatedBy'
+-- )
+-- BEGIN
+    -- ALTER TABLE HR.tbl_contractRequestPerson
+    -- ADD CONSTRAINT FK_contractRequestPerson_CreatedBy
+    -- FOREIGN KEY (CreatedBy)
+    -- REFERENCES HR.tbl_Employees(EmployeeID);
+-- END;
+-- GO
+
+-- IF NOT EXISTS (
+    -- SELECT 1
+    -- FROM sys.foreign_keys
+    -- WHERE name = 'FK_contractRequestPerson_UpdatedBy'
+-- )
+-- BEGIN
+    -- ALTER TABLE HR.tbl_contractRequestPerson
+    -- ADD CONSTRAINT FK_contractRequestPerson_UpdatedBy
+    -- FOREIGN KEY (UpdatedBy)
+    -- REFERENCES HR.tbl_Employees(EmployeeID);
+-- END;
+-- GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_contractRequestPerson_Status'
+)
+BEGIN
+    ALTER TABLE HR.tbl_contractRequestPerson
+    ADD CONSTRAINT FK_contractRequestPerson_Status
+    FOREIGN KEY (Status)
+    REFERENCES HR.ref_Types(TypeID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_contractRequestPerson_Status'
+)
+BEGIN
+    ALTER TABLE HR.tbl_contractRequestPerson
+    ADD CONSTRAINT FK_contractRequestPerson_RequestPersonType
+    FOREIGN KEY (RequestPersonType)
+    REFERENCES HR.ref_Types(TypeID);
+END;
+GO
+
+
+/* ============================================================
+   7.4 FK - HR.tbl_FinancialCertificationRejectionHistory
+   ============================================================ */
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_FinCertRejectHistory_Certification'
+)
+BEGIN
+    ALTER TABLE HR.tbl_FinancialCertificationRejectionHistory
+    ADD CONSTRAINT FK_FinCertRejectHistory_Certification
+    FOREIGN KEY (CertificationID)
+    REFERENCES HR.tbl_FinancialCertification(CertificationID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_FinCertRejectHistory_Request'
+)
+BEGIN
+    ALTER TABLE HR.tbl_FinancialCertificationRejectionHistory
+    ADD CONSTRAINT FK_FinCertRejectHistory_Request
+    FOREIGN KEY (RequestID)
+    REFERENCES HR.tbl_contractRequest(RequestID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_FinCertRejectHistory_RejectionType'
+)
+BEGIN
+    ALTER TABLE HR.tbl_FinancialCertificationRejectionHistory
+    ADD CONSTRAINT FK_FinCertRejectHistory_RejectionType
+    FOREIGN KEY (RejectionTypeID)
+    REFERENCES HR.ref_Types(TypeID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_FinCertRejectHistory_PreviousCertificationStatus'
+)
+BEGIN
+    ALTER TABLE HR.tbl_FinancialCertificationRejectionHistory
+    ADD CONSTRAINT FK_FinCertRejectHistory_PreviousCertificationStatus
+    FOREIGN KEY (PreviousCertificationStatus)
+    REFERENCES HR.ref_Types(TypeID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_FinCertRejectHistory_NewCertificationStatus'
+)
+BEGIN
+    ALTER TABLE HR.tbl_FinancialCertificationRejectionHistory
+    ADD CONSTRAINT FK_FinCertRejectHistory_NewCertificationStatus
+    FOREIGN KEY (NewCertificationStatus)
+    REFERENCES HR.ref_Types(TypeID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_FinCertRejectHistory_PreviousRequestStatus'
+)
+BEGIN
+    ALTER TABLE HR.tbl_FinancialCertificationRejectionHistory
+    ADD CONSTRAINT FK_FinCertRejectHistory_PreviousRequestStatus
+    FOREIGN KEY (PreviousRequestStatus)
+    REFERENCES HR.ref_Types(TypeID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.foreign_keys
+    WHERE name = 'FK_FinCertRejectHistory_NewRequestStatus'
+)
+BEGIN
+    ALTER TABLE HR.tbl_FinancialCertificationRejectionHistory
+    ADD CONSTRAINT FK_FinCertRejectHistory_NewRequestStatus
+    FOREIGN KEY (NewRequestStatus)
+    REFERENCES HR.ref_Types(TypeID);
+END;
+GO
+
+-- IF NOT EXISTS (
+    -- SELECT 1
+    -- FROM sys.foreign_keys
+    -- WHERE name = 'FK_FinCertRejectHistory_CreatedBy'
+-- )
+-- BEGIN
+    -- ALTER TABLE HR.tbl_FinancialCertificationRejectionHistory
+    -- ADD CONSTRAINT FK_FinCertRejectHistory_CreatedBy
+    -- FOREIGN KEY (CreatedBy)
+    -- REFERENCES HR.tbl_Employees(EmployeeID);
+-- END;
+-- GO

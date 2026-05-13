@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.DTOs.ContractRequest;
+using WsUtaSystem.Application.DTOs.ContractRequestPerson;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Data;
@@ -10,10 +11,14 @@ namespace WsUtaSystem.Application.Services;
 
 public class ContractRequestService : Service<ContractRequest, int>, IContractRequestService
 {
-    private const string StatusCategory = "CONTRACT_REQUEST_STATUS";
-    private const string StatusInitial   = "PENDIENTE_CERT_FINANCIERA";
-    private const string StatusEnProceso = "EN_PROCESO";
-    private const string StatusCompletado = "COMPLETADO";
+    private const string StatusCategory       = "CONTRACT_REQUEST_STATUS";
+    private const string StatusInitial        = "PENDIENTE_CERT_FINANCIERA";
+    private const string StatusEnProceso      = "EN_PROCESO";
+    private const string StatusCompletado     = "COMPLETADO";
+    private const string StatusPendingCorrec  = "PENDIENTE_CORRECCION";
+
+    private const string PersonStatusCategory = "CONTRACT_REQUEST_PERSON_STATUS";
+    private const string PersonStatusPending  = "PENDIENTE";
 
     private readonly IContractRequestRepository _repo;
     private readonly AppDbContext _db;
@@ -122,6 +127,79 @@ public class ContractRequestService : Service<ContractRequest, int>, IContractRe
         });
     }
 
+    public async Task<ContractRequestSlotsDto> GetSlotsAsync(int requestId, CancellationToken ct = default)
+    {
+        var entity = await _repo.GetByIdAsync(requestId, ct)
+            ?? throw new KeyNotFoundException($"ContractRequest id={requestId} no existe.");
+
+        var personStatuses = await _refTypes.GetByCategoryAsync(PersonStatusCategory, ct);
+        var pendingPersonId = personStatuses.FirstOrDefault(x => x.Name == PersonStatusPending)?.TypeId;
+
+        var pendingCount = pendingPersonId.HasValue
+            ? await _db.Set<ContractRequestPerson>()
+                .AsNoTracking()
+                .CountAsync(p => p.RequestId == requestId && p.StatusId == pendingPersonId.Value, ct)
+            : 0;
+
+        return new ContractRequestSlotsDto
+        {
+            RequestId            = requestId,
+            NumberOfPeopleToHire = entity.NumberOfPeopleToHire,
+            TotalHired           = entity.TotalPeopleHired,
+            SlotsAvailable       = entity.PendingCount,
+            PendingPeople        = pendingCount
+        };
+    }
+
+    public async Task<IEnumerable<AvailablePersonDto>> SearchAvailablePeopleAsync(
+        int requestId, string? search, CancellationToken ct = default)
+    {
+        var query = _db.Set<People>().AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(p =>
+                (p.FirstName != null && p.FirstName.Contains(term)) ||
+                (p.LastName  != null && p.LastName.Contains(term))  ||
+                (p.IdCard    != null && p.IdCard.Contains(term)));
+        }
+
+        var people = await query
+            .OrderBy(p => p.LastName)
+            .Take(50)
+            .ToListAsync(ct);
+
+        return people.Select(p => new AvailablePersonDto
+        {
+            PersonId       = p.PersonId,
+            FullName       = $"{p.FirstName} {p.LastName}".Trim(),
+            Identification = p.IdCard
+        }).ToList();
+    }
+
+    public async Task SendToCorrectionAsync(int requestId, string reason, int userId, CancellationToken ct = default)
+    {
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
+            var entity = await _db.Set<ContractRequest>()
+                .FirstOrDefaultAsync(x => x.RequestId == requestId, ct)
+                ?? throw new KeyNotFoundException($"ContractRequest id={requestId} no existe.");
+
+            entity.Status                  = await GetStatusIdAsync(StatusPendingCorrec, ct);
+            entity.PendingCorrectionReason = reason;
+            entity.UpdatedAt               = DateTime.Now;
+            entity.UpdatedBy               = userId;
+
+            await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
+    }
+
     // ── Helpers ──────────────────────────────────────────────
 
     private async Task<int> GetStatusIdAsync(string name, CancellationToken ct)
@@ -133,19 +211,22 @@ public class ContractRequestService : Service<ContractRequest, int>, IContractRe
 
     private static ContractRequestDto MapToDto(ContractRequest r, Dictionary<int, string> statusMap) => new()
     {
-        RequestId            = r.RequestId,
-        DepartmentId         = r.DepartmentId,
-        WorkModalityId       = r.WorkModalityId,
-        NumberOfPeopleToHire = r.NumberOfPeopleToHire,
-        NumberHour           = r.NumberHour,
-        TotalPeopleHired     = r.TotalPeopleHired,
-        Observation          = r.Observation,
-        CreatedAt            = r.CreatedAt ?? DateTime.MinValue,
-        CreatedBy            = r.CreatedBy ?? 0,
-        UpdatedAt            = r.UpdatedAt,
-        UpdatedBy            = r.UpdatedBy,
-        Status               = r.Status,
-        PendingCount         = r.PendingCount,
-        StatusName           = r.Status.HasValue && statusMap.TryGetValue(r.Status.Value, out var n) ? n : null
+        RequestId                = r.RequestId,
+        DepartmentId             = r.DepartmentId,
+        WorkModalityId           = r.WorkModalityId,
+        NumberOfPeopleToHire     = r.NumberOfPeopleToHire,
+        NumberHour               = r.NumberHour,
+        TotalPeopleHired         = r.TotalPeopleHired,
+        Observation              = r.Observation,
+        StartDate                = r.StartDate,
+        EndDate                  = r.EndDate,
+        PendingCorrectionReason  = r.PendingCorrectionReason,
+        CreatedAt                = r.CreatedAt ?? DateTime.MinValue,
+        CreatedBy                = r.CreatedBy ?? 0,
+        UpdatedAt                = r.UpdatedAt,
+        UpdatedBy                = r.UpdatedBy,
+        Status                   = r.Status,
+        PendingCount             = r.PendingCount,
+        StatusName               = r.Status.HasValue && statusMap.TryGetValue(r.Status.Value, out var n) ? n : null
     };
 }

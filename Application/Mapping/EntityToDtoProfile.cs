@@ -169,6 +169,7 @@ public class EntityToDtoProfile : Profile
         CreateMap<FinancialCertification, WsUtaSystem.Application.DTOs.FinancialCertification.FinancialCertificationCreateDto>().ReverseMap();
         CreateMap<FinancialCertification, WsUtaSystem.Application.DTOs.FinancialCertification.FinancialCertificationDto>().ReverseMap();
         CreateMap<FinancialCertification, WsUtaSystem.Application.DTOs.FinancialCertification.FinancialCertificationUpdateDto>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.ContractRequestPerson, WsUtaSystem.Application.DTOs.ContractRequestPerson.ContractRequestPersonDto>().ReverseMap();
         CreateMap<Parameters, WsUtaSystem.Application.DTOs.Parameters.ParametersCreateDto>().ReverseMap();
         CreateMap<Parameters, WsUtaSystem.Application.DTOs.Parameters.ParametersDto>().ReverseMap();
         CreateMap<Parameters, WsUtaSystem.Application.DTOs.Parameters.ParametersUpdateDto>().ReverseMap();

@@ -513,40 +513,83 @@ CREATE TABLE HR.tbl_EmployeeSchedules (
     RowVersion ROWVERSION
 );
 
+-- CREATE TABLE HR.tbl_contractRequest (
+	-- RequestID INT IDENTITY(1,1) NOT NULL,
+	-- WorkModalityID INT NULL,--modalidad de trabajo CATEGORY WORK_MODALITY hr.reftype.typeid
+	-- DepartmentID INT NULL,  --Departamento solicitante 
+	-- NumberOfPeopleToHire INT NOT NULL DEFAULT (0), 	 --numero de personas a requerir 
+	-- NumberHour DECIMAL(12,2) NOT NULL DEFAULT (0), --numerod e horas 
+	-- TotalPeopleHired INT NOT NULL DEFAULT (0), --numero total de personas ya contratadas 
+	-- Observation NVARCHAR(1000) NULL, 
+	-- CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
+	-- CreatedBy INT NOT NULL, -- persona que solicita 
+	-- UpdatedAt DATETIME2 NULL, 
+	-- UpdatedBy INT NULL,	
+	-- Status INT NULL --ESTADO Category CONTRACT_REQUEST_STATUS
+-- );
+
 CREATE TABLE HR.tbl_contractRequest (
-	RequestID INT IDENTITY(1,1) NOT NULL,
-	WorkModalityID INT NULL,--modalidad de trabajo CATEGORY WORK_MODALITY hr.reftype.typeid
-	DepartmentID INT NULL,  --Departamento solicitante 
-	NumberOfPeopleToHire INT NOT NULL DEFAULT (0), 	 --numero de personas a requerir 
-	NumberHour DECIMAL(12,2) NOT NULL DEFAULT (0), --numerod e horas 
-	TotalPeopleHired INT NOT NULL DEFAULT (0), --numero total de personas ya contratadas 
-	Observation NVARCHAR(1000) NULL, 
-	CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
-	CreatedBy INT NOT NULL, -- persona que solicita 
-	UpdatedAt DATETIME2 NULL, 
-	UpdatedBy INT NULL,	
-	Status INT NULL --ESTADO Category CONTRACT_REQUEST_STATUS
+  RequestID INT IDENTITY
+ ,WorkModalityID INT NULL
+ ,DepartmentID INT NULL
+ ,NumberOfPeopleToHire INT NOT NULL DEFAULT (0)
+ ,NumberHour DECIMAL(12, 2) NOT NULL DEFAULT (0)
+ ,TotalPeopleHired INT NULL DEFAULT (0)
+ ,CreatedAt DATETIME2 NOT NULL
+ ,CreatedBy INT NOT NULL
+ ,UpdatedAt DATETIME2 NULL
+ ,UpdatedBy INT NULL
+ ,Status INT NULL
+ ,Observation NVARCHAR(1000) NULL
+ ,StartDate DATE NULL
+ ,EndDate DATE NULL
+ ,PendingCorrectionReason NVARCHAR(1000) NULL
 );
+GO
 
 
-Create Table Hr.tbl_FinancialCertification(
-	CertificationID INT IDENTITY(1,1) NOT NULL,
-	RequestID INT NULL,						--tbl_contractRequest.RequestID
-	CertCode NVARCHAR(100) NOT NULL, 		-- CODIGO de certificación presupuestaria
-	CertNumber NVARCHAR(100) NULL,			-- NUMERO de certificación presupuestaria
-	budget NVARCHAR(100) NULL, 						-- Número de partida presupuestaria
-	CertBudgetDate DATETIME2 NULL,					-- Fecha de certificación presupuestaria           
-    -- REMUNERACIÓN
-	rmu_hour DECIMAL(12,2) NULL,                 -- Remuneración por hora
-	rmu_con DECIMAL(12,2) NULL, 
-	filename NVARCHAR(150) NULL,   
-	filepath NVARCHAR(max) NULL,	
-	CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
-	CreatedBy INT NOT NULL,
-	UpdatedAt DATETIME2 NULL, 
-	UpdatedBy INT NULL,
-	Status INT NULL 			--ESTADO Category CERTF_FINANCIAL
-  );
+-- Create Table Hr.tbl_FinancialCertification(
+	-- CertificationID INT IDENTITY(1,1) NOT NULL,
+	-- RequestID INT NULL,						--tbl_contractRequest.RequestID
+	-- CertCode NVARCHAR(100) NOT NULL, 		-- CODIGO de certificación presupuestaria
+	-- CertNumber NVARCHAR(100) NULL,			-- NUMERO de certificación presupuestaria
+	-- budget NVARCHAR(100) NULL, 						-- Número de partida presupuestaria
+	-- CertBudgetDate DATETIME2 NULL,					-- Fecha de certificación presupuestaria           
+    -- -- REMUNERACIÓN
+	-- rmu_hour DECIMAL(12,2) NULL,                 -- Remuneración por hora
+	-- rmu_con DECIMAL(12,2) NULL, 
+	-- filename NVARCHAR(150) NULL,   
+	-- filepath NVARCHAR(max) NULL,	
+	-- CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
+	-- CreatedBy INT NOT NULL,
+	-- UpdatedAt DATETIME2 NULL, 
+	-- UpdatedBy INT NULL,
+	-- Status INT NULL 			--ESTADO Category CERTF_FINANCIAL
+  -- );
+  
+  CREATE TABLE HR.tbl_FinancialCertification (
+	  CertificationID INT IDENTITY
+	 ,RequestID INT NULL
+	 ,CertCode NVARCHAR(100) NOT NULL
+	 ,CertNumber NVARCHAR(100) NULL
+	 ,budget NVARCHAR(100) NULL
+	 ,CertBudgetDate DATETIME2 NULL
+	 ,rmu_hour DECIMAL(12, 2) NULL
+	 ,rmu_con DECIMAL(12, 2) NULL
+	 ,Status INT NULL
+	 ,CreatedAt DATETIME2 NOT NULL
+	 ,CreatedBy INT NOT NULL
+	 ,UpdatedAt DATETIME2 NULL
+	 ,UpdatedBy INT NULL
+	 ,filename NVARCHAR(150) NULL
+	 ,filepath NVARCHAR(MAX) NULL
+	 ,RejectionReason NVARCHAR(1000) NULL
+	 ,RejectedAt DATETIME2 NULL
+	 ,RejectedBy INT NULL
+	 ,RejectionTypeID INT NULL
+	 
+	); 
+	GO
 
 
 
@@ -630,7 +673,9 @@ CREATE TABLE HR.tbl_Contracts (
     CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),  -- CAMBIADO A GETDATE()
     UpdatedBy INT NULL,
     UpdatedAt DATETIME2 NULL,                         -- CAMBIADO A DATETIME2
-    RowVersion ROWVERSION
+    RowVersion ROWVERSION,
+	AuthorityNominatorId INT NULL,
+	DthDirectorId INT NULL
 );
 
 -- CREATE TABLE HR.tbl_contractAttachedFile (
@@ -645,6 +690,144 @@ CREATE TABLE HR.tbl_Contracts (
     -- CreatedAt DATETIME2 NOT NULL DEFAULT(GETDATE()),
 -- );
 
+/* ============================================================
+   5.1 Tabla detalle de personas por solicitud
+   ============================================================ */
+IF OBJECT_ID('HR.tbl_contractRequestPerson', 'U') IS NULL
+BEGIN
+    CREATE TABLE HR.tbl_contractRequestPerson
+    (
+        RequestPersonID INT IDENTITY(1,1) NOT NULL,
+        RequestID INT NOT NULL,
+
+        PersonID INT NULL,
+
+        -- Identification NVARCHAR(20) NULL,
+        -- FullName NVARCHAR(250) NULL,
+        -- Email NVARCHAR(250) NULL,
+        -- Phone NVARCHAR(50) NULL,
+		RequestPersonType	INT NOT NULL,
+        JobID INT NOT NULL,
+		
+        StartDate DATE NULL,
+        EndDate DATE NULL,
+
+        WeeklyClassHours DECIMAL(12,2) NULL,
+        HourValue DECIMAL(12,4) NULL,
+
+        MonthsPeriod DECIMAL(12,4) NULL,
+
+        RMU DECIMAL(12,2) NULL,
+        RMUPeriod DECIMAL(12,2) NULL,
+
+        EntrySourceID INT NOT NULL,
+
+        IsHired BIT NOT NULL CONSTRAINT DF_contractRequestPerson_IsHired DEFAULT(0),
+
+        ContractID INT NULL,
+
+        HiredAt DATETIME2 NULL,
+        HiredBy INT NULL,
+
+        Observation NVARCHAR(1000) NULL,
+
+        IsActive BIT NOT NULL CONSTRAINT DF_contractRequestPerson_IsActive DEFAULT(1),
+
+        InactiveAt DATETIME2 NULL,
+        InactiveBy INT NULL,
+        InactiveReason NVARCHAR(500) NULL,
+
+        CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_contractRequestPerson_CreatedAt DEFAULT(GETDATE()),
+        CreatedBy INT NOT NULL,
+        UpdatedAt DATETIME2 NULL,
+        UpdatedBy INT NULL,
+
+        Status INT NOT NULL,
+
+        CONSTRAINT PK_contractRequestPerson
+            PRIMARY KEY CLUSTERED (RequestPersonID),
+
+        CONSTRAINT CK_contractRequestPerson_Dates
+            CHECK (
+                StartDate IS NULL 
+                OR EndDate IS NULL 
+                OR EndDate >= StartDate
+            ),
+
+        CONSTRAINT CK_contractRequestPerson_WeeklyClassHours
+            CHECK (
+                WeeklyClassHours IS NULL 
+                OR WeeklyClassHours >= 0
+            ),
+
+        CONSTRAINT CK_contractRequestPerson_HourValue
+            CHECK (
+                HourValue IS NULL 
+                OR HourValue >= 0
+            ),
+
+        CONSTRAINT CK_contractRequestPerson_RMU
+            CHECK (
+                RMU IS NULL 
+                OR RMU >= 0
+            ),
+
+        CONSTRAINT CK_contractRequestPerson_RMUPeriod
+            CHECK (
+                RMUPeriod IS NULL 
+                OR RMUPeriod >= 0
+            ),
+
+        CONSTRAINT CK_contractRequestPerson_MonthsPeriod
+            CHECK (
+                MonthsPeriod IS NULL 
+                OR MonthsPeriod >= 0
+            ),
+
+        CONSTRAINT CK_contractRequestPerson_HiredContract
+            CHECK (
+                (IsHired = 1 AND ContractID IS NOT NULL)
+                OR
+                (IsHired = 0)
+            ),
+
+        CONSTRAINT CK_contractRequestPerson_InactiveData
+            CHECK (
+                (IsActive = 1 AND InactiveAt IS NULL)
+                OR
+                (IsActive = 0)
+            )
+    );
+END;
+GO
+
+/* ============================================================
+   6.1 Historial de rechazos de certificación financiera
+   ============================================================ */
+IF OBJECT_ID('HR.tbl_FinancialCertificationRejectionHistory', 'U') IS NULL
+BEGIN
+    CREATE TABLE HR.tbl_FinancialCertificationRejectionHistory
+    (
+        RejectionHistoryID INT IDENTITY(1,1) NOT NULL,
+        CertificationID INT NOT NULL,
+        RequestID INT NOT NULL,
+        RejectionTypeID INT NOT NULL,
+        RejectionReason NVARCHAR(1000) NOT NULL,
+
+        PreviousCertificationStatus INT NULL,
+        NewCertificationStatus INT NOT NULL,
+
+        PreviousRequestStatus INT NULL,
+        NewRequestStatus INT NOT NULL,
+
+        CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_FinCertRejectHistory_CreatedAt DEFAULT(GETDATE()),
+        CreatedBy INT NOT NULL,
+
+        CONSTRAINT PK_FinancialCertificationRejectionHistory
+            PRIMARY KEY CLUSTERED (RejectionHistoryID)
+    );
+END;
+GO
 
 
 CREATE TABLE HR.tbl_Vacations (

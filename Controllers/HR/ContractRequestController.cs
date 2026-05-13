@@ -2,22 +2,32 @@ using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.ContractRequest;
+using WsUtaSystem.Application.DTOs.ContractRequestPerson;
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Models;
 using WsUtaSystem.Application.DTOs.Common;
 
 namespace WsUtaSystem.Controllers.HR;
 
 [ApiController]
-[Route("cv/contract-request")]
+[Route("contract-request")]
 public class ContractRequestController : ControllerBase
 {
     private readonly IContractRequestService _svc;
+    private readonly IContractRequestPersonService _personSvc;
     private readonly IMapper _mapper;
+    private readonly ICurrentUserService _user;
 
-    public ContractRequestController(IContractRequestService svc, IMapper mapper)
+    public ContractRequestController(
+        IContractRequestService svc,
+        IContractRequestPersonService personSvc,
+        IMapper mapper,
+        ICurrentUserService user)
     {
-        _svc    = svc;
-        _mapper = mapper;
+        _svc       = svc;
+        _personSvc = personSvc;
+        _mapper    = mapper;
+        _user      = user;
     }
 
     /// <summary>Lista todos los registros de ContractRequest.</summary>
@@ -91,6 +101,109 @@ public class ContractRequestController : ControllerBase
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);
+        return NoContent();
+    }
+
+    // ── Personas del detalle de solicitud ────────────────────────────────────
+
+    /// <summary>Retorna todas las personas registradas en el detalle de una solicitud.</summary>
+    [HttpGet("{id:int}/people")]
+    public async Task<IActionResult> GetPeople([FromRoute] int id, CancellationToken ct)
+    {
+        var items = await _personSvc.GetByRequestAsync(id, ct);
+        return Ok(items);
+    }
+
+    /// <summary>Retorna las personas pendientes (PENDIENTE) del detalle de una solicitud.</summary>
+    [HttpGet("{id:int}/pending-people")]
+    public async Task<IActionResult> GetPendingPeople([FromRoute] int id, CancellationToken ct)
+    {
+        var items = await _personSvc.GetPendingByRequestAsync(id, ct);
+        return Ok(items);
+    }
+
+    /// <summary>Retorna información de cupos (contratados, libres, pendientes).</summary>
+    [HttpGet("{id:int}/slots")]
+    public async Task<IActionResult> GetSlots([FromRoute] int id, CancellationToken ct)
+    {
+        var slots = await _svc.GetSlotsAsync(id, ct);
+        return Ok(slots);
+    }
+
+    /// <summary>Busca personas disponibles para vincular a una solicitud.</summary>
+    [HttpGet("{id:int}/available-people")]
+    public async Task<IActionResult> GetAvailablePeople(
+        [FromRoute] int id,
+        [FromQuery] string? search,
+        CancellationToken ct)
+    {
+        var people = await _svc.SearchAvailablePeopleAsync(id, search, ct);
+        return Ok(people);
+    }
+
+    /// <summary>Agrega una persona al detalle de una solicitud.</summary>
+    [HttpPost("{id:int}/people")]
+    public async Task<IActionResult> AddPerson(
+        [FromRoute] int id,
+        [FromBody] CreateContractRequestPersonDto dto,
+        CancellationToken ct)
+    {
+        var userId  = _user.EmployeeId ?? 0;
+        var created = await _personSvc.AddPersonAsync(id, dto, userId, ct);
+        return CreatedAtAction(nameof(GetPeople), new { id }, created);
+    }
+
+    /// <summary>Actualiza los datos de una persona en el detalle.</summary>
+    [HttpPut("{id:int}/people/{personId:int}")]
+    public async Task<IActionResult> UpdatePerson(
+        [FromRoute] int id,
+        [FromRoute] int personId,
+        [FromBody] UpdateContractRequestPersonDto dto,
+        CancellationToken ct)
+    {
+        var userId = _user.EmployeeId ?? 0;
+        await _personSvc.UpdatePersonAsync(personId, dto, userId, ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Marca una persona del detalle como contratada (llamado tras crear el contrato).
+    /// </summary>
+    [HttpPost("{id:int}/people/{personId:int}/generate-contract")]
+    public async Task<IActionResult> GenerateContractFromPerson(
+        [FromRoute] int id,
+        [FromRoute] int personId,
+        [FromBody] HireRequestPersonDto dto,
+        CancellationToken ct)
+    {
+        var userId = _user.EmployeeId ?? 0;
+        await _personSvc.HireAsync(personId, dto.ContractId, userId, ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Registra la contratación de una persona disponible (no estaba en el detalle).
+    /// </summary>
+    [HttpPost("{id:int}/available-people/generate-contract")]
+    public async Task<IActionResult> GenerateContractFromAvailablePerson(
+        [FromRoute] int id,
+        [FromBody] GenerateContractFromAvailablePersonDto dto,
+        CancellationToken ct)
+    {
+        var userId = _user.EmployeeId ?? 0;
+        await _personSvc.RecordHiredFromAvailableAsync(id, dto.PersonId, dto.JobId, dto.ContractId, userId, ct);
+        return NoContent();
+    }
+
+    /// <summary>Envía la solicitud a estado PENDIENTE_CORRECCION.</summary>
+    [HttpPost("{id:int}/send-to-correction")]
+    public async Task<IActionResult> SendToCorrection(
+        [FromRoute] int id,
+        [FromBody] RejectTemporaryDto dto,
+        CancellationToken ct)
+    {
+        var userId = _user.EmployeeId ?? 0;
+        await _svc.SendToCorrectionAsync(id, dto.Reason ?? string.Empty, userId, ct);
         return NoContent();
     }
 }

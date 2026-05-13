@@ -58,5 +58,8 @@ public class ContractsUpdateDto
     public string? Competition { get; set; }
     public DateTime? CompetitionDate { get; set; }
 
+    public int? AuthorityNominatorId { get; set; }
+    public int? DthDirectorId { get; set; }
+
     public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 }

@@ -7,24 +7,23 @@ namespace WsUtaSystem.Infrastructure.Repositories
 {
     public class JobRepository : ServiceAwareEfRepository<Job, int>, IJobRepository
     {
-        private readonly DbContext _db;
         public JobRepository(WsUtaSystem.Data.AppDbContext db) : base(db)
         {
         }
-        
+
         public async Task<IEnumerable<Job>> GetActiveJobsAsync(CancellationToken ct)
         {
-            return await _db.Set<Job>()
-                .Where(predicate: rt => rt.IsActive)
-                .ToListAsync(ct); 
-        }
-        public async Task<IEnumerable<Job>> SearchJobsByTitleAsync(string title, CancellationToken ct)
-        {
-            return await _db.Set<Job>()
-                //.Where(j => j..Title.Contains(title))
-                //.OrderByDescending(j => j.CreatedDate)
+            return await _set
+                .Where(j => j.IsActive)
                 .ToListAsync(ct);
         }
 
+        public async Task<IEnumerable<Job>> SearchJobsByTitleAsync(string title, CancellationToken ct)
+        {
+            return await _set
+                .Where(j => j.IsActive && EF.Functions.Like(j.Description, $"%{title}%"))
+                .OrderBy(j => j.JobID)
+                .ToListAsync(ct);
+        }
     }
 }

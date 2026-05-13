@@ -19,6 +19,10 @@ namespace WsUtaSystem.Models
         public DateTime? UpdatedAt { get; set; }
         public int? UpdatedBy { get; set; }
         public int? Status { get; set; }
+        public string? RejectionReason { get; set; }
+        public DateTime? RejectedAt { get; set; }
+        public int? RejectedBy { get; set; }
+        public int? RejectionTypeId { get; set; }
 
         public ContractRequest? Request { get; set; }
     }

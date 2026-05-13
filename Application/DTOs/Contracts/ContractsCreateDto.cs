@@ -56,4 +56,7 @@ public class ContractsCreateDto
     public bool GenerateDocument { get; set; } = false;
 
     public Dictionary<string, string>? DocumentOverrides { get; set; }
+
+    public int? AuthorityNominatorId { get; set; }
+    public int? DthDirectorId { get; set; }
 }

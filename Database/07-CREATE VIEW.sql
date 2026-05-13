@@ -732,7 +732,7 @@ SELECT
     d.IsActive,
     d.CreatedAt
 FROM HR.tbl_Departments d
-INNER JOIN HR.ref_Types rt 
+LEFT JOIN HR.ref_Types rt 
     ON d.DepartmentType = rt.TypeID
 LEFT JOIN HR.ref_Types rs
     ON d.DepartmentScope = rs.TypeID
@@ -743,7 +743,7 @@ LEFT JOIN HR.tbl_Departments dp
 -- =============================================
 -- VISTA 2: Cargos con sus grados y grupos ocupacionales
 -- =============================================
-CREATE VIEW HR.vw_Jobs_WithDegreeAndGroup AS
+CREATE OR ALTER VIEW HR.vw_Jobs_WithDegreeAndGroup AS
 SELECT 
     j.JobID,
     CAST(j.Description AS NVARCHAR(500))    AS JobDescription,
@@ -755,12 +755,12 @@ SELECT
     d.Description                            AS Degree,
     d.IsActive                               AS DegreeIsActive
 FROM hr.tbl_jobs j
-INNER JOIN hr.ref_Types rt 
+LEFT JOIN hr.ref_Types rt 
     ON j.JobTypeID = rt.TypeID
-INNER JOIN hr.tbl_Occupational_Groups og 
+LEFT JOIN hr.tbl_Occupational_Groups og 
     ON j.GroupID = og.GroupID
-INNER JOIN hr.tbl_Degrees d 
-    ON og.DegreeID = d.DegreeID;
+LEFT JOIN hr.tbl_Degrees d 
+    ON og.DegreeID = d.DegreeID
 
 
 -- =============================================
@@ -786,3 +786,37 @@ INNER JOIN hr.ref_Types rt
 INNER JOIN hr.tbl_Occupational_Groups og 
     ON j.GroupID = og.GroupID;
 
+
+-- =============================================
+-- VISTA : Autoridades 
+-- =============================================
+
+CREATE or ALTER VIEW HR.vw_Authority AS
+SELECT
+    da.AuthorityID,
+    da.DepartmentID,
+    dep.Code        AS DepartmentCode,
+    dep.Name        AS DepartmentName,
+    da.EmployeeID,
+    p.IDCard        AS EmployeeIDCard,
+    CONCAT(p.FirstName, ' ', p.LastName) AS EmployeeFullName,
+    da.AuthorityTypeID,
+    at_ref.Name     AS AuthorityTypeName,
+    at_ref.Description AS AuthorityTypeDescription,
+    da.JobID,
+    j.Description   AS JobDescription,
+    da.Denomination,
+    da.StartDate,
+    da.EndDate,
+    da.ResolutionCode,
+    da.Notes,
+    da.IsActive,
+    da.CreatedAt,
+    da.UpdatedAt
+FROM  HR.tbl_DepartmentAuthorities  da
+LEFT JOIN HR.tbl_Departments   dep    ON dep.DepartmentID = da.DepartmentID
+LEFT JOIN HR.tbl_Employees     emp    ON emp.EmployeeID   = da.EmployeeID
+LEFT JOIN HR.tbl_People        p      ON p.PersonID       = emp.PersonID
+LEFT JOIN HR.ref_Types         at_ref ON at_ref.TypeID    = da.AuthorityTypeID
+LEFT JOIN HR.tbl_jobs          j      ON j.JobID           = da.JobID;
+--ORDER BY da.AuthorityID;

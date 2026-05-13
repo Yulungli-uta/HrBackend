@@ -11,6 +11,9 @@ namespace WsUtaSystem.Models
         public decimal NumberHour { get; set; } = 0;
         public int TotalPeopleHired { get; set; } = 0;
         public string? Observation { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public string? PendingCorrectionReason { get; set; }
         public DateTime? CreatedAt { get; set; }
         public int? CreatedBy { get; set; }
         public DateTime? UpdatedAt { get; set; }
@@ -21,6 +24,7 @@ namespace WsUtaSystem.Models
         public int PendingCount => Math.Max(0, NumberOfPeopleToHire - TotalPeopleHired);
 
         public ICollection<FinancialCertification> FinancialCertifications { get; set; } = [];
+        public ICollection<ContractRequestPerson> ContractRequestPersons { get; set; } = [];
     }
 }
 

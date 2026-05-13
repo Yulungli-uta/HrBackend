@@ -281,7 +281,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             var contract = await _db.Set<Contracts>().FirstOrDefaultAsync(x => x.ContractID == contractId, ct);
             if (contract is null) throw new KeyNotFoundException($"Contrato id={contractId} no existe.");
 
-            var fromStatus = contract.Status; // asumiendo int
+            var fromStatus = contract.Status;
             if (fromStatus == toStatusTypeId)
                 return; // NoOp
 
@@ -292,19 +292,27 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             if (!allowed)
                 throw new InvalidOperationException($"Transición no permitida: {fromStatus} -> {toStatusTypeId}");
 
-            // Actualiza estado
             contract.Status = toStatusTypeId;
 
-            // Histórico (auditoría por JWT)
-            var userId = _currentUser.EmployeeId; // según tu implementación
+            var userId = _currentUser.EmployeeId;
             _db.ContractStatusHistories.Add(new ContractStatusHistory
             {
                 ContractID = contractId,
                 StatusTypeID = toStatusTypeId,
                 Comment = comment,
-                ChangedBy = userId > 0 ? userId : null,
+                ChangedBy = userId,
                 ChangedAt = DateTime.Now
             });
+
+            // Si se anula un contrato raíz, revertir contadores y persona de la solicitud
+            var toStatusName = await _db.RefTypes
+                .AsNoTracking()
+                .Where(x => x.TypeId == toStatusTypeId && x.Category == ContractStatusCategory)
+                .Select(x => x.Name)
+                .FirstOrDefaultAsync(ct);
+
+            if (toStatusName == StatusAnulado && contract.ParentID is null)
+                await ReverseContractRequestOnCancellationAsync(contractId, contract.CertificationID, ct);
 
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
@@ -600,6 +608,28 @@ public class ContractsService : Service<Contracts, int>, IContractsService
 
         var templateId = await ResolveContractTemplateIdAsync(contract.ContractTypeID, ct);
 
+        // Resolver responsables del contrato para variables de plantilla
+        var (authorityName, authorityTitle) = await ResolveEmployeeInfoAsync(contract.AuthorityNominatorId, ct);
+        var (directorName, directorTitle)   = await ResolveEmployeeInfoAsync(contract.DthDirectorId, ct);
+        var (registrarName, _)              = await ResolveEmployeeInfoAsync(contract.CreatedBy, ct);
+
+        var mergedOverrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        static void SetOv(Dictionary<string, string> d, string key, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value)) d[key] = value!;
+        }
+        SetOv(mergedOverrides, "DTH_DIRECTOR_NAME",     directorName);
+        SetOv(mergedOverrides, "DTH_DIRECTOR_FULLNAME", directorName);
+        SetOv(mergedOverrides, "DTH_DIRECTOR_TITLE",    directorTitle);
+        SetOv(mergedOverrides, "AUTHORITY_NAME",        authorityName);
+        SetOv(mergedOverrides, "AUTHORITY_TITLE",       authorityTitle);
+        SetOv(mergedOverrides, "REGISTRAR_NAME",        registrarName);
+
+        // Los overrides manuales del request tienen máxima prioridad
+        if (request.Overrides is not null)
+            foreach (var kvp in request.Overrides)
+                mergedOverrides[kvp.Key] = kvp.Value;
+
         var generateRequest = new GenerateDocumentRequest(
             TemplateId: templateId,
             EmployeeId: employeeId,
@@ -607,7 +637,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             EntityId: contract.ContractID,
             DocumentNumber: contract.ContractCode,
             Notes: $"Documento generado para contrato {contract.ContractID}",
-            ManualOverrides: request.Overrides
+            ManualOverrides: mergedOverrides.Count > 0 ? mergedOverrides : null
         );
 
         var document = await _documentGenerationService.GenerateAsync(
@@ -724,14 +754,29 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         if (string.IsNullOrWhiteSpace(request.Reason))
             throw new ArgumentException("Debe ingresar el motivo de anulación.");
 
-        var contract = await GetContractWithGeneratedDocumentAsync(contractId, ct);
+        var contract = await _db.Set<Contracts>()
+            .FirstOrDefaultAsync(x => x.ContractID == contractId, ct)
+            ?? throw new KeyNotFoundException($"Contrato id={contractId} no existe.");
 
-        await UpdateContractDocumentStatusAsync(
-            contract,
-            StatusAnulado,
-            request.Reason,
-            updatedBy,
-            ct);
+        var statusId = await GetContractStatusIdAsync(StatusAnulado, ct);
+        contract.Status    = statusId;
+        contract.UpdatedAt = DateTime.Now;
+        contract.UpdatedBy = updatedBy > 0 ? updatedBy : null;
+        await _db.SaveChangesAsync(ct);
+
+        // Solo actualizar el documento si ya fue generado (BORRADOR no tiene documento)
+        if (contract.GeneratedDocumentId.HasValue)
+        {
+            await _documentGenerationService.UpdateStatusAsync(
+                contract.GeneratedDocumentId.Value,
+                new UpdateDocumentStatusRequest(ToDocumentStatus(StatusAnulado), request.Reason),
+                updatedBy,
+                ct);
+        }
+
+        // Revertir contadores y estado de persona en la solicitud (solo contrato raíz)
+        if (contract.ParentID is null)
+            await ReverseContractRequestOnCancellationAsync(contractId, contract.CertificationID, ct);
     }
 
     private async Task UpdateContractDocumentStatusAsync(
@@ -848,5 +893,121 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         return int.TryParse(major, out var value) && value > 0
             ? value
             : 1;
+    }
+
+    /// <summary>
+    /// Revierte los contadores y el estado de la persona en la solicitud de contrato
+    /// cuando un contrato raíz es anulado.
+    /// </summary>
+    private async Task ReverseContractRequestOnCancellationAsync(
+        int contractId,
+        int? certificationId,
+        CancellationToken ct)
+    {
+        // 1. Liberar la persona vinculada al contrato en la solicitud
+        var person = await _db.Set<ContractRequestPerson>()
+            .FirstOrDefaultAsync(x => x.ContractId == contractId, ct);
+
+        if (person is not null)
+        {
+            var pendientePersonStatusId = await _db.RefTypes
+                .AsNoTracking()
+                .Where(x => x.Category == "CONTRACT_REQUEST_PERSON_STATUS"
+                         && x.Name == "PENDIENTE"
+                         && x.IsActive)
+                .Select(x => (int?)x.TypeId)
+                .FirstOrDefaultAsync(ct);
+
+            person.IsHired    = false;
+            person.ContractId = null;
+            person.UpdatedAt  = DateTime.Now;
+            person.UpdatedBy  = _currentUser.EmployeeId;
+
+            if (pendientePersonStatusId.HasValue)
+                person.StatusId = pendientePersonStatusId.Value;
+        }
+
+        // 2. Decrementar contador de contratados en la solicitud
+        if (certificationId is null)
+        {
+            await _db.SaveChangesAsync(ct);
+            return;
+        }
+
+        var cert = await _db.Set<FinancialCertification>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.CertificationId == certificationId.Value, ct);
+
+        if (cert?.RequestId is null)
+        {
+            await _db.SaveChangesAsync(ct);
+            return;
+        }
+
+        var contractRequest = await _db.Set<ContractRequest>()
+            .FirstOrDefaultAsync(x => x.RequestId == cert.RequestId.Value, ct);
+
+        if (contractRequest is null)
+        {
+            await _db.SaveChangesAsync(ct);
+            return;
+        }
+
+        contractRequest.TotalPeopleHired = Math.Max(0, contractRequest.TotalPeopleHired - 1);
+        contractRequest.UpdatedAt = DateTime.Now;
+
+        // Nuevo estado según contadores
+        var newRequestStatusName = contractRequest.TotalPeopleHired <= 0
+            ? "PENDIENTE"
+            : contractRequest.TotalPeopleHired >= contractRequest.NumberOfPeopleToHire
+                ? "COMPLETADO"
+                : "EN_PROCESO";
+
+        var newStatusId = await _db.RefTypes
+            .AsNoTracking()
+            .Where(x => x.Category == "CONTRACT_REQUEST_STATUS"
+                     && x.Name == newRequestStatusName
+                     && x.IsActive)
+            .Select(x => (int?)x.TypeId)
+            .FirstOrDefaultAsync(ct);
+
+        // Si "PENDIENTE" no existe en ref_Types, caer a EN_PROCESO
+        if (!newStatusId.HasValue && newRequestStatusName == "PENDIENTE")
+        {
+            newStatusId = await _db.RefTypes
+                .AsNoTracking()
+                .Where(x => x.Category == "CONTRACT_REQUEST_STATUS"
+                         && x.Name == "EN_PROCESO"
+                         && x.IsActive)
+                .Select(x => (int?)x.TypeId)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        if (newStatusId.HasValue)
+            contractRequest.Status = newStatusId.Value;
+
+        await _db.SaveChangesAsync(ct);
+    }
+
+    private async Task<(string? Name, string? JobTitle)> ResolveEmployeeInfoAsync(int? employeeId, CancellationToken ct)
+    {
+        if (!employeeId.HasValue) return (null, null);
+
+        var row = await (
+            from emp in _db.Employees.AsNoTracking()
+            join person in _db.People.AsNoTracking()
+                on emp.PersonID equals person.PersonId
+            join job in _db.Jobs.AsNoTracking()
+                on emp.JobId equals job.JobID into jobJoin
+            from job in jobJoin.DefaultIfEmpty()
+            where emp.EmployeeId == employeeId.Value
+            select new
+            {
+                Name     = person.FirstName + " " + person.LastName,
+                JobTitle = (string?)job.Description
+            }
+        ).FirstOrDefaultAsync(ct);
+
+        return row is null ? (null, null) : (row.Name, row.JobTitle);
     }
 }

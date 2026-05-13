@@ -28,6 +28,8 @@ public sealed class ContractsConfiguration : IEntityTypeConfiguration<Contracts>
         e.Property(x => x.GeneratedDocumentId).HasColumnName("GeneratedDocumentID");
         e.Property(x => x.TemplateVersionUsed).HasColumnName("TemplateVersionUsed");
         e.Property(x => x.IsDocumentFrozen).HasColumnName("IsDocumentFrozen").HasDefaultValue(false);
+        e.Property(x => x.AuthorityNominatorId).HasColumnName("AuthorityNominatorID");
+        e.Property(x => x.DthDirectorId).HasColumnName("DthDirectorID");
 
         e.HasOne(x => x.Parent)
             .WithMany(x => x.Addendums)
@@ -122,6 +124,77 @@ public sealed class FinancialCertificationConfiguration : IEntityTypeConfigurati
         e.Property(x => x.RequestId).HasColumnName("RequestID");
         e.Property(x => x.FileName).HasColumnName("filename").HasMaxLength(150);
         e.Property(x => x.FilePath).HasColumnName("filepath");
+        e.Property(x => x.RejectionReason).HasColumnName("RejectionReason").HasMaxLength(1000);
+        e.Property(x => x.RejectedAt).HasColumnName("RejectedAt");
+        e.Property(x => x.RejectedBy).HasColumnName("RejectedBy");
+        e.Property(x => x.RejectionTypeId).HasColumnName("RejectionTypeID");
+    }
+}
+
+public sealed class ContractRequestPersonConfiguration : IEntityTypeConfiguration<WsUtaSystem.Models.ContractRequestPerson>
+{
+    public void Configure(EntityTypeBuilder<WsUtaSystem.Models.ContractRequestPerson> e)
+    {
+        e.ToTable("tbl_contractRequestPerson", "HR");
+        e.HasKey(x => x.RequestPersonId);
+        e.Property(x => x.RequestPersonId).HasColumnName("RequestPersonID");
+        e.Property(x => x.RequestId).HasColumnName("RequestID");
+        e.Property(x => x.PersonId).HasColumnName("PersonID");
+        e.Property(x => x.JobId).HasColumnName("JobID");
+        e.Property(x => x.RequestPersonTypeId).HasColumnName("RequestPersonType");
+        e.Property(x => x.EntrySourceId).HasColumnName("EntrySourceID");
+        e.Property(x => x.ContractId).HasColumnName("ContractID");
+        e.Property(x => x.StatusId).HasColumnName("Status");
+        e.Property(x => x.Rmu).HasColumnName("RMU");
+        e.Property(x => x.RmuPeriod).HasColumnName("RMUPeriod");
+        e.Property(x => x.CreatedBy).HasColumnName("CreatedBy");
+        e.Property(x => x.UpdatedAt).HasColumnName("UpdatedAt");
+        e.Property(x => x.UpdatedBy).HasColumnName("UpdatedBy");
+
+        e.HasOne(x => x.Request)
+            .WithMany(r => r.ContractRequestPersons)
+            .HasForeignKey(x => x.RequestId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.Person)
+            .WithMany()
+            .HasForeignKey(x => x.PersonId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        e.HasOne(x => x.Job)
+            .WithMany()
+            .HasForeignKey(x => x.JobId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.Contract)
+            .WithMany()
+            .HasForeignKey(x => x.ContractId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        e.HasIndex(x => x.RequestId);
+        e.HasIndex(x => new { x.RequestId, x.IsHired });
+    }
+}
+
+public sealed class FinancialCertificationRejectionHistoryConfiguration
+    : IEntityTypeConfiguration<WsUtaSystem.Models.FinancialCertificationRejectionHistory>
+{
+    public void Configure(EntityTypeBuilder<WsUtaSystem.Models.FinancialCertificationRejectionHistory> e)
+    {
+        e.ToTable("tbl_FinancialCertificationRejectionHistory", "HR");
+        e.HasKey(x => x.RejectionHistoryId);
+        e.Property(x => x.RejectionHistoryId).HasColumnName("RejectionHistoryID");
+        e.Property(x => x.CertificationId).HasColumnName("CertificationID");
+        e.Property(x => x.RejectionTypeId).HasColumnName("RejectionTypeID");
+        e.Property(x => x.RejectionReason).HasMaxLength(1000);
+        e.Property(x => x.RejectedBy).HasColumnName("RejectedBy");
+
+        e.HasOne(x => x.Certification)
+            .WithMany()
+            .HasForeignKey(x => x.CertificationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        e.HasIndex(x => x.CertificationId);
     }
 }
 

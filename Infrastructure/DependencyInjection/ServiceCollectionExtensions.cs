@@ -487,6 +487,8 @@ public static class ServiceCollectionExtensions
         // ── Módulo: Certificación Financiera ──────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IFinancialCertificationRepository, WsUtaSystem.Infrastructure.Repositories.FinancialCertificationRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFinancialCertificationService, WsUtaSystem.Application.Services.FinancialCertificationService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IContractRequestPersonRepository, WsUtaSystem.Infrastructure.Repositories.ContractRequestPersonRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractRequestPersonService, WsUtaSystem.Application.Services.ContractRequestPersonService>();
 
         // ── Módulo: Feriados ──────────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IHolidayRepository, WsUtaSystem.Infrastructure.Repositories.HolidayRepository>();
@@ -515,6 +517,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVwJobWithDegreeAndGroupService, WsUtaSystem.Application.Services.VwJobWithDegreeAndGroupService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IVwJobActivityRepository, WsUtaSystem.Infrastructure.Repositories.VwJobActivityRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVwJobActivityService, WsUtaSystem.Application.Services.VwJobActivityService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IVwAuthorityRepository, WsUtaSystem.Infrastructure.Repositories.VwAuthorityRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVwAuthorityService, WsUtaSystem.Application.Services.VwAuthorityService>();
 
         // ── Módulo: Actividades ───────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IActivityRepository, WsUtaSystem.Infrastructure.Repositories.ActivityRepository>();
@@ -644,6 +648,26 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IScheduleChangePlanService, WsUtaSystem.Application.Services.ScheduleChangePlanService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEmployeeCurrentScheduleRepository, WsUtaSystem.Infrastructure.Repositories.EmployeeCurrentScheduleRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmployeeCurrentScheduleService, WsUtaSystem.Application.Services.EmployeeCurrentScheduleService>();
+
+        // ── Módulo: Guardias Rotativos ────────────────────────────────────────
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardServiceLocationRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardServiceLocationRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardRotationGroupRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardRotationGroupRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IRotationPatternRepository, WsUtaSystem.Infrastructure.Repositories.Guards.RotationPatternRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardShiftCoverageRequirementRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardShiftCoverageRequirementRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardShiftPlanningRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardShiftPlanningRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardShiftChangeRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardShiftChangeRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IEmployeeAvailabilityBlockRepository, WsUtaSystem.Infrastructure.Repositories.Guards.EmployeeAvailabilityBlockRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardAssignmentValidationRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardAssignmentValidationRepository>();
+
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardServiceLocationService, WsUtaSystem.Application.Services.Guards.GuardServiceLocationService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardRotationGroupService, WsUtaSystem.Application.Services.Guards.GuardRotationGroupService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IRotationPatternService, WsUtaSystem.Application.Services.Guards.RotationPatternService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardShiftCoverageRequirementService, WsUtaSystem.Application.Services.Guards.GuardShiftCoverageRequirementService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IEmployeeAvailabilityService, WsUtaSystem.Application.Services.Guards.EmployeeAvailabilityService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardAssignmentValidationService, WsUtaSystem.Application.Services.Guards.GuardAssignmentValidationService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardShiftPlanningService, WsUtaSystem.Application.Services.Guards.GuardShiftPlanningService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardShiftChangeService, WsUtaSystem.Application.Services.Guards.GuardShiftChangeService>();
+
         return services;
     }
 

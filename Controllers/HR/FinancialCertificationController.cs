@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.FinancialCertification;
+using WsUtaSystem.Application.DTOs.ContractRequestPerson;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Models;
 
@@ -106,6 +107,27 @@ public class FinancialCertificationController : ControllerBase
     {
         var userId = _user.EmployeeId ?? 0;
         await _svc.RejectAsync(id, dto.Reason, userId, ct);
+        return NoContent();
+    }
+
+    /// <summary>Rechaza temporalmente. El solicitante puede corregir y reenviar.</summary>
+    [HttpPost("{id:int}/reject-temporary")]
+    public async Task<IActionResult> RejectTemporary(
+        [FromRoute] int id,
+        [FromBody] RejectTemporaryDto dto,
+        CancellationToken ct)
+    {
+        var userId = _user.EmployeeId ?? 0;
+        await _svc.RejectTemporaryAsync(id, dto.Reason, userId, ct);
+        return NoContent();
+    }
+
+    /// <summary>El solicitante reenvía la certificación corregida; vuelve a PENDIENTE_REVISION.</summary>
+    [HttpPost("{id:int}/resend")]
+    public async Task<IActionResult> Resend([FromRoute] int id, CancellationToken ct)
+    {
+        var userId = _user.EmployeeId ?? 0;
+        await _svc.ResendAsync(id, userId, ct);
         return NoContent();
     }
 

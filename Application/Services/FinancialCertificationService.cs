@@ -10,14 +10,21 @@ namespace WsUtaSystem.Application.Services;
 
 public class FinancialCertificationService : Service<FinancialCertification, int>, IFinancialCertificationService
 {
-    private const string CertCategory      = "FIN_CERT_STATUS";
-    private const string CertPending       = "PENDIENTE_REVISION";
-    private const string CertApproved      = "APROBADA";
-    private const string CertRejected      = "RECHAZADA";
+    private const string CertCategory         = "FIN_CERT_STATUS";
+    private const string CertPending          = "PENDIENTE_REVISION";
+    private const string CertApproved         = "APROBADA";
+    private const string CertRejected         = "RECHAZADA";
+    private const string CertPendingCorrection = "PENDIENTE_CORRECCION";
 
-    private const string RequestCategory         = "CONTRACT_REQUEST_STATUS";
-    private const string RequestPendingHiring    = "PENDIENTE_CONTRATACION";
-    private const string RequestCertRejected     = "CERT_RECHAZADA";
+    private const string RequestCategory              = "CONTRACT_REQUEST_STATUS";
+    private const string RequestPendingHiring         = "PENDIENTE_CONTRATACION";
+    private const string RequestCertRejected          = "CERT_RECHAZADA";
+    private const string RequestPendingCorrection     = "PENDIENTE_CORRECCION";
+    private const string RequestPendingCertFinanciera = "PENDIENTE_CERT_FINANCIERA";
+
+    private const string RejectionTypeCategory = "FIN_CERT_REJECTION_TYPE";
+    private const string RejectionTypeTemporary = "TEMPORAL";
+    private const string RejectionTypeDefinitive = "DEFINITIVO";
 
     private readonly IFinancialCertificationRepository _repo;
     private readonly AppDbContext _db;
@@ -109,6 +116,10 @@ public class FinancialCertificationService : Service<FinancialCertification, int
             UpdatedAt       = c.UpdatedAt,
             UpdatedBy       = c.UpdatedBy,
             Status          = c.Status,
+            RejectionReason = c.RejectionReason,
+            RejectedAt      = c.RejectedAt,
+            RejectedBy      = c.RejectedBy,
+            RejectionTypeId = c.RejectionTypeId,
             StatusName      = c.Status.HasValue && statusMap.TryGetValue(c.Status.Value, out var n) ? n : null,
             RequestSummary  = c.RequestId.HasValue && requests.TryGetValue(c.RequestId.Value, out var req)
                 ? new ContractRequestSummary
@@ -206,6 +217,101 @@ public class FinancialCertificationService : Service<FinancialCertification, int
         });
     }
 
+    public async Task RejectTemporaryAsync(int certificationId, string? reason, int userId, CancellationToken ct = default)
+    {
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
+            var cert = await _db.Set<FinancialCertification>()
+                .FirstOrDefaultAsync(x => x.CertificationId == certificationId, ct)
+                ?? throw new KeyNotFoundException($"Certificación id={certificationId} no existe.");
+
+            var rejTypeId = await GetRejectionTypeIdAsync(RejectionTypeTemporary, ct);
+
+            cert.Status          = await GetCertStatusIdAsync(CertPendingCorrection, ct);
+            cert.RejectionReason = reason;
+            cert.RejectedAt      = DateTime.Now;
+            cert.RejectedBy      = userId;
+            cert.RejectionTypeId = rejTypeId;
+            cert.UpdatedAt       = DateTime.Now;
+            cert.UpdatedBy       = userId;
+
+            // Registrar en historial
+            _db.Set<FinancialCertificationRejectionHistory>().Add(new FinancialCertificationRejectionHistory
+            {
+                CertificationId = certificationId,
+                RejectionTypeId = rejTypeId,
+                RejectionReason = reason,
+                RejectedAt      = DateTime.Now,
+                RejectedBy      = userId
+            });
+
+            // Actualizar solicitud → PENDIENTE_CORRECCION
+            if (cert.RequestId.HasValue)
+            {
+                var request = await _db.Set<ContractRequest>()
+                    .FirstOrDefaultAsync(x => x.RequestId == cert.RequestId.Value, ct);
+
+                if (request is not null)
+                {
+                    request.Status               = await GetRequestStatusIdAsync(RequestPendingCorrection, ct);
+                    request.PendingCorrectionReason = reason;
+                    request.UpdatedAt            = DateTime.Now;
+                    request.UpdatedBy            = userId;
+                }
+            }
+
+            await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
+    }
+
+    public async Task ResendAsync(int certificationId, int userId, CancellationToken ct = default)
+    {
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
+            var cert = await _db.Set<FinancialCertification>()
+                .FirstOrDefaultAsync(x => x.CertificationId == certificationId, ct)
+                ?? throw new KeyNotFoundException($"Certificación id={certificationId} no existe.");
+
+            if (cert.Status != await GetCertStatusIdAsync(CertPendingCorrection, ct))
+                throw new InvalidOperationException("Solo se puede reenviar una certificación en estado PENDIENTE_CORRECCION.");
+
+            cert.Status          = await GetCertStatusIdAsync(CertPending, ct);
+            cert.RejectionReason = null;
+            cert.RejectedAt      = null;
+            cert.RejectedBy      = null;
+            cert.RejectionTypeId = null;
+            cert.UpdatedAt       = DateTime.Now;
+            cert.UpdatedBy       = userId;
+
+            // Actualizar solicitud → PENDIENTE_CERT_FINANCIERA
+            if (cert.RequestId.HasValue)
+            {
+                var request = await _db.Set<ContractRequest>()
+                    .FirstOrDefaultAsync(x => x.RequestId == cert.RequestId.Value, ct);
+
+                if (request is not null)
+                {
+                    request.Status                  = await GetRequestStatusIdAsync(RequestPendingCertFinanciera, ct);
+                    request.PendingCorrectionReason = null;
+                    request.UpdatedAt               = DateTime.Now;
+                    request.UpdatedBy               = userId;
+                }
+            }
+
+            await _db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        });
+    }
+
     public async Task<FinancialCertificationDto?> GetDetailAsync(int certificationId, CancellationToken ct = default)
     {
         var cert = await _db.Set<FinancialCertification>()
@@ -225,6 +331,12 @@ public class FinancialCertificationService : Service<FinancialCertification, int
         var statuses = await _refTypes.GetByCategoryAsync(CertCategory, ct);
         return statuses.FirstOrDefault(x => x.Name == name)?.TypeId
             ?? throw new InvalidOperationException($"Estado '{CertCategory}/{name}' no existe en ref_Types.");
+    }
+
+    private async Task<int?> GetRejectionTypeIdAsync(string name, CancellationToken ct)
+    {
+        var types = await _refTypes.GetByCategoryAsync(RejectionTypeCategory, ct);
+        return types.FirstOrDefault(x => x.Name == name)?.TypeId;
     }
 
     private async Task<int> GetRequestStatusIdAsync(string name, CancellationToken ct)
@@ -270,6 +382,10 @@ public class FinancialCertificationService : Service<FinancialCertification, int
             UpdatedAt       = c.UpdatedAt,
             UpdatedBy       = c.UpdatedBy,
             Status          = c.Status,
+            RejectionReason = c.RejectionReason,
+            RejectedAt      = c.RejectedAt,
+            RejectedBy      = c.RejectedBy,
+            RejectionTypeId = c.RejectionTypeId,
             StatusName      = c.Status.HasValue && certStatuses.TryGetValue(c.Status.Value, out var n) ? n : null,
             RequestSummary  = c.RequestId.HasValue && requests.TryGetValue(c.RequestId.Value, out var req)
                 ? new ContractRequestSummary

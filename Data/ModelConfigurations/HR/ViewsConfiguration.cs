@@ -125,6 +125,15 @@ public sealed class VwJobActivityConfiguration : IEntityTypeConfiguration<VwJobA
     }
 }
 
+public sealed class VwAuthorityConfiguration : IEntityTypeConfiguration<VwAuthority>
+{
+    public void Configure(EntityTypeBuilder<VwAuthority> e)
+    {
+        e.HasNoKey();
+        e.ToView("vw_Authority", "HR");
+    }
+}
+
 public sealed class VwEmployeeCurrentScheduleConfiguration : IEntityTypeConfiguration<VwEmployeeCurrentSchedule>
 {
     public void Configure(EntityTypeBuilder<VwEmployeeCurrentSchedule> builder)

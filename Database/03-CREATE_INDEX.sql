@@ -451,3 +451,193 @@ CREATE NONCLUSTERED INDEX IX_TimeRecoveryLogs_PlanID_Date
 ON HR.tbl_TimeRecoveryLogs (RecoveryPlanID ASC, ExecutedDate ASC)
 INCLUDE (MinutesRecovered)
 WITH (ONLINE = ON);
+
+
+
+/* ============================================================
+   8.1 Índices para HR.tbl_contractRequest
+   ============================================================ */
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_contractRequest_Status'
+      AND object_id = OBJECT_ID('HR.tbl_contractRequest')
+)
+BEGIN
+    CREATE INDEX IX_contractRequest_Status
+    ON HR.tbl_contractRequest(Status);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_contractRequest_Department_Status'
+      AND object_id = OBJECT_ID('HR.tbl_contractRequest')
+)
+BEGIN
+    CREATE INDEX IX_contractRequest_Department_Status
+    ON HR.tbl_contractRequest(DepartmentID, Status);
+END;
+GO
+
+
+/* ============================================================
+   8.2 Índices para HR.tbl_FinancialCertification
+   ============================================================ */
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_FinancialCertification_Request_Status'
+      AND object_id = OBJECT_ID('HR.tbl_FinancialCertification')
+)
+BEGIN
+    CREATE INDEX IX_FinancialCertification_Request_Status
+    ON HR.tbl_FinancialCertification(RequestID, Status);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_FinancialCertification_RejectionType'
+      AND object_id = OBJECT_ID('HR.tbl_FinancialCertification')
+)
+BEGIN
+    CREATE INDEX IX_FinancialCertification_RejectionType
+    ON HR.tbl_FinancialCertification(RejectionTypeID);
+END;
+GO
+
+
+/* ============================================================
+   8.3 Índices para HR.tbl_contractRequestPerson
+   ============================================================ */
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_contractRequestPerson_Request'
+      AND object_id = OBJECT_ID('HR.tbl_contractRequestPerson')
+)
+BEGIN
+    CREATE INDEX IX_contractRequestPerson_Request
+    ON HR.tbl_contractRequestPerson(RequestID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_contractRequestPerson_Request_Status_Active'
+      AND object_id = OBJECT_ID('HR.tbl_contractRequestPerson')
+)
+BEGIN
+    CREATE INDEX IX_contractRequestPerson_Request_Status_Active
+    ON HR.tbl_contractRequestPerson(RequestID, Status, IsActive);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_contractRequestPerson_Pending'
+      AND object_id = OBJECT_ID('HR.tbl_contractRequestPerson')
+)
+BEGIN
+    CREATE INDEX IX_contractRequestPerson_Pending
+    ON HR.tbl_contractRequestPerson(RequestID, IsActive, IsHired, ContractID)
+    INCLUDE
+    (
+        PersonID,
+        -- Identification,
+        -- FullName,
+        JobID,
+        StartDate,
+        EndDate,
+        WeeklyClassHours,
+        HourValue,
+        RMU,
+        RMUPeriod
+    );
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_contractRequestPerson_Person'
+      AND object_id = OBJECT_ID('HR.tbl_contractRequestPerson')
+)
+BEGIN
+    CREATE INDEX IX_contractRequestPerson_Person
+    ON HR.tbl_contractRequestPerson(PersonID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_contractRequestPerson_Contract'
+      AND object_id = OBJECT_ID('HR.tbl_contractRequestPerson')
+)
+BEGIN
+    CREATE INDEX IX_contractRequestPerson_Contract
+    ON HR.tbl_contractRequestPerson(ContractID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'UX_contractRequestPerson_Request_Person_Active'
+      AND object_id = OBJECT_ID('HR.tbl_contractRequestPerson')
+)
+BEGIN
+    CREATE UNIQUE INDEX UX_contractRequestPerson_Request_Person_Active
+    ON HR.tbl_contractRequestPerson(RequestID, PersonID)
+    WHERE PersonID IS NOT NULL
+      AND IsActive = 1;
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'UX_contractRequestPerson_Contract_Active'
+      AND object_id = OBJECT_ID('HR.tbl_contractRequestPerson')
+)
+BEGIN
+    CREATE UNIQUE INDEX UX_contractRequestPerson_Contract_Active
+    ON HR.tbl_contractRequestPerson(ContractID)
+    WHERE ContractID IS NOT NULL
+      AND IsActive = 1;
+END;
+GO
+
+
+/* ============================================================
+   8.4 Índices para historial de rechazo financiero
+   ============================================================ */
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_FinCertRejectHistory_Certification'
+      AND object_id = OBJECT_ID('HR.tbl_FinancialCertificationRejectionHistory')
+)
+BEGIN
+    CREATE INDEX IX_FinCertRejectHistory_Certification
+    ON HR.tbl_FinancialCertificationRejectionHistory(CertificationID);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_FinCertRejectHistory_Request'
+      AND object_id = OBJECT_ID('HR.tbl_FinancialCertificationRejectionHistory')
+)
+BEGIN
+    CREATE INDEX IX_FinCertRejectHistory_Request
+    ON HR.tbl_FinancialCertificationRejectionHistory(RequestID);
+END;
+GO

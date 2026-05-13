@@ -59,4 +59,11 @@ public class AttendanceCalculations
     public int? CreatedBy { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public int? UpdatedBy { get; set; }
+
+    // Campos del módulo de guardias
+    public int? GuardShiftPlanningId { get; set; }
+    public int? GuardShiftChangeId { get; set; }
+    public int? OriginalEmployeeId { get; set; }
+    public int? EffectiveEmployeeId { get; set; }
+    public bool IsReplacement { get; set; }
 }

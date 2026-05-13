@@ -18,6 +18,11 @@ namespace WsUtaSystem.Application.DTOs.FinancialCertification
         public int? UpdatedBy { get; set; }
         public int? Status { get; set; }
 
+        public string? RejectionReason { get; set; }
+        public DateTime? RejectedAt { get; set; }
+        public int? RejectedBy { get; set; }
+        public int? RejectionTypeId { get; set; }
+
         /// <summary>Nombre del estado desde ref_Types (FIN_CERT_STATUS).</summary>
         public string? StatusName { get; set; }
 

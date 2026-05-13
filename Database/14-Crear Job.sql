@@ -36,3 +36,24 @@ EXEC dbo.sp_add_jobserver
     @job_id = @jobId, 
     @server_name = N'(local)';
 GO
+
+
+/*visualizar los job creados */
+SELECT 
+    j.name AS [Nombre_del_Job],
+    j.enabled AS [Activo],
+    s.step_name AS [Nombre_del_Paso],
+    s.database_name AS [Base_de_Datos],
+    s.command AS [Comando_SQL],
+    sched.name AS [Nombre_Horario],
+    CASE 
+        WHEN next_run_date > 0 THEN 
+            CAST(CAST(next_run_date AS CHAR(8)) + ' ' + 
+            STUFF(STUFF(RIGHT('000000' + CAST(next_run_time AS VARCHAR(6)), 6), 3, 0, ':'), 6, 0, ':') AS DATETIME)
+        ELSE NULL 
+    END AS [Proxima_Ejecucion]
+FROM msdb.dbo.sysjobs j
+INNER JOIN msdb.dbo.sysjobsteps s ON j.job_id = s.job_id
+LEFT JOIN msdb.dbo.sysjobschedules js ON j.job_id = js.job_id
+LEFT JOIN msdb.dbo.sysschedules sched ON js.schedule_id = sched.schedule_id
+ORDER BY j.name;

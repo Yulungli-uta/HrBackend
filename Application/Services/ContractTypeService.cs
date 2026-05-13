@@ -65,6 +65,10 @@ public class ContractTypeService : Service<ContractType, int>, IContractTypeServ
     {
         var year = DateTime.Now.Year;
         var (docNumber, y, seq) = await _repo.ConsumeNextNumberAsync(contractTypeId, year, ct);
-        return new ContractNextNumberDto(docNumber, docNumber.Split('-')[0], y, seq);
+        // Extraer el prefijo completo quitando los dos últimos segmentos (-año-seq)
+        var lastDash       = docNumber.LastIndexOf('-');
+        var secondLastDash = lastDash > 0 ? docNumber.LastIndexOf('-', lastDash - 1) : -1;
+        var prefix         = secondLastDash > 0 ? docNumber[..secondLastDash] : docNumber;
+        return new ContractNextNumberDto(docNumber, prefix, y, seq);
     }
 }

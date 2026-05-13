@@ -80,6 +80,9 @@ public class Contracts : IAuditable{
 
     public int? SignedDocumentStoredFileId { get; set; }
 
+    public int? AuthorityNominatorId { get; set; }
+    public int? DthDirectorId { get; set; }
+
     public Contracts? Parent { get; set; }
     public ICollection<Contracts> Addendums { get; set; } = [];
     public FinancialCertification? Certification { get; set; }

@@ -16,6 +16,8 @@ namespace WsUtaSystem.Application.DTOs.ContractRequest
         public int? UpdatedBy { get; set; }
 
         public int? Status { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
     }
 }
 

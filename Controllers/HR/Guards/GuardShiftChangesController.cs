@@ -1,0 +1,47 @@
+using Microsoft.AspNetCore.Mvc;
+using WsUtaSystem.Application.DTOs.Guards;
+using WsUtaSystem.Application.Interfaces.Guards;
+
+namespace WsUtaSystem.Controllers.HR.Guards;
+
+[ApiController]
+[Route("guard-shift-changes")]
+public class GuardShiftChangesController : ControllerBase
+{
+    private readonly IGuardShiftChangeService _svc;
+    public GuardShiftChangesController(IGuardShiftChangeService svc) => _svc = svc;
+
+    [HttpGet("pending")]
+    public async Task<IActionResult> GetPending(CancellationToken ct) =>
+        Ok(await _svc.GetPendingAsync(ct));
+
+    [HttpGet("pending/paged")]
+    public async Task<IActionResult> GetPendingPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 100) pageSize = 20;
+        return Ok(await _svc.GetPendingPagedAsync(page, pageSize, ct));
+    }
+
+    [HttpGet("by-planning/{planningId:int}")]
+    public async Task<IActionResult> GetByPlanning(int planningId, CancellationToken ct) =>
+        Ok(await _svc.GetByPlanningAsync(planningId, ct));
+
+    [HttpPost("replacement")]
+    public async Task<IActionResult> CreateReplacement([FromBody] CreateGuardShiftReplacementDto dto, CancellationToken ct)
+    {
+        var created = await _svc.CreateReplacementAsync(dto, ct);
+        return Ok(created);
+    }
+
+    [HttpPost("{id:int}/approve")]
+    public async Task<IActionResult> Approve(int id, [FromBody] ApproveGuardShiftChangeDto dto, CancellationToken ct) =>
+        Ok(await _svc.ApproveAsync(id, dto, ct));
+
+    [HttpPost("{id:int}/reject")]
+    public async Task<IActionResult> Reject(int id, [FromBody] RejectGuardShiftChangeDto dto, CancellationToken ct) =>
+        Ok(await _svc.RejectAsync(id, dto, ct));
+}
