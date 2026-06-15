@@ -89,6 +89,49 @@ public class PeopleController : ControllerBase
         return Ok(dto);
     }
 
+    /// <summary>
+    /// Verifica si existen personas para una lista de identificaciones (cédulas/pasaportes).
+    /// Devuelve el detalle de cada una indicando si fue encontrada o no.
+    /// </summary>
+    /// <param name="dto">Lista de identificaciones a verificar.</param>
+    [HttpPost("verify-bulk")]
+    public async Task<IActionResult> VerifyBulk(
+        [FromBody] BulkVerifyPeopleRequestDto dto,
+        CancellationToken ct)
+    {
+        if (dto.Identifications.Count == 0)
+            return BadRequest(new { message = "La lista de identificaciones no puede estar vacía." });
+
+        var found = await _svc.GetByIdentificationsAsync(dto.Identifications, ct);
+
+        var foundMap = found
+            .Where(p => p.IdCard is not null)
+            .ToDictionary(p => p.IdCard!.Trim().ToLower());
+
+        var results = dto.Identifications
+            .Select(id => id.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(id =>
+            {
+                var exists = foundMap.TryGetValue(id.ToLower(), out var person);
+                return new BulkVerifyResultItemDto
+                {
+                    Identification = id,
+                    Exists = exists,
+                    Person = exists ? _mapper.Map<PeopleDto>(person) : null,
+                };
+            })
+            .ToList();
+
+        return Ok(new
+        {
+            results,
+            totalRequested = results.Count,
+            found          = results.Count(r => r.Exists),
+            notFound       = results.Count(r => !r.Exists),
+        });
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] PeopleCreateDto dto, CancellationToken ct)

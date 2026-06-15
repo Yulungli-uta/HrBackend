@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Models.Views;
 using WsUtaSystem.Data.ModelConfigurations.HR;
 using WsUtaSystem.Models;
+using WsUtaSystem.Models.Academic;
 using WsUtaSystem.Models.Docflow;
 using WsUtaSystem.Models.Guards;
 using WsUtaSystem.Models.Views;
@@ -41,6 +42,14 @@ public class AppDbContext : DbContext
     public DbSet<OccupationalGroup> OccupationalGroup => Set<OccupationalGroup>();
     public DbSet<Degree> Degree => Set<Degree>();
     public DbSet<DepartmentAuthority> DepartmentAuthorities => Set<DepartmentAuthority>();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DbSets - Módulo Académico: Estudiantes
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public DbSet<Students> Students => Set<Students>();
+    public DbSet<StudentEnrollments> StudentEnrollments => Set<StudentEnrollments>();
+    public DbSet<StudentProvisioning> StudentProvisionings => Set<StudentProvisioning>();
 
     // ─────────────────────────────────────────────────────────────────────────
     // DbSets - Módulo HR: Contratos y Nómina
@@ -156,6 +165,13 @@ public class AppDbContext : DbContext
     public DbSet<PersonnelActionType> PersonnelActionTypes => Set<PersonnelActionType>();
 
     // ─────────────────────────────────────────────────────────────────────────
+    // DbSets - Módulo Docentes
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public DbSet<AcademicLadder> AcademicLadders => Set<AcademicLadder>();
+    public DbSet<TeacherStructure> TeacherStructures => Set<TeacherStructure>();
+
+    // ─────────────────────────────────────────────────────────────────────────
     // DbSets - Módulo Guardias Rotativos
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -170,6 +186,12 @@ public class AppDbContext : DbContext
     public DbSet<GuardShiftChange> GuardShiftChanges => Set<GuardShiftChange>();
     public DbSet<EmployeeAvailabilityBlock> EmployeeAvailabilityBlocks => Set<EmployeeAvailabilityBlock>();
     public DbSet<GuardAssignmentValidation> GuardAssignmentValidations => Set<GuardAssignmentValidation>();
+    public DbSet<GuardSetting> GuardSettings => Set<GuardSetting>();
+    public DbSet<GuardLocationRotationPeriod> GuardLocationRotationPeriods => Set<GuardLocationRotationPeriod>();
+    public DbSet<GuardLocationRotationAssignment> GuardLocationRotationAssignments => Set<GuardLocationRotationAssignment>();
+    public DbSet<GuardEmployeeSpecialRule> GuardEmployeeSpecialRules => Set<GuardEmployeeSpecialRule>();
+    public DbSet<GuardVacationPlan> GuardVacationPlans => Set<GuardVacationPlan>();
+    public DbSet<GuardVacationRequest> GuardVacationRequests => Set<GuardVacationRequest>();
 
     // ─────────────────────────────────────────────────────────────────────────
     // DbSets - Vistas (sin clave primaria)

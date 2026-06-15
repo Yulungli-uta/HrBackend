@@ -88,6 +88,57 @@ public class ContractsController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Retorna los contratos creados por el usuario autenticado (paginado).
+    /// El filtro por empleado se aplica en el servidor usando el token JWT — el cliente
+    /// nunca envía el employeeId en la URL.
+    /// </summary>
+    [HttpGet("my/paged")]
+    public async Task<IActionResult> GetMyPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        [FromQuery] int? statusTypeId = null,
+        [FromQuery] int? year = null,
+        [FromQuery] string? sortDirection = "desc",
+        CancellationToken ct = default)
+    {
+        var employeeId = _currentUser.EmployeeId;
+        if (employeeId is null) return Unauthorized();
+
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 200) pageSize = 20;
+
+        var hasSearch = !string.IsNullOrWhiteSpace(search);
+        var term = hasSearch ? search!.Trim().ToLower() : string.Empty;
+        var hasYear = year.HasValue && year.Value > 0;
+        var ascending = string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
+
+        System.Linq.Expressions.Expression<Func<Contracts, bool>> predicate = c =>
+            c.CreatedBy == employeeId.Value &&
+            (!hasSearch || c.ContractCode.ToLower().Contains(term) ||
+                (c.ContractDescription != null && c.ContractDescription.ToLower().Contains(term))) &&
+            (!statusTypeId.HasValue || c.Status == statusTypeId.Value) &&
+            (!hasYear || (c.CreatedAt != null && c.CreatedAt.Value.Year == year!.Value));
+
+        var pagedEntities = await _service.GetPagedAsync(
+            predicate, page, pageSize, ct,
+            orderBy: c => (object)c.CreatedAt!, ascending: ascending);
+
+        var dtoItems = _mapper.Map<List<ContractsDto>>(pagedEntities.Items);
+
+        return Ok(new
+        {
+            items = dtoItems,
+            page = pagedEntities.Page,
+            pageSize = pagedEntities.PageSize,
+            totalCount = pagedEntities.TotalCount,
+            totalPages = pagedEntities.TotalPages,
+            hasPreviousPage = pagedEntities.HasPreviousPage,
+            hasNextPage = pagedEntities.HasNextPage
+        });
+    }
+
     /// <summary>Obtiene un contrato por ID.</summary>
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id, CancellationToken ct)

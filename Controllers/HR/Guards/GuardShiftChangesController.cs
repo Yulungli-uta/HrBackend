@@ -26,6 +26,18 @@ public class GuardShiftChangesController : ControllerBase
         return Ok(await _svc.GetPendingPagedAsync(page, pageSize, ct));
     }
 
+    [HttpGet("all/paged")]
+    public async Task<IActionResult> GetAllPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? status = null,
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 100) pageSize = 20;
+        return Ok(await _svc.GetAllPagedAsync(page, pageSize, status, ct));
+    }
+
     [HttpGet("by-planning/{planningId:int}")]
     public async Task<IActionResult> GetByPlanning(int planningId, CancellationToken ct) =>
         Ok(await _svc.GetByPlanningAsync(planningId, ct));

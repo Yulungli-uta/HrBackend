@@ -13,8 +13,11 @@ using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.Interfaces.Email;
 using WsUtaSystem.Application.Interfaces.Repositories;
+using WsUtaSystem.Application.Infrastructure.Academic;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Application.Interfaces.Services.Academic;
 using WsUtaSystem.Application.Services;
+using WsUtaSystem.Application.Services.Academic;
 using WsUtaSystem.Filters;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Infrastructure.Controller;
@@ -308,6 +311,21 @@ public static class ServiceCollectionExtensions
         // IReportRenderer: cada implementación sabe cómo renderizar en un formato.
         // IReportServiceV2: orquestador que une source + renderer.
         // Para agregar un nuevo reporte: solo registrar un nuevo IReportSource aquí.
+
+        // ── Migración v1 → v2 ────────────────────────────────────────────────
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.EmployeesReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.AttendanceReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.DepartmentsReportSource>();
+
+        // ── Existentes ───────────────────────────────────────────────────────
         services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportSource,
             WsUtaSystem.Reports.Sources.AttendanceSummaryReportSource>();
@@ -323,6 +341,39 @@ public static class ServiceCollectionExtensions
         services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportSource,
             WsUtaSystem.Reports.Sources.ScheduleContractSummaryReportSource>();
+
+        // ── Nuevos reportes de gestión RH ────────────────────────────────────
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.ContractsReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.ActiveContractsReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.PersonnelActionsReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.ActivePersonnelActionsReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.EmployeeHistoryReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.GrantedPermissionsReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.ContractRequestsReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.CertificationsReportSource>();
 
         // ── Reportes v2: AttendanceCalculations (Atrasos, Horas Extras, Cruzado) ──────────
         services.AddScoped<
@@ -344,6 +395,27 @@ public static class ServiceCollectionExtensions
         services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportSource,
             WsUtaSystem.Reports.Sources.AttendanceCrossReportSource>();
+
+        // ── Reportes módulo Guardias ──────────────────────────────────────────
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.Guards.GuardShiftPlanningReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.Guards.GuardLocationCoverageReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.Guards.GuardShiftChangesReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.Guards.GuardGroupRosterReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.Guards.GuardScheduleMatrixReportSource>();
 
         services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportRenderer,
@@ -451,6 +523,7 @@ public static class ServiceCollectionExtensions
         // ── Módulo: Contratos ─────────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IContractsRepository, WsUtaSystem.Infrastructure.Repositories.ContractsRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractsService, WsUtaSystem.Application.Services.ContractsService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractExpirationService, WsUtaSystem.Application.Services.ContractExpirationService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IContractTypeRepository, WsUtaSystem.Infrastructure.Repositories.ContractTypeRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IContractTypeService, WsUtaSystem.Application.Services.ContractTypeService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IContractRequestRepository, WsUtaSystem.Infrastructure.Repositories.ContractRequestRepository>();
@@ -477,6 +550,11 @@ public static class ServiceCollectionExtensions
         // ── Módulo: Empleados ─────────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEmployeesRepository, WsUtaSystem.Infrastructure.Repositories.EmployeesRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmployeesService, WsUtaSystem.Application.Services.EmployeesService>();
+
+        // Orquestador de aprovisionamiento — centraliza el flujo post-firma de documento
+        // (EnsureEmployee → RepositoryUta → UpdateEmail → SendEmail)
+        // Usado por: ContractsService, PersonnelActionService, ContractProvisioningController
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmployeeProvisioningOrchestrator, WsUtaSystem.Application.Services.EmployeeProvisioningOrchestrator>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEmployeeSchedulesRepository, WsUtaSystem.Infrastructure.Repositories.EmployeeSchedulesRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmployeeSchedulesService, WsUtaSystem.Application.Services.EmployeeSchedulesService>();
 
@@ -610,6 +688,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IVacationsRepository, WsUtaSystem.Infrastructure.Repositories.VacationsRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVacationsService, WsUtaSystem.Application.Services.VacationsService>();
 
+        // ── Módulo: Escalafón y Estructura Docente ────────────────────────────
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IAcademicLadderRepository, WsUtaSystem.Infrastructure.Repositories.AcademicLadderRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IAcademicLadderService, WsUtaSystem.Application.Services.AcademicLadderService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITeacherStructureRepository, WsUtaSystem.Infrastructure.Repositories.TeacherStructureRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITeacherStructureService, WsUtaSystem.Application.Services.TeacherStructureService>();
+
         // ── Módulo: Experiencia Laboral ───────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IWorkExperiencesRepository, WsUtaSystem.Infrastructure.Repositories.WorkExperiencesRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IWorkExperiencesService, WsUtaSystem.Application.Services.WorkExperiencesService>();
@@ -658,6 +742,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardShiftChangeRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardShiftChangeRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IEmployeeAvailabilityBlockRepository, WsUtaSystem.Infrastructure.Repositories.Guards.EmployeeAvailabilityBlockRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardAssignmentValidationRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardAssignmentValidationRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardLocationRotationPeriodRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardLocationRotationPeriodRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardLocationRotationAssignmentRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardLocationRotationAssignmentRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardEmployeeSpecialRuleRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardEmployeeSpecialRuleRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardVacationPlanRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardVacationPlanRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardVacationRequestRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardVacationRequestRepository>();
 
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardServiceLocationService, WsUtaSystem.Application.Services.Guards.GuardServiceLocationService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardRotationGroupService, WsUtaSystem.Application.Services.Guards.GuardRotationGroupService>();
@@ -667,6 +756,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardAssignmentValidationService, WsUtaSystem.Application.Services.Guards.GuardAssignmentValidationService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardShiftPlanningService, WsUtaSystem.Application.Services.Guards.GuardShiftPlanningService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardShiftChangeService, WsUtaSystem.Application.Services.Guards.GuardShiftChangeService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardLocationRotationService, WsUtaSystem.Application.Services.Guards.GuardLocationRotationService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardEmployeeSpecialRuleService, WsUtaSystem.Application.Services.Guards.GuardEmployeeSpecialRuleService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardVacationService, WsUtaSystem.Application.Services.Guards.GuardVacationService>();
 
         return services;
     }
@@ -752,6 +844,45 @@ public static class ServiceCollectionExtensions
         // Dispatcher y worker del sistema de cola de emails
         services.AddSingleton<IEmailDispatcher, EmailDispatcher>();
         services.AddHostedService<EmailQueueWorker>();
+
+        return services;
+    }
+
+    // =========================================================
+    // APROVISIONAMIENTO EMPLEADOS (HrBackend → RepositoryUta)
+    // Typed HttpClient para llamar al endpoint de provisioning en RepositoryUta.
+    // La URL base se lee de la sección "AuthService:Url" de appsettings.json.
+    // =========================================================
+
+    /// <summary>
+    /// Registra el cliente HTTP tipado para el servicio de aprovisionamiento de empleados.
+    /// Requiere la sección "AuthService:Url" en appsettings.json.
+    /// </summary>
+    public static IServiceCollection AddProvisioningServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var baseUrl = configuration["AuthService:Url"] ?? string.Empty;
+
+        services.AddHttpClient<IEmployeeProvisioningClient, EmployeeProvisioningClient>(client =>
+        {
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+                client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        services.AddHttpClient<IStudentProvisioningClient, StudentProvisioningClient>(client =>
+        {
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+                client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+
+        // Origen de datos de matrícula: cambiar a ApiStudentEnrollmentSource cuando la API esté lista
+        services.AddScoped<IStudentEnrollmentSource, DbStudentEnrollmentSource>();
+        services.AddScoped<IStudentEnrollmentSyncService, StudentEnrollmentSyncService>();
 
         return services;
     }

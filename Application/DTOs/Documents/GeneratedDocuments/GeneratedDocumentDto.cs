@@ -10,7 +10,7 @@ public sealed record GeneratedDocumentSummaryDto(
     int TemplateId,
     string TemplateName,
     string TemplateCode,
-    int EmployeeId,
+    int? EmployeeId,
     string EmployeeFullName,
     string EmployeeIdCard,
     DocumentEntityType EntityType,
@@ -30,7 +30,7 @@ public sealed record GeneratedDocumentDetailDto(
     int TemplateId,
     string TemplateName,
     string TemplateCode,
-    int EmployeeId,
+    int? EmployeeId,
     string EmployeeFullName,
     string EmployeeIdCard,
     DocumentEntityType EntityType,
@@ -70,12 +70,13 @@ public sealed record GeneratedDocumentFieldDto(
 /// </summary>
 public sealed record GenerateDocumentRequest(
     int TemplateId,
-    int EmployeeId,
+    int? EmployeeId,
     DocumentEntityType EntityType,
     int? EntityId,
     string? DocumentNumber,
     string? Notes,
-    Dictionary<string, string>? ManualOverrides
+    Dictionary<string, string>? ManualOverrides,
+    int PersonId = 0
 );
 
 /// <summary>Respuesta de generación de documento con el PDF en base64.</summary>

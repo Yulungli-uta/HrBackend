@@ -67,7 +67,8 @@ public sealed class DocumentGenerationService : IDocumentGenerationService
             request.EmployeeId,
             request.EntityId,
             request.ManualOverrides,
-            ct);
+            ct,
+            request.PersonId);
 
         // Aplicar overrides manuales directamente al dict de valores resueltos.
         // Esto cubre tokens del HTML que no tienen definición en tbl_DocumentTemplateFields.

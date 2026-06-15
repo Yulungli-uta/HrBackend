@@ -39,26 +39,53 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
     /// <inheritdoc />
     public async Task<Dictionary<string, string>> ResolveAsync(
         IReadOnlyList<DocumentTemplateField> fields,
-        int employeeId,
+        int? employeeId,
         int? entityId,
         Dictionary<string, string>? overrides = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        int personId = 0)
     {
         ArgumentNullException.ThrowIfNull(fields);
 
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // ── Cargar datos de empleado (siempre necesarios) ────────────────────────
-        var employee = await _db.Employees
-            .AsNoTracking()
-            .Include(e => e.People)
-            .FirstOrDefaultAsync(e => e.EmployeeId == employeeId, ct);
+        // ── Cargar datos de empleado ─────────────────────────────────────────────
+        Employees? employee = null;
+
+        if (employeeId is > 0)
+        {
+            employee = await _db.Employees
+                .AsNoTracking()
+                .Include(e => e.People)
+                .FirstOrDefaultAsync(e => e.EmployeeId == employeeId, ct);
+        }
+
+        // Sin empleado aún (nuevo ingreso): construir un Employees sintético desde tbl_People
+        if (employee is null && personId > 0)
+        {
+            var person = await _db.People
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.PersonId == personId, ct);
+
+            if (person is not null)
+            {
+                employee = new Employees
+                {
+                    EmployeeId = 0,
+                    PersonID   = personId,
+                    People     = person,
+                    HireDate   = DateOnly.FromDateTime(DateTime.Today),
+                };
+
+                _logger.LogInformation(
+                    "DocumentFieldResolver: sin empleado, usando datos de Person {PersonId} para campos EMPLOYEE_*.", personId);
+            }
+        }
 
         if (employee is null)
         {
             _logger.LogWarning(
-                "DocumentFieldResolver: Empleado {EmployeeId} no encontrado.", employeeId);
-            return result;
+                "DocumentFieldResolver: Empleado {EmployeeId} / Persona {PersonId} no encontrados. Solo se resolverán campos SYSTEM.", employeeId, personId);
         }
 
         // ── Cargar datos de contrato ─────────────────────────────────────────────
@@ -123,8 +150,12 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
                 continue;
             }
 
-            // 2. Resolución automática según SourceType (enum real)
-            var resolved = ResolveField(field, employee, contract, contractType, department, job, movement);
+            // 2. Resolución automática: saltar campos de empleado/contrato si no hay datos
+            string? resolved = null;
+            if (field.SourceType == FieldSourceType.System)
+                resolved = ResolveField(field, employee, contract, contractType, department, job, movement);
+            else if (employee is not null)
+                resolved = ResolveField(field, employee, contract, contractType, department, job, movement);
 
             // 3. Fallback al valor por defecto de la plantilla
             result[field.FieldName] = resolved ?? field.DefaultValue ?? string.Empty;

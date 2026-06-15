@@ -1,10 +1,17 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Application.DTOs.Documents.GeneratedDocuments;
 using WsUtaSystem.Application.DTOs.PersonnelActions;
+using WsUtaSystem.Application.DTOs.Provisioning;
+using WsUtaSystem.Application.DTOs.Reports;
+using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Repositories.Documents;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Interfaces.Services.Documents;
+using WsUtaSystem.Data;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Application.Services;
@@ -39,7 +46,12 @@ public sealed class PersonnelActionService : IPersonnelActionService
     private readonly IEmployeesRepository _employeesRepository;
     private readonly IDocumentTemplateRepository _templateRepository;
     private readonly IDocumentGenerationService _documentGenerationService;
+    private readonly IHttpContextAccessor _httpContext;
+    private readonly AppDbContext _db;
     private readonly ILogger<PersonnelActionService> _logger;
+    // Orquestador reutilizable: centraliza EnsureEmployee + RepositoryUta + UpdateEmail + SendEmail
+    private readonly IEmployeeProvisioningOrchestrator _provisioningOrchestrator;
+    private readonly IEmployeeProvisioningClient _provisioningClient;
 
     public PersonnelActionService(
         IPersonnelActionRepository actionRepository,
@@ -47,14 +59,22 @@ public sealed class PersonnelActionService : IPersonnelActionService
         IEmployeesRepository employeesRepository,
         IDocumentTemplateRepository templateRepository,
         IDocumentGenerationService documentGenerationService,
-        ILogger<PersonnelActionService> logger)
+        IHttpContextAccessor httpContext,
+        AppDbContext db,
+        ILogger<PersonnelActionService> logger,
+        IEmployeeProvisioningOrchestrator provisioningOrchestrator,
+        IEmployeeProvisioningClient provisioningClient)
     {
         _actionRepository          = actionRepository;
         _personnelActionType       = personnelActionType;
         _employeesRepository       = employeesRepository;
         _templateRepository        = templateRepository;
         _documentGenerationService = documentGenerationService;
+        _httpContext               = httpContext;
+        _db                        = db;
         _logger                    = logger;
+        _provisioningOrchestrator  = provisioningOrchestrator;
+        _provisioningClient        = provisioningClient;
     }
 
     /// <inheritdoc />
@@ -87,11 +107,16 @@ public sealed class PersonnelActionService : IPersonnelActionService
         int personId = request.personId;
         var employee = await _employeesRepository.GetByPersonIdAsync(personId, ct);
 
+        // Reservar el número de acción de forma atómica desde la secuencia del tipo
+        var (reservedNumber, _, _) = await _personnelActionType
+            .ConsumeNextNumberAsync(request.ActionTypeId, DateTime.Now.Year, ct);
+
         var action = new PersonnelAction
         {
-            EmployeeId              = request.EmployeeId,
+            PersonId                = request.personId,
+            EmployeeId              = (request.EmployeeId is > 0) ? request.EmployeeId : null,
             ActionTypeId            = request.ActionTypeId,
-            ActionNumber            = request.ActionNumber?.Trim(),
+            ActionNumber            = reservedNumber,
             ActionDate              = request.ActionDate,
             EffectiveDate           = request.EffectiveDate,
             EndDate                 = request.EndDate,
@@ -108,6 +133,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
             Observations            = request.Observations?.Trim(),
             ContractId              = request.ContractId,
             MovementId              = request.MovementId,
+            EmployeeTypeId          = request.EmployeeTypeId is > 0 ? request.EmployeeTypeId : null,
             SwornDeclaration        = request.SwornDeclaration,
             InstitutionalProcess    = request.InstitutionalProcess,
             ManagementLevel        = request.ManagementLevel,
@@ -130,17 +156,21 @@ public sealed class PersonnelActionService : IPersonnelActionService
         if (!request.GenerateDocument)
         {
             return new CreatePersonnelActionResponse(
-                ActionId: actionId, ActionNumber: request.ActionNumber,
+                ActionId: actionId, ActionNumber: reservedNumber,
                 Status: "BORRADOR", GeneratedDocumentId: null,
                 PdfBase64: null, FileName: null);
         }
 
         var docResponse = await GenerateDocumentForActionAsync(
-            actionId, request.EmployeeId, request.ContractId,
+            actionId, request.EmployeeId, request.personId, request.ContractId,
             request.DocumentOverrides, createdBy, ct);
 
+        if (docResponse is not null)
+            await TransitionStatusAsync(actionId, "BORRADOR", "GENERADO",
+                "Documento generado al crear la acción.", createdBy, ct);
+
         return new CreatePersonnelActionResponse(
-            ActionId: actionId, ActionNumber: request.ActionNumber,
+            ActionId: actionId, ActionNumber: reservedNumber,
             Status: docResponse is not null ? "GENERADO" : "BORRADOR",
             GeneratedDocumentId: docResponse?.DocumentId,
             PdfBase64: docResponse?.PdfBase64,
@@ -184,6 +214,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         action.SwornDeclaration        = request.SwornDeclaration;
         action.InstitutionalProcess    = request.InstitutionalProcess;
         action.ManagementLevel         = request.ManagementLevel;
+        action.EmployeeTypeId          = request.EmployeeTypeId is > 0 ? request.EmployeeTypeId : action.EmployeeTypeId;
         action.DthDirectorId           = request.DthDirectorId;
         action.AuthorityNominatorId    = request.AuthorityNominatorId;
         action.ElaboratorId            = request.ElaboratorId;
@@ -214,7 +245,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         if (request.GenerateDocumentIfMissing && !action.GeneratedDocumentId.HasValue)
         {
             docResponse = await GenerateDocumentForActionAsync(
-                actionId, action.EmployeeId, action.ContractId,
+                actionId, action.EmployeeId, action.PersonId, action.ContractId,
                 overrides: null, approvedBy, ct);
         }
 
@@ -246,7 +277,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
                 $"No se puede generar documento en estado '{action.Status}'.");
 
         var docResponse = await GenerateDocumentForActionAsync(
-            actionId, action.EmployeeId, action.ContractId,
+            actionId, action.EmployeeId, action.PersonId, action.ContractId,
             overrides, generatedBy, ct);
 
         if (docResponse is not null &&
@@ -299,6 +330,14 @@ public sealed class PersonnelActionService : IPersonnelActionService
         _logger.LogInformation(
             "PersonnelActionService: documento firmado StoredFileId={FileId} vinculado a acción {ActionId}.",
             request.StoredFileId, actionId);
+
+        var actionType = await _personnelActionType.GetByIdAsync(action.ActionTypeId, ct);
+
+        if (actionType?.RequiresAdUserCreation == true)
+            await TriggerActionProvisioningAsync(actionId, updatedBy, ct);
+
+        if (actionType?.RequiresAdUserDisable == true)
+            await TriggerActionDisableAsync(actionId, updatedBy, ct);
     }
 
     /// <inheritdoc />
@@ -421,7 +460,8 @@ public sealed class PersonnelActionService : IPersonnelActionService
 
     private async Task<GenerateDocumentResponse?> GenerateDocumentForActionAsync(
         int actionId,
-        int employeeId,
+        int? employeeId,
+        int personId,
         int? contractId,
         Dictionary<string, string>? overrides,
         int generatedBy,
@@ -471,13 +511,14 @@ public sealed class PersonnelActionService : IPersonnelActionService
         try
         {
             var generateRequest = new GenerateDocumentRequest(
-                TemplateId:      templates[0].TemplateId,                
-                EmployeeId:      employeeId,
+                TemplateId:      templates[0].TemplateId,
+                EmployeeId:      employeeId is > 0 ? employeeId : null,
                 EntityType:      DocumentEntityType.PersonnelAction,
-                EntityId:        contractId,   // null → resolver usa contrato activo más reciente
+                EntityId:        contractId,
                 DocumentNumber:  null,
                 Notes:           $"Generado para acción de personal {actionId}",
-                ManualOverrides: actionOverrides);
+                ManualOverrides: actionOverrides,
+                PersonId:        personId);
 
             var docResponse = await _documentGenerationService.GenerateAsync(
                 generateRequest, generatedBy, ct);
@@ -570,5 +611,225 @@ public sealed class PersonnelActionService : IPersonnelActionService
         if (n.Contains("DESTITUCI"))                          return "CB_DESTITUCION";
         if (n.Contains("VACACI"))                             return "CB_VACACIONES";
         return "CB_OTRO";
+    }
+
+    // ── Aprovisionamiento AD desde Acción de Personal ────────────────────────────
+
+    // Fase 1/4: 2002=CreatedInLocalAd … 2006=LicenseFailed → cuenta AD creada; 2007=LocalAdFailed → sin cuenta
+    private static bool ProvisionedAdAccount(int statusId) => statusId is >= 2002 and <= 2006;
+
+    /// <summary>
+    /// Dispara el aprovisionamiento de cuenta institucional para el empleado
+    /// vinculado a la acción de personal. Delega la lógica al
+    /// <see cref="IEmployeeProvisioningOrchestrator"/>.
+    /// </summary>
+    private async Task TriggerActionProvisioningAsync(int actionId, int updatedBy, CancellationToken ct)
+    {
+        try
+        {
+            var action = await _db.PersonnelActions
+                .AsNoTracking()
+                .Where(a => a.ActionId == actionId)
+                .Select(a => new
+                {
+                    a.PersonId,
+                    a.EmployeeId,
+                    a.EmployeeTypeId,
+                    a.DestinationDepartmentId,
+                    a.OriginDepartmentId,
+                    a.DestinationJobId,
+                    a.OriginJobId,
+                    a.GeneratedDocumentId,
+                    a.ContractId
+                })
+                .FirstOrDefaultAsync(ct);
+
+            if (action is null || action.PersonId == 0)
+            {
+                _logger.LogWarning(
+                    "[ACTION] Aprovisionamiento omitido: PersonId no disponible en ActionId={ActionId}",
+                    actionId);
+                return;
+            }
+
+            var deptId   = action.DestinationDepartmentId ?? action.OriginDepartmentId;
+            var jobId    = action.DestinationJobId        ?? action.OriginJobId;
+            var empType  = 0;
+
+            if (action.EmployeeId > 0)
+            {
+                // Empleado existente: leer régimen desde tbl_Employees
+                empType = await _db.Employees
+                    .AsNoTracking()
+                    .Where(e => e.EmployeeId == action.EmployeeId)
+                    .Select(e => e.EmployeeType)
+                    .FirstOrDefaultAsync(ct);
+            }
+            else
+            {
+                // Nuevo ingreso: usar EmployeeTypeId capturado en la acción (seleccionado por el usuario)
+                if (action.EmployeeTypeId is > 0)
+                {
+                    empType = action.EmployeeTypeId.Value;
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "[ACTION] Aprovisionamiento omitido: nuevo ingreso sin EmployeeTypeId en ActionId={ActionId} PersonId={PersonId}. " +
+                        "Selecciona el Régimen Laboral en el formulario de acción de personal.",
+                        actionId, action.PersonId);
+                    return;
+                }
+            }
+
+            string? deptName = deptId.HasValue
+                ? await _db.Departments.AsNoTracking()
+                    .Where(d => d.DepartmentId == deptId.Value)
+                    .Select(d => d.Name)
+                    .FirstOrDefaultAsync(ct)
+                : null;
+
+            var token = _httpContext.HttpContext?.Request.Headers["Authorization"].FirstOrDefault()
+                ?? string.Empty;
+
+            var request = new ProvisioningOrchestrationRequest(
+                PersonId:        action.PersonId,
+                EmployeeType:    empType,
+                DepartmentId:    deptId,
+                DepartmentName:  deptName,
+                HireDate:        null,
+                JobId:           jobId,
+                UpdatedBy:       updatedBy,
+                BearerToken:     token,
+                SourceReference: $"PersonnelAction:{actionId}",
+                Source:          ProvisioningSource.PersonnelAction
+            );
+
+            var result = await _provisioningOrchestrator.ExecuteAsync(request, ct);
+
+            if (!result.Success && !result.AlreadyExists)
+            {
+                _logger.LogWarning(
+                    "[ACTION] Aprovisionamiento no exitoso. ActionId={ActionId}: {Error}",
+                    actionId, result.ErrorMessage);
+                return;
+            }
+
+            // Si el empleado no existía aún, actualizar el EmployeeId en la acción y en el documento generado
+            if ((action.EmployeeId ?? 0) == 0 && result.EmployeeId.HasValue)
+            {
+                await _db.PersonnelActions
+                    .Where(a => a.ActionId == actionId)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(a => a.EmployeeId, result.EmployeeId.Value),
+                        ct);
+
+                // Actualizar también el documento generado si existe
+                if (action.GeneratedDocumentId.HasValue)
+                {
+                    await _db.GeneratedDocuments
+                        .Where(d => d.DocumentId == action.GeneratedDocumentId.Value)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(d => d.EmployeeId, result.EmployeeId.Value),
+                            ct);
+                }
+
+                _logger.LogInformation(
+                    "[ACTION] ✓ EmployeeId actualizado. ActionId={ActionId} | EmployeeId={EmployeeId}",
+                    actionId, result.EmployeeId.Value);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[ACTION] ERROR en aprovisionamiento. ActionId={ActionId}", actionId);
+        }
+    }
+
+    private async Task TriggerActionDisableAsync(int actionId, int updatedBy, CancellationToken ct)
+    {
+        try
+        {
+            var action = await _db.PersonnelActions
+                .AsNoTracking()
+                .Where(a => a.ActionId == actionId)
+                .Select(a => new { a.EmployeeId, a.PersonId, a.Status })
+                .FirstOrDefaultAsync(ct);
+
+            if (action is null || (action.EmployeeId ?? 0) == 0)
+            {
+                _logger.LogWarning(
+                    "[ACTION][DISABLE] Deshabilitar omitido: EmployeeId no disponible en ActionId={ActionId}",
+                    actionId);
+                return;
+            }
+
+            var token = _httpContext.HttpContext?.Request.Headers["Authorization"].FirstOrDefault()
+                ?? string.Empty;
+
+            var result = await _provisioningClient.DisableAsync(action.EmployeeId!.Value, token, ct);
+
+            var historyComment = result?.Success == true
+                ? $"Cuenta institucional deshabilitada para EmployeeId={action.EmployeeId}."
+                : $"Error al deshabilitar cuenta para EmployeeId={action.EmployeeId}: {result?.ErrorMessage ?? "sin respuesta de RepositoryUta"}";
+
+            await WriteHistoryAsync(actionId, action.Status, action.Status, historyComment, updatedBy, ct);
+
+            if (result?.Success == true)
+                _logger.LogInformation(
+                    "[ACTION][DISABLE] ✓ Cuenta deshabilitada. ActionId={ActionId} | EmployeeId={EmployeeId} | Email={Email}",
+                    actionId, action.EmployeeId, result.Email);
+            else
+                _logger.LogWarning(
+                    "[ACTION][DISABLE] ✗ Fallo al deshabilitar. ActionId={ActionId} | EmployeeId={EmployeeId}: {Error}",
+                    actionId, action.EmployeeId, result?.ErrorMessage);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[ACTION][DISABLE] ERROR al deshabilitar cuenta. ActionId={ActionId}", actionId);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<PersonnelActionReportDto>> GetForReportAsync(ReportFilterDto filter, CancellationToken ct = default)
+    {
+        var start = filter.StartDate.HasValue ? DateOnly.FromDateTime(filter.StartDate.Value) : (DateOnly?)null;
+        var end   = filter.EndDate.HasValue   ? DateOnly.FromDateTime(filter.EndDate.Value)   : (DateOnly?)null;
+        var categories = filter.ActionCategories?.ToList();
+
+        var query =
+            from a in _db.PersonnelActions.AsNoTracking()
+            join p   in _db.People.AsNoTracking()                on a.PersonId       equals p.PersonId
+            join pat in _db.PersonnelActionTypes.AsNoTracking()  on a.ActionTypeId   equals pat.PersonnelActionTypeId
+            join od  in _db.Departments.AsNoTracking()           on a.OriginDepartmentId      equals od.DepartmentId  into odg
+            from od in odg.DefaultIfEmpty()
+            join dd  in _db.Departments.AsNoTracking()           on a.DestinationDepartmentId equals dd.DepartmentId  into ddg
+            from dd in ddg.DefaultIfEmpty()
+            where (!start.HasValue || a.ActionDate >= start.Value)
+               && (!end.HasValue   || a.ActionDate <= end.Value)
+               && (string.IsNullOrEmpty(filter.Status) || a.Status == filter.Status)
+               && (!filter.EmployeeId.HasValue  || a.EmployeeId == filter.EmployeeId.Value || a.PersonId == filter.EmployeeId.Value)
+               && (!filter.ActionTypeId.HasValue || a.ActionTypeId == filter.ActionTypeId.Value)
+               && (categories == null || categories.Count == 0 || categories.Contains(pat.ActionCategory))
+            orderby a.ActionDate descending
+            select new PersonnelActionReportDto
+            {
+                ActionId               = a.ActionId,
+                ActionNumber           = a.ActionNumber,
+                PersonIdCard           = p.IdCard,
+                PersonFullName         = p.FirstName + " " + p.LastName,
+                DepartmentName         = od != null ? od.Name : dd != null ? dd.Name : null,
+                ActionTypeName         = pat.Name,
+                ActionCategory         = pat.ActionCategory,
+                ActionDate             = a.ActionDate.ToDateTime(TimeOnly.MinValue),
+                EffectiveDate          = a.EffectiveDate.HasValue ? a.EffectiveDate.Value.ToDateTime(TimeOnly.MinValue) : (DateTime?)null,
+                EndDate                = a.EndDate.HasValue ? a.EndDate.Value.ToDateTime(TimeOnly.MinValue) : (DateTime?)null,
+                InstitutionalProcessName = null,
+                StatusName             = a.Status,
+                HasDocument            = a.GeneratedDocumentId.HasValue
+            };
+
+        return await query.ToListAsync(ct);
     }
 }

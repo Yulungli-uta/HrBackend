@@ -49,11 +49,26 @@ public sealed class GuardRotationGroupConfiguration : IEntityTypeConfiguration<G
         e.Property(x => x.GroupCode).HasMaxLength(30);
         e.Property(x => x.Name).HasMaxLength(150).IsRequired();
         e.Property(x => x.Description).HasMaxLength(500);
+        e.Property(x => x.ParentGroupId).HasColumnName("ParentGroupId");
+        e.Property(x => x.GroupLevelTypeId).HasColumnName("GroupLevelTypeId");
+        e.Property(x => x.ColorCode).HasMaxLength(20);
         e.Property(x => x.RowVersion).IsRowVersion().HasColumnName("RowVersion").IsConcurrencyToken();
         e.Property(x => x.CreatedAt)
             .HasDefaultValueSql("GETDATE()")
             .ValueGeneratedOnAdd()
             .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
+
+        e.HasOne(x => x.ParentGroup)
+            .WithMany(g => g.Subgroups)
+            .HasForeignKey(x => x.ParentGroupId)
+            .HasConstraintName("FK_GuardRotationGroups_Parent")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.GroupLevelType)
+            .WithMany()
+            .HasForeignKey(x => x.GroupLevelTypeId)
+            .HasConstraintName("FK_GuardRotationGroups_LevelType")
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -453,6 +468,253 @@ public sealed class GuardAssignmentValidationConfiguration : IEntityTypeConfigur
             .WithMany()
             .HasForeignKey(x => x.SeverityTypeId)
             .HasConstraintName("FK_GuardAssignValids_SeverityType")
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+// ─── Entidades nuevas ────────────────────────────────────────────────────────
+
+public sealed class GuardSettingConfiguration : IEntityTypeConfiguration<GuardSetting>
+{
+    public void Configure(EntityTypeBuilder<GuardSetting> e)
+    {
+        e.ToTable("tbl_GuardSettings", "HR");
+        e.HasKey(x => x.SettingKey);
+        e.Property(x => x.SettingKey).HasMaxLength(100);
+        e.Property(x => x.SettingValue).HasMaxLength(500).IsRequired();
+        e.Property(x => x.Description).HasMaxLength(500);
+        e.Property(x => x.UpdatedAt).HasDefaultValueSql("GETDATE()");
+    }
+}
+
+public sealed class GuardLocationRotationPeriodConfiguration : IEntityTypeConfiguration<GuardLocationRotationPeriod>
+{
+    public void Configure(EntityTypeBuilder<GuardLocationRotationPeriod> e)
+    {
+        e.ToTable("tbl_GuardLocationRotationPeriods", "HR");
+        e.HasKey(x => x.LocationRotationPeriodId);
+        e.Property(x => x.LocationRotationPeriodId).HasColumnName("LocationRotationPeriodId").UseIdentityColumn();
+        e.Property(x => x.Name).HasMaxLength(150).IsRequired();
+        e.Property(x => x.Notes).HasMaxLength(500);
+        e.Property(x => x.RowVersion).IsRowVersion().HasColumnName("RowVersion").IsConcurrencyToken();
+        e.Property(x => x.CreatedAt)
+            .HasDefaultValueSql("GETDATE()")
+            .ValueGeneratedOnAdd()
+            .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
+    }
+}
+
+public sealed class GuardLocationRotationAssignmentConfiguration : IEntityTypeConfiguration<GuardLocationRotationAssignment>
+{
+    public void Configure(EntityTypeBuilder<GuardLocationRotationAssignment> e)
+    {
+        e.ToTable("tbl_GuardLocationRotationAssignments", "HR");
+        e.HasKey(x => x.LocationRotationAssignmentId);
+        e.Property(x => x.LocationRotationAssignmentId).HasColumnName("LocationRotationAssignmentId").UseIdentityColumn();
+        e.Property(x => x.LocationRotationPeriodId).HasColumnName("LocationRotationPeriodId");
+        e.Property(x => x.GroupId).HasColumnName("GroupId");
+        e.Property(x => x.EmployeeId).HasColumnName("EmployeeId");
+        e.Property(x => x.LocationId).HasColumnName("LocationId");
+        e.Property(x => x.PriorityTypeId).HasColumnName("PriorityTypeId");
+        e.Property(x => x.Notes).HasMaxLength(500);
+        e.Property(x => x.RowVersion).IsRowVersion().HasColumnName("RowVersion").IsConcurrencyToken();
+        e.Property(x => x.CreatedAt)
+            .HasDefaultValueSql("GETDATE()")
+            .ValueGeneratedOnAdd()
+            .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
+
+        e.HasOne(x => x.Period)
+            .WithMany(p => p.Assignments)
+            .HasForeignKey(x => x.LocationRotationPeriodId)
+            .HasConstraintName("FK_LocationAssign_Period")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.Group)
+            .WithMany()
+            .HasForeignKey(x => x.GroupId)
+            .HasConstraintName("FK_LocationAssign_Group")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .HasConstraintName("FK_LocationAssign_Employee")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.Location)
+            .WithMany()
+            .HasForeignKey(x => x.LocationId)
+            .HasConstraintName("FK_LocationAssign_Location")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.PriorityType)
+            .WithMany()
+            .HasForeignKey(x => x.PriorityTypeId)
+            .HasConstraintName("FK_LocationAssign_Priority")
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public sealed class GuardEmployeeSpecialRuleConfiguration : IEntityTypeConfiguration<GuardEmployeeSpecialRule>
+{
+    public void Configure(EntityTypeBuilder<GuardEmployeeSpecialRule> e)
+    {
+        e.ToTable("tbl_GuardEmployeeSpecialRules", "HR");
+        e.HasKey(x => x.SpecialRuleId);
+        e.Property(x => x.SpecialRuleId).HasColumnName("SpecialRuleId").UseIdentityColumn();
+        e.Property(x => x.EmployeeId).HasColumnName("EmployeeId");
+        e.Property(x => x.FixedLocationId).HasColumnName("FixedLocationId");
+        e.Property(x => x.FixedScheduleId).HasColumnName("FixedScheduleId");
+        e.Property(x => x.Reason).HasMaxLength(500);
+        e.Property(x => x.RowVersion).IsRowVersion().HasColumnName("RowVersion").IsConcurrencyToken();
+        e.Property(x => x.CreatedAt)
+            .HasDefaultValueSql("GETDATE()")
+            .ValueGeneratedOnAdd()
+            .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
+
+        e.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .HasConstraintName("FK_SpecialRules_Employee")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.FixedLocation)
+            .WithMany()
+            .HasForeignKey(x => x.FixedLocationId)
+            .HasConstraintName("FK_SpecialRules_Location")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.FixedSchedule)
+            .WithMany()
+            .HasForeignKey(x => x.FixedScheduleId)
+            .HasConstraintName("FK_SpecialRules_Schedule")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasIndex(x => new { x.EmployeeId, x.IsActive })
+            .HasDatabaseName("IX_SpecialRules_Employee");
+    }
+}
+
+public sealed class GuardVacationPlanConfiguration : IEntityTypeConfiguration<GuardVacationPlan>
+{
+    public void Configure(EntityTypeBuilder<GuardVacationPlan> e)
+    {
+        e.ToTable("tbl_GuardVacationPlans", "HR");
+        e.HasKey(x => x.GuardVacationPlanId);
+        e.Property(x => x.GuardVacationPlanId).HasColumnName("GuardVacationPlanId").UseIdentityColumn();
+        e.Property(x => x.EmployeeId).HasColumnName("EmployeeId");
+        e.Property(x => x.StatusTypeId).HasColumnName("StatusTypeId");
+        e.Property(x => x.DirectionApprovedBy).HasColumnName("DirectionApprovedBy");
+        e.Property(x => x.SubmittedToDirectionBy).HasColumnName("SubmittedToDirectionBy");
+        e.Property(x => x.SubmittedToDirectionAt).HasColumnName("SubmittedToDirectionAt");
+        e.Property(x => x.Notes).HasMaxLength(1000);
+        e.Property(x => x.RowVersion).IsRowVersion().HasColumnName("RowVersion").IsConcurrencyToken();
+        e.Property(x => x.CreatedAt)
+            .HasDefaultValueSql("GETDATE()")
+            .ValueGeneratedOnAdd()
+            .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
+
+        e.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .HasConstraintName("FK_VacPlan_Employee")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.StatusType)
+            .WithMany()
+            .HasForeignKey(x => x.StatusTypeId)
+            .HasConstraintName("FK_VacPlan_Status")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.DirectionApprover)
+            .WithMany()
+            .HasForeignKey(x => x.DirectionApprovedBy)
+            .HasConstraintName("FK_VacPlan_ApprovedBy")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.SubmittedByEmployee)
+            .WithMany()
+            .HasForeignKey(x => x.SubmittedToDirectionBy)
+            .HasConstraintName("FK_VacPlan_SubmittedBy")
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public sealed class GuardVacationRequestConfiguration : IEntityTypeConfiguration<GuardVacationRequest>
+{
+    public void Configure(EntityTypeBuilder<GuardVacationRequest> e)
+    {
+        e.ToTable("tbl_GuardVacationRequests", "HR");
+        e.HasKey(x => x.GuardVacationRequestId);
+        e.Property(x => x.GuardVacationRequestId).HasColumnName("GuardVacationRequestId").UseIdentityColumn();
+        e.Property(x => x.EmployeeId).HasColumnName("EmployeeId");
+        e.Property(x => x.GuardVacationPlanId).HasColumnName("GuardVacationPlanId");
+        e.Property(x => x.VacationId).HasColumnName("VacationId");
+        e.Property(x => x.RequestTypeId).HasColumnName("RequestTypeId");
+        e.Property(x => x.StatusTypeId).HasColumnName("StatusTypeId");
+        e.Property(x => x.RequestedBy).HasColumnName("RequestedBy");
+        e.Property(x => x.DirectionApprovedBy).HasColumnName("DirectionApprovedBy");
+        e.Property(x => x.SubmittedToDirectionBy).HasColumnName("SubmittedToDirectionBy");
+        e.Property(x => x.SubmittedToDirectionAt).HasColumnName("SubmittedToDirectionAt");
+        e.Property(x => x.RejectedBy).HasColumnName("RejectedBy");
+        e.Property(x => x.Reason).HasMaxLength(1000).IsRequired();
+        e.Property(x => x.RejectionReason).HasMaxLength(500);
+        e.Property(x => x.RequestedAt)
+            .HasDefaultValueSql("GETDATE()")
+            .ValueGeneratedOnAdd()
+            .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
+        e.Property(x => x.RowVersion).IsRowVersion().HasColumnName("RowVersion").IsConcurrencyToken();
+        e.Property(x => x.CreatedAt)
+            .HasDefaultValueSql("GETDATE()")
+            .ValueGeneratedOnAdd()
+            .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
+
+        e.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .HasConstraintName("FK_VacReq_Employee")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.Plan)
+            .WithMany(p => p.Requests)
+            .HasForeignKey(x => x.GuardVacationPlanId)
+            .HasConstraintName("FK_VacReq_Plan")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.RequestType)
+            .WithMany()
+            .HasForeignKey(x => x.RequestTypeId)
+            .HasConstraintName("FK_VacReq_RequestType")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.StatusType)
+            .WithMany()
+            .HasForeignKey(x => x.StatusTypeId)
+            .HasConstraintName("FK_VacReq_Status")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.Requester)
+            .WithMany()
+            .HasForeignKey(x => x.RequestedBy)
+            .HasConstraintName("FK_VacReq_RequestedBy")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.DirectionApprover)
+            .WithMany()
+            .HasForeignKey(x => x.DirectionApprovedBy)
+            .HasConstraintName("FK_VacReq_ApprovedBy")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.SubmittedByEmployee)
+            .WithMany()
+            .HasForeignKey(x => x.SubmittedToDirectionBy)
+            .HasConstraintName("FK_VacReq_SubmittedBy")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.Rejector)
+            .WithMany()
+            .HasForeignKey(x => x.RejectedBy)
+            .HasConstraintName("FK_VacReq_RejectedBy")
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

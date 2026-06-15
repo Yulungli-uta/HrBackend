@@ -59,4 +59,16 @@ public class ContractsCreateDto
 
     public int? AuthorityNominatorId { get; set; }
     public int? DthDirectorId { get; set; }
+
+    /// <summary>
+    /// Régimen laboral. Si no se envía explícitamente, el servicio lo auto-puebla
+    /// desde tbl_contractRequest vía CertificationID.
+    /// </summary>
+    public int? LaborRegimeID { get; set; }
+
+    /// <summary>Modalidad de trabajo. Auto-poblado desde la solicitud si no se envía.</summary>
+    public int? WorkModalityID { get; set; }
+
+    /// <summary>Horas contratadas. Auto-poblado desde la solicitud si no se envía.</summary>
+    public decimal? ContractedHours { get; set; }
 }

@@ -42,6 +42,10 @@ public sealed class PermissionsConfiguration : IEntityTypeConfiguration<Permissi
         e.Property(x => x.HourTaken).HasColumnName("HourTaken");
         e.Property(x => x.Status).HasMaxLength(20);
         e.Property(x => x.VacationId).HasColumnName("VacationID");
+
+        // Índices para reportes: filtra por rango de fechas, estado y empleado
+        e.HasIndex(x => new { x.EmployeeId, x.StartDate });
+        e.HasIndex(x => new { x.StartDate, x.Status });
     }
 }
 

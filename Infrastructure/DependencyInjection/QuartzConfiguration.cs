@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quartz;
 using WsUtaSystem.Infrastructure.Jobs;
@@ -5,19 +6,23 @@ using WsUtaSystem.Infrastructure.Jobs;
 namespace WsUtaSystem.Infrastructure.DependencyInjection;
 
 /// <summary>
-/// Configuración de Quartz.NET para jobs automáticos
+/// Configuración de Quartz.NET para jobs automáticos.
+/// Los jobs solo se registran si Quartz:EnableJobs = true en la configuración,
+/// lo que previene que instancias locales de desarrollo disparen jobs de producción.
 /// </summary>
 public static class QuartzConfiguration
 {
-    public static IServiceCollection AddQuartzJobs(this IServiceCollection services)
+    public static IServiceCollection AddQuartzJobs(this IServiceCollection services, IConfiguration configuration)
     {
-        // Configurar Quartz.NET
+        var enableJobs = configuration.GetValue<bool>("Quartz:EnableJobs");
+
+        if (!enableJobs)
+            return services;
+
         services.AddQuartz(q =>
         {
-            // Usar Microsoft DI para inyección de dependencias en Jobs
             q.UseMicrosoftDependencyInjectionJobFactory();
 
-            // Zona horaria por defecto
             const string timeZone = "America/Guayaquil";
 
             // ========================================
@@ -30,45 +35,32 @@ public static class QuartzConfiguration
             q.AddTrigger(opts => opts
                 .ForJob(dailyAttendanceKey)
                 .WithIdentity("DailyAttendanceCalculationTrigger")
-                .WithCronSchedule("0 0 1 * * ?", x => x
+                .WithCronSchedule("0 0 7 * * ?", x => x
                     .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-                .WithDescription("Ejecuta el cálculo de asistencia diariamente a las 1:00 AM")
+                .WithDescription("Ejecuta el cálculo de asistencia diariamente a las 7:00 AM (permite capturar picadas de turnos nocturnos hasta las 06:00)")
                 .UsingJobData("TimeZone", timeZone));
 
-            //// 2. Cálculo de minutos nocturnos - 3:00 AM
-            //var nightMinutesKey = new JobKey("DailyNightMinutesCalculationJob");
-            //q.AddJob<DailyNightMinutesCalculationJob>(opts => opts.WithIdentity(nightMinutesKey));
-            //q.AddTrigger(opts => opts
-            //    .ForJob(nightMinutesKey)
-            //    .WithIdentity("DailyNightMinutesCalculationTrigger")
-            //    .WithCronSchedule("0 0 3 * * ?", x => x
-            //        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-            //    .WithDescription("Ejecuta el cálculo de minutos nocturnos diariamente a las 3:00 AM")
-            //    .UsingJobData("TimeZone", timeZone));
+            // 2. Contratos vencidos - diariamente a las 2:00 AM
+            var contractExpirationKey = new JobKey("DailyContractExpirationJob");
+            q.AddJob<DailyContractExpirationJob>(opts => opts.WithIdentity(contractExpirationKey));
+            q.AddTrigger(opts => opts
+                .ForJob(contractExpirationKey)
+                .WithIdentity("DailyContractExpirationTrigger")
+                .WithCronSchedule("0 0 2 * * ?", x => x
+                    .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
+                .WithDescription("Detecta contratos VIGENTES vencidos: marca VENCIDO y deshabilita cuentas AD")
+                .UsingJobData("TimeZone", timeZone));
 
-            //// 2. Cálculo de minutos nocturnos - 2:00 AM
-            //var overtimeRecoveryKey = new JobKey("DailyOvertimeRecoveryCalculation");
-            //q.AddJob<DailyOvertimeRecoveryCalculation>(opts => opts.WithIdentity(overtimeRecoveryKey));
-            //q.AddTrigger(opts => opts
-            //    .ForJob(overtimeRecoveryKey)
-            //    .WithIdentity("DailyOvertimeRecoveryCalculationTrigger")
-            //    .WithCronSchedule("0 0 2 * * ?", x => x
-            //        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-            //    .WithDescription("Ejecuta el cálculo de minutos Horas extras y Recuperacion diariamente a las 2:00 AM")
-            //    .UsingJobData("TimeZone", timeZone));
+            // 3. Sincronización de matrículas de estudiantes — manual/bajo demanda (no hay cron fijo)
+            // El PeriodCode y PreviousPeriod se inyectan desde el endpoint manual o se configuran aquí.
+            var studentEnrollmentKey = new JobKey("DailyStudentEnrollmentSyncJob");
+            q.AddJob<DailyStudentEnrollmentSyncJob>(opts => opts
+                .WithIdentity(studentEnrollmentKey)
+                .StoreDurably()   // permite dispararlo manualmente sin trigger fijo
+                .UsingJobData("PeriodCode", "")
+                .UsingJobData("PreviousPeriod", ""));
 
-            //// 3. Aplicar justificaciones - 2:30 AM
-            //var justificationsKey = new JobKey("DailyJustificationsJob");
-            //q.AddJob<DailyJustificationsJob>(opts => opts.WithIdentity(justificationsKey));
-            //q.AddTrigger(opts => opts
-            //    .ForJob(justificationsKey)
-            //    .WithIdentity("DailyJustificationsTrigger")
-            //    .WithCronSchedule("0 30 2 * * ?", x => x
-            //        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-            //    .WithDescription("Aplica justificaciones aprobadas diariamente a las 2:30 AM")
-            //    .UsingJobData("TimeZone", timeZone));
-
-            //4.Acreditacion de vacaciones -Día 1 del mes a las 00:30
+            // 4. Acreditacion de vacaciones - Día 1 del mes a las 00:30
             var accrueVacation = new JobKey("MonthlyAccrueVacationBalanceJob");
             q.AddJob<DailyAccrueVacationBalance>(opts => opts.WithIdentity(accrueVacation));
             q.AddTrigger(opts => opts
@@ -78,73 +70,10 @@ public static class QuartzConfiguration
                     .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
                 .WithDescription("Acredita vacaciones mensual el día 1 (acredita el mes anterior)")
                 .UsingJobData("TimeZone", timeZone));
-
-
-            //// 4. Acreditacion de tiempos de vacacic iones  - 0:30 AM
-            //var accrueVacation = new JobKey("DailyAccrueVacationBalanceJob");
-            //q.AddJob<DailyAccrueVacationBalance>(opts => opts.WithIdentity(accrueVacation));
-            //q.AddTrigger(opts => opts
-            //    .ForJob(accrueVacation)
-            //    .WithIdentity("DailyAccrueVacationBalanceTrigger")
-            //    //.WithCronSchedule("0 0 3 * * ?", x => x
-            //    .WithCronSchedule("0 * * ? * * *", x => x
-            //        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-            //    .WithDescription("Aplica recuperaciones de tiempo diariamente a las 3:00 AM")
-            //    .UsingJobData("TimeZone", timeZone));
-
-            //// 4. Aplicar recuperaciones - 5:00 AM
-            //var recoveryKey = new JobKey("DailyRecoveryJob");
-            //q.AddJob<DailyRecoveryJob>(opts => opts.WithIdentity(recoveryKey));
-            //q.AddTrigger(opts => opts
-            //    .ForJob(recoveryKey)
-            //    .WithIdentity("DailyRecoveryTrigger")
-            //    .WithCronSchedule("0 0 5 * * ?", x => x
-            //        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-            //    .WithDescription("Aplica recuperaciones de tiempo diariamente a las 5:00 AM")
-            //    .UsingJobData("TimeZone", timeZone));
-
-            //// ========================================
-            //// JOBS MENSUALES DE NÓMINA
-            //// ========================================
-
-            //// 5. Cálculo de horas extra - Día 1 del mes a las 2:00 AM
-            //var overtimeKey = new JobKey("MonthlyOvertimePriceJob");
-            //q.AddJob<MonthlyOvertimePriceJob>(opts => opts.WithIdentity(overtimeKey));
-            //q.AddTrigger(opts => opts
-            //    .ForJob(overtimeKey)
-            //    .WithIdentity("MonthlyOvertimePriceTrigger")
-            //    .WithCronSchedule("0 0 2 1 * ?", x => x
-            //        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-            //    .WithDescription("Calcula precio de horas extra el día 1 de cada mes a las 2:00 AM")
-            //    .UsingJobData("TimeZone", timeZone));
-
-            //// 6. Cálculo de descuentos - Día 1 del mes a las 3:00 AM
-            //var discountsKey = new JobKey("MonthlyPayrollDiscountsJob");
-            //q.AddJob<MonthlyPayrollDiscountsJob>(opts => opts.WithIdentity(discountsKey));
-            //q.AddTrigger(opts => opts
-            //    .ForJob(discountsKey)
-            //    .WithIdentity("MonthlyPayrollDiscountsTrigger")
-            //    .WithCronSchedule("0 0 3 1 * ?", x => x
-            //        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-            //    .WithDescription("Calcula descuentos de nómina el día 1 de cada mes a las 3:00 AM")
-            //    .UsingJobData("TimeZone", timeZone));
-
-            //// 7. Cálculo de subsidios - Día 1 del mes a las 4:00 AM
-            //var subsidiesKey = new JobKey("MonthlyPayrollSubsidiesJob");
-            //q.AddJob<MonthlyPayrollSubsidiesJob>(opts => opts.WithIdentity(subsidiesKey));
-            //q.AddTrigger(opts => opts
-            //    .ForJob(subsidiesKey)
-            //    .WithIdentity("MonthlyPayrollSubsidiesTrigger")
-            //    .WithCronSchedule("0 0 4 1 * ?", x => x
-            //        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-            //    .WithDescription("Calcula subsidios de nómina el día 1 de cada mes a las 4:00 AM")
-            //    .UsingJobData("TimeZone", timeZone));
         });
 
-        // Agregar el servicio de Quartz hosted
         services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
         return services;
     }
 }
-

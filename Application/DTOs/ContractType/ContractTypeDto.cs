@@ -14,5 +14,8 @@
         public string? NumberingPrefix { get; set; }
         public int NumberingYear { get; set; }
         public int NumberingLastSequence { get; set; }
+        public bool RequiresAdUserCreation { get; set; }
+        public bool RequiresAdUserDisable { get; set; }
+        public bool RequiresAdGroupAssignment { get; set; }
     }
 }

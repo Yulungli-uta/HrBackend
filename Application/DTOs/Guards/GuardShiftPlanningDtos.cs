@@ -145,7 +145,10 @@ public record ScheduleBoardCellEmployeeDto(
     int EmployeeId,
     string FullName,
     bool IsReplacement,
-    int PlanningId
+    int PlanningId,
+    int? GroupId,
+    string? GroupName,
+    string? GroupColorCode
 );
 
 public record ScheduleBoardCellDto(
@@ -164,6 +167,8 @@ public record ScheduleBoardRowDto(
     int LocationId,
     string LocationName,
     string? LocationCode,
+    int? ParentLocationId,
+    string? ParentLocationName,
     string ScheduleCode,
     string ScheduleName,
     List<ScheduleBoardCellDto> Cells

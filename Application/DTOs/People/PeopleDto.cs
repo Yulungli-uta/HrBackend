@@ -22,9 +22,9 @@ public class PeopleDto
     public string MilitaryCard { get; set; }
     public string MotherName { get; set; }
     public string FatherName { get; set; }
-    public int CountryId { get; set; }
-    public int ProvinceId { get; set; }
-    public int CantonId { get; set; }
+    public string? CountryId { get; set; }
+    public string? ProvinceId { get; set; }
+    public string? CantonId { get; set; }
     public int YearsOfResidence { get; set; }
     public int? EthnicityTypeId { get; set; }
     public int BloodTypeTypeId { get; set; }

@@ -1,6 +1,8 @@
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Contracts;
 using WsUtaSystem.Application.DTOs.ContractStatusHistory;
+using WsUtaSystem.Application.DTOs.Reports;
+using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Models;
 using ContractDocumentStatusDto = WsUtaSystem.Application.DTOs.Contracts.ContractDocumentStatusDto;
 namespace WsUtaSystem.Application.Interfaces.Services;
@@ -38,4 +40,10 @@ public interface IContractsService : IService<Contracts, int> {
     /// Lanza InvalidOperationException si no se cumplen las condiciones.
     /// </summary>
     Task ValidateCanCreateContractAsync(int? certificationId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Retorna contratos para reporte aplicando filtros de fecha de inicio, dependencia y estado.
+    /// Incluye persona, tipo de contrato, régimen laboral y modalidad de trabajo.
+    /// </summary>
+    Task<IReadOnlyList<ContractReportDto>> GetForReportAsync(ReportFilterDto filter, CancellationToken ct = default);
 }

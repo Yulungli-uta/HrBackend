@@ -5,6 +5,8 @@ using WsUtaSystem.Application.Common.Email;
 using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Common.Services;
+using WsUtaSystem.Application.DTOs.Reports;
+using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Data;
@@ -432,5 +434,43 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
             $"<li><b>Hasta:</b> {to:yyyy-MM-dd HH:mm:ss}</li>" +
             $"<li><b>Minutos Duración:</b> {permissions.HourTaken}</li>" +
             $"</ul>";
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<PermissionReportDto>> GetForReportAsync(ReportFilterDto filter, CancellationToken ct = default)
+    {
+        var query =
+            from perm in _db.Permissions.AsNoTracking()
+            join emp  in _db.Employees.AsNoTracking()      on perm.EmployeeId      equals emp.EmployeeId
+            join per  in _db.People.AsNoTracking()         on emp.PersonID         equals per.PersonId
+            join pt   in _db.PermissionTypes.AsNoTracking() on perm.PermissionTypeId equals pt.TypeId
+            join d    in _db.Departments.AsNoTracking()    on emp.DepartmentId     equals d.DepartmentId  into dg
+            from d in dg.DefaultIfEmpty()
+            join approver in _db.Employees.AsNoTracking()  on perm.ApprovedBy      equals approver.EmployeeId into ag
+            from approver in ag.DefaultIfEmpty()
+            join approverPerson in _db.People.AsNoTracking() on approver.PersonID  equals approverPerson.PersonId into apg
+            from approverPerson in apg.DefaultIfEmpty()
+            where (!filter.StartDate.HasValue || perm.StartDate >= filter.StartDate.Value)
+               && (!filter.EndDate.HasValue   || perm.StartDate <= filter.EndDate.Value)
+               && (string.IsNullOrEmpty(filter.Status) || perm.Status == filter.Status)
+               && (!filter.EmployeeId.HasValue || perm.EmployeeId == filter.EmployeeId.Value)
+            orderby perm.StartDate descending
+            select new PermissionReportDto
+            {
+                PermissionId      = perm.PermissionId,
+                PersonIdCard      = per.IdCard,
+                PersonFullName    = per.FirstName + " " + per.LastName,
+                DepartmentName    = d != null ? d.Name : "—",
+                PermissionTypeName = pt.Name,
+                StartDate         = perm.StartDate,
+                EndDate           = perm.EndDate,
+                HourTaken         = perm.HourTaken,
+                ChargedToVacation = perm.ChargedToVacation,
+                Justification     = perm.Justification,
+                Status            = perm.Status,
+                ApprovedByName    = approverPerson != null ? approverPerson.FirstName + " " + approverPerson.LastName : null
+            };
+
+        return await query.ToListAsync(ct);
     }
 }

@@ -4,6 +4,7 @@
     {
         AttendancePunch,
         VacationApproved,
-        ContractGenerated
+        ContractGenerated,
+        AccountCreated
     }
 }

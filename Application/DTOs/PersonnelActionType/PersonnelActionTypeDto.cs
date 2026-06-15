@@ -9,5 +9,9 @@ public sealed record PersonnelActionTypeDto(
     int NumberingYear,
     int NumberingLastSequence,
     string? TemplateCode,
-    bool IsActive
+    bool IsActive,
+    bool RequiresAdUserCreation,
+    bool RequiresAdUserDisable,
+    bool RequiresAdGroupAssignment,
+    string? ActionCategory
 );

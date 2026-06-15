@@ -20,6 +20,7 @@ public sealed class EmployeesConfiguration : IEntityTypeConfiguration<Employees>
         e.Property(x => x.DepartmentId).HasColumnName("DepartmentID");
         e.Property(x => x.ImmediateBossId).HasColumnName("ImmediateBossID");
         e.Property(x => x.JobId).HasColumnName("JobID");
+        e.Property(x => x.LaborRegimeId).HasColumnName("LaborRegimeID");
 
         // Relación con People: un empleado tiene una persona asociada
         e.HasOne(x => x.People)

@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.DTOs.ContractRequest;
 using WsUtaSystem.Application.DTOs.ContractRequestPerson;
+using WsUtaSystem.Application.DTOs.Reports;
+using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Data;
@@ -229,4 +231,46 @@ public class ContractRequestService : Service<ContractRequest, int>, IContractRe
         PendingCount             = r.PendingCount,
         StatusName               = r.Status.HasValue && statusMap.TryGetValue(r.Status.Value, out var n) ? n : null
     };
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ContractRequestReportDto>> GetForReportAsync(ReportFilterDto filter, CancellationToken ct = default)
+    {
+        var statusMap = await _db.RefTypes.AsNoTracking()
+            .Where(x => x.Category == StatusCategory)
+            .ToDictionaryAsync(x => x.TypeId, x => x.Name, ct);
+
+        var wmMap = await _db.RefTypes.AsNoTracking()
+            .Where(x => x.Category == "WORK_MODALITY")
+            .ToDictionaryAsync(x => x.TypeId, x => x.Name, ct);
+
+        var query =
+            from r in _db.ContractRequest.AsNoTracking()
+            join d in _db.Departments.AsNoTracking() on r.DepartmentId equals d.DepartmentId into dg
+            from d in dg.DefaultIfEmpty()
+            where (!filter.StartDate.HasValue || (r.StartDate.HasValue && r.StartDate >= filter.StartDate.Value))
+               && (!filter.EndDate.HasValue   || (r.StartDate.HasValue && r.StartDate <= filter.EndDate.Value))
+               && (string.IsNullOrEmpty(filter.Status) ||
+                   (r.Status.HasValue && statusMap.ContainsKey(r.Status.Value) && statusMap[r.Status.Value] == filter.Status))
+            orderby r.CreatedAt descending
+            select new ContractRequestReportDto
+            {
+                RequestId            = r.RequestId,
+                DepartmentName       = d != null ? d.Name : "—",
+                WorkModalityName     = r.WorkModalityId.HasValue && wmMap.ContainsKey(r.WorkModalityId.Value)
+                                            ? wmMap[r.WorkModalityId.Value] : null,
+                NumberHour           = r.NumberHour,
+                NumberOfPeopleToHire = r.NumberOfPeopleToHire,
+                TotalPeopleHired     = r.TotalPeopleHired,
+                PendingCount         = r.NumberOfPeopleToHire - r.TotalPeopleHired > 0
+                                            ? r.NumberOfPeopleToHire - r.TotalPeopleHired : 0,
+                StartDate            = r.StartDate,
+                EndDate              = r.EndDate,
+                StatusName           = r.Status.HasValue && statusMap.ContainsKey(r.Status.Value)
+                                            ? statusMap[r.Status.Value] : "—",
+                Observation          = r.Observation,
+                CreatedAt            = r.CreatedAt ?? DateTime.MinValue
+            };
+
+        return await query.ToListAsync(ct);
+    }
 }

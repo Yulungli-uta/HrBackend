@@ -197,7 +197,9 @@ public sealed class ReportServiceV2 : IReportServiceV2
         {
             var userIdStr = context.GetUserId();
             var userId    = Guid.TryParse(userIdStr, out var uid) ? uid : (Guid?)null;
-            var userEmail = context.User.Identity?.Name ?? "anonymous";
+            var userEmail = context.GetUserEmail()
+                ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+                ?? "anonymous";
             var clientIp  = context.Connection.RemoteIpAddress?.ToString();
 
             var audit = new CreateReportAuditDto

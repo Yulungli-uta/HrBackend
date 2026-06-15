@@ -1,5 +1,6 @@
 ﻿# Ignorar archivos de compilación y ejecución
 bin/
+obj_codex/
 obj/
 /publish/
 

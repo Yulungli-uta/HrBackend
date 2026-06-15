@@ -65,6 +65,10 @@ public sealed record PersonnelActionDetailDto(
     int? ManagementLevel,
     string? ManagementLevelName,
 
+    // Régimen laboral del nuevo ingreso (solo cuando EmployeeId es null)
+    int? EmployeeTypeId,
+    string? EmployeeTypeName,
+
     // Relaciones
     int? GeneratedDocumentId,
     string? GeneratedDocumentFileName,
@@ -100,7 +104,7 @@ public sealed record PersonnelActionDetailDto(
 /// <summary>Solicitud para crear una nueva acción de personal.</summary>
 public sealed record CreatePersonnelActionRequest(
     int personId,
-    int EmployeeId,
+    int? EmployeeId,
     int ActionTypeId,
     string? ActionNumber,
     DateOnly ActionDate,
@@ -129,6 +133,9 @@ public sealed record CreatePersonnelActionRequest(
     // Relaciones
     int? ContractId,
     int? MovementId,
+
+    // Régimen laboral del nuevo ingreso (solo cuando la persona no tiene empleado activo)
+    int? EmployeeTypeId,
 
     // Clasificación de la acción
     bool SwornDeclaration,
@@ -164,6 +171,9 @@ public sealed record UpdatePersonnelActionRequest(
     string? LegalBasis,
     string? Reason,
     string? Observations,
+
+    // Régimen laboral del nuevo ingreso
+    int? EmployeeTypeId,
 
     // Clasificación de la acción
     bool SwornDeclaration,

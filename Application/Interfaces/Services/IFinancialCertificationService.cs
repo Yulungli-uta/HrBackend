@@ -1,4 +1,6 @@
 using WsUtaSystem.Application.DTOs.FinancialCertification;
+using WsUtaSystem.Application.DTOs.Reports;
+using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Models;
 using WsUtaSystem.Application.Common.Interfaces;
 
@@ -18,4 +20,10 @@ public interface IFinancialCertificationService : IService<FinancialCertificatio
     Task ResendAsync(int certificationId, int userId, CancellationToken ct = default);
 
     Task<FinancialCertificationDto?> GetDetailAsync(int certificationId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Retorna certificaciones financieras para reporte con filtros de estado y fecha de certificación.
+    /// Incluye solicitud de contrato asociada, dependencia y razón de rechazo si aplica.
+    /// </summary>
+    Task<IReadOnlyList<CertificationReportDto>> GetForReportAsync(ReportFilterDto filter, CancellationToken ct = default);
 }

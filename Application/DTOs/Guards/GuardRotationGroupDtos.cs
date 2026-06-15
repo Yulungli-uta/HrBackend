@@ -6,7 +6,25 @@ public record GuardRotationGroupDto(
     string Name,
     string? Description,
     bool IsActive,
-    int EmployeeCount
+    int EmployeeCount,
+    int? ParentGroupId,
+    string? ParentGroupName,
+    string? GroupLevelTypeName,
+    string? ColorCode,
+    int SubgroupCount
+);
+
+public record GuardRotationGroupWithSubgroupsDto(
+    int GroupId,
+    string? GroupCode,
+    string Name,
+    string? Description,
+    bool IsActive,
+    string? ColorCode,
+    string? GroupLevelTypeName,
+    int EmployeeCount,
+    int SubgroupCount,
+    List<GuardRotationGroupDto> Subgroups
 );
 
 public record LocationSummaryDto(
@@ -35,14 +53,20 @@ public record LocationGroupDetailDto(
 public record CreateGuardRotationGroupDto(
     string? GroupCode,
     string Name,
-    string? Description
+    string? Description,
+    int? ParentGroupId,
+    int? GroupLevelTypeId,
+    string? ColorCode
 );
 
 public record UpdateGuardRotationGroupDto(
     string? GroupCode,
     string Name,
     string? Description,
-    bool IsActive
+    bool IsActive,
+    int? ParentGroupId,
+    int? GroupLevelTypeId,
+    string? ColorCode
 );
 
 public record GuardRotationGroupEmployeeDto(
@@ -68,4 +92,25 @@ public record AssignEmployeeToRotationGroupDto(
 public record RemoveEmployeeFromRotationGroupDto(
     int GroupEmployeeId,
     DateOnly ValidTo
+);
+
+public record GuardGroupRotationPatternDto(
+    int GroupPatternId,
+    int GroupId,
+    int PatternId,
+    string? PatternName,
+    string? PatternCode,
+    DateOnly StartCycleDate,
+    DateOnly ValidFrom,
+    DateOnly? ValidTo,
+    bool IsActive,
+    string? Notes
+);
+
+public record AssignPatternToGroupDto(
+    int PatternId,
+    DateOnly StartCycleDate,
+    DateOnly ValidFrom,
+    DateOnly? ValidTo,
+    string? Notes
 );

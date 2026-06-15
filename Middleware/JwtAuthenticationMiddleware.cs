@@ -131,10 +131,15 @@ public class JwtAuthenticationMiddleware
 
                     if (meDetails is not null)
                     {
+                        // Inyectar nombre completo en el principal para que esté disponible
+                        // en context.User.Identity.Name a lo largo de toda la cadena (reportes, auditoría, etc.)
+                        if (context.User.Identity is ClaimsIdentity ci && !string.IsNullOrWhiteSpace(meDetails.FullName))
+                            ci.AddClaim(new Claim(ClaimTypes.Name, meDetails.FullName));
+
                         if (_enableLogging)
                             _logger.LogInformation(
-                                "[AUTH-MW] Detalles del empleado cargados: EmployeeId={EmployeeId} | Departamento={Dept} | DepartmentID={DeptId}",
-                                employeeId, meDetails.Department, meDetails.DepartmentID);
+                                "[AUTH-MW] Detalles del empleado cargados: EmployeeId={EmployeeId} | Nombre={Name} | Departamento={Dept}",
+                                employeeId, meDetails.FullName, meDetails.Department);
                     }
                     else
                     {

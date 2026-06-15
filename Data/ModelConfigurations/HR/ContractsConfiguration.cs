@@ -30,6 +30,9 @@ public sealed class ContractsConfiguration : IEntityTypeConfiguration<Contracts>
         e.Property(x => x.IsDocumentFrozen).HasColumnName("IsDocumentFrozen").HasDefaultValue(false);
         e.Property(x => x.AuthorityNominatorId).HasColumnName("AuthorityNominatorID");
         e.Property(x => x.DthDirectorId).HasColumnName("DthDirectorID");
+        e.Property(x => x.LaborRegimeID).HasColumnName("LaborRegimeID");
+        e.Property(x => x.WorkModalityID).HasColumnName("WorkModalityID");
+        e.Property(x => x.ContractedHours).HasColumnName("ContractedHours").HasColumnType("DECIMAL(5,2)");
 
         e.HasOne(x => x.Parent)
             .WithMany(x => x.Addendums)
@@ -40,6 +43,10 @@ public sealed class ContractsConfiguration : IEntityTypeConfiguration<Contracts>
             .WithMany()
             .HasForeignKey(x => x.CertificationID)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Índices para reportes: filtra por rango de fechas + dependencia y por estado
+        e.HasIndex(x => new { x.StartDate, x.DepartmentID });
+        e.HasIndex(x => x.Status);
     }
 }
 
@@ -89,6 +96,7 @@ public sealed class PersonnelActionTypeConfiguration : IEntityTypeConfiguration<
         e.Property(x => x.NumberingLastSequence).HasDefaultValue(0);
         e.Property(x => x.TemplateCode).HasMaxLength(100);
         e.Property(x => x.IsActive).HasDefaultValue(true);
+        e.Property(x => x.ActionCategory).HasMaxLength(30);
         e.HasIndex(x => x.Code).IsUnique();
     }
 }
@@ -109,6 +117,10 @@ public sealed class ContractRequestConfiguration : IEntityTypeConfiguration<Cont
             .WithOne(f => f.Request)
             .HasForeignKey(f => f.RequestId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Índices para reportes: filtra por estado y rango de fechas de inicio
+        e.HasIndex(x => x.Status);
+        e.HasIndex(x => x.StartDate);
     }
 }
 
@@ -128,6 +140,10 @@ public sealed class FinancialCertificationConfiguration : IEntityTypeConfigurati
         e.Property(x => x.RejectedAt).HasColumnName("RejectedAt");
         e.Property(x => x.RejectedBy).HasColumnName("RejectedBy");
         e.Property(x => x.RejectionTypeId).HasColumnName("RejectionTypeID");
+
+        // Índices para reportes: filtra por estado y fecha de presupuesto
+        e.HasIndex(x => x.Status);
+        e.HasIndex(x => x.CertBudgetDate);
     }
 }
 
@@ -227,7 +243,7 @@ public sealed class PersonnelActionConfiguration : IEntityTypeConfiguration<Pers
         e.HasKey(x => x.ActionId);
 
         e.Property(x => x.ActionId).HasColumnName("ActionID");
-        e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
+        e.Property(x => x.EmployeeId).HasColumnName("EmployeeID").IsRequired(false);
         e.Property(x => x.ActionTypeId).HasColumnName("ActionTypeID");
         e.Property(x => x.GeneratedDocumentId).HasColumnName("GeneratedDocumentID");
         e.Property(x => x.ContractId).HasColumnName("ContractID");
@@ -248,8 +264,11 @@ public sealed class PersonnelActionConfiguration : IEntityTypeConfiguration<Pers
         e.Property(x => x.ElaboratorId).HasColumnName("ElaboratorID");
         e.Property(x => x.ReviewerId).HasColumnName("ReviewerID");
         e.Property(x => x.RegistrarId).HasColumnName("RegistrarID");
+        e.Property(x => x.EmployeeTypeId).HasColumnName("EmployeeTypeId").IsRequired(false);
 
         e.HasIndex(x => new { x.EmployeeId, x.ActionDate });
+        // PersonId cubre nuevos ingresos donde EmployeeId aún es NULL
+        e.HasIndex(x => new { x.PersonId, x.ActionDate });
         e.HasIndex(x => x.Status);
         e.HasIndex(x => x.ActionNumber);
 

@@ -57,3 +57,34 @@ public interface IGuardAssignmentValidationRepository : IRepository<GuardAssignm
     Task<List<GuardAssignmentValidation>> GetByEmployeeIdAsync(int employeeId, int limit, CancellationToken ct);
     Task DeleteByPlanningIdAsync(int planningId, CancellationToken ct);
 }
+
+public interface IGuardLocationRotationPeriodRepository : IRepository<GuardLocationRotationPeriod, int>
+{
+    Task<List<GuardLocationRotationPeriod>> GetActiveByDateAsync(DateOnly date, CancellationToken ct);
+    Task<GuardLocationRotationPeriod?> GetWithAssignmentsAsync(int periodId, CancellationToken ct);
+}
+
+public interface IGuardLocationRotationAssignmentRepository : IRepository<GuardLocationRotationAssignment, int>
+{
+    Task<List<GuardLocationRotationAssignment>> GetByPeriodAsync(int periodId, CancellationToken ct);
+    Task<GuardLocationRotationAssignment?> GetActiveForGroupAsync(int groupId, DateOnly date, CancellationToken ct);
+    Task<GuardLocationRotationAssignment?> GetActiveForEmployeeAsync(int employeeId, DateOnly date, CancellationToken ct);
+}
+
+public interface IGuardEmployeeSpecialRuleRepository : IRepository<GuardEmployeeSpecialRule, int>
+{
+    Task<List<GuardEmployeeSpecialRule>> GetActiveByEmployeeAsync(int employeeId, DateOnly date, CancellationToken ct);
+    Task<GuardEmployeeSpecialRule?> GetActiveRuleAsync(int employeeId, DateOnly date, CancellationToken ct);
+}
+
+public interface IGuardVacationPlanRepository : IRepository<GuardVacationPlan, int>
+{
+    Task<List<GuardVacationPlan>> GetByEmployeeAsync(int employeeId, int? year, CancellationToken ct);
+    Task<List<GuardVacationPlan>> GetPendingApprovalAsync(CancellationToken ct);
+}
+
+public interface IGuardVacationRequestRepository : IRepository<GuardVacationRequest, int>
+{
+    Task<List<GuardVacationRequest>> GetByEmployeeAsync(int employeeId, CancellationToken ct);
+    Task<List<GuardVacationRequest>> GetPendingDirectionApprovalAsync(CancellationToken ct);
+}

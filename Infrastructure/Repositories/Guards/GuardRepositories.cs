@@ -259,3 +259,142 @@ public class GuardAssignmentValidationRepository
         await _db.SaveChangesAsync(ct);
     }
 }
+
+public class GuardLocationRotationPeriodRepository
+    : ServiceAwareEfRepository<GuardLocationRotationPeriod, int>, IGuardLocationRotationPeriodRepository
+{
+    private readonly AppDbContext _db;
+    public GuardLocationRotationPeriodRepository(AppDbContext db) : base(db) => _db = db;
+
+    public async Task<List<GuardLocationRotationPeriod>> GetActiveByDateAsync(DateOnly date, CancellationToken ct) =>
+        await _db.GuardLocationRotationPeriods
+            .Where(p => p.IsActive && p.StartDate <= date && p.EndDate >= date)
+            .OrderBy(p => p.StartDate)
+            .ToListAsync(ct);
+
+    public async Task<GuardLocationRotationPeriod?> GetWithAssignmentsAsync(int periodId, CancellationToken ct) =>
+        await _db.GuardLocationRotationPeriods
+            .Include(p => p.Assignments.Where(a => a.IsActive))
+                .ThenInclude(a => a.Group)
+            .Include(p => p.Assignments.Where(a => a.IsActive))
+                .ThenInclude(a => a.Employee).ThenInclude(e => e!.People)
+            .Include(p => p.Assignments.Where(a => a.IsActive))
+                .ThenInclude(a => a.Location)
+            .Include(p => p.Assignments.Where(a => a.IsActive))
+                .ThenInclude(a => a.PriorityType)
+            .FirstOrDefaultAsync(p => p.LocationRotationPeriodId == periodId, ct);
+}
+
+public class GuardLocationRotationAssignmentRepository
+    : ServiceAwareEfRepository<GuardLocationRotationAssignment, int>, IGuardLocationRotationAssignmentRepository
+{
+    private readonly AppDbContext _db;
+    public GuardLocationRotationAssignmentRepository(AppDbContext db) : base(db) => _db = db;
+
+    public async Task<List<GuardLocationRotationAssignment>> GetByPeriodAsync(int periodId, CancellationToken ct) =>
+        await _db.GuardLocationRotationAssignments
+            .Where(a => a.LocationRotationPeriodId == periodId)
+            .Include(a => a.Group)
+            .Include(a => a.Employee).ThenInclude(e => e!.People)
+            .Include(a => a.Location)
+            .Include(a => a.PriorityType)
+            .OrderBy(a => a.GroupId).ThenBy(a => a.EmployeeId)
+            .ToListAsync(ct);
+
+    public async Task<GuardLocationRotationAssignment?> GetActiveForGroupAsync(int groupId, DateOnly date, CancellationToken ct) =>
+        await _db.GuardLocationRotationAssignments
+            .Where(a => a.GroupId == groupId && a.IsActive
+                && a.Period!.IsActive && a.Period.StartDate <= date && a.Period.EndDate >= date)
+            .Include(a => a.Location)
+            .Include(a => a.PriorityType)
+            .FirstOrDefaultAsync(ct);
+
+    public async Task<GuardLocationRotationAssignment?> GetActiveForEmployeeAsync(int employeeId, DateOnly date, CancellationToken ct) =>
+        await _db.GuardLocationRotationAssignments
+            .Where(a => a.EmployeeId == employeeId && a.IsActive
+                && a.Period!.IsActive && a.Period.StartDate <= date && a.Period.EndDate >= date)
+            .Include(a => a.Location)
+            .Include(a => a.PriorityType)
+            .FirstOrDefaultAsync(ct);
+}
+
+public class GuardEmployeeSpecialRuleRepository
+    : ServiceAwareEfRepository<GuardEmployeeSpecialRule, int>, IGuardEmployeeSpecialRuleRepository
+{
+    private readonly AppDbContext _db;
+    public GuardEmployeeSpecialRuleRepository(AppDbContext db) : base(db) => _db = db;
+
+    public async Task<List<GuardEmployeeSpecialRule>> GetActiveByEmployeeAsync(int employeeId, DateOnly date, CancellationToken ct) =>
+        await _db.GuardEmployeeSpecialRules
+            .Where(r => r.EmployeeId == employeeId && r.IsActive
+                && r.ValidFrom <= date && (r.ValidTo == null || r.ValidTo >= date))
+            .Include(r => r.FixedLocation)
+            .Include(r => r.FixedSchedule)
+            .ToListAsync(ct);
+
+    public async Task<GuardEmployeeSpecialRule?> GetActiveRuleAsync(int employeeId, DateOnly date, CancellationToken ct) =>
+        await _db.GuardEmployeeSpecialRules
+            .Where(r => r.EmployeeId == employeeId && r.IsActive
+                && r.ValidFrom <= date && (r.ValidTo == null || r.ValidTo >= date))
+            .Include(r => r.FixedLocation)
+            .Include(r => r.FixedSchedule)
+            .OrderByDescending(r => r.ValidFrom)
+            .FirstOrDefaultAsync(ct);
+}
+
+public class GuardVacationPlanRepository
+    : ServiceAwareEfRepository<GuardVacationPlan, int>, IGuardVacationPlanRepository
+{
+    private readonly AppDbContext _db;
+    public GuardVacationPlanRepository(AppDbContext db) : base(db) => _db = db;
+
+    public async Task<List<GuardVacationPlan>> GetByEmployeeAsync(int employeeId, int? year, CancellationToken ct)
+    {
+        var q = _db.GuardVacationPlans
+            .Where(p => p.EmployeeId == employeeId)
+            .Include(p => p.Employee).ThenInclude(e => e!.People)
+            .Include(p => p.StatusType)
+            .Include(p => p.DirectionApprover).ThenInclude(e => e!.People)
+            .AsQueryable();
+
+        if (year.HasValue) q = q.Where(p => p.VacationYear == year.Value);
+
+        return await q.OrderByDescending(p => p.VacationYear)
+            .ThenBy(p => p.PlannedStartDate)
+            .ToListAsync(ct);
+    }
+
+    public async Task<List<GuardVacationPlan>> GetPendingApprovalAsync(CancellationToken ct) =>
+        await _db.GuardVacationPlans
+            .Where(p => p.StatusType!.Name == "PENDING_DIRECTION_APPROVAL")
+            .Include(p => p.Employee).ThenInclude(e => e!.People)
+            .Include(p => p.StatusType)
+            .OrderBy(p => p.PlannedStartDate)
+            .ToListAsync(ct);
+}
+
+public class GuardVacationRequestRepository
+    : ServiceAwareEfRepository<GuardVacationRequest, int>, IGuardVacationRequestRepository
+{
+    private readonly AppDbContext _db;
+    public GuardVacationRequestRepository(AppDbContext db) : base(db) => _db = db;
+
+    public async Task<List<GuardVacationRequest>> GetByEmployeeAsync(int employeeId, CancellationToken ct) =>
+        await _db.GuardVacationRequests
+            .Where(r => r.EmployeeId == employeeId)
+            .Include(r => r.Employee).ThenInclude(e => e!.People)
+            .Include(r => r.RequestType)
+            .Include(r => r.StatusType)
+            .Include(r => r.DirectionApprover).ThenInclude(e => e!.People)
+            .OrderByDescending(r => r.RequestedAt)
+            .ToListAsync(ct);
+
+    public async Task<List<GuardVacationRequest>> GetPendingDirectionApprovalAsync(CancellationToken ct) =>
+        await _db.GuardVacationRequests
+            .Where(r => r.StatusType!.Name == "PENDING_DIRECTION_APPROVAL")
+            .Include(r => r.Employee).ThenInclude(e => e!.People)
+            .Include(r => r.RequestType)
+            .Include(r => r.StatusType)
+            .OrderBy(r => r.RequestedAt)
+            .ToListAsync(ct);
+}

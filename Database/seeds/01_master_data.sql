@@ -1,0 +1,1450 @@
+﻿-- ============================================================
+-- SEED: Datos Maestros
+-- Fuente: 09-DATOS MAESTROS.sql
+-- Generado: 2026-05-29
+-- ============================================================
+
+
+PRINT (N'Dumping data for table ref_Types')
+SET IDENTITY_INSERT HR.ref_Types ON
+GO
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (1, 'MARITAL_STATUS', 'Soltero/a', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (2, 'MARITAL_STATUS', 'Casado/a', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (3, 'MARITAL_STATUS', 'Divorciado/a', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (4, 'MARITAL_STATUS', 'Viudo/a', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (5, 'MARITAL_STATUS', 'UniÃ³n libre', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (6, 'ETHNICITY', 'Mestizo', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (7, 'ETHNICITY', 'Afroecuatoriano', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (8, 'ETHNICITY', 'IndÃ­gena', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (9, 'ETHNICITY', 'Montubio', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (10, 'ETHNICITY', 'Blanco', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (11, 'ETHNICITY', 'Otro', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (12, 'BLOOD_TYPE', 'A+', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (13, 'BLOOD_TYPE', 'A-', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (14, 'BLOOD_TYPE', 'B+', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (15, 'BLOOD_TYPE', 'B-', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (16, 'BLOOD_TYPE', 'AB+', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (17, 'BLOOD_TYPE', 'AB-', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (18, 'BLOOD_TYPE', 'O+', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (19, 'BLOOD_TYPE', 'O-', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (20, 'SPECIAL_NEEDS', 'Trastorno emocional', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (21, 'SPECIAL_NEEDS', 'Trastorno de personalidad', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (22, 'SPECIAL_NEEDS', 'Problemas de aprendizaje', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (23, 'SPECIAL_NEEDS', 'Otras necesidades especiales', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (24, 'DISABILITY_TYPE', 'FÃ­sica', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (25, 'DISABILITY_TYPE', 'Mental', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (26, 'DISABILITY_TYPE', 'Auditiva', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (27, 'DISABILITY_TYPE', 'Visual', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (28, 'DISABILITY_TYPE', 'Otra', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (29, 'RELATIONSHIP', 'CÃ³nyuge', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (30, 'RELATIONSHIP', 'Hijo/a', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (31, 'RELATIONSHIP', 'Padre', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (32, 'RELATIONSHIP', 'Madre', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (33, 'RELATIONSHIP', 'Hermano/a', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (34, 'RELATIONSHIP', 'Abuelo/a', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (35, 'RELATIONSHIP', 'TÃ­o/a', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (36, 'RELATIONSHIP', 'Primo/a', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (37, 'RELATIONSHIP', 'Otro', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (38, 'INSTITUTION_TYPE', 'Educativa', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (39, 'INSTITUTION_TYPE', 'Gubernamental', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (40, 'INSTITUTION_TYPE', 'Privada', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (41, 'INSTITUTION_TYPE', 'ONG', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (42, 'INSTITUTION_TYPE', 'Religiosa', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (43, 'INSTITUTION_TYPE', 'Otro', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (44, 'EVENT_TYPE', 'Charla', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (45, 'EVENT_TYPE', 'Conferencia', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (46, 'EVENT_TYPE', 'Taller', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (47, 'EVENT_TYPE', 'Seminario', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (48, 'EVENT_TYPE', 'Diplomado', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (49, 'EVENT_TYPE', 'Curso', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (50, 'EVENT_TYPE', 'Otro', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (51, 'KNOWLEDGE_AREA', 'TecnolÃ³gico', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (52, 'KNOWLEDGE_AREA', 'Educativo', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (53, 'KNOWLEDGE_AREA', 'Salud', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (54, 'KNOWLEDGE_AREA', 'Administrativo', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (55, 'KNOWLEDGE_AREA', 'HumanÃ­stico', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (56, 'KNOWLEDGE_AREA', 'Otro', NULL, CONVERT(bit, 'True'), '2025-08-15 08:27:07')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (57, 'CONTRACT_TYPE', 'LOSEP', NULL, CONVERT(bit, 'True'), '2025-08-18 14:10:09')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (58, 'CONTRACT_TYPE', 'LOSE', NULL, CONVERT(bit, 'True'), '2025-08-18 14:10:09')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (59, 'CONTRACT_TYPE', 'CÃ³digo Trabajo', NULL, CONVERT(bit, 'True'), '2025-08-18 14:10:09')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (60, 'GENDER_TYPE', 'Hombre', NULL, CONVERT(bit, 'True'), '2025-08-25 11:58:44')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (61, 'GENDER_TYPE', 'Mujer', NULL, CONVERT(bit, 'True'), '2025-08-25 11:58:54')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (63, 'GENDER_TYPE', 'No Binario', NULL, CONVERT(bit, 'True'), '2025-08-25 12:54:02')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (64, 'GENDER_TYPE', 'Ag+enero', NULL, CONVERT(bit, 'True'), '2025-08-25 12:54:02')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (65, 'GENDER_TYPE', 'Mujer Trans', NULL, CONVERT(bit, 'True'), '2025-08-25 12:54:02')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (66, 'GENDER_TYPE', 'Hombre Trans', NULL, CONVERT(bit, 'True'), '2025-08-25 12:54:02')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (67, 'GENDER_TYPE', 'Prefiero no decir', NULL, CONVERT(bit, 'True'), '2025-08-25 12:54:02')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (68, 'GENDER_TYPE', 'Otros', NULL, CONVERT(bit, 'True'), '2025-08-25 12:54:02')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (69, 'SEX_TYPE', 'Masculino', NULL, CONVERT(bit, 'True'), '2025-08-25 12:54:02')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (70, 'SEX_TYPE', 'Femenino', NULL, CONVERT(bit, 'True'), '2025-08-25 12:54:02')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (71, 'SEX_TYPE', 'Prefiero no decir', NULL, CONVERT(bit, 'True'), '2025-08-25 12:54:02')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (73, 'ACTION_TYPE', 'INGRESO', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (74, 'ACTION_TYPE', 'REINGRESO', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (75, 'ACTION_TYPE', 'RESTITUCIÃ“N', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (76, 'ACTION_TYPE', 'ASCENSO', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (77, 'ACTION_TYPE', 'TRASLADO', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (78, 'ACTION_TYPE', 'TRASPASO', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (79, 'ACTION_TYPE', 'CAMBIO ADMINISTRATIVO', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (80, 'ACTION_TYPE', 'INTERCAMBIO VOLUNTARIO', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (81, 'ACTION_TYPE', 'LICENCIA', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (82, 'ACTION_TYPE', 'COMISIÃ“N DE SERVICIOS', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (83, 'ACTION_TYPE', 'SANCIONES', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (84, 'ACTION_TYPE', 'INCREMENTO RMU', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (85, 'ACTION_TYPE', 'SUBROGACIÃ“N', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (86, 'ACTION_TYPE', 'ENCARGO', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (87, 'ACTION_TYPE', 'CESACIÃ“N DE FUNCIONES', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (88, 'ACTION_TYPE', 'DESTITUCIÃ“N', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (89, 'ACTION_TYPE', 'VACACIONES', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (90, 'ACTION_TYPE', 'REVISIÃ“N CLASI. PUESTO', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (91, 'ACTION_TYPE', 'OTRO(DETALLAR)', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (92, 'ACTION_TYPE', 'NOMBRAMIENTO PROVISIONAL', NULL, CONVERT(bit, 'True'), '2025-08-26 12:07:06')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (93, 'JUSTIFICATION', 'PUNCH', 'JustificaciÃ³n de picada especÃ­fica (entrada/salida olvidada)', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (94, 'JUSTIFICATION', 'HOURS', 'JustificaciÃ³n de horas especÃ­ficas (ausencia parcial)', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (95, 'JUSTIFICATION', 'FULL_DAY', 'JustificaciÃ³n de dÃ­a completo (ausencia total)', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (96, 'JUSTIFICATION_REASON', 'MEDICAL', 'Cita mÃ©dica o incapacidad mÃ©dica', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (97, 'JUSTIFICATION_REASON', 'PERSONAL', 'Asunto personal urgente', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (98, 'JUSTIFICATION_REASON', 'FAMILY_EMERGENCY', 'Emergencia familiar', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (99, 'JUSTIFICATION_REASON', 'TECHNICAL_ISSUE', 'Problemas tÃ©cnicos (sistema, tarjeta, etc.)', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (100, 'JUSTIFICATION_REASON', 'WORK_MEETING', 'ReuniÃ³n de trabajo externa', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (101, 'JUSTIFICATION_REASON', 'TRAINING', 'CapacitaciÃ³n o entrenamiento', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (102, 'JUSTIFICATION_REASON', 'COURT_DUTY', 'Deber cÃ­vico (jurado, testigo, etc.)', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (103, 'JUSTIFICATION_REASON', 'BEREAVEMENT', 'Duelo familiar', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (104, 'JUSTIFICATION_REASON', 'TRANSPORTATION', 'Problemas de transporte', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (105, 'JUSTIFICATION_REASON', 'WEATHER', 'Condiciones climÃ¡ticas adversas', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (106, 'JUSTIFICATION_STATUS', 'PENDING', 'Pendiente de aprobaciÃ³n', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (107, 'JUSTIFICATION_STATUS', 'APPROVED', 'Aprobado por supervisor', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (108, 'JUSTIFICATION_STATUS', 'REJECTED', 'Rechazado por supervisor', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (109, 'JUSTIFICATION_STATUS', 'CANCELLED', 'Cancelado por el empleado', CONVERT(bit, 'True'), '2025-08-29 11:52:04')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (110, 'PLAN_STATUS', 'Borrador', 'PlanificaciÃ³n en creaciÃ³n, no enviada para aprobaciÃ³n', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (111, 'PLAN_STATUS', 'Pendiente', 'Enviada para aprobaciÃ³n, esperando revisiÃ³n', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (112, 'PLAN_STATUS', 'Aprobado', 'Aprobada por todas las instancias, lista para ejecutar', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (113, 'PLAN_STATUS', 'Rechazado', 'Rechazada por inconsistencias o no aprobaciÃ³n', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (114, 'PLAN_STATUS', 'En Progreso', 'En perÃ­odo de ejecuciÃ³n, empleados trabajando', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (115, 'PLAN_STATUS', 'Completado', 'Finalizada exitosamente, todas las horas ejecutadas', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (116, 'PLAN_STATUS', 'Cancelado', 'Anulada por cambio de planes o circunstancias', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (117, 'EMPLOYEE_PLAN_STATUS', 'Asignado', 'Empleado asignado a la planificaciÃ³n', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (118, 'EMPLOYEE_PLAN_STATUS', 'En Proceso', 'Empleado ejecutando las horas asignadas', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (119, 'EMPLOYEE_PLAN_STATUS', 'Ejecutado', 'Empleado completÃ³ todas las horas asignadas', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (120, 'EMPLOYEE_PLAN_STATUS', 'Cancelado', 'ParticipaciÃ³n del empleado fue cancelada', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (121, 'PERSONAL_CONTRACT_TYPE', 'Administrativo', 'Administrativo', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (122, 'PERSONAL_CONTRACT_TYPE', 'Docente Pregrado', 'Docente Pregrado', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (123, 'PERSONAL_CONTRACT_TYPE', 'Docente Posgrado', 'Docente Posgrado', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (124, 'PERSONAL_CONTRACT_TYPE', 'Codigo de Trabajo', 'Codigo de Trabajo', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (125, 'PERSONAL_CONTRACT_TYPE', 'Investigador', 'Investigador', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (126, 'PERSONAL_CONTRACT_TYPE', 'No Utilizados', 'No Utilizados', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+INSERT HR.ref_Types(TypeID, Category, Name, Description, IsActive, CreatedAt) VALUES (127, 'PERSONAL_CONTRACT_TYPE', 'Profesionales', 'Servicios profesionales', CONVERT(bit, 'True'), '2025-09-23 14:13:40')
+-- Insertar categorÃ­as base para Docflow si no existen
+-- Estas categorÃ­as se usarÃ¡n para poblar los catÃ¡logos del frontend
+
+IF NOT EXISTS (SELECT 1 FROM hr.ref_Types WHERE Category = 'DOCFLOW_INSTANCE_STATUSES')
+BEGIN
+    INSERT INTO hr.ref_Types (Category, Name, Description, IsActive, CreatedAt, SortOrder)
+    VALUES 
+        ('DOCFLOW_INSTANCE_STATUSES', 'Borrador', 'Expediente en borrador', 1, GETDATE(), 1),
+        ('DOCFLOW_INSTANCE_STATUSES', 'Pendiente', 'Expediente pendiente de revisiÃ³n', 1, GETDATE(), 2),
+        ('DOCFLOW_INSTANCE_STATUSES', 'En Revision', 'Expediente en revisiÃ³n', 1, GETDATE(), 3),
+        ('DOCFLOW_INSTANCE_STATUSES', 'Aprobado', 'Expediente aprobado', 1, GETDATE(), 4),
+        ('DOCFLOW_INSTANCE_STATUSES', 'Retornado', 'Expediente retornado para correcciones', 1, GETDATE(), 5),
+        ('DOCFLOW_INSTANCE_STATUSES', 'Finalizado', 'Expediente finalizado', 1, GETDATE(), 6);
+    
+    PRINT 'CategorÃ­a DOCFLOW_INSTANCE_STATUSES insertada';
+END
+
+GO
+
+IF NOT EXISTS (SELECT 1 FROM hr.ref_Types WHERE Category = 'DOCFLOW_MOVEMENT_TYPES')
+BEGIN
+    INSERT INTO hr.ref_Types (Category, Name, Description, IsActive, CreatedAt, SortOrder)
+    VALUES 
+        ('DOCFLOW_MOVEMENT_TYPES', 'FORWARD', 'Avanzar al siguiente estado', 1, GETDATE(), 1),
+        ('DOCFLOW_MOVEMENT_TYPES', 'RETURN', 'Retornar para correcciones', 1, GETDATE(), 2);
+    
+    PRINT 'CategorÃ­a DOCFLOW_MOVEMENT_TYPES insertada';
+END
+
+GO
+
+IF NOT EXISTS (SELECT 1 FROM hr.ref_Types WHERE Category = 'DOCFLOW_PRIORITIES')
+BEGIN
+    INSERT INTO hr.ref_Types (Category, Name, Description, IsActive, CreatedAt, SortOrder)
+    VALUES 
+        ('DOCFLOW_PRIORITIES', 'Baja', 'Prioridad baja', 1, GETDATE(), 1),
+        ('DOCFLOW_PRIORITIES', 'Media', 'Prioridad media', 1, GETDATE(), 2),
+        ('DOCFLOW_PRIORITIES', 'Alta', 'Prioridad alta', 1, GETDATE(), 3),
+        ('DOCFLOW_PRIORITIES', 'Urgente', 'Prioridad urgente', 1, GETDATE(), 4);
+    
+    PRINT 'CategorÃ­a DOCFLOW_PRIORITIES insertada';
+END
+
+GO
+SET IDENTITY_INSERT HR.ref_Types OFF
+GO
+
+PRINT (N'Dumping data for table tbl_Countries')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('001', 'ECUADOR', 'ECUATORIANA', '19', '001', NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('002', 'MALTA', 'MALTENSE', '134', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('003', 'AFGANISTÃN', 'AFGANA', '1', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('004', 'ALBANIA', 'ALBANO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('005', 'ALEMANIA', 'ALEMANA', '2', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('006', 'ANDORRA', 'ANDORREÃ‘O', '51', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('007', 'ANGOLA', 'ANGOLES', '52', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('008', 'ARABIA SAUDÃ', 'ÃRABE', '3', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('009', 'ARGELIA', 'ARGELIANO', '55', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('010', 'ARGENTINA', 'ARGENTINA', '4', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('011', 'ARMENIA', 'ARMENIO', '56', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('012', 'ARUBA', 'ARRUBENSE', '57', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('013', 'AUSTRALIA', 'AUSTRALIANA ', '5', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('014', 'AUSTRIA', 'AUSTRIACO', '58', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('015', 'BAHAMAS', 'BAHAMEÃ‘O', '60', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('016', 'BARBADOS', 'BARBADENCE', '63', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('017', 'BÃ‰LGICA', 'BELGA', '6', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('018', 'BERMUDAS', 'BERMUDENCE', '66', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('019', 'BOLIVIA', 'BOLIVIANA ', '7', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('020', 'BOSNIA', 'BOSNIO', '68', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('021', 'BOTSWANA', 'BOTSUWANES', '69', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('022', 'BELGICA', 'BELGA', NULL, '011', NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('023', 'BELICE', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('024', 'BENÃN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('025', 'BERMUDAS', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('026', 'BIELORRUSIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('027', 'BOLIVIA', 'BOLIVIANA ', '7', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('028', 'BOSNIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('029', 'BOTSWANA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('030', 'BRASIL', 'BRASILEÃ‘A', NULL, '007', '037', '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('031', 'BRUNEI', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('032', 'BULGARIA', 'BULGARO', NULL, '004', '039', '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('033', 'BURKINA FASO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('034', 'BURUNDI', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('035', 'BUTÃN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('036', 'CABO VERDE', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('037', 'CAMBOYA', 'CAMBOYANA ', '9', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('038', 'CAMERÃšN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('039', 'CANADÃ', 'CANADIENSE', '10', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('040', 'CHAD', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('041', 'CHEQUIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('042', 'CHILE', 'CHILENA', NULL, '013', NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('043', 'CHINA', 'CHINA', NULL, '006', '050', '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('044', 'CHIPRE', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('045', 'COLOMBIA', 'COLOMBIANA', NULL, '002', '054', '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('046', 'COMORAS', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('047', 'CONGO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('048', 'COREA DEL NORTE', 'COREANA ', '14', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('049', 'REPUBLICA DE COREA', 'SURCOREANA', NULL, '016', NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('050', 'COSTA DE MARFIL', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('051', 'COSTA RICA', 'COSTARRICENSE', '15', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('052', 'CROACIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('053', 'CUBA', 'CUBANA', NULL, '008', '064', '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('054', 'CURAZAO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('055', 'DINAMARCA', 'DANESA ', '17', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('056', 'DOMINICA', 'DOMINICANA ', '18', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('057', 'DUBAI', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('058', 'EGIPTO', 'EGIPCIA ', '20', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('059', 'EL SALVADOR', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('060', 'EMIRATOS ÃRABES UNID', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('061', 'ERITREA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('062', 'ESCOCIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('063', 'ESLOVAQUIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('064', 'ESLOVENIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('065', 'ESPAÃ‘A', 'ESPAÃ‘OLA', NULL, '012', '077', '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('066', 'ESTADOS UNIDOS', 'NORTEAMERICANA', NULL, '009', '078', '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('067', 'ESTONIA', 'ESTONIA ', '23', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('068', 'ETIOPÃA', 'ETIOPE ', '24', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('069', 'FILIPINAS', 'FILIPINA ', '25', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('070', 'FINLANDIA', 'FINLANDESA ', '26', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('071', 'FIYI', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('072', 'FRANCIA', 'FRANCESA', '27', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('073', 'GABÃ“N', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('074', 'GAMBIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('075', 'GEORGIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('076', 'GHANA', 'GALESA ', '28', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('077', 'GRANADA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('078', 'GRECIA', 'GRIEGA ', '29', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('079', 'GUAM', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('080', 'GUATEMALA', 'GUATEMALTECA ', '30', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('081', 'GUAYANA FRANCESA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('082', 'GUINEA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('083', 'GUINEA ECUATORIAL', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('084', 'GUINEA-BISSAU', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('085', 'GUYANA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('086', 'HAITÃ', 'HAITIANA ', '31', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('087', 'HERZEGOVINA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('088', 'HOLANDA', 'HOLANDESA ', '32', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('089', 'HONDURAS', 'HONDUREÃ‘A ', '33', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('090', 'HONG KONG', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('091', 'HUNGRÃA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('092', 'INDIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('093', 'INDONESIA', 'INDONESA ', '34', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('094', 'IRAK', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('095', 'IRÃN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('096', 'IRLANDA', 'IRLANDESA ', '36', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('097', 'ISLANDIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('098', 'ISLAS CAIMÃN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('099', 'ISLAS MARSHALL', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('100', 'ISLAS PITCAIRN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('101', 'ISLAS SALOMÃ“N', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('102', 'ISRAEL', 'ISRAELÃ', '37', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('103', 'ITALIA', 'ITALIANA', NULL, '014', NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('104', 'JAMAICA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('105', 'JAPÃ“N', 'JAPONESA ', '39', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('106', 'JORDANIA', 'JORDANA ', '40', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('107', 'KAZAJSTÃN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('108', 'KENIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('109', 'KIRGUISTÃN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('110', 'KIRIBATI', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('111', 'KÃ“SOVO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('112', 'KUWAIT', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('113', 'LAOS', 'LAOSIANA', '41', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('114', 'LESOTHO', 'LETONA ', '42', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('115', 'LETONIA', 'LETONESA ', '43', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('116', 'LÃBANO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('117', 'LIBERIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('118', 'LIBIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('119', 'LIECHTENSTEIN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('120', 'LITUANIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('121', 'LUXEMBURGO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('122', 'MACEDONIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('123', 'MADAGASCAR', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('124', 'MALASIA', 'MALAYA ', '44', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('125', 'MALAWI', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('126', 'MALDIVAS', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('127', 'MALÃ', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('128', 'MARIANAS DEL NORTE', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('129', 'MARRUECOS', 'MARROQUÃ ', '45', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('130', 'MARTINICA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('131', 'MAURICIO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('132', 'MAURITANIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('133', 'MÃ‰XICO', 'MEXICANA ', '46', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('134', 'MICRONESIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('135', 'MOLDAVIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('136', 'MÃ“NACO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('137', 'MONGOLIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('138', 'MONTENEGRO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('139', 'MONTSERRAT', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('140', 'MOZAMBIQUE', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('141', 'MYANMAR ( BIRMANIA)', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('142', 'NAMIBIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('143', 'NAURU', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('144', 'NEPAL', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('145', 'NICARAGUA', 'NICARAGÃœENSE ', '48', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('146', 'NÃGER', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('147', 'NIGERIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('148', 'NORUEGA', 'NORUEGA ', '49', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('149', 'NUEVA ZELANDA', 'NEOCELANDESA ', '47', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('150', 'OMÃN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('151', 'PAÃSES BAJOS', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('152', 'PAKISTÃN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('153', 'PALAU', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('154', 'PALESTINA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('155', 'PANAMÃ', 'PANAMEÃ‘A ', '51', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('156', 'PAPÃšA NUEVA GUINEA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('157', 'PARAGUAY', 'PARAGUAYA ', '52', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('158', 'PERU', 'PERUANA', NULL, '010', '198', '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('159', 'POLONIA', 'POLACA ', '54', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('160', 'PORTUGAL', 'PORTUGUES', NULL, '005', NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('161', 'QATAR', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('162', 'REINO UNIDO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('163', 'REPUB CENTROAFRICANA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('164', 'REPÃšBLICA DEL CONGO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('165', 'REP DEMOCRATICA CONGO(ZAIRE)', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('166', 'REPÃšBLICA DOMINICANA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('167', 'RUANDA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('168', 'RUMANIA', 'RUMANA ', '57', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('169', 'RUSIA', 'RUSA', NULL, '015', '216', '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('170', 'SÃHARA OCCIDENTAL', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('171', 'SAINT KITTS-NEVIS', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('172', 'SAMOA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('173', 'SAMOA AMERICANA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('174', 'SAN MARINO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('175', 'SAN VICENTE Y LAS GRANADINAS', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('176', 'SANTA LUCÃA (PAÃS)', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('177', 'SANTO TOMÃ‰ Y PRÃNCIPE', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('178', 'SENEGAL', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('179', 'SERBIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('180', 'SEYCHELLES', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('181', 'SIERRA LEONA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('182', 'SINGAPUR', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('183', 'SIRIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('184', 'SOMALIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('185', 'SRI LANKA (ANTES CEILÃN)', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('186', 'SUAZILANDIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('187', 'SUDÃFRICA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('188', 'SUDÃN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('189', 'SUECIA', 'SUECA ', '60', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('190', 'SUIZA', 'SUIZA ', '61', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('191', 'TAILANDIA', 'TAILANDESA ', '62', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('192', 'TAIWÃN (REPÃšBLICA CHINA)', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('193', 'TANZANIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('194', 'TAYIKISTÃN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('195', 'TÃBET ( BAJO SOBERANÃA CHINA)', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('196', 'TIMOR ORIENTAL (INDONESIA)', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('197', 'TOGO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('198', 'TONGA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('199', 'TRINIDAD Y TOBAGO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('200', 'TÃšNEZ', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('201', 'TURKMENISTÃN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('202', 'TURQUÃA', 'TURCA ', '64', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('203', 'TUVALU', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('204', 'UCRANIA', 'UCRANIANA ', '65', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('205', 'UGANDA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('206', 'URUGUAY', 'URUGUAYA ', '66', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('207', 'UZBEQUISTÃN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('208', 'VANUATU', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('209', 'VATICANO', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('210', 'VENEZUELA', 'VENEZOLANA', '67', '003', '266', '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('211', 'VIETNAM', 'VIETNAMITA', '68', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('212', 'WALLIS Y FUTUNA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('213', 'YEMEN', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('214', 'YIBUTI', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('215', 'ZAMBIA', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('216', 'ZIMBABUE', 'OTRO', '50', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('217', 'INGLATERRA', 'INGLESA ', '35', NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('218', 'REPUBLICA CHECA', 'CHECA', NULL, NULL, NULL, '2025-08-25 10:25:44')
+INSERT HR.tbl_Countries(CountryID, CountryName, Nationality, NationalityCode, AuxSIITH, AuxCEAACES, CreatedAt) VALUES ('219', 'PUERTO RICO', 'PUERTO RICO', NULL, NULL, NULL, '2025-08-25 10:25:44')
+GO
+
+PRINT (N'Dumping data for table tbl_Provinces')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00101', '001', 'AZUAY', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00102', '001', 'BOLIVAR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00103', '001', 'CAÃ‘AR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00104', '001', 'CARCHI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00105', '001', 'COTOPAXI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00106', '001', 'CHIMBORAZO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00107', '001', 'EL ORO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00108', '001', 'ESMERALDAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00109', '001', 'GUAYAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00110', '001', 'IMBABURA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00111', '001', 'LOJA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00112', '001', 'LOS RIOS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00113', '001', 'MANABI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00114', '001', 'MORONA SANTIAGO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00115', '001', 'NAPO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00116', '001', 'PASTAZA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00117', '001', 'PICHINCHA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00118', '001', 'TUNGURAHUA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00119', '001', 'ZAMORA CHINCHIPE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00120', '001', 'GALAPAGOS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00121', '001', 'SUCUMBIOS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00122', '001', 'ORELLANA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00123', '001', 'ST DOMINGO TSACHILAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('00124', '001', 'SANTA ELENA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('01001', '010', 'BUENOS AIRES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('01401', '014', 'STEIERMARK', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('02201', '022', 'BRUCELAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03001', '030', 'ACRE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03002', '030', 'ALAGOAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03003', '030', 'AMAPÃ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03004', '030', 'AMAZONAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03005', '030', 'BAHIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03006', '030', 'CEARÃ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03007', '030', 'ESPÃRITO SANTO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03008', '030', 'GOIÃS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03009', '030', 'MARANHAO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03010', '030', 'MATO GROSSO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03011', '030', 'MATO GROSSO DO SUL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03012', '030', 'MINAS GERAIS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03013', '030', 'PARÃ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03014', '030', 'PARAÃBA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03015', '030', 'PARANÃ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03016', '030', 'PERNAMBUCO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03017', '030', 'PIAUÃ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03018', '030', 'RIO DE JANEIRO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03019', '030', 'RIO GRANDE DO NORTE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03020', '030', 'RIO GRANDE DO SUL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03021', '030', 'RONDONIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03022', '030', 'RORAIMA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03023', '030', 'SANTA CATARINA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03024', '030', 'SAO PAULO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03025', '030', 'SERGIPE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03026', '030', 'TOCANTINS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('03201', '032', 'BULGARIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04201', '042', 'TALAGANTE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04301', '043', 'TAIWAN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04501', '045', 'CUNDINAMARCA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04502', '045', 'ANTIOQUIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04503', '045', 'ATLÃNTICO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04504', '045', 'BOLÃVAR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04505', '045', 'BOYACÃ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04506', '045', 'CALDAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04507', '045', 'CAQUETÃ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04508', '045', 'CAUCA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04509', '045', 'CESAR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04510', '045', 'CÃ“RDOVA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04511', '045', 'HUILA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04512', '045', 'CHOCÃ“', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04513', '045', 'GUAJIRA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04514', '045', 'MAGDALENA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04515', '045', 'META', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04516', '045', 'NARIÃ‘O', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04517', '045', 'NORTE DE SANTANDER', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04518', '045', 'ARMENIA ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04519', '045', 'RISARALDA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04520', '045', 'SANTANDER', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04521', '045', 'SUCRE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04522', '045', 'TOLIMA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04523', '045', 'VALLE DEL CAUCA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04524', '045', 'ARAUCA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04525', '045', 'CASANARE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04526', '045', 'PUTUMAYO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04527', '045', 'S ANDRÃ‰S PROVIDENCIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04528', '045', 'AMAZONAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04529', '045', 'GUAINÃA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04530', '045', 'GUAVIARE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04531', '045', 'VAUPÃ‰S', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('04532', '045', 'VICHADA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('05201', '052', 'EXTRANJERO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('05301', '053', 'LA HABANA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('05302', '053', 'SANCTI SPIRITUS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('05901', '059', 'LA LIBERTAD', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06501', '065', 'ANDALUCIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06502', '065', 'CATALUÃ‘A', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06503', '065', 'MADRID', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06504', '065', 'ILLES BALEARS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06505', '065', 'MURCIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06506', '065', 'PAIS VASCO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06507', '065', 'CANTABRIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06508', '065', 'NAVARRA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06509', '065', 'VALENCIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06601', '066', 'ALABAMA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06602', '066', 'ARIZONA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06603', '066', 'ARKANSAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06604', '066', 'CALIFORNIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06605', '066', 'CAROLINA DEL NORTE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06606', '066', 'CAROLINA DEL SUR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06607', '066', 'COLORADO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06608', '066', 'CONNECTICUT', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06609', '066', 'DAKOTA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06610', '066', 'DAKOTA DEL SUR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06611', '066', 'DELAWARE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06612', '066', 'DISTRITO DE COLUMBIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06613', '066', 'FLORIDA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06614', '066', 'GEORGIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06615', '066', 'IDAHO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06616', '066', 'ILLINOIS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06617', '066', 'INDIANA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06618', '066', 'IOWA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06619', '066', 'KANSAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06620', '066', 'KENTUCKY', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06621', '066', 'LOUISIANA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06622', '066', 'MAINE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06623', '066', 'MARYLAND', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06624', '066', 'MASSACHUSETTS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06625', '066', 'MICHIGAN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06626', '066', 'MINNESOTA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06627', '066', 'MISSISSIPPI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06628', '066', 'MISSOURI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06629', '066', 'MONTANA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06630', '066', 'NEBRASKA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06631', '066', 'NEW HAMPSHIRE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06632', '066', 'NEW JERSEY', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06633', '066', 'NEVADA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06634', '066', 'NUEVA YORK', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06635', '066', 'NUEVO MÃ‰XICO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06636', '066', 'OHIO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06637', '066', 'OKLAHOMA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06638', '066', 'OREGÃ“N', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06639', '066', 'PENNSYLVANIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06640', '066', 'RHODE ISLAND', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06641', '066', 'TENNESSEE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06642', '066', 'TEXAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06643', '066', 'UTAH', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06644', '066', 'WASHINGTON', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06645', '066', 'VERMONT', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06646', '066', 'VIRGINIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06647', '066', 'VIRGINIA OCCIDENTAL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06648', '066', 'WISCONSIN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06649', '066', 'WYOMING', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('06650', '066', 'CHICAGO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('07201', '072', 'PIRINEOS ATLANTICOS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('07202', '072', 'NORD PAS DE CALAIS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('08901', '089', 'FRANCISCO MORAZAN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('10301', '103', 'TERNI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('10302', '103', 'ROMA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('10303', '103', 'OSTUNI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('10304', '103', 'MILAN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('10305', '103', 'PERUGIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('13301', '133', 'CIUDAD DE MÃ‰XICO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('14501', '145', 'CHINANDEGA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15801', '158', 'AMAZONAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15802', '158', 'ANCASH', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15803', '158', 'APURIMAC', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15804', '158', 'AREQUIPA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15805', '158', 'AYACUCHO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15806', '158', 'CAJAMARCA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15807', '158', 'CUSCO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15808', '158', 'HUÃNUCO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15809', '158', 'HUANCAVELICA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15810', '158', 'ICA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15811', '158', 'JUNÃN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15812', '158', 'LA LIBERTAD', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15813', '158', 'LAMBAYEQUE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15814', '158', 'LIMA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15815', '158', 'LORETO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15816', '158', 'MADRE DE DIOS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15817', '158', 'MOQUEGUA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15818', '158', 'PASCO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15819', '158', 'PIURA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15820', '158', 'PUNO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15821', '158', 'SAN MARTÃN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15822', '158', 'TACNA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15823', '158', 'TUMBES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15824', '158', 'UCAYALI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15901', '159', 'PODLASKIE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('15902', '159', 'MAZOWSZE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('16201', '162', 'DURHAN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('16801', '168', 'ALBA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('16901', '169', 'MOSCU', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('16902', '169', 'BIELORUSIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21001', '210', 'CARACAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21002', '210', 'ANZOÃTEGUI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21003', '210', 'APURE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21004', '210', 'ARAGUA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21005', '210', 'BARINAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21006', '210', 'BOLÃVAR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21007', '210', 'CARABOBO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21008', '210', 'COJEDES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21009', '210', 'DELTA AMACURO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21010', '210', 'AMAZONAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21011', '210', 'FALCÃ“N', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21012', '210', 'GUARICO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21013', '210', 'LARA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21014', '210', 'MÃ‰RIDA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21015', '210', 'MIRANDA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21016', '210', 'MONAGAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21017', '210', 'PORTUGUESA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21018', '210', 'SUCRE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21019', '210', 'TÃCHIRA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21020', '210', 'TRUJILLO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21021', '210', 'VARGAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21022', '210', 'YARACUY', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21023', '210', 'ZULIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21024', '210', 'NUEVA ESPARTA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21801', '218', 'Usti Nad Labem', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21802', '218', 'PRAGA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Provinces(ProvinceID, CountryID, ProvinceName, CreatedAt) VALUES ('21901', '219', 'SAN JUAN', '2025-08-25 10:25:44')
+GO
+
+
+PRINT (N'Dumping data for table tbl_Cantons')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010101', '00101', 'CUENCA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010102', '00101', 'GIRON', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010103', '00101', 'GUALACEO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010104', '00101', 'PAUTE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010105', '00101', 'SANTA ISABEL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010106', '00101', 'OÃ‘A', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010107', '00101', 'NABON', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010108', '00101', 'PUCARA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010109', '00101', 'SAN FERNANDO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010110', '00101', 'CHORDELEG', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010111', '00101', 'EL PAN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010112', '00101', 'SEVILLA DE ORO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010113', '00101', 'GUACHAPALA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010114', '00101', 'SIGSIG', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010115', '00101', 'CAMILO PONCE ENRÃQUE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010201', '00102', 'GUARANDA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010202', '00102', 'CHILLANES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010203', '00102', 'CHIMBO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010204', '00102', 'SAN MIGUEL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010205', '00102', 'ECHEANDIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010206', '00102', 'CALUMA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010207', '00102', 'LAS NAVES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010301', '00103', 'AZOGUES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010302', '00103', 'LA TRONCAL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010303', '00103', 'CAÃ‘AR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010304', '00103', 'BIBLIÃN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010305', '00103', 'EL TAMBO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010306', '00103', 'DÃ‰LEG', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010307', '00103', 'SUSCAL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010401', '00104', 'TULCAN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010402', '00104', 'BOLÃVAR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010403', '00104', 'ESPEJO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010404', '00104', 'MIRA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010405', '00104', 'MONTÃšFAR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010406', '00104', 'SAN PEDRO DE HUACA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010501', '00105', 'LATACUNGA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010502', '00105', 'PANGUA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010503', '00105', 'PUJILI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010504', '00105', 'SALCEDO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010505', '00105', 'SAQUISILÃ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010506', '00105', 'LA MANÃ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010507', '00105', 'SIGCHOS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010601', '00106', 'RIOBAMBA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010602', '00106', 'ALAUSI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010603', '00106', 'COLTA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010604', '00106', 'CHUNCHI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010605', '00106', 'GUAMOTE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010606', '00106', 'GUANO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010607', '00106', 'PENIPE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010608', '00106', 'CHAMBO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010609', '00106', 'PALLATANGA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010610', '00106', 'CUMANDÃ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010701', '00107', 'MACHALA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010702', '00107', 'ARENILLAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010703', '00107', 'PASAJE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010704', '00107', 'PIÃ‘AS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010705', '00107', 'SANTA ROSA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010706', '00107', 'ZARUMA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010707', '00107', 'ATAHUALPA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010708', '00107', 'ELGUABO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010709', '00107', 'HUAQUILLAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010710', '00107', 'PORTOVELO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010711', '00107', 'MARCABELI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010712', '00107', 'BALSAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010713', '00107', 'CHILLA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010714', '00107', 'LAS LAJAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010801', '00108', 'ESMERALDAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010802', '00108', 'MUISNE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010803', '00108', 'QUININDÃ‰', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010804', '00108', 'ELOY ALFARO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010805', '00108', 'ATACAMES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010806', '00108', 'SAN LORENZO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010807', '00108', 'RIO VERDE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010808', '00108', 'LA CONCORDIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010901', '00109', 'GUAYAQUIL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010902', '00109', 'DURÃN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010903', '00109', 'SALINAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010904', '00109', 'SAN JACINTO YAGUACH', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010905', '00109', 'MILAGRO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010906', '00109', 'EL TRIUNFO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010907', '00109', 'DAULE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010908', '00109', 'SANTA ELENA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010909', '00109', 'EL EMPALME', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010910', '00109', 'A. BAQUERIZO MORENO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010911', '00109', 'BALAO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010912', '00109', 'BALZAR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010913', '00109', 'COLIMES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010914', '00109', 'NARANJAL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010915', '00109', 'NARANJITO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010916', '00109', 'PALESTINA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010917', '00109', 'PEDRO CARBO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010918', '00109', 'SAN BORONDÃ“N', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010919', '00109', 'SANTA LUCÃA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010920', '00109', 'URBINA JADO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010921', '00109', 'PLAYAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010922', '00109', 'SIMÃ“N BOLIVAR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010923', '00109', 'MARCELINO MARIDUEÃ‘A', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010924', '00109', 'LOMAS DE SARGENTILLO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010925', '00109', 'NOBOL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010926', '00109', 'LA LIBERTAD', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010927', '00109', 'GENERAL ELIZALDE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010928', '00109', 'ISIDRO AYORA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010929', '00109', 'YAGUACHI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0010930', '00109', 'SALITRE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011001', '00110', 'IBARRA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011002', '00110', 'ANTONIO ANTE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011003', '00110', 'COTACACHI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011004', '00110', 'OTAVALO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011005', '00110', 'PIMAMPIRO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011006', '00110', 'SAN M. DE URCUQUI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011007', '00110', 'ATUNTAQUI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011101', '00111', 'LOJA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011102', '00111', 'CALVAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011103', '00111', 'CELICA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011104', '00111', 'ESPINDOLA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011105', '00111', 'GONZANAMA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011106', '00111', 'MACARA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011107', '00111', 'PALTAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011108', '00111', 'PUYANGO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011109', '00111', 'SARAGURO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011110', '00111', 'SOZORANGA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011111', '00111', 'CATAMAYO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011112', '00111', 'ZAPOTILLO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011113', '00111', 'CHAGUARPAMBA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011114', '00111', 'PINDAL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011115', '00111', 'QUILANGA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011116', '00111', 'OLMEDO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011201', '00112', 'BABAHOYO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011202', '00112', 'QUEVEDO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011203', '00112', 'VENTANAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011204', '00112', 'BABA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011205', '00112', 'VINCES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011206', '00112', 'MONTALVO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011207', '00112', 'PUEBLO VIEJO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011208', '00112', 'URDANETA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011209', '00112', 'PALENQUE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011210', '00112', 'BUENA FÃ‰', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011211', '00112', 'VALENCIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011212', '00112', 'MOCACHE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011213', '00112', 'QUINSALOMA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011301', '00113', 'PORTOVIEJO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011302', '00113', 'FLAVIO ALFARO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011303', '00113', 'BOLIVAR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011304', '00113', 'CHONE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011305', '00113', 'EL CÃRMEN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011306', '00113', 'JIPIJAPA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011307', '00113', 'JUNÃN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011308', '00113', 'MANTA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011309', '00113', 'MONTE CRISTI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011310', '00113', 'PAJAN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011311', '00113', 'PICHINCHA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011312', '00113', 'ROCAFUERTE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011313', '00113', 'SANTA ANA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011314', '00113', 'SUCRE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011315', '00113', 'TOSAGUA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011316', '00113', '24 DE MAYO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011317', '00113', 'PEDERNALES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011318', '00113', 'OLMEDO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011319', '00113', 'PUERTO LÃ“PEZ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011320', '00113', 'JAMA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011321', '00113', 'JARAMIJÃ“', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011322', '00113', 'SAN VICENTE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011401', '00114', 'MORONA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011402', '00114', 'GUALAQUIZA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011403', '00114', 'LIMÃ“N - INDANZA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011404', '00114', 'PALORA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011405', '00114', 'SANTIAGO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011406', '00114', 'SUCUA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011407', '00114', 'HUAMBOYA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011408', '00114', 'SAN JUAN BOSCO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011409', '00114', 'TAISHA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011410', '00114', 'LOGROÃ‘O', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011411', '00114', 'PABLO VI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011412', '00114', 'TIWINTZA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011413', '00114', 'MACAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011501', '00115', 'TENA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011502', '00115', 'ARCHIDONA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011503', '00115', 'EL CHACO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011504', '00115', 'QUIJOS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011505', '00115', 'CARLOS J. AROSEMENA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011601', '00116', 'PASTAZA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011602', '00116', 'MERA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011603', '00116', 'PUYO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011604', '00116', 'SANTA CLARA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011605', '00116', 'ARAJUNO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011701', '00117', 'QUITO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011702', '00117', 'CAYAMBE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011703', '00117', 'MEJIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011704', '00117', 'PEDRO MONCAYO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011705', '00117', 'RUMIÃ‘AHUI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011707', '00117', 'SAN M D LOS BANCOS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011708', '00117', 'PUERTO QUITO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011709', '00117', 'PEDRO V. MALDONADO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011801', '00118', 'AMBATO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011802', '00118', 'BAÃ‘OS DE AGUA SANTA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011803', '00118', 'PATATE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011804', '00118', 'SAN PEDRO DE PELILEO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011805', '00118', 'SANTIAGO DE PILLARO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011806', '00118', 'QUERO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011807', '00118', 'CEVALLOS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011808', '00118', 'MOCHA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011809', '00118', 'TISALEO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011901', '00119', 'ZAMORA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011902', '00119', 'YANTZAZA (YANZATZA)', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011903', '00119', 'YACUAMBI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011904', '00119', 'CHINCHIPE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011905', '00119', 'NANGARITZA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011906', '00119', 'EL PANGUI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011907', '00119', 'CENTINELA DEL CONDOR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011908', '00119', 'PALANDA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0011909', '00119', 'PAQUISHA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012001', '00120', 'SAN CRISTOBAL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012002', '00120', 'ISABELA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012003', '00120', 'SANTA CRUZ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012101', '00121', 'GONZALO PIZARRO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012102', '00121', 'LAGO AGRIO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012103', '00121', 'PUTUMAYO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012104', '00121', 'SHUSHUFINDI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012105', '00121', 'SUCUMBIOS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012106', '00121', 'CASCALES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012107', '00121', 'CUYABENO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012201', '00122', 'ORELLANA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012202', '00122', 'NUEVO ROCAFUERTE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012203', '00122', 'LA JOYA D LOS SACHAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012204', '00122', 'AGUARICO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012205', '00122', 'LORETO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012301', '00123', 'SANTO DOMINGO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012302', '00123', 'LA CONCORDIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012401', '00124', 'SANTA ELENA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012402', '00124', 'LA LIBERTAD', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0012403', '00124', 'SALINAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0100101', '01001', 'LA PLATA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0100102', '01001', 'NECOCHEA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0100103', '01001', 'BAHIA BLANCA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0140101', '01401', 'HARTBERG', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0220101', '02201', 'BRUCELAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0300101', '03001', 'RIO BRANCO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0300102', '03002', 'MACEIÃ“', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0300103', '03003', 'MACAPÃ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0300104', '03004', 'MANAUS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0300105', '03005', 'SALVADOR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0300106', '03006', 'FORTALEZA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0300107', '03007', 'VITORIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0300115', '03015', 'CURITIBA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0300801', '03008', 'GOIANIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0300901', '03009', 'SAO LUÃS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0301001', '03010', 'CUIABÃ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0301101', '03011', 'CAMPO GRANDE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0301201', '03012', 'BELO HORIZONTE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0301301', '03013', 'BELEM', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0301401', '03014', 'JOAO PESSOA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0301601', '03016', 'RECIFE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0301701', '03017', 'TERESINA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0301801', '03018', 'RIO DE JANEIRO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0301901', '03019', 'NATAL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0302001', '03020', 'PORTO ALEGRE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0302101', '03021', 'PORTO VELHO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0302201', '03022', 'BOA VISTA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0302301', '03023', 'FLORIANÃ“POLIS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0302401', '03024', 'SAO PAULO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0302501', '03025', 'ARACAJU', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0302601', '03026', 'PALMAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0320101', '03201', 'BULGARIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0420101', '04201', 'PEÃ‘AFLOR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0430101', '04301', 'TAIWAN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0450101', '04501', 'BOGOTÃ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0450201', '04502', 'MEDELLÃN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0450301', '04503', 'BARRANQUILLA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0450401', '04504', 'CARTAGENA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0450501', '04505', 'TUNJA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0450601', '04506', 'MANIZALES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0450701', '04507', 'FLORENCIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0450801', '04508', 'POPAYÃN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0450901', '04509', 'VALLEDUPAR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0451001', '04510', 'MONTERÃA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0451101', '04511', 'NEIVA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0451201', '04512', 'QUIBDÃ“', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0451301', '04513', 'RIOHACHA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0451401', '04514', 'SANTA MARTA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0451501', '04515', 'VILLAVICENCIO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0451601', '04516', 'PASTO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0451602', '04516', 'IPIALES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0451701', '04517', 'CÃšCUTA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0451801', '04518', 'QUINDÃO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0451901', '04519', 'PEREIRA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0452001', '04520', 'BUCARAMANGA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0452101', '04521', 'SINCELEJO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0452201', '04522', 'IBAGUÃ‰', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0452301', '04523', 'CALI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0452401', '04524', 'ARAUCA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0452501', '04525', 'YOPAL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0452601', '04526', 'MOCOA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0452701', '04527', 'SAN ANDRÃ‰S', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0452801', '04528', 'LETICIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0452901', '04529', 'PUERTO INÃRIDA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0453001', '04530', 'SAN JOSÃ‰ DE GUAVIARE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0453101', '04531', 'MITÃš', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0453201', '04532', 'PUERTO CARREÃ‘O', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0520101', '05201', 'EXTRANJERO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0530101', '05301', 'LA HABANA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0530201', '05302', 'SANCTI SPIRITUS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0590101', '05901', 'SANTA TECLA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0650101', '06501', 'ALMERIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0650201', '06502', 'BAÃ‘OLES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0650301', '06503', 'MADRID', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0650401', '06504', 'INCA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0650501', '06505', 'ARCHENA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0650502', '06505', 'YECLA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0650601', '06506', 'VITORIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0650701', '06507', 'SANTANDER', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0650801', '06508', 'PAMPLONA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0650901', '06509', 'VALENCIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660101', '06601', 'MONTGOMERY', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660102', '06602', 'PHOENIX', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660103', '06603', 'LITTLE ROCK', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660104', '06604', 'SACRAMENTO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660105', '06605', 'RALEIGH', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660106', '06606', 'COLUMBIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660107', '06607', 'DENVER', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660108', '06608', 'HARTFORD', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660109', '06609', 'BISMARCK', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660110', '06610', 'PIERRE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660111', '06611', 'DOVER', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660112', '06612', 'WASHINGTON D.C.', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660113', '06613', 'TALLAHASSEE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660114', '06614', 'ATLANTA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660115', '06615', 'BOISE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660116', '06616', 'SPRINGFIELD', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660117', '06617', 'INDIANÃPOLIS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660118', '06618', 'DES MOINES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660119', '06619', 'TOPEKA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660120', '06620', 'FRANKFORT', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660121', '06621', 'BATON ROUGE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660122', '06622', 'AUGUSTA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660123', '06623', 'ANNAPOLIS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660124', '06624', 'BOSTON', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660125', '06625', 'LANSING', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660126', '06626', 'SAINT PAUL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660127', '06627', 'JACKSON', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660128', '06628', 'JEFFERSON CITY', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660129', '06629', 'HELENA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660130', '06630', 'LINCOLN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660131', '06631', 'CONCORD', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660132', '06632', 'TRENTON', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660133', '06633', 'CARSON CITY', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660134', '06634', 'ALBANY', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660135', '06635', 'SANTA FE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660136', '06636', 'COLUMBUS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660137', '06637', 'OKLAHOMA CITY', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660138', '06638', 'SALEM', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660139', '06639', 'HARRISBURG', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660140', '06640', 'PROVIDENCE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660141', '06641', 'NASHVILLE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660142', '06642', 'AUSTIN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660143', '06643', 'SALT LAKE CITY', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660144', '06644', 'OLYMPIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660145', '06645', 'MONTPELIER', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660146', '06646', 'RICHMOND', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660147', '06647', 'CHARLESTON, WV', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660148', '06648', 'MADISON', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660149', '06649', 'CHEYENNE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0660401', '06604', 'CALIFORNIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0661302', '06613', 'ORLANDO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0661303', '06613', 'CLEARWATER', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0661901', '06619', 'LUBBACK', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0663202', '06632', 'NORTH PLAINFIELD', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0663401', '06634', 'BROOKLYN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0663402', '06634', 'QUEENS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0663403', '06634', 'SOUTHAMETOM', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0665001', '06650', 'CHICAGO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0720101', '07201', 'PAU', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0720201', '07202', 'LILLE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('0890101', '08901', 'TEGUCIGALPA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1030101', '10301', 'TERNI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1030201', '10302', 'ROMA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1030301', '10303', 'OSTUNI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1030401', '10304', 'MILAN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1030501', '10305', 'PERUGIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1330101', '13301', 'CIUDAD DE MÃ‰XICO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1450101', '14501', 'CHINANDEGA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1580101', '15801', 'CHACHAPOYAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1580201', '15802', 'HUARAZ', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1580301', '15803', 'ABANCAY', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1580401', '15804', 'AREQUIPA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1580501', '15805', 'AYACUCHO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1580601', '15806', 'CAJAMARCA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1580701', '15807', 'CUSCO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1580801', '15808', 'HUÃNUCO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1580901', '15809', 'HUANCAVELICA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1581001', '15810', 'ICA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1581101', '15811', 'JUNÃN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1581201', '15812', 'TRUJILLO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1581301', '15813', 'CHICLAYO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1581401', '15814', 'LIMA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1581501', '15815', 'IQUITOS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1581601', '15816', 'PUERTO MALDONADO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1581701', '15817', 'MOQUEGUA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1581801', '15818', 'CERRO DE PASCO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1581901', '15819', 'PIURA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1582001', '15820', 'PUNO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1582101', '15821', 'SAN MARTÃN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1582201', '15822', 'TACNA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1582301', '15823', 'TUMBES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1582401', '15824', 'UCAYALI', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1590101', '15901', 'AUGUSTOW', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1590201', '15902', 'WARSZAWA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1620101', '16201', 'DURHAN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1680101', '16801', 'CUGIR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1690101', '16901', 'MOSCU', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('1690201', '16902', 'MINIST', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2100101', '21001', 'CARACAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2100201', '21002', 'BARCELONA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2100301', '21003', 'SAN FERNANDO APURE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2100401', '21004', 'MARACAY', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2100501', '21005', 'BARINAS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2100601', '21006', 'CIUDAD DE BOLÃVAR', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2100701', '21007', 'VALENCIA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2100801', '21008', 'SAN CARLOS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2100901', '21009', 'TUCUPITA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2101001', '21010', 'PUERTO AYACUCHO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2101101', '21011', 'CORO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2101201', '21012', 'SAN JOSÃ‰ LOS MOROS', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2101301', '21013', 'BARQUISIMETO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2101401', '21014', 'MÃ‰RIDA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2101501', '21015', 'LOS TEQUES', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2101601', '21016', 'MATURIN', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2101701', '21017', 'GUANARE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2101801', '21018', 'CUMANA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2101901', '21019', 'SAN CRISTRÃ“BAL', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2102001', '21020', 'TRUJILLO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2102101', '21021', 'LA GUAIRA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2102201', '21022', 'SAN FELIPE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2102301', '21023', 'MARACAIBO', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2102401', '21024', 'LA ASUNCIÃ“N', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2180101', '21801', 'LITOMERICE', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2180102', '21802', 'PRAGA', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2180103', '21801', 'Roudnice nad Labem', '2025-08-25 10:25:44')
+INSERT HR.tbl_Cantons(CantonID, ProvinceID, CantonName, CreatedAt) VALUES ('2190101', '21901', 'SAN JUAN', '2025-08-25 10:25:44')
+GO
+
+PRINT (N'Dumping data for table tbl_PermissionTypes')
+SET IDENTITY_INSERT HR.tbl_PermissionTypes ON
+GO
+INSERT HR.tbl_PermissionTypes(TypeID, Name, DeductsFromVacation, RequiresApproval, MaxDays) VALUES (1, 'Vacaciones', CONVERT(bit, 'True'), CONVERT(bit, 'True'), 30)
+INSERT HR.tbl_PermissionTypes(TypeID, Name, DeductsFromVacation, RequiresApproval, MaxDays) VALUES (2, 'ComisiÃ³n de servicios', CONVERT(bit, 'False'), CONVERT(bit, 'True'), 10)
+INSERT HR.tbl_PermissionTypes(TypeID, Name, DeductsFromVacation, RequiresApproval, MaxDays) VALUES (3, 'Enfermedad', CONVERT(bit, 'False'), CONVERT(bit, 'True'), 15)
+INSERT HR.tbl_PermissionTypes(TypeID, Name, DeductsFromVacation, RequiresApproval, MaxDays) VALUES (4, 'Asuntos personales', CONVERT(bit, 'False'), CONVERT(bit, 'True'), 5)
+GO
+SET IDENTITY_INSERT HR.tbl_PermissionTypes OFF
+GO
+
+-- Dumping data for table tbl_OvertimeConfig
+--
+PRINT (N'Dumping data for table tbl_OvertimeConfig')
+INSERT HR.tbl_OvertimeConfig(OvertimeType, Factor, Description) VALUES ('Feriado', 2.00, 'Hora extra en feriado')
+INSERT HR.tbl_OvertimeConfig(OvertimeType, Factor, Description) VALUES ('Nocturna', 1.75, 'Hora extra nocturna')
+INSERT HR.tbl_OvertimeConfig(OvertimeType, Factor, Description) VALUES ('Ordinaria', 1.50, 'Hora extra ordinaria')
+GO
+
+
+-- ============================================
+-- NIVEL 1: ÃREAS PRINCIPALES (CÃ³digos: 01-10)
+-- ============================================
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('01', 'EDUCACIÃ“N', NULL, 1, 1),
+('02', 'ARTES Y HUMANIDADES', NULL, 1, 1),
+('03', 'CIENCIAS SOCIALES, PERIODISMO E INFORMACIÃ“N', NULL, 1, 1),
+('04', 'ADMINISTRACIÃ“N DE EMPRESAS Y DERECHO', NULL, 1, 1),
+('05', 'CIENCIAS NATURALES, MATEMÃTICAS Y ESTADÃSTICA', NULL, 1, 1),
+('06', 'TECNOLOGÃAS DE LA INFORMACIÃ“N Y LA COMUNICACIÃ“N (TIC)', NULL, 1, 1),
+('07', 'INGENIERÃA, INDUSTRIA Y CONSTRUCCIÃ“N', NULL, 1, 1),
+('08', 'AGRICULTURA, SILVICULTURA, PESCA Y VETERINARIA', NULL, 1, 1),
+('09', 'SALUD Y BIENESTAR', NULL, 1, 1),
+('10', 'SERVICIOS', NULL, 1, 1);
+GO
+
+-- ============================================
+-- NIVEL 2: SUBÃREAS (CÃ³digos: 0101, 0201, etc.)
+-- ============================================
+
+-- SubÃ¡reas de EDUCACIÃ“N (01)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0101', 'EDUCACIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='01'), 2, 1);
+GO
+
+-- SubÃ¡reas de ARTES Y HUMANIDADES (02)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0201', 'ARTES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='02'), 2, 1),
+('0202', 'HUMANIDADES (EXCEPTO IDIOMAS)', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='02'), 2, 1),
+('0203', 'IDIOMAS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='02'), 2, 1);
+GO
+
+-- SubÃ¡reas de CIENCIAS SOCIALES (03)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0301', 'CIENCIAS SOCIALES Y DEL COMPORTAMIENTO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='03'), 2, 1),
+('0302', 'PERIODISMO E INFORMACIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='03'), 2, 1);
+GO
+
+-- SubÃ¡reas de ADMINISTRACIÃ“N Y DERECHO (04)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0401', 'CIENCIAS EMPRESARIALES Y ADMINISTRACIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='04'), 2, 1),
+('0402', 'DERECHO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='04'), 2, 1);
+GO
+
+-- SubÃ¡reas de CIENCIAS NATURALES (05)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0501', 'CIENCIAS BIOLÃ“GICAS Y AFINES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='05'), 2, 1),
+('0502', 'MEDIO AMBIENTE', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='05'), 2, 1),
+('0503', 'CIENCIAS FÃSICAS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='05'), 2, 1),
+('0504', 'MATEMÃTICAS Y ESTADÃSTICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='05'), 2, 1);
+GO
+
+-- SubÃ¡reas de TIC (06)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0601', 'TECNOLOGÃAS DE LA INFORMACIÃ“N Y LA COMUNICACIÃ“N (TIC)', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='06'), 2, 1);
+GO
+
+-- SubÃ¡reas de INGENIERÃA (07)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0701', 'INGENIERÃA Y PROFESIONES AFINES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='07'), 2, 1),
+('0702', 'INDUSTRIA Y PRODUCCIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='07'), 2, 1),
+('0703', 'ARQUITECTURA Y CONSTRUCCIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='07'), 2, 1);
+GO
+
+-- SubÃ¡reas de AGRICULTURA (08)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0801', 'AGRICULTURA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='08'), 2, 1),
+('0802', 'SILVICULTURA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='08'), 2, 1),
+('0803', 'PESCA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='08'), 2, 1),
+('0804', 'VETERINARIA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='08'), 2, 1);
+GO
+
+-- SubÃ¡reas de SALUD (09)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('0901', 'SALUD', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='09'), 2, 1),
+('0902', 'BIENESTAR', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='09'), 2, 1);
+GO
+
+-- SubÃ¡reas de SERVICIOS (10)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('1001', 'SERVICIOS PERSONALES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='10'), 2, 1),
+('1002', 'SERVICIOS DE HIGIENE Y SALUD OCUPACIONAL', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='10'), 2, 1),
+('1003', 'SERVICIOS DE SEGURIDAD', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='10'), 2, 1),
+('1004', 'SERVICIOS DE TRANSPORTE', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='10'), 2, 1);
+GO
+
+-- ============================================
+-- NIVEL 3: ESPECIALIZACIONES (CÃ³digos: 010101, 020101, etc.)
+-- ============================================
+
+-- Especializaciones de EDUCACIÃ“N (0101)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('010101', 'CIENCIAS DE LA EDUCACIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0101'), 3, 1),
+('010102', 'CAPACITACIÃ“N PARA MAESTROS DE PREESCOLAR', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0101'), 3, 1),
+('010103', 'FORMACIÃ“N DE PROFESOR SIN ASIGNATURA DE ESPECIALIZACIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0101'), 3, 1),
+('010104', 'FORMACIÃ“N DE PROFESOR CON ASIGNATURA DE ESPECIALIZACIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0101'), 3, 1),
+('010105', 'TÃ‰CNICAS AUDIOVISUALES Y PRODUCCIÃ“N DE MEDIOS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0101'), 3, 1),
+('010106', 'FORMACIÃ“N DE DOCENTES DE EDUCACIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0101'), 3, 1);
+GO
+
+-- Especializaciones de ARTES (0201)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('020101', 'BELLAS ARTES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0201'), 3, 1),
+('020102', 'ARTESANÃAS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0201'), 3, 1),
+('020103', 'ARTES MUSICALES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0201'), 3, 1),
+('020104', 'ARTES PLÃSTICAS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0201'), 3, 1),
+('020105', 'ACTIVIDAD FÃSICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0201'), 3, 1);
+GO
+
+-- Especializaciones de HUMANIDADES (0202)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('020201', 'RELIGIÃ“N Y TEOLOGÃA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0202'), 3, 1),
+('020202', 'HISTORIA Y ARQUEOLOGÃA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0202'), 3, 1),
+('020203', 'FILOSOFÃA Y Ã‰TICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0202'), 3, 1);
+GO
+
+-- Especializaciones de IDIOMAS (0203)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('020301', 'LENGUAS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0203'), 3, 1),
+('020302', 'LITERATURA Y LINGÃœÃSTICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0203'), 3, 1);
+GO
+
+-- Especializaciones de CIENCIAS SOCIALES (0301)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('030101', 'ECONOMÃA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0301'), 3, 1),
+('030102', 'CIENCIAS POLÃTICAS Y EDUCACIÃ“N CÃVICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0301'), 3, 1),
+('030103', 'PSICOLOGÃA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0301'), 3, 1),
+('030104', 'SOCIOLOGÃA, ESTUDIOS CULTURALES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0301'), 3, 1);
+GO
+
+-- Especializaciones de PERIODISMO (0302)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('030201', 'PERIODISMO Y REPORTAJE', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0302'), 3, 1),
+('030202', 'BIBLIOTECA, INFORMACIÃ“N Y ARCHIVÃSTICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0302'), 3, 1);
+GO
+
+-- Especializaciones de CIENCIAS EMPRESARIALES (0401)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('040101', 'CONTABILIDAD Y AUDITORÃA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1),
+('040102', 'FINANZAS, BANCA Y SEGUROS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1),
+('040103', 'GESTIÃ“N Y ADMINISTRACIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1),
+('040104', 'MARKETING Y PUBLICIDAD', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1),
+('040105', 'SECRETARIADO Y TRABAJO DE OFICINA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1),
+('040106', 'VIDA LABORAL Y RECURSOS HUMANOS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1),
+('040107', 'INVERSIONES, LABORAL', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0401'), 3, 1);
+GO
+
+-- Especializaciones de DERECHO (0402)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('040201', 'DERECHO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0402'), 3, 1);
+GO
+
+-- Especializaciones de CIENCIAS BIOLÃ“GICAS (0501)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('050101', 'BIOLOGÃA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0501'), 3, 1),
+('050102', 'BIOQUÃMICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0501'), 3, 1);
+GO
+
+-- Especializaciones de MEDIO AMBIENTE (0502)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('050201', 'CIENCIAS AMBIENTALES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0502'), 3, 1),
+('050202', 'MEDIO AMBIENTE Y VIDA SILVESTRE', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0502'), 3, 1);
+GO
+
+-- Especializaciones de CIENCIAS FÃSICAS (0503)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('050301', 'QUÃMICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0503'), 3, 1),
+('050302', 'CIENCIA DE LA TIERRA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0503'), 3, 1),
+('050303', 'FÃSICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0503'), 3, 1);
+GO
+
+-- Especializaciones de MATEMÃTICAS (0504)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('050401', 'MATEMÃTICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0504'), 3, 1),
+('050402', 'ESTADÃSTICA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0504'), 3, 1);
+GO
+
+-- Especializaciones de TIC (0601)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('060101', 'EL USO DEL ORDENADOR', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0601'), 3, 1),
+('060102', 'BASE DE DATOS, DISEÃ‘O Y ADMINISTRACIÃ“N DE REDES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0601'), 3, 1),
+('060103', 'SOFTWARE Y DESARROLLO Y ANÃLISIS DE APLICATIVOS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0601'), 3, 1);
+GO
+
+-- Especializaciones de INGENIERÃA (0701)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('070101', 'INGENIERÃA Y PROCESOS QUÃMICOS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1),
+('070102', 'TECNOLOGÃA DE PROTECCIÃ“N DEL MEDIO AMBIENTE', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1),
+('070103', 'ELECTRICIDAD Y ENERGÃA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1),
+('070104', 'ELECTRÃ“NICA Y AUTOMATIZACIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1),
+('070105', 'MECÃNICA Y METALISTERÃA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1),
+('070106', 'MOTOR DE VEHÃCULOS, EMBARCACIONES Y AERONAVES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1),
+('070107', 'TELECOMUNICACIONES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0701'), 3, 1);
+GO
+
+-- Especializaciones de INDUSTRIA (0702)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('070201', 'PROCESAMIENTO DE ALIMENTOS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0702'), 3, 1),
+('070202', 'MATERIALES (VIDRIO, PAPEL, PLÃSTICO Y MADERA)', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0702'), 3, 1),
+('070203', 'TEXTILES, CONFECCIÃ“N, CALZADO Y CUERO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0702'), 3, 1),
+('070204', 'MINERÃA Y EXTRACCIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0702'), 3, 1),
+('070205', 'PRODUCCIÃ“N INDUSTRIAL', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0702'), 3, 1);
+GO
+
+-- Especializaciones de ARQUITECTURA (0703)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('070301', 'ARQUITECTURA Y URBANISMO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0703'), 3, 1),
+('070302', 'CONSTRUCCIÃ“N E INGENIERÃA CIVIL', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0703'), 3, 1);
+GO
+
+-- Especializaciones de AGRICULTURA (0801)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('080101', 'PRODUCCIÃ“N AGRÃCOLA Y GANADERA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0801'), 3, 1),
+('080102', 'HORTICULTURA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0801'), 3, 1);
+GO
+
+-- Especializaciones de SILVICULTURA (0802)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('080201', 'SILVICULTURA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0802'), 3, 1);
+GO
+
+-- Especializaciones de PESCA (0803)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('080301', 'PESCA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0803'), 3, 1);
+GO
+
+-- Especializaciones de VETERINARIA (0804)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('080401', 'VETERINARIA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0804'), 3, 1),
+('080402', 'ESTUDIOS DENTALES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0804'), 3, 1);
+GO
+
+-- Especializaciones de SALUD (0901)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('090101', 'MEDICINA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0901'), 3, 1),
+('090102', 'ENFERMERÃA Y OBSTETRICIA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0901'), 3, 1),
+('090103', 'TECNOLOGÃA DE DIAGNÃ“STICO Y TRATAMIENTO MÃ‰DICO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0901'), 3, 1),
+('090104', 'TERAPIA Y REHABILITACIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0901'), 3, 1),
+('090105', 'FARMACIA', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0901'), 3, 1),
+('090106', 'ASISTENCIA MÃ‰DICA, PROGRAMAS COMPARTIDOS', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0901'), 3, 1);
+GO
+
+-- Especializaciones de BIENESTAR (0902)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('090201', 'CUIDADO DEL ADULTO MAYOR Y ATENCIÃ“N DISCAPACIDAD', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0902'), 3, 1),
+('090202', 'SERVICIO DE CUIDADO A NIÃ‘OS Y JÃ“VENES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0902'), 3, 1),
+('090203', 'TRABAJO SOCIAL Y ORIENTACIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0902'), 3, 1),
+('090204', 'SERVICIO DOMÃ‰STICO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='0902'), 3, 1);
+GO
+
+-- Especializaciones de SERVICIOS PERSONALES (1001)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('100101', 'SERVICIOS DE ALIMENTACIÃ“N', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='1001'), 3, 1),
+('100102', 'HOTELES, RESTAURANTES Y CATERING', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='1001'), 3, 1),
+('100103', 'DEPORTES', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='1001'), 3, 1),
+('100104', 'VIAJES, TURISMO Y OCIO', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='1001'), 3, 1);
+GO
+
+-- Especializaciones de HIGIENE Y SALUD OCUPACIONAL (1002)
+INSERT INTO HR.tbl_KnowledgeArea (code, name, parent_id, levels, IsActive) VALUES
+('100201', 'SANEAMIENTO DE LA COMUNIDAD', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='1002'), 3, 1),
+('100202', 'SALUD Y SEGURIDAD OCUPACIONAL', (SELECT id FROM HR.tbl_KnowledgeArea WHERE code='1002'), 3, 1);
+GO
+
+
+
+
+PRINT (N'Dumping data for table tbl_Holidays')
+SET IDENTITY_INSERT HR.tbl_Holidays ON
+GO
+INSERT HR.tbl_Holidays(HolidayID, Name, HolidayDate, IsActive, Description, CreatedAt) VALUES (1, 'AÃ±o Nuevo', '2025-01-01', CONVERT(bit, 'True'), 'AÃ±o Nuevo', '2025-09-23 14:13:40')
+INSERT HR.tbl_Holidays(HolidayID, Name, HolidayDate, IsActive, Description, CreatedAt) VALUES (2, 'Carnaval', '2025-03-03', CONVERT(bit, 'True'), 'Carnaval', '2025-09-23 14:13:40')
+INSERT HR.tbl_Holidays(HolidayID, Name, HolidayDate, IsActive, Description, CreatedAt) VALUES (3, 'Carnaval', '2025-03-04', CONVERT(bit, 'True'), 'Carnaval', '2025-09-23 14:13:40')
+INSERT HR.tbl_Holidays(HolidayID, Name, HolidayDate, IsActive, Description, CreatedAt) VALUES (4, 'Viernes Santo', '2025-04-18', CONVERT(bit, 'True'), 'Semana Santa', '2025-09-23 14:13:40')
+INSERT HR.tbl_Holidays(HolidayID, Name, HolidayDate, IsActive, Description, CreatedAt) VALUES (5, 'DÃ­a del Trabajo', '2025-05-01', CONVERT(bit, 'True'), 'DÃ­a Internacional del Trabajo', '2025-09-23 14:13:40')
+INSERT HR.tbl_Holidays(HolidayID, Name, HolidayDate, IsActive, Description, CreatedAt) VALUES (6, 'Batalla de Pichincha', '2025-05-24', CONVERT(bit, 'True'), 'Batalla de Pichincha', '2025-09-23 14:13:40')
+INSERT HR.tbl_Holidays(HolidayID, Name, HolidayDate, IsActive, Description, CreatedAt) VALUES (7, 'Primer Grito de Independencia', '2025-08-10', CONVERT(bit, 'True'), 'Primer Grito de Independencia', '2025-09-23 14:13:40')
+INSERT HR.tbl_Holidays(HolidayID, Name, HolidayDate, IsActive, Description, CreatedAt) VALUES (8, 'Independencia de Guayaquil', '2025-10-09', CONVERT(bit, 'True'), 'Independencia de Guayaquil', '2025-09-23 14:13:40')
+INSERT HR.tbl_Holidays(HolidayID, Name, HolidayDate, IsActive, Description, CreatedAt) VALUES (9, 'DÃ­a de los Difuntos', '2025-11-02', CONVERT(bit, 'True'), 'DÃ­a de los Difuntos', '2025-09-23 14:13:40')
+INSERT HR.tbl_Holidays(HolidayID, Name, HolidayDate, IsActive, Description, CreatedAt) VALUES (10, 'Independencia de Cuenca', '2025-11-03', CONVERT(bit, 'True'), 'Independencia de Cuenca', '2025-09-23 14:13:40')
+INSERT HR.tbl_Holidays(HolidayID, Name, HolidayDate, IsActive, Description, CreatedAt) VALUES (11, 'Navidad', '2025-12-25', CONVERT(bit, 'True'), 'Navidad', '2025-09-23 14:13:40')
+INSERT HR.tbl_Holidays(HolidayID, Name, HolidayDate, IsActive, Description, CreatedAt) VALUES (12, 'cumpleaÃ±os', '2025-10-01', CONVERT(bit, 'True'), 'dIA DEL PROGRAMADOR', '0001-01-01 00:00:00')
+GO
+SET IDENTITY_INSERT HR.tbl_Holidays OFF
+GO
+
+PRINT (N'Dumping data for table tbl_People')
+SET IDENTITY_INSERT HR.tbl_People ON
+GO
+INSERT HR.tbl_People(PersonID, IdentType, FirstName, LastName, IDCard, Email, Phone, BirthDate, Sex, Gender, Disability, Address, IsActive, CreatedAt, UpdatedAt, MaritalStatusTypeID, MilitaryCard, MotherName, FatherName, CountryID, ProvinceID, CantonID, YearsOfResidence, EthnicityTypeID, BloodTypeTypeID, DisabilityPercentage, CONADISCard, SpecialNeedsTypeID) VALUES (1, null, 'Henry', 'Flores', '1801234567', 'henry.flores@uta.edu.ec', '099000111', '1988-05-10', 69, NULL, NULL, 'Ambato', CONVERT(bit, 'True'), '2025-08-13 16:10:39', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+INSERT HR.tbl_People(PersonID, IdentType, FirstName, LastName, IDCard, Email, Phone, BirthDate, Sex, Gender, Disability, Address, IsActive, CreatedAt, UpdatedAt, MaritalStatusTypeID, MilitaryCard, MotherName, FatherName, CountryID, ProvinceID, CantonID, YearsOfResidence, EthnicityTypeID, BloodTypeTypeID, DisabilityPercentage, CONADISCard, SpecialNeedsTypeID) VALUES (2, null, 'Ana', 'PÃ©rez', '1807654321', 'ana.perez@uta.edu.ec', '098111222', '1990-09-21', 70, NULL, NULL, 'Ambato', CONVERT(bit, 'True'), '2025-08-13 16:10:39', NULL,  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+INSERT HR.tbl_People(PersonID, IdentType, FirstName, LastName, IDCard, Email, Phone, BirthDate, Sex, Gender, Disability, Address, IsActive, CreatedAt, UpdatedAt, MaritalStatusTypeID, MilitaryCard, MotherName, FatherName, CountryID, ProvinceID, CantonID, YearsOfResidence, EthnicityTypeID, BloodTypeTypeID, DisabilityPercentage, CONADISCard, SpecialNeedsTypeID) VALUES (3, null, 'Luis', 'GarcÃ­a', '1712345678', 'luis.garcia@uta.edu.ec', '097222333', '1985-02-12', 69, NULL, NULL, 'Quito', CONVERT(bit, 'True'), '2025-08-13 16:10:39', NULL,  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+INSERT HR.tbl_People(PersonID, IdentType, FirstName, LastName, IDCard, Email, Phone, BirthDate, Sex, Gender, Disability, Address, IsActive, CreatedAt, UpdatedAt, MaritalStatusTypeID, MilitaryCard, MotherName, FatherName, CountryID, ProvinceID, CantonID, YearsOfResidence, EthnicityTypeID, BloodTypeTypeID, DisabilityPercentage, CONADISCard, SpecialNeedsTypeID) VALUES (4, null, 'MarÃ­a', 'Lozano', '1711122233', 'maria.lozano@uta.edu.ec', '096333444', '1992-11-30', 70, NULL, NULL, 'Ambato', CONVERT(bit, 'True'), '2025-08-13 16:10:39', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+INSERT HR.tbl_People(PersonID, IdentType, FirstName, LastName, IDCard, Email, Phone, BirthDate, Sex, Gender, Disability, Address, IsActive, CreatedAt, UpdatedAt, MaritalStatusTypeID, MilitaryCard, MotherName, FatherName, CountryID, ProvinceID, CantonID, YearsOfResidence, EthnicityTypeID, BloodTypeTypeID, DisabilityPercentage, CONADISCard, SpecialNeedsTypeID) VALUES (5, null, 'yu lung', 'li', '1715559421', 'liyulung@hotmail.com', '', '2025-08-28', 69, NULL, NULL, 'direccion', CONVERT(bit, 'True'), '2025-08-13 00:00:00', NULL,  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+INSERT HR.tbl_People(PersonID, IdentType, FirstName, LastName, IDCard, Email, Phone, BirthDate, Sex, Gender, Disability, Address, IsActive, CreatedAt, UpdatedAt, MaritalStatusTypeID, MilitaryCard, MotherName, FatherName, CountryID, ProvinceID, CantonID, YearsOfResidence, EthnicityTypeID, BloodTypeTypeID, DisabilityPercentage, CONADISCard, SpecialNeedsTypeID) VALUES (16, null, 'NOMRE', 'APER', '1234567891', 'liyulung1@hotmail.com', '1234', '2024-12-30', 69, 60, '', '', CONVERT(bit, 'True'), '2025-08-13 00:00:00', '2025-08-13 00:00:00',  1, '', 'MADRE', 'PADRE', '001', '00118', '0011801', 1, 6, 12, NULL, '', 20)
+INSERT HR.tbl_People(PersonID, IdentType, FirstName, LastName, IDCard, Email, Phone, BirthDate, Sex, Gender, Disability, Address, IsActive, CreatedAt, UpdatedAt, MaritalStatusTypeID, MilitaryCard, MotherName, FatherName, CountryID, ProvinceID, CantonID, YearsOfResidence, EthnicityTypeID, BloodTypeTypeID, DisabilityPercentage, CONADISCard, SpecialNeedsTypeID) VALUES (19, null, 'pruen1', 'pruea1', '1234567890', 'liyulung2@hotmail.com', '099124345', '2025-02-24', 69, 60, NULL, 'dire', CONVERT(bit, 'True'), '2025-08-13 00:00:00', NULL,  1, NULL, 'madre', 'padre', '001', '00118', '0011801', 1, 6, 18, NULL, NULL, NULL)
+INSERT HR.tbl_People(PersonID, IdentType, FirstName, LastName, IDCard, Email, Phone, BirthDate, Sex, Gender, Disability, Address, IsActive, CreatedAt, UpdatedAt, MaritalStatusTypeID, MilitaryCard, MotherName, FatherName, CountryID, ProvinceID, CantonID, YearsOfResidence, EthnicityTypeID, BloodTypeTypeID, DisabilityPercentage, CONADISCard, SpecialNeedsTypeID) VALUES (21, null, 'nom1', 'aped1', '1234123541', 'liyulung4@hotmail.com', '1234123455', '2025-08-04', 69, 60, NULL, 'dire', CONVERT(bit, 'True'), '2025-08-13 00:00:00', NULL,  1, NULL, 'ma', 'pa', '001', '00118', '0011801', NULL, 6, 18, NULL, NULL, NULL)
+INSERT HR.tbl_People(PersonID, IdentType, FirstName, LastName, IDCard, Email, Phone, BirthDate, Sex, Gender, Disability, Address, IsActive, CreatedAt, UpdatedAt, MaritalStatusTypeID, MilitaryCard, MotherName, FatherName, CountryID, ProvinceID, CantonID, YearsOfResidence, EthnicityTypeID, BloodTypeTypeID, DisabilityPercentage, CONADISCard, SpecialNeedsTypeID) VALUES (22, null, 'prue4', 'prueb34', '6453242344', 'liyulung5@hotmail.com', '12341566633', '2025-07-28', 70, 61, NULL, 'ad', CONVERT(bit, 'True'), '2025-08-13 00:00:00', NULL,  2, NULL, 'mad', 'pad', '032', '03201', '0320101', 1, 9, 14, NULL, NULL, NULL)
+INSERT HR.tbl_People(PersonID, IdentType, FirstName, LastName, IDCard, Email, Phone, BirthDate, Sex, Gender, Disability, Address, IsActive, CreatedAt, UpdatedAt, MaritalStatusTypeID, MilitaryCard, MotherName, FatherName, CountryID, ProvinceID, CantonID, YearsOfResidence, EthnicityTypeID, BloodTypeTypeID, DisabilityPercentage, CONADISCard, SpecialNeedsTypeID) VALUES (23, null, 'por', 'pro', '1235412302', 'liyulung9@hotmail.com', '1465347653', '2025-08-04', 70, 61, NULL, 'dire', CONVERT(bit, 'True'), '2025-08-13 00:00:00', NULL,  4, NULL, 'ma', 'pa', '001', '00118', '0011801', 9, 6, 12, NULL, NULL, NULL)
+GO
+SET IDENTITY_INSERT HR.tbl_People OFF
+GO
+
+PRINT (N'Dumping data for table tbl_Employees')
+INSERT HR.tbl_Employees(EmployeeID, Type, DepartmentID, ImmediateBossID, HireDate, IsActive, CreatedBy, CreatedAt, UpdatedBy, UpdatedAt, email) VALUES (1, 57, 1, NULL, '2020-03-01', CONVERT(bit, 'True'), NULL, '2025-08-13 16:10:39', NULL, NULL,  'henry.flores@uta.edu.ec')
+INSERT HR.tbl_Employees(EmployeeID, Type, DepartmentID, ImmediateBossID, HireDate, IsActive, CreatedBy, CreatedAt, UpdatedBy, UpdatedAt, email) VALUES (2, 58, 1, 1, '2022-01-15', CONVERT(bit, 'True'), NULL, '2025-08-13 16:10:39', NULL, NULL,  'ana.perez@uta.edu.ec')
+INSERT HR.tbl_Employees(EmployeeID, Type, DepartmentID, ImmediateBossID, HireDate, IsActive, CreatedBy, CreatedAt, UpdatedBy, UpdatedAt, email) VALUES (3, 59, 2, 1, '2019-09-01', CONVERT(bit, 'True'), NULL, '2025-08-13 16:10:39', NULL, NULL,  'yl.li@uta.edu.ec')
+INSERT HR.tbl_Employees(EmployeeID, Type, DepartmentID, ImmediateBossID, HireDate, IsActive, CreatedBy, CreatedAt, UpdatedBy, UpdatedAt, email) VALUES (4, 57, 3, 1, '2021-07-01', CONVERT(bit, 'True'), NULL, '2025-08-13 16:10:39', NULL, NULL, 'admin@uta.edu.ec')
+GO
+
+
+
+PRINT (N'Dumping data for table tbl_Vacations')
+SET IDENTITY_INSERT HR.tbl_Vacations ON
+GO
+INSERT HR.tbl_Vacations(VacationID, EmployeeID, StartDate, EndDate, DaysGranted, DaysTaken, Status, CreatedAt, UpdatedAt) VALUES (1, 1, '2025-02-03', '2025-02-07', 5, 5, 'Completed', '2025-08-13 16:10:39', NULL)
+INSERT HR.tbl_Vacations(VacationID, EmployeeID, StartDate, EndDate, DaysGranted, DaysTaken, Status, CreatedAt, UpdatedAt) VALUES (2, 2, '2025-08-11', '2025-08-15', 5, 0, 'InProgress', '2025-08-13 16:10:39', NULL)
+INSERT HR.tbl_Vacations(VacationID, EmployeeID, StartDate, EndDate, DaysGranted, DaysTaken, Status, CreatedAt, UpdatedAt) VALUES (6, 4, '2025-09-26', '2025-09-30', 5, 0, 'Canceled', '0001-01-01 00:00:00', '0001-01-01 00:00:00')
+INSERT HR.tbl_Vacations(VacationID, EmployeeID, StartDate, EndDate, DaysGranted, DaysTaken, Status, CreatedAt, UpdatedAt) VALUES (7, 4, '2025-10-01', '2025-10-31', 31, 0, 'Canceled', '0001-01-01 00:00:00', '0001-01-01 00:00:00')
+INSERT HR.tbl_Vacations(VacationID, EmployeeID, StartDate, EndDate, DaysGranted, DaysTaken, Status, CreatedAt, UpdatedAt) VALUES (8, 4, '2025-10-01', '2025-10-08', 8, 0, 'InProgress', '0001-01-01 00:00:00', '0001-01-01 00:00:00')
+INSERT HR.tbl_Vacations(VacationID, EmployeeID, StartDate, EndDate, DaysGranted, DaysTaken, Status, CreatedAt, UpdatedAt) VALUES (9, 4, '2025-12-01', '2025-12-27', 27, 0, 'Planned', '0001-01-01 00:00:00', '0001-01-01 00:00:00')
+INSERT HR.tbl_Vacations(VacationID, EmployeeID, StartDate, EndDate, DaysGranted, DaysTaken, Status, CreatedAt, UpdatedAt) VALUES (10, 4, '2026-03-17', '2026-03-26', 10, 0, 'Planned', '0001-01-01 00:00:00', '0001-01-01 00:00:00')
+GO
+SET IDENTITY_INSERT HR.tbl_Vacations OFF
+GO
+
+PRINT (N'Dumping data for table tbl_AttendancePunches')
+SET IDENTITY_INSERT HR.tbl_AttendancePunches ON
+GO
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (1, 1, '2025-08-05 08:01:00', 'In', 'BIO-01', NULL, NULL, '2025-08-13 16:10:39')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (2, 1, '2025-08-05 12:31:00', 'Out', 'BIO-01', NULL, NULL, '2025-08-13 16:10:39')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (3, 1, '2025-08-05 13:35:00', 'In', 'BIO-01', NULL, NULL, '2025-08-13 16:10:39')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (4, 1, '2025-08-05 17:05:00', 'Out', 'BIO-01', NULL, NULL, '2025-08-13 16:10:39')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (5, 2, '2025-08-08 08:00:00', 'In', 'BIO-01', NULL, NULL, '2025-08-13 16:10:39')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (6, 2, '2025-08-08 17:10:00', 'Out', 'BIO-01', NULL, NULL, '2025-08-13 16:10:39')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (23, 1, '2025-08-28 14:35:04.2363711', 'In', 'WEB', -78,6200000, -1,2700000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (24, 1, '2025-08-28 14:54:06.4198714', 'In', 'WEB', -78,6200000, -1,2700000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (25, 1, '2025-08-28 15:00:47.4169208', 'Out', 'WEB', -78,6200000, -1,2700000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (26, 1, '2025-08-28 15:11:13.4126941', 'In', 'WEB', -78,6200000, -1,2700000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (27, 1, '2025-08-30 08:00:11', 'Out', 'WEB', 0,0000000, 0,0000000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (28, 1, '2025-08-30 16:19:44.1180000', 'In', 'WEB', 0,0000000, 0,0000000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (29, 1, '2025-09-01 08:54:04.4900000', 'In', 'WEB', 0,0000000, 0,0000000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (30, 1, '2025-07-01 20:19:47.5510000', 'Out', 'WEB', 0,0000000, 0,0000000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (31, 1, '2025-06-01 20:28:44.6140000', 'Out', 'WEB', 0,0000000, 0,0000000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (32, 1, '2025-05-01 20:30:59.9060000', 'Out', 'WEB', 0,0000000, 0,0000000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (33, 1, '2025-04-01 20:32:44.7550000', 'Out', 'WEB', 0,0000000, 0,0000000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (34, 1, '2025-04-01 20:34:44.6790000', 'Out', 'WEB', 0,0000000, 0,0000000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (37, 1, '2025-09-01 16:48:10', 'Out', 'WEB', 0,0000000, 0,0000000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (38, 1, '2025-09-02 08:43:53', 'In', 'WEB', 0,0000000, 0,0000000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (39, 1, '2025-09-04 08:32:14', 'In', 'WEB', 0,0000000, 0,0000000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (40, 1, '2025-09-04 08:37:59', 'Out', 'WEB', 0,0000000, 0,0000000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (41, 1, '2025-09-18 14:42:33', 'In', 'WEB', -78,6200000, -1,2700000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (42, 1, '2025-09-18 14:47:35', 'Out', 'WEB', -78,6200000, -1,2700000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (43, 1, '2025-09-24 12:24:40', 'In', 'WEB', -78,6200000, -1,2700000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (44, 1, '2025-09-24 14:12:19', 'Out', 'WEB', -78,6200000, -1,2700000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (45, 1, '2025-09-26 09:13:00', 'In', 'WEB', -78,6200000, -1,2700000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (46, 1, '2025-09-26 14:22:51', 'Out', 'WEB', -78,6200000, -1,2700000, '0001-01-01 00:00:00')
+INSERT HR.tbl_AttendancePunches(PunchID, EmployeeID, PunchTime, PunchType, DeviceID, Longitude, Latitude, CreatedAt) VALUES (47, 1, '2025-09-30 14:13:23', 'In', 'WEB', -78,6200000, -1,2700000, '0001-01-01 00:00:00')
+GO
+SET IDENTITY_INSERT HR.tbl_AttendancePunches OFF
+GO
+
+

@@ -8,4 +8,8 @@ public sealed class PersonnelActionTypeUpdateDto
     public string NumberingPrefix { get; set; } = null!;
     public string? TemplateCode { get; set; }
     public bool IsActive { get; set; } = true;
+    public bool RequiresAdUserCreation { get; set; } = false;
+    public bool RequiresAdUserDisable { get; set; } = false;
+    public bool RequiresAdGroupAssignment { get; set; } = false;
+    public string? ActionCategory { get; set; }
 }

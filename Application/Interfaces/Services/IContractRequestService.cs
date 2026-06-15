@@ -1,5 +1,7 @@
 using WsUtaSystem.Application.DTOs.ContractRequest;
 using WsUtaSystem.Application.DTOs.ContractRequestPerson;
+using WsUtaSystem.Application.DTOs.Reports;
+using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Models;
 using WsUtaSystem.Application.Common.Interfaces;
 
@@ -20,4 +22,10 @@ public interface IContractRequestService : IService<ContractRequest, int>
 
     /// <summary>Envía la solicitud a estado PENDIENTE_CORRECCION con la razón indicada.</summary>
     Task SendToCorrectionAsync(int requestId, string reason, int userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Retorna solicitudes de contrato para reporte con filtros de estado y rango de fechas de inicio.
+    /// Incluye dependencia, modalidad de trabajo y conteo de personas contratadas vs solicitadas.
+    /// </summary>
+    Task<IReadOnlyList<ContractRequestReportDto>> GetForReportAsync(ReportFilterDto filter, CancellationToken ct = default);
 }

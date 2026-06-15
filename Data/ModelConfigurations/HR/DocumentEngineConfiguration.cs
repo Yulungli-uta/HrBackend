@@ -98,7 +98,7 @@ public sealed class GeneratedDocumentConfiguration : IEntityTypeConfiguration<Ge
 
         e.Property(x => x.DocumentId).HasColumnName("DocumentID");
         e.Property(x => x.TemplateId).HasColumnName("TemplateID");
-        e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
+        e.Property(x => x.EmployeeId).HasColumnName("EmployeeID").IsRequired(false);
         e.Property(x => x.StoredFileId).HasColumnName("StoredFileID");
         e.Property(x => x.DocumentNumber).HasMaxLength(50);
         e.Property(x => x.FileName).HasMaxLength(255).IsRequired();

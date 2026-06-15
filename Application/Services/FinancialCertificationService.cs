@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.DTOs.FinancialCertification;
+using WsUtaSystem.Application.DTOs.Reports;
+using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Data;
@@ -397,5 +399,44 @@ public class FinancialCertificationService : Service<FinancialCertification, int
                 }
                 : null
         }).ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<CertificationReportDto>> GetForReportAsync(ReportFilterDto filter, CancellationToken ct = default)
+    {
+        var statusMap = await _db.RefTypes.AsNoTracking()
+            .Where(x => x.Category == CertCategory)
+            .ToDictionaryAsync(x => x.TypeId, x => x.Name, ct);
+
+        var query =
+            from cert in _db.FinancialCertification.AsNoTracking()
+            join req  in _db.ContractRequest.AsNoTracking()  on cert.RequestId   equals req.RequestId into rg
+            from req in rg.DefaultIfEmpty()
+            join d    in _db.Departments.AsNoTracking()       on req.DepartmentId equals d.DepartmentId into dg
+            from d in dg.DefaultIfEmpty()
+            where (!filter.StartDate.HasValue || (cert.CertBudgetDate.HasValue && cert.CertBudgetDate >= filter.StartDate.Value))
+               && (!filter.EndDate.HasValue   || (cert.CertBudgetDate.HasValue && cert.CertBudgetDate <= filter.EndDate.Value))
+               && (string.IsNullOrEmpty(filter.Status) ||
+                   (cert.Status.HasValue && statusMap.ContainsKey(cert.Status.Value) && statusMap[cert.Status.Value] == filter.Status))
+            orderby cert.CertBudgetDate descending
+            select new CertificationReportDto
+            {
+                CertificationId        = cert.CertificationId,
+                CertCode               = cert.CertCode,
+                CertNumber             = cert.CertNumber,
+                Budget                 = cert.Budget,
+                RmuHour                = cert.RmuHour,
+                RmuCon                 = cert.RmuCon,
+                CertBudgetDate         = cert.CertBudgetDate,
+                StatusName             = cert.Status.HasValue && statusMap.ContainsKey(cert.Status.Value)
+                                              ? statusMap[cert.Status.Value] : "—",
+                RequestId              = cert.RequestId,
+                DepartmentName         = d != null ? d.Name : "—",
+                NumberOfPeopleRequested = req != null ? req.NumberOfPeopleToHire : null,
+                RejectionReason        = cert.RejectionReason,
+                CreatedAt              = cert.CreatedAt
+            };
+
+        return await query.ToListAsync(ct);
     }
 }

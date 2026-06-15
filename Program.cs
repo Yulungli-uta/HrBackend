@@ -55,7 +55,10 @@ builder.Services.AddDocumentEngineServices();
 // ── 12. Permisos de usuario ───────────────────────────────────────────────────
 builder.Services.AddUserPermissionServices();
 
-// ── 12. Autenticación JWT + usuario actual ────────────────────────────────────
+// ── 13. Aprovisionamiento empleados (HrBackend → RepositoryUta) ───────────────
+builder.Services.AddProvisioningServices(builder.Configuration);
+
+// ── 14. Autenticación JWT + usuario actual ────────────────────────────────────
 builder.Services.AddAuthServices();
 
 // ── 13. Base de datos + interceptores EF Core ────────────────────────────────
@@ -64,7 +67,7 @@ builder.Services.AddAuthServices();
 builder.Services.AddDatabaseServices(builder.Configuration, builder.Environment);
 
 // ── 14. Jobs programados (Quartz) ─────────────────────────────────────────────
-builder.Services.AddQuartzJobs();
+builder.Services.AddQuartzJobs(builder.Configuration);
 
 // =========================================================
 // CONSTRUCCIÓN DE LA APLICACIÓN

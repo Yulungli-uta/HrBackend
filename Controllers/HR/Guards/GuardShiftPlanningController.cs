@@ -69,4 +69,12 @@ public class GuardShiftPlanningController : ControllerBase
     [HttpPost("validate")]
     public async Task<IActionResult> Validate([FromBody] ValidateGuardAssignmentRequestDto dto, CancellationToken ct) =>
         Ok(await _svc.ValidateAssignmentAsync(dto, ct));
+
+    /// <summary>
+    /// Verifica si el módulo de guardias tiene todos los pre-requisitos configurados
+    /// para generar planificación en la fecha indicada.
+    /// </summary>
+    [HttpGet("readiness-check")]
+    public async Task<IActionResult> ReadinessCheck([FromQuery] DateOnly targetDate, CancellationToken ct) =>
+        Ok(await _svc.GetReadinessCheckAsync(targetDate, ct));
 }

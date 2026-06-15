@@ -168,7 +168,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
                     e.FirstName.ToLower().Contains(term) ||
                     e.LastName.ToLower().Contains(term) ||
                     e.IDCard.ToLower().Contains(term) ||
-                    e.Email.ToLower().Contains(term));
+                    (e.Email != null && e.Email.ToLower().Contains(term)));
             }
 
             // 3. Contamos antes de ordenar (es más eficiente)

@@ -67,4 +67,15 @@ public class ContractsDto
 
     public int? AuthorityNominatorId { get; set; }
     public int? DthDirectorId { get; set; }
+
+    /// <summary>Régimen laboral (LOSEP/LOES/CT). Auto-poblado desde la solicitud. Solo lectura.</summary>
+    public int? LaborRegimeID { get; set; }
+    public string? LaborRegimeName { get; set; }
+
+    /// <summary>Modalidad de trabajo (TC/MT/Horas). Auto-poblado desde la solicitud. Solo lectura.</summary>
+    public int? WorkModalityID { get; set; }
+    public string? WorkModalityName { get; set; }
+
+    /// <summary>Horas contratadas. Auto-poblado desde la solicitud. Solo lectura.</summary>
+    public decimal? ContractedHours { get; set; }
 }

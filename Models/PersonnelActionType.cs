@@ -35,6 +35,23 @@ public sealed class PersonnelActionType : IAuditable
     /// <summary>Indica si este tipo de acción está disponible para uso.</summary>
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Categoría funcional de la acción. Permite agrupar y filtrar en reportes.
+    /// Valores: MOVEMENT, ENTRY, ECONOMIC, LEAVE, DISCIPLINARY, EXIT.
+    /// </summary>
+    public string? ActionCategory { get; set; }
+
+    // ── Integración Active Directory ─────────────────────────────────────────────
+
+    /// <summary>Si verdadero, al ejecutar esta acción se debe crear un usuario en AD local.</summary>
+    public bool RequiresAdUserCreation { get; set; } = false;
+
+    /// <summary>Si verdadero, al ejecutar esta acción se debe deshabilitar el usuario en AD local (ej: baja, jubilación).</summary>
+    public bool RequiresAdUserDisable { get; set; } = false;
+
+    /// <summary>Si verdadero, al ejecutar esta acción se deben asignar grupos/roles en AD local al usuario.</summary>
+    public bool RequiresAdGroupAssignment { get; set; } = false;
+
     // ── IAuditable ──────────────────────────────────────────────────────────────
     public DateTime? CreatedAt { get; set; }
     public int? CreatedBy { get; set; }

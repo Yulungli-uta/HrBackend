@@ -83,6 +83,15 @@ public class Contracts : IAuditable{
     public int? AuthorityNominatorId { get; set; }
     public int? DthDirectorId { get; set; }
 
+    /// <summary>Régimen laboral del contrato (LOSEP/LOES/CT). Auto-poblado desde la solicitud al crear.</summary>
+    public int? LaborRegimeID { get; set; }
+
+    /// <summary>Modalidad de trabajo (TC/MT/Horas). Auto-poblado desde la solicitud al crear. No editable.</summary>
+    public int? WorkModalityID { get; set; }
+
+    /// <summary>Horas contratadas. Auto-poblado desde la solicitud al crear. No editable.</summary>
+    public decimal? ContractedHours { get; set; }
+
     public Contracts? Parent { get; set; }
     public ICollection<Contracts> Addendums { get; set; } = [];
     public FinancialCertification? Certification { get; set; }

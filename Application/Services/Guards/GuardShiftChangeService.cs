@@ -68,6 +68,38 @@ public class GuardShiftChangeService : IGuardShiftChangeService
         };
     }
 
+    public async Task<PagedResult<GuardShiftChangeDto>> GetAllPagedAsync(int page, int pageSize, string? status, CancellationToken ct)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var q = _db.GuardShiftChanges
+            .Include(c => c.Planning)
+            .Include(c => c.OriginalEmployee).ThenInclude(e => e!.People)
+            .Include(c => c.ReplacementEmployee).ThenInclude(e => e!.People)
+            .Include(c => c.OriginalSchedule)
+            .Include(c => c.NewSchedule)
+            .Include(c => c.ChangeType)
+            .Include(c => c.StatusType)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(status))
+            q = q.Where(c => c.StatusType!.Name == status);
+
+        q = q.OrderByDescending(c => c.RequestedAt);
+
+        var total = await q.LongCountAsync(ct);
+        var items = await q.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+
+        return new PagedResult<GuardShiftChangeDto>
+        {
+            Items = items.Select(MapToDto).ToList(),
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = total
+        };
+    }
+
     public async Task<GuardShiftChangeDto> CreateReplacementAsync(CreateGuardShiftReplacementDto dto, CancellationToken ct)
     {
         var planning = await _db.GuardShiftPlannings

@@ -11,5 +11,8 @@
         public string? ContractCode { get; set; }
         public int? DefaultTemplateId { get; set; }
         public string? NumberingPrefix { get; set; }
+        public bool RequiresAdUserCreation { get; set; } = false;
+        public bool RequiresAdUserDisable { get; set; } = false;
+        public bool RequiresAdGroupAssignment { get; set; } = false;
     }
 }

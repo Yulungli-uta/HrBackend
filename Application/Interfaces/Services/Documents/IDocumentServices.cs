@@ -2,6 +2,8 @@ using WsUtaSystem.Application.DTOs.Documents.GeneratedDocuments;
 using WsUtaSystem.Application.DTOs.Documents.Templates;
 using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Application.DTOs.PersonnelActions;
+using WsUtaSystem.Application.DTOs.Reports;
+using WsUtaSystem.Application.DTOs.Reports.Common;
 
 namespace WsUtaSystem.Application.Interfaces.Services.Documents;
 
@@ -155,4 +157,10 @@ public interface IPersonnelActionService
     /// </summary>
     Task<(string PdfBase64, string FileName)> PreviewDocumentAsync(
         int employeeId, Dictionary<string, string> overrides, CancellationToken ct = default);
+
+    /// <summary>
+    /// Retorna acciones de personal para reporte con filtros de fecha, estado y categoría.
+    /// Permite excluir categorías (ej. DISCIPLINARY) para el historial de empleado.
+    /// </summary>
+    Task<IReadOnlyList<PersonnelActionReportDto>> GetForReportAsync(ReportFilterDto filter, CancellationToken ct = default);
 }

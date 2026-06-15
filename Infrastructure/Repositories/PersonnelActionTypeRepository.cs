@@ -23,27 +23,43 @@ public sealed class PersonnelActionTypeRepository
         int year,
         CancellationToken ct = default)
     {
-        await using var tx = await _db.Database.BeginTransactionAsync(
-            System.Data.IsolationLevel.Serializable, ct);
+        // UPDATE atómico con OUTPUT: evita el bug de entity tracker + HasDefaultValue
+        // + MARS que causaba duplicados en UQ_PersonnelActions_ActionNumber.
+        // No requiere transacción explícita: el UPDATE de una sola fila es atómico en SQL Server.
+        const string sql = """
+            UPDATE HR.tbl_Personnel_Action_Type
+            SET   NumberingLastSequence = CASE
+                      WHEN NumberingYear = @year THEN NumberingLastSequence + 1
+                      ELSE 1
+                  END,
+                  NumberingYear = @year,
+                  UpdatedAt     = GETDATE()
+            OUTPUT INSERTED.NumberingPrefix, INSERTED.NumberingLastSequence
+            WHERE  PersonnelActionTypeID = @id
+            """;
 
-        var entity = await _db.Set<PersonnelActionType>()
-            .FirstOrDefaultAsync(x => x.PersonnelActionTypeId == personnelActionTypeId, ct)
-            ?? throw new KeyNotFoundException(
-                $"PersonnelActionType id={personnelActionTypeId} no existe.");
+        var conn = (SqlConnection)_db.Database.GetDbConnection();
+        bool opened = conn.State != System.Data.ConnectionState.Open;
+        if (opened) await conn.OpenAsync(ct);
 
-        if (entity.NumberingYear != year)
+        try
         {
-            entity.NumberingYear = year;
-            entity.NumberingLastSequence = 0;
+            await using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@id", personnelActionTypeId);
+            cmd.Parameters.AddWithValue("@year", year);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+                throw new KeyNotFoundException(
+                    $"PersonnelActionType id={personnelActionTypeId} no existe.");
+
+            var prefix   = reader.GetString(0);
+            var sequence = reader.GetInt32(1);
+            return ($"{prefix}-{year}-{sequence:D3}", year, sequence);
         }
-
-        entity.NumberingLastSequence++;
-        entity.UpdatedAt = DateTime.Now;
-
-        await _db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
-
-        var docNumber = $"{entity.NumberingPrefix}-{year}-{entity.NumberingLastSequence:D3}";
-        return (docNumber, year, entity.NumberingLastSequence);
+        finally
+        {
+            if (opened) conn.Close();
+        }
     }
 }

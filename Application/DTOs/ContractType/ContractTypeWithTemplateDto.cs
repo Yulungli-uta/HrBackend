@@ -14,7 +14,10 @@ public sealed record ContractTypeWithTemplateDto(
     string? DefaultTemplateVersion,
     string? NumberingPrefix,
     int NumberingYear,
-    int NumberingLastSequence
+    int NumberingLastSequence,
+    bool RequiresAdUserCreation = false,
+    bool RequiresAdUserDisable = false,
+    bool RequiresAdGroupAssignment = false
 );
 
 /// <summary>Respuesta con el siguiente número de documento reservado para un tipo de contrato.</summary>

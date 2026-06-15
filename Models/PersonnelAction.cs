@@ -12,8 +12,11 @@ public sealed class PersonnelAction : IAuditable
     /// <summary>Clave primaria autoincremental.</summary>
     public int ActionId { get; set; }
 
-    /// <summary>FK al empleado afectado por la acción.</summary>
-    public int EmployeeId { get; set; }
+    /// <summary>FK a hr.tbl_People. Siempre poblado; permite crear el empleado si aún no existe.</summary>
+    public int PersonId { get; set; }
+
+    /// <summary>FK al empleado afectado por la acción. NULL para nuevos ingresos hasta que el orquestador crea el registro.</summary>
+    public int? EmployeeId { get; set; }
 
     /// <summary>
     /// FK al tipo de acción desde <c>ref_Types</c> (Category = 'ACTION_TYPE').
@@ -93,6 +96,13 @@ public sealed class PersonnelAction : IAuditable
 
     /// <summary>FK al movimiento de personal relacionado (si aplica).</summary>
     public int? MovementId { get; set; }
+
+    /// <summary>
+    /// FK a <c>HR.ref_Types</c> (Category = 'CONTRACT_TYPE').
+    /// Régimen laboral del nuevo ingreso: 57=LOSEP, 58=LOES, 59=Código del Trabajo.
+    /// Solo obligatorio cuando <see cref="EmployeeId"/> es null y el tipo de acción requiere creación de cuenta AD.
+    /// </summary>
+    public int? EmployeeTypeId { get; set; }
 
     // ── Clasificación de la acción ───────────────────────────────────────────────
     /// <summary>Indica si el empleado presentó declaración juramentada de no nepotismo.</summary>

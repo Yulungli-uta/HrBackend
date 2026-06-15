@@ -216,6 +216,22 @@ public class ContractRequestPersonService
         var hiredId  = await GetStatusIdAsync(StatusHired, ct);
         var sourceId = await GetSourceIdAsync(SourceAvailable, ct);
 
+        // Si ya existe un registro activo para (requestId, personId), actualizarlo en vez de insertar
+        var existing = await _db.Set<ContractRequestPerson>()
+            .FirstOrDefaultAsync(x => x.RequestId == requestId && x.PersonId == personId, ct);
+
+        if (existing is not null)
+        {
+            existing.JobId      = jobId;
+            existing.ContractId = contractId;
+            existing.IsHired    = true;
+            existing.StatusId   = hiredId;
+            existing.UpdatedAt  = DateTime.Now;
+            existing.UpdatedBy  = createdBy;
+            await _db.SaveChangesAsync(ct);
+            return;
+        }
+
         // Obtener el tipo ADMINISTRATIVO por defecto (o el primer tipo disponible)
         var types = await _refTypes.GetByCategoryAsync(TypeCategory, ct);
         var defaultTypeId = types.FirstOrDefault()?.TypeId ?? 0;

@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Application.Common.Enums;
@@ -6,6 +7,9 @@ using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.DTOs.Contracts;
 using WsUtaSystem.Application.DTOs.ContractStatusHistory;
+using WsUtaSystem.Application.DTOs.Provisioning;
+using WsUtaSystem.Application.DTOs.Reports;
+using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.Documents.GeneratedDocuments;
@@ -26,6 +30,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
     private const string StatusPendienteFirmas = "PENDIENTE_FIRMAS";
     private const string StatusFirmadoCargado = "FIRMADO_CARGADO";
     private const string StatusFinalizado = "FINALIZADO";
+    private const string StatusVigente = "VIGENTE";
     private const string StatusAnulado = "ANULADO";
 
     private readonly IContractsRepository _repository;
@@ -38,7 +43,11 @@ public class ContractsService : Service<Contracts, int>, IContractsService
     private readonly IDocumentTemplateRepository _templateRepository;
     private readonly IDocumentGenerationService _documentGenerationService;
     private readonly IContractTypeRepository _contractTypeRepository;
+    private readonly IHttpContextAccessor _httpContext;
     private readonly ILogger<ContractsService> _logger;
+    private readonly IParametersRepository _parametersRepository;
+    // Orquestador reutilizable: centraliza EnsureEmployee + RepositoryUta + UpdateEmail + SendEmail
+    private readonly IEmployeeProvisioningOrchestrator _provisioningOrchestrator;
 
     public ContractsService(
         IContractsRepository repo,
@@ -50,19 +59,25 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         IDocumentTemplateRepository templateRepository,
         IDocumentGenerationService documentGenerationService,
         IContractTypeRepository contractTypeRepository,
-        ILogger<ContractsService> logger
+        IHttpContextAccessor httpContext,
+        ILogger<ContractsService> logger,
+        IParametersRepository parametersRepository,
+        IEmployeeProvisioningOrchestrator provisioningOrchestrator
     ) : base(repo)
     {
-        _repository                = repo                    ?? throw new ArgumentNullException(nameof(repo));
-        _db                        = db                      ?? throw new ArgumentNullException(nameof(db));
-        _emailBuilder              = emailBuilder            ?? throw new ArgumentNullException(nameof(emailBuilder));
-        _currentUser               = currentUser             ?? throw new ArgumentNullException(nameof(currentUser));
-        _employeeDetails           = employeeDetails         ?? throw new ArgumentNullException(nameof(employeeDetails));
-        _refTypes                  = refTypes                ?? throw new ArgumentNullException(nameof(refTypes));
-        _templateRepository        = templateRepository      ?? throw new ArgumentNullException(nameof(templateRepository));
-        _documentGenerationService = documentGenerationService ?? throw new ArgumentNullException(nameof(documentGenerationService));
-        _contractTypeRepository    = contractTypeRepository  ?? throw new ArgumentNullException(nameof(contractTypeRepository));
-        _logger                    = logger                  ?? throw new ArgumentNullException(nameof(logger));
+        _repository                = repo                       ?? throw new ArgumentNullException(nameof(repo));
+        _db                        = db                         ?? throw new ArgumentNullException(nameof(db));
+        _emailBuilder              = emailBuilder               ?? throw new ArgumentNullException(nameof(emailBuilder));
+        _currentUser               = currentUser                ?? throw new ArgumentNullException(nameof(currentUser));
+        _employeeDetails           = employeeDetails            ?? throw new ArgumentNullException(nameof(employeeDetails));
+        _refTypes                  = refTypes                   ?? throw new ArgumentNullException(nameof(refTypes));
+        _templateRepository        = templateRepository         ?? throw new ArgumentNullException(nameof(templateRepository));
+        _documentGenerationService = documentGenerationService  ?? throw new ArgumentNullException(nameof(documentGenerationService));
+        _contractTypeRepository    = contractTypeRepository     ?? throw new ArgumentNullException(nameof(contractTypeRepository));
+        _httpContext               = httpContext                ?? throw new ArgumentNullException(nameof(httpContext));
+        _logger                    = logger                     ?? throw new ArgumentNullException(nameof(logger));
+        _parametersRepository      = parametersRepository       ?? throw new ArgumentNullException(nameof(parametersRepository));
+        _provisioningOrchestrator  = provisioningOrchestrator  ?? throw new ArgumentNullException(nameof(provisioningOrchestrator));
     }
 
     // -------------------------------------------------------
@@ -109,8 +124,6 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             await tx.CommitAsync(ct);
         });
 
-        if (updated is not null)
-            await NotifyOnUpdateAsync(updated, ct);
     }
 
     // -------------------------------------------------------
@@ -129,6 +142,47 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         // Validar flujo solo para contratos raíz (no adendums)
         if (isRootContract)
             await ValidateCanCreateContractAsync(entity.CertificationID, ct);
+
+        // Auto-poblar régimen, modalidad y horas desde la cadena CertificationID → ContractRequest
+        // Solo si los campos no vienen ya explícitamente en el DTO
+        if (isRootContract && entity.CertificationID.HasValue
+            && (entity.LaborRegimeID is null || entity.WorkModalityID is null || entity.ContractedHours is null))
+        {
+            var requestData = await _db.Set<FinancialCertification>()
+                .AsNoTracking()
+                .Where(f => f.CertificationId == entity.CertificationID.Value)
+                .Select(f => new
+                {
+                    f.Request!.WorkModalityId,
+                    f.Request!.NumberHour,
+                })
+                .FirstOrDefaultAsync(ct);
+
+            if (requestData is not null)
+            {
+                entity.WorkModalityID  ??= requestData.WorkModalityId;
+                entity.ContractedHours ??= requestData.NumberHour > 0 ? requestData.NumberHour : null;
+            }
+
+            // LaborRegimeID: derivar desde PersonalContractTypeId del tipo de contrato
+            if (entity.LaborRegimeID is null && entity.ContractTypeID > 0)
+            {
+                var contractType = await _db.Set<ContractType>()
+                    .AsNoTracking()
+                    .Where(ct => ct.ContractTypeId == entity.ContractTypeID)
+                    .Select(ct => ct.PersonalContractTypeId)
+                    .FirstOrDefaultAsync(ct);
+
+                // PersonalContractTypeId ya migrado a CONTRACT_TYPE: 57=LOSEP, 58=LOES, 59=CT
+                entity.LaborRegimeID = contractType switch
+                {
+                    57 => 57, // LOSEP
+                    58 => 58, // LOES
+                    59 => 59, // Código del Trabajo
+                    _  => contractType  // cualquier otro valor, guardar directo
+                };
+            }
+        }
 
         // Auto-numerar si no viene código
         if (string.IsNullOrWhiteSpace(entity.ContractCode))
@@ -153,9 +207,6 @@ public class ContractsService : Service<Contracts, int>, IContractsService
 
             await tx.CommitAsync(ct);
         });
-
-        if (created is not null)
-            await NotifyOnCreateAsync(created, ct);
 
         return created!;
     }
@@ -254,8 +305,6 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             await tx.CommitAsync(ct);
         });
 
-        if (updated is not null)
-            await NotifyOnUpdateAsync(updated, ct);
     }
 
     public async Task<IReadOnlyList<int>> GetAllowedNextStatusesAsync(int currentStatusTypeId, CancellationToken ct)
@@ -317,6 +366,100 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         });
+    }
+
+    /// <summary>
+    /// Dispara el aprovisionamiento AD para el contrato indicado.
+    /// Retorna true solo si la cuenta fue creada exitosamente en esta llamada.
+    /// Si la cuenta ya existía (409) o hubo error, retorna false sin propagar excepción.
+    /// </summary>
+    /// <summary>
+    /// Dispara el aprovisionamiento de cuenta institucional para el empleado
+    /// asociado al contrato. Delega toda la lógica al <see cref="IEmployeeProvisioningOrchestrator"/>.
+    /// <para>
+    /// Retorna (true, provisioningId) si la cuenta fue creada exitosamente en AD Local.
+    /// Retorna (false, null) si el aprovisionamiento falló o la cuenta ya existía.
+    /// </para>
+    /// </summary>
+    private async Task<(bool Provisioned, Guid? ProvisioningId)> TriggerProvisioningAsync(
+        int personId, int departmentId, int contractId, int updatedBy, CancellationToken ct)
+    {
+        // Leer nombre del departamento para pasarlo al orquestador
+        string? deptName = null;
+        if (departmentId > 0)
+            deptName = await _db.Departments
+                .AsNoTracking()
+                .Where(d => d.DepartmentId == departmentId)
+                .Select(d => d.Name)
+                .FirstOrDefaultAsync(ct);
+
+        // Tipo de empleado: se lee desde el registro existente (si hay) o se usa 0 como fallback
+        // (el orquestador creará tbl_Employees con este tipo si no existe el registro)
+        var empType = await _db.Employees
+            .AsNoTracking()
+            .Where(e => e.PersonID == personId)
+            .Select(e => (int?)e.EmployeeType)
+            .FirstOrDefaultAsync(ct) ?? 0;
+
+        // JobId del contrato que se está firmando
+        var contractJobId = await _db.Contracts
+            .AsNoTracking()
+            .Where(c => c.ContractID == contractId)
+            .Select(c => c.JobID)
+            .FirstOrDefaultAsync(ct);
+
+        var token = _httpContext.HttpContext?.Request.Headers["Authorization"].FirstOrDefault()
+            ?? string.Empty;
+
+        var request = new ProvisioningOrchestrationRequest(
+            PersonId:        personId,
+            EmployeeType:    empType,
+            DepartmentId:    departmentId > 0 ? departmentId : null,
+            DepartmentName:  deptName,
+            HireDate:        null,
+            JobId:           contractJobId,
+            UpdatedBy:       updatedBy,
+            BearerToken:     token,
+            SourceReference: $"Contract:{contractId}",
+            Source:          ProvisioningSource.Contract
+        );
+
+        var result = await _provisioningOrchestrator.ExecuteAsync(request, ct);
+
+        // El orquestador ya loguea todo el detalle; aquí solo registramos el resultado final
+        if (!result.Success && !result.AlreadyExists)
+        {
+            _logger.LogWarning(
+                "[CONTRACT] Aprovisionamiento no exitoso para PersonID={PersonId} ContractId={ContractId}: {Error}",
+                personId, contractId, result.ErrorMessage);
+            return (false, null);
+        }
+
+        // Si el aprovisionamiento creó un empleado nuevo, actualizar EmployeeId en el documento generado
+        if (result.EmployeeId.HasValue)
+        {
+            var generatedDocId = await _db.Contracts
+                .AsNoTracking()
+                .Where(c => c.ContractID == contractId)
+                .Select(c => c.GeneratedDocumentId)
+                .FirstOrDefaultAsync(ct);
+
+            if (generatedDocId.HasValue)
+            {
+                await _db.GeneratedDocuments
+                    .Where(d => d.DocumentId == generatedDocId.Value)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(d => d.EmployeeId, result.EmployeeId.Value)
+                        .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
+                    ct);
+
+                _logger.LogInformation(
+                    "[CONTRACT] ✓ EmployeeId actualizado en documento. ContractId={ContractId} | DocumentId={DocId} | EmployeeId={EmployeeId}",
+                    contractId, generatedDocId.Value, result.EmployeeId.Value);
+            }
+        }
+
+        return (result.Success, null);
     }
 
     public async Task<IReadOnlyList<ContractStatusHistoryDto>> GetStatusHistoryAsync(int contractId, CancellationToken ct)
@@ -393,61 +536,6 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             fileName,
             fileId
         );
-    }
-
-    // -------------------------------------------------------
-    // Notificaciones
-    // -------------------------------------------------------
-    private async Task NotifyOnCreateAsync(Contracts created, CancellationToken ct)
-    {
-        try
-        {
-            await _currentUser.LoadBossAsync(ct);
-            var toBoss = _currentUser.BossEmail?.Trim();
-
-            if (!string.IsNullOrWhiteSpace(toBoss))
-            {
-                var body = BuildCreateEmailBody(created);
-                await _emailBuilder.TryNotifyAsync(
-                    EmailTemplateKey.AttendancePunch,
-                    $"Contrato creado: {created.ContractCode}",
-                    body,
-                    to: toBoss,
-                    timeoutSeconds: 15,
-                    ct: ct
-                );
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "CREATE contract => fallo notificando. ContractID={ContractID}", created?.ContractID);
-        }
-    }
-
-    private async Task NotifyOnUpdateAsync(Contracts updated, CancellationToken ct)
-    {
-        try
-        {
-            await _currentUser.LoadBossAsync(ct);
-            var toBoss = _currentUser.BossEmail?.Trim();
-
-            if (!string.IsNullOrWhiteSpace(toBoss))
-            {
-                var body = BuildUpdateEmailBody(updated);
-                await _emailBuilder.TryNotifyAsync(
-                    EmailTemplateKey.AttendancePunch,
-                    $"Contrato actualizado: {updated.ContractCode}",
-                    body,
-                    to: toBoss,
-                    timeoutSeconds: 15,
-                    ct: ct
-                );
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "UPDATE contract => fallo notificando. ContractID={ContractID}", updated?.ContractID);
-        }
     }
 
     // -------------------------------------------------------
@@ -556,30 +644,6 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         target.CompetitionDate = source.CompetitionDate;
     }
 
-    private static string BuildCreateEmailBody(Contracts c) => $@"
-        <h3>Nuevo contrato creado</h3>
-        <ul>
-          <li><b>Contrato:</b> {c.ContractCode}</li>
-          <li><b>PersonID:</b> {c.PersonID}</li>
-          <li><b>Tipo:</b> {c.ContractTypeID}</li>
-          <li><b>Departamento:</b> {c.DepartmentID}</li>
-          <li><b>Inicio:</b> {c.StartDate:yyyy-MM-dd}</li>
-          <li><b>Fin:</b> {c.EndDate:yyyy-MM-dd}</li>
-          <li><b>Estado:</b> {c.Status}</li>
-        </ul>";
-
-    private static string BuildUpdateEmailBody(Contracts c) => $@"
-        <h3>Contrato actualizado</h3>
-        <ul>
-          <li><b>Contrato:</b> {c.ContractCode}</li>
-          <li><b>PersonID:</b> {c.PersonID}</li>
-          <li><b>Tipo:</b> {c.ContractTypeID}</li>
-          <li><b>Departamento:</b> {c.DepartmentID}</li>
-          <li><b>Inicio:</b> {c.StartDate:yyyy-MM-dd}</li>
-          <li><b>Fin:</b> {c.EndDate:yyyy-MM-dd}</li>
-          <li><b>Estado:</b> {c.Status}</li>
-        </ul>";
-
     public async Task<GenerateContractDocumentResponse> GenerateDocumentAsync(
     int contractId,
     GenerateContractDocumentRequest request,
@@ -599,12 +663,8 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         var employeeId = await _db.Employees
             .AsNoTracking()
             .Where(e => e.PersonID == contract.PersonID)
-            .Select(e => e.EmployeeId)
+            .Select(e => (int?)e.EmployeeId)
             .FirstOrDefaultAsync(ct);
-
-        if (employeeId <= 0)
-            throw new InvalidOperationException(
-                $"No existe empleado asociado al PersonID={contract.PersonID}.");
 
         var templateId = await ResolveContractTemplateIdAsync(contract.ContractTypeID, ct);
 
@@ -631,13 +691,14 @@ public class ContractsService : Service<Contracts, int>, IContractsService
                 mergedOverrides[kvp.Key] = kvp.Value;
 
         var generateRequest = new GenerateDocumentRequest(
-            TemplateId: templateId,
-            EmployeeId: employeeId,
-            EntityType: DocumentEntityType.Contract,
-            EntityId: contract.ContractID,
-            DocumentNumber: contract.ContractCode,
-            Notes: $"Documento generado para contrato {contract.ContractID}",
-            ManualOverrides: mergedOverrides.Count > 0 ? mergedOverrides : null
+            TemplateId:      templateId,
+            EmployeeId:      employeeId > 0 ? employeeId : null,
+            EntityType:      DocumentEntityType.Contract,
+            EntityId:        contract.ContractID,
+            DocumentNumber:  contract.ContractCode,
+            Notes:           $"Documento generado para contrato {contract.ContractID}",
+            ManualOverrides: mergedOverrides.Count > 0 ? mergedOverrides : null,
+            PersonId:        contract.PersonID
         );
 
         var document = await _documentGenerationService.GenerateAsync(
@@ -721,6 +782,28 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             request.Comment,
             updatedBy,
             ct);
+
+        // Disparar aprovisionamiento AD si el tipo de contrato lo requiere (solo contratos raíz)
+        if (contract.ParentID is null)
+        {
+            var contractType = await _db.ContractType
+                .AsNoTracking()
+                .Where(x => x.ContractTypeId == contract.ContractTypeID)
+                .Select(x => new { x.RequiresAdUserCreation })
+                .FirstOrDefaultAsync(ct);
+
+            if (contractType?.RequiresAdUserCreation == true)
+            {
+                var (provisioned, provisioningId) = await TriggerProvisioningAsync(
+                    contract.PersonID, contract.DepartmentID, contractId, updatedBy, ct);
+
+                if (provisioned)
+                    await UpdateContractDocumentStatusAsync(
+                        contract, StatusVigente,
+                        "Cuenta institucional creada automáticamente al cargar documento firmado.",
+                        updatedBy, ct);
+            }
+        }
     }
 
     public async Task FinalizeDocumentAsync(
@@ -792,6 +875,16 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         contract.UpdatedAt = DateTime.Now;
         contract.UpdatedBy = updatedBy > 0 ? updatedBy : null;
 
+        // Auditoría: registrar el cambio de estado en el historial
+        _db.ContractStatusHistories.Add(new ContractStatusHistory
+        {
+            ContractID  = contract.ContractID,
+            StatusTypeID = statusId,
+            Comment     = comment,
+            ChangedBy   = updatedBy > 0 ? updatedBy : _currentUser.EmployeeId,
+            ChangedAt   = DateTime.Now,
+        });
+
         await _db.SaveChangesAsync(ct);
 
         await _documentGenerationService.UpdateStatusAsync(
@@ -828,6 +921,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         "PENDIENTE_FIRMAS" => "SIGNED",
         "FIRMADO_CARGADO"  => "SIGNED",
         "FINALIZADO"       => "APPROVED",
+        "VIGENTE"          => "APPROVED",
         "ANULADO"          => "REJECTED",
         _                  => "DRAFT"
     };
@@ -1009,5 +1103,54 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         ).FirstOrDefaultAsync(ct);
 
         return row is null ? (null, null) : (row.Name, row.JobTitle);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<ContractReportDto>> GetForReportAsync(ReportFilterDto filter, CancellationToken ct = default)
+    {
+        var query =
+            from c in _db.Contracts.AsNoTracking()
+            join p    in _db.People.AsNoTracking()         on c.PersonID        equals p.PersonId
+            join d    in _db.Departments.AsNoTracking()    on c.DepartmentID    equals d.DepartmentId
+            join ct2  in _db.ContractType.AsNoTracking()   on c.ContractTypeID  equals ct2.ContractTypeId
+            join rs   in _db.RefTypes.AsNoTracking()       on c.Status          equals rs.TypeId  into rsg
+            from rs   in rsg.DefaultIfEmpty()
+            join lr   in _db.RefTypes.AsNoTracking()       on c.LaborRegimeID   equals lr.TypeId  into lrg
+            from lr   in lrg.DefaultIfEmpty()
+            join wm   in _db.RefTypes.AsNoTracking()       on c.WorkModalityID  equals wm.TypeId  into wmg
+            from wm   in wmg.DefaultIfEmpty()
+            join j    in _db.Jobs.AsNoTracking()           on c.JobID           equals j.JobID    into jg
+            from j    in jg.DefaultIfEmpty()
+            join cbe  in _db.Employees.AsNoTracking()      on c.CreatedBy       equals cbe.EmployeeId into cbeg
+            from cbe  in cbeg.DefaultIfEmpty()
+            join cbp  in _db.People.AsNoTracking()         on cbe.PersonID      equals cbp.PersonId   into cbpg
+            from cbp  in cbpg.DefaultIfEmpty()
+            where (!filter.StartDate.HasValue         || c.StartDate >= filter.StartDate.Value)
+               && (!filter.EndDate.HasValue           || c.StartDate <= filter.EndDate.Value)
+               && (!filter.DepartmentId.HasValue      || c.DepartmentID    == filter.DepartmentId.Value)
+               && (!filter.ContractTypeId.HasValue    || c.ContractTypeID  == filter.ContractTypeId.Value)
+               && (!filter.LaborRegimeId.HasValue     || c.LaborRegimeID   == filter.LaborRegimeId.Value)
+               && (!filter.CreatedByEmployeeId.HasValue || c.CreatedBy     == filter.CreatedByEmployeeId.Value)
+               && (string.IsNullOrEmpty(filter.Status) || (rs != null && rs.Name == filter.Status))
+            orderby c.StartDate descending
+            select new ContractReportDto
+            {
+                ContractId        = c.ContractID,
+                ContractCode      = c.ContractCode,
+                PersonIdCard      = p.IdCard,
+                PersonFullName    = p.FirstName + " " + p.LastName,
+                DepartmentName    = d.Name,
+                ContractTypeName  = ct2.Name,
+                LaborRegimeName   = lr != null ? lr.Name : null,
+                WorkModalityName  = wm != null ? wm.Name : null,
+                ContractedHours   = c.ContractedHours,
+                JobTitle          = j != null ? j.Description : null,
+                CreatedByName     = cbp != null ? cbp.FirstName + " " + cbp.LastName : null,
+                StartDate         = c.StartDate,
+                EndDate           = c.EndDate,
+                StatusName        = rs != null ? rs.Name : "—"
+            };
+
+        return await query.ToListAsync(ct);
     }
 }

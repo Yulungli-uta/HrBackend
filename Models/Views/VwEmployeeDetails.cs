@@ -10,8 +10,10 @@ namespace WsUtaSystem.Models.Views
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;     
         public string IDCard { get; set; } = string.Empty;   
-        public string Email { get; set; } = string.Empty;
-        public string PersonnelEmail { get; set; } = string.Empty;
+        /// <summary>Email institucional. Puede ser null en empleados recién creados sin cuenta asignada aún.</summary>
+        public string? Email { get; set; }
+        /// <summary>Email personal. Puede ser null si no fue registrado en tbl_People.</summary>
+        public string? PersonnelEmail { get; set; }
         public int EmployeeType { get; set; }
         [Column("ContractType")]
         public string? ContractType { get; set; }

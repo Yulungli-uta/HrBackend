@@ -51,6 +51,23 @@ public static class ReportTypeMapper
             ["lateness"]          = ReportType.Lateness,
             ["overtime"]          = ReportType.Overtime,
             ["attendance-cross"]  = ReportType.AttendanceCross,
+
+            // ── Reportes v2 — Gestión RH ──────────────────────────────────────
+            // ── Reportes módulo Guardias ──────────────────────────────────────
+            ["guard-shift-planning"]    = ReportType.GuardShiftPlanning,
+            ["guard-location-coverage"] = ReportType.GuardLocationCoverage,
+            ["guard-shift-changes"]     = ReportType.GuardShiftChanges,
+            ["guard-group-roster"]      = ReportType.GuardGroupRoster,
+            ["guard-schedule-matrix"]   = ReportType.GuardScheduleMatrix,
+
+            ["contracts"]               = ReportType.Contracts,
+            ["active-contracts"]        = ReportType.ActiveContracts,
+            ["personnel-actions"]       = ReportType.PersonnelActions,
+            ["active-personnel-actions"] = ReportType.ActivePersonnelActions,
+            ["employee-history"]        = ReportType.EmployeeHistory,
+            ["granted-permissions"]     = ReportType.GrantedPermissions,
+            ["contract-requests"]       = ReportType.ContractRequests,
+            ["certifications"]          = ReportType.Certifications,
         };
 
     /// <summary>

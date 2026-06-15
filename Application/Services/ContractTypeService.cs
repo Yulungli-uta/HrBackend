@@ -57,7 +57,10 @@ public class ContractTypeService : Service<ContractType, int>, IContractTypeServ
             templateVersion,
             ct2.NumberingPrefix,
             ct2.NumberingYear,
-            ct2.NumberingLastSequence
+            ct2.NumberingLastSequence,
+            ct2.RequiresAdUserCreation,
+            ct2.RequiresAdUserDisable,
+            ct2.RequiresAdGroupAssignment
         );
     }
 

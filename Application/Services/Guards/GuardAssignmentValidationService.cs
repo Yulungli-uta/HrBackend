@@ -119,6 +119,43 @@ public class GuardAssignmentValidationService : IGuardAssignmentValidationServic
             }
         }
 
+        // 4. Verificar descanso mínimo entre turnos consecutivos
+        if (schedule is not null)
+        {
+            var restSettings = await _db.Set<GuardSetting>()
+                .Where(s => s.SettingKey == "MINIMUM_REST_HOURS" || s.SettingKey == "MINIMUM_REST_SEVERITY")
+                .ToDictionaryAsync(s => s.SettingKey, s => s.SettingValue, ct);
+
+            if (restSettings.TryGetValue("MINIMUM_REST_HOURS", out var minRestStr) &&
+                double.TryParse(minRestStr, out var minRestHours))
+            {
+                var currentStart = dto.WorkDate.ToDateTime(schedule.EntryTime);
+
+                var previousShift = await _db.Set<GuardShiftPlanning>()
+                    .Where(p => p.EmployeeId == dto.EmployeeId
+                        && p.WorkDate < dto.WorkDate
+                        && p.IsActiveForAssignment)
+                    .Include(p => p.Schedule)
+                    .OrderByDescending(p => p.WorkDate)
+                    .FirstOrDefaultAsync(ct);
+
+                if (previousShift?.Schedule is not null)
+                {
+                    var prevEnd = previousShift.Schedule.CrossesMidnight
+                        ? previousShift.WorkDate.AddDays(1).ToDateTime(previousShift.Schedule.ExitTime)
+                        : previousShift.WorkDate.ToDateTime(previousShift.Schedule.ExitTime);
+
+                    var restHours = (currentStart - prevEnd).TotalHours;
+                    if (restHours >= 0 && restHours < minRestHours)
+                    {
+                        var severity = restSettings.TryGetValue("MINIMUM_REST_SEVERITY", out var sev) ? sev : "WARNING";
+                        results.Add(("REST_HOURS", "FAILED", severity,
+                            $"Descanso insuficiente: {restHours:F1}h previas (mínimo requerido: {minRestHours}h)."));
+                    }
+                }
+            }
+        }
+
         return BuildResult(results, dto, typeIds, null);
     }
 

@@ -17,6 +17,34 @@ public record ReportFilterDto
     public bool? IncludeInactive { get; init; }
     public int? EmployeeTypeId { get; init; }
 
+    /// <summary>Filtra por tipo de contrato (ID de tbl_ContractType). Null = todos.</summary>
+    public int? ContractTypeId { get; init; }
+
+    /// <summary>Filtra por régimen laboral (TypeId de ref_Types categoría LABOR_REGIME). Null = todos.</summary>
+    public int? LaborRegimeId { get; init; }
+
+    /// <summary>Filtra contratos por el empleado que los creó (ID de tbl_Employees). Null = todos.</summary>
+    public int? CreatedByEmployeeId { get; init; }
+
+    /// <summary>Filtra acciones de personal por tipo (ID de tbl_PersonnelActionTypes). Null = todos.</summary>
+    public int? ActionTypeId { get; init; }
+
+    /// <summary>Filtra por estado (ej: "VIGENTE", "FIRMADO_CARGADO", "ANULADO"). Null = todos.</summary>
+    public string? Status { get; init; }
+
+    /// <summary>Filtra por ubicación de servicio (ID de tbl_GuardServiceLocations). Null = todas.</summary>
+    public int? LocationId { get; init; }
+
+    /// <summary>Filtra por grupo de rotación de guardias (ID de tbl_GuardRotationGroups). Null = todos.</summary>
+    public int? GroupId { get; init; }
+
+    /// <summary>
+    /// Filtra acciones de personal por categoría funcional.
+    /// Valores: MOVEMENT, ENTRY, ECONOMIC, LEAVE, DISCIPLINARY, EXIT.
+    /// Null o vacío = todas las categorías.
+    /// </summary>
+    public string[]? ActionCategories { get; init; }
+
     /// <summary>
     /// Orientación de página para el PDF generado.
     /// <para>

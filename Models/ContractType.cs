@@ -30,6 +30,17 @@ namespace WsUtaSystem.Models
         /// <summary>Último número de secuencia emitido para el año actual.</summary>
         public int NumberingLastSequence { get; set; } = 0;
 
+        // ── Integración Active Directory ─────────────────────────────────────────
+
+        /// <summary>Si verdadero, al vincular este tipo de contrato se debe crear un usuario en AD local.</summary>
+        public bool RequiresAdUserCreation { get; set; } = false;
+
+        /// <summary>Si verdadero, al finalizar o revocar este contrato se debe deshabilitar el usuario en AD local.</summary>
+        public bool RequiresAdUserDisable { get; set; } = false;
+
+        /// <summary>Si verdadero, al vincular este tipo de contrato se deben asignar grupos/roles en AD local.</summary>
+        public bool RequiresAdGroupAssignment { get; set; } = false;
+
         public DateTime? CreatedAt { get; set; }
         public int? CreatedBy { get; set; }
         public DateTime? UpdatedAt { get; set; }

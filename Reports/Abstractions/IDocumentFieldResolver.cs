@@ -20,8 +20,9 @@ public interface IDocumentFieldResolver
     /// <param name="ct">Token de cancelación.</param>
     Task<Dictionary<string, string>> ResolveAsync(
         IReadOnlyList<DocumentTemplateField> fields,
-        int employeeId,
+        int? employeeId,
         int? entityId,
         Dictionary<string, string>? overrides = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        int personId = 0);
 }

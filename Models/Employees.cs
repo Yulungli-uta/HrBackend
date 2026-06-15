@@ -8,6 +8,7 @@ public class Employees : IAuditable
     public int EmployeeId { get; set; }
     public int PersonID { get; set; }
     public int EmployeeType { get; set; }
+    public int? LaborRegimeId { get; set; }
     public int? DepartmentId { get; set; }
     public int? ImmediateBossId { get; set; }
     public int? JobId { get; set; }

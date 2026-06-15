@@ -18,7 +18,7 @@ public static class ReportEndpoints
             .WithTags("Reports");
             //.RequireAuthorization();
 
-        // ==================== EMPLEADOS ====================
+        // ==================== EMPLEADOS (v1 - OBSOLETO, usar /v2/employees) ====================
 
         group.MapPost("/employees/preview", async (
             [FromBody] ReportFilterDto filter,
@@ -57,7 +57,7 @@ public static class ReportEndpoints
             return Results.Ok(response);
         })
         .WithName("PreviewEmployeesPdf")
-        .WithSummary("Vista previa del reporte de empleados en PDF")
+        .WithSummary("[OBSOLETO] Vista previa del reporte de empleados en PDF — usar POST /v2/employees/preview")
         .Produces<PreviewResponseDto>(StatusCodes.Status200OK, "application/json");
 
         group.MapPost("/employees/pdf/download", async (
@@ -98,7 +98,7 @@ public static class ReportEndpoints
         .WithSummary("Descarga del reporte de empleados en Excel")
         .Produces<FileResult>(StatusCodes.Status200OK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
-        // ==================== ASISTENCIA ====================
+        // ==================== ASISTENCIA (v1 - OBSOLETO, usar /v2/attendance) ====================
 
         group.MapPost("/attendance/preview", async (
             [FromBody] ReportFilterDto filter,
@@ -136,7 +136,7 @@ public static class ReportEndpoints
             return Results.Ok(response);
         })
         .WithName("PreviewAttendancePdf")
-        .WithSummary("Vista previa del reporte de asistencia en PDF")
+        .WithSummary("[OBSOLETO] Vista previa del reporte de asistencia en PDF — usar POST /v2/attendance/preview")
         .Produces<PreviewResponseDto>(StatusCodes.Status200OK, "application/json");
 
         group.MapPost("/attendance/pdf/download", async (
@@ -177,7 +177,7 @@ public static class ReportEndpoints
         .WithSummary("Descarga del reporte de asistencia en Excel")
         .Produces<FileResult>(StatusCodes.Status200OK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
-        // ==================== DEPARTAMENTOS ====================
+        // ==================== DEPARTAMENTOS (v1 - OBSOLETO, usar /v2/departments) ====================
 
         group.MapPost("/departments/preview", async (
             [FromBody] ReportFilterDto filter,

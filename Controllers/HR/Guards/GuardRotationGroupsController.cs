@@ -65,6 +65,18 @@ public class GuardRotationGroupsController : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("general")]
+    public async Task<IActionResult> GetGeneralGroups(CancellationToken ct) =>
+        Ok(await _svc.GetGeneralGroupsAsync(ct));
+
+    [HttpGet("general/with-subgroups")]
+    public async Task<IActionResult> GetGeneralGroupsWithSubgroups(CancellationToken ct) =>
+        Ok(await _svc.GetGeneralGroupsWithSubgroupsAsync(ct));
+
+    [HttpGet("{id:int}/subgroups")]
+    public async Task<IActionResult> GetSubgroups(int id, CancellationToken ct) =>
+        Ok(await _svc.GetSubgroupsByParentAsync(id, ct));
+
     [HttpGet("location-summary")]
     public async Task<IActionResult> GetLocationSummary(CancellationToken ct) =>
         Ok(await _svc.GetLocationSummaryAsync(ct));
@@ -72,4 +84,22 @@ public class GuardRotationGroupsController : ControllerBase
     [HttpGet("by-location/{locationKey}")]
     public async Task<IActionResult> GetByLocationKey(string locationKey, CancellationToken ct) =>
         Ok(await _svc.GetByLocationKeyAsync(locationKey, ct));
+
+    [HttpGet("{id:int}/patterns")]
+    public async Task<IActionResult> GetPatterns(int id, CancellationToken ct) =>
+        Ok(await _svc.GetGroupPatternsAsync(id, ct));
+
+    [HttpPost("{id:int}/patterns")]
+    public async Task<IActionResult> AssignPattern(int id, [FromBody] AssignPatternToGroupDto dto, CancellationToken ct)
+    {
+        var result = await _svc.AssignPatternToGroupAsync(id, dto, ct);
+        return Ok(result);
+    }
+
+    [HttpDelete("{id:int}/patterns/{groupPatternId:int}")]
+    public async Task<IActionResult> RemovePattern(int id, int groupPatternId, CancellationToken ct)
+    {
+        await _svc.RemovePatternFromGroupAsync(id, groupPatternId, ct);
+        return NoContent();
+    }
 }

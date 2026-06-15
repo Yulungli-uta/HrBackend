@@ -27,10 +27,11 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
         ArgumentNullException.ThrowIfNull(filter);
 
         var query = from action in _db.PersonnelActions.AsNoTracking()
-                    join emp in _db.Employees.AsNoTracking()
-                        on action.EmployeeId equals emp.EmployeeId
+                    join empJoin in _db.Employees.AsNoTracking()
+                        on action.EmployeeId equals (int?)empJoin.EmployeeId into empLeft
+                    from emp in empLeft.DefaultIfEmpty()
                     join person in _db.People.AsNoTracking()
-                        on emp.PersonID equals person.PersonId
+                        on action.PersonId equals person.PersonId
                     join actionType in _db.PersonnelActionTypes.AsNoTracking()
                         on action.ActionTypeId equals actionType.PersonnelActionTypeId
                     select new { action, emp, person, actionType };
@@ -58,7 +59,7 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             .Take(filter.PageSize)
             .Select(x => new PersonnelActionSummaryDto(
                 x.action.ActionId,
-                x.action.EmployeeId,
+                x.action.EmployeeId ?? 0,
                 x.person.FirstName + " " + x.person.LastName,
                 x.person.IdCard,
                 x.action.ActionTypeId,
@@ -83,10 +84,11 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
     {
         var result = await (
             from action in _db.PersonnelActions.AsNoTracking()
-            join emp in _db.Employees.AsNoTracking()
-                on action.EmployeeId equals emp.EmployeeId
+            join empJoin in _db.Employees.AsNoTracking()
+                on action.EmployeeId equals (int?)empJoin.EmployeeId into empLeft
+            from emp in empLeft.DefaultIfEmpty()
             join person in _db.People.AsNoTracking()
-                on emp.PersonID equals person.PersonId
+                on action.PersonId equals person.PersonId
             join dept in _db.Departments.AsNoTracking()
                 on emp.DepartmentId equals dept.DepartmentId into deptJoin
             from dept in deptJoin.DefaultIfEmpty()
@@ -156,9 +158,16 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 .FirstOrDefaultAsync(ct)
             : null;
 
+        var employeeTypeName = result.action.EmployeeTypeId.HasValue
+            ? await _db.RefTypes.AsNoTracking()
+                .Where(r => r.TypeId == result.action.EmployeeTypeId.Value)
+                .Select(r => r.Name)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
         return new PersonnelActionDetailDto(
             result.action.ActionId,
-            result.action.EmployeeId,
+            result.action.EmployeeId ?? 0,
             result.person.FirstName + " " + result.person.LastName,
             result.person.IdCard,
             result.dept?.Name ?? string.Empty,
@@ -190,6 +199,8 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             instProcessName,
             result.action.ManagementLevel,
             mgmtLevelName,
+            result.action.EmployeeTypeId,
+            employeeTypeName,
             result.action.GeneratedDocumentId,
             generatedDocFileName,
             result.action.ContractId,
@@ -226,17 +237,18 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
     {
         return await (
             from action in _db.PersonnelActions.AsNoTracking()
-            join emp in _db.Employees.AsNoTracking()
-                on action.EmployeeId equals emp.EmployeeId
+            join empJoin in _db.Employees.AsNoTracking()
+                on action.EmployeeId equals (int?)empJoin.EmployeeId into empLeft
+            from emp in empLeft.DefaultIfEmpty()
             join person in _db.People.AsNoTracking()
-                on emp.PersonID equals person.PersonId
+                on action.PersonId equals person.PersonId
             join actionType in _db.PersonnelActionTypes.AsNoTracking()
                 on action.ActionTypeId equals actionType.PersonnelActionTypeId
             where action.EmployeeId == employeeId
             orderby action.ActionDate descending
             select new PersonnelActionSummaryDto(
                 action.ActionId,
-                action.EmployeeId,
+                action.EmployeeId ?? 0,
                 person.FirstName + " " + person.LastName,
                 person.IdCard,
                 action.ActionTypeId,

@@ -245,12 +245,20 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
 
     public async Task<GeneratePreviewResponseDto> GeneratePreviewAsync(GeneratePreviewRequestDto dto, CancellationToken ct)
     {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (dto.StartDate < today)
+            throw new InvalidOperationException($"No se puede generar planificación para fechas pasadas. La fecha de inicio debe ser {today:dd/MM/yyyy} o posterior.");
+
         var (items, restDays) = await RunGenerationLogicAsync(dto, dryRun: true, ct);
         return BuildPreviewResponse(items, restDays);
     }
 
     public async Task<GuardShiftPlanningResultDto> GenerateConfirmAsync(GeneratePreviewRequestDto dto, CancellationToken ct)
     {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (dto.StartDate < today)
+            throw new InvalidOperationException($"No se puede generar planificación para fechas pasadas. La fecha de inicio debe ser {today:dd/MM/yyyy} o posterior.");
+
         var (items, _) = await RunGenerationLogicAsync(dto, dryRun: false, ct);
         await _db.SaveChangesAsync(ct);
 
@@ -269,7 +277,7 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
     {
         var query = _db.GuardShiftPlannings
             .Include(p => p.Employee).ThenInclude(e => e!.People)
-            .Include(p => p.Location)
+            .Include(p => p.Location).ThenInclude(l => l!.Parent)
             .Include(p => p.Schedule)
             .Include(p => p.StatusType)
             .Include(p => p.Changes.Where(c => c.IsActiveForAttendance))
@@ -289,15 +297,47 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
         for (var d = filter.StartDate; d <= filter.EndDate; d = d.AddDays(1))
             dates.Add(d);
 
+        // Cargar asignaciones individuales de sub-ubicación para los empleados en el tablero
+        var employeeIds = plannings.Select(p => p.EmployeeId).Distinct().ToList();
+        var empSubLocations = await _db.Set<GuardLocationRotationAssignment>()
+            .Include(a => a.Location).ThenInclude(l => l!.Parent)
+            .Include(a => a.Period)
+            .Where(a => a.EmployeeId != null
+                     && employeeIds.Contains(a.EmployeeId!.Value)
+                     && a.IsActive
+                     && a.Period!.StartDate <= filter.EndDate
+                     && a.Period.EndDate >= filter.StartDate)
+            .ToListAsync(ct);
+
+        // Prioridad: asignación individual más reciente por empleado
+        var empLocationLookup = empSubLocations
+            .GroupBy(a => a.EmployeeId!.Value)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderByDescending(a => a.Period!.StartDate).First()
+            );
+
+        // Función para resolver la ubicación efectiva de un planning (sub-ubicación o la del planning)
+        (int id, string name, string? code, int? parentId, string? parentName) EffectiveLocation(GuardShiftPlanning p)
+        {
+            if (empLocationLookup.TryGetValue(p.EmployeeId, out var empAssign))
+                return (empAssign.LocationId, empAssign.Location?.LocationName ?? "", empAssign.Location?.LocationCode,
+                        empAssign.Location?.ParentLocationId, empAssign.Location?.Parent?.LocationName);
+            return (p.LocationId, p.Location?.LocationName ?? "", p.Location?.LocationCode,
+                    p.Location?.ParentLocationId, p.Location?.Parent?.LocationName);
+        }
+
+        // Agrupar por ubicación efectiva + turno
         var rowGroups = plannings
-            .GroupBy(p => new { p.LocationId, ScheduleCode = p.Schedule?.ScheduleCode ?? "" })
-            .OrderBy(g => g.First().Location?.LocationName ?? "")
+            .GroupBy(p => new { EffLoc = EffectiveLocation(p).id, ScheduleCode = p.Schedule?.ScheduleCode ?? "" })
+            .OrderBy(g => { var (_, name, _, _, _) = EffectiveLocation(g.First()); return name; })
             .ThenBy(g => g.Key.ScheduleCode);
 
         var rows = rowGroups.Select(group =>
         {
             var sample = group.First();
-            var rowKey = $"{sample.Location?.LocationCode ?? sample.LocationId.ToString()}_{sample.Schedule?.ScheduleCode ?? "X"}";
+            var (locId, locName, locCode, parentLocId, parentLocName) = EffectiveLocation(sample);
+            var rowKey = $"{locCode ?? locId.ToString()}_{sample.Schedule?.ScheduleCode ?? "X"}";
 
             var cells = dates.Select(date =>
             {
@@ -309,7 +349,10 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
                         p.EmployeeId,
                         $"{p.Employee?.People?.FirstName} {p.Employee?.People?.LastName}",
                         activeChange is not null,
-                        p.PlanningId
+                        p.PlanningId,
+                        p.GroupId,
+                        p.Group?.Name,
+                        p.Group?.ColorCode
                     );
                 }).ToList();
 
@@ -323,8 +366,9 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
             }).ToList();
 
             return new ScheduleBoardRowDto(
-                rowKey, sample.LocationId,
-                sample.Location?.LocationName ?? "", sample.Location?.LocationCode,
+                rowKey, locId,
+                locName, locCode,
+                parentLocId, parentLocName,
                 sample.Schedule?.ScheduleCode ?? "", sample.Schedule?.Description ?? "",
                 cells
             );
@@ -394,6 +438,102 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
             c.IsActiveForAttendance, c.Reason, c.RequestedAt, c.RequestedBy, null,
             c.ApprovedBy, null, c.ApprovedAt, c.RejectionReason);
 
+    public async Task<GuardReadinessCheckDto> GetReadinessCheckAsync(DateOnly targetDate, CancellationToken ct)
+    {
+        var items = new List<GuardReadinessItemDto>();
+
+        // 1. Existen grupos activos con empleados
+        var groupsWithEmployees = await _db.GuardRotationGroups
+            .Where(g => g.Employees.Any(ge => ge.IsActive))
+            .CountAsync(ct);
+
+        items.Add(new GuardReadinessItemDto(
+            "GROUPS_WITH_EMPLOYEES",
+            "Grupos con empleados asignados",
+            groupsWithEmployees > 0,
+            groupsWithEmployees > 0
+                ? $"{groupsWithEmployees} grupo(s) con empleados activos."
+                : "No hay grupos de rotación con empleados activos."
+        ));
+
+        // 2. Grupos activos tienen patrón de rotación para la fecha
+        var groupsTotal = await _db.GuardRotationGroups.CountAsync(ct);
+        var groupsWithPattern = await _db.GuardGroupRotationPatterns
+            .Where(gp => gp.IsActive && gp.ValidFrom <= targetDate && (gp.ValidTo == null || gp.ValidTo >= targetDate))
+            .Select(gp => gp.GroupId)
+            .Distinct()
+            .CountAsync(ct);
+
+        var patternOk = groupsTotal > 0 && groupsWithPattern == groupsTotal;
+        items.Add(new GuardReadinessItemDto(
+            "GROUPS_WITH_PATTERN",
+            "Grupos con patrón de rotación activo",
+            patternOk,
+            patternOk
+                ? $"Todos los grupos ({groupsWithPattern}) tienen patrón activo para la fecha."
+                : $"{groupsWithPattern} de {groupsTotal} grupo(s) tienen patrón activo. Asigna patrón a los grupos restantes."
+        ));
+
+        // 3. Existe un periodo de rotación de ubicaciones activo que cubra la fecha
+        var activePeriod = await _db.GuardLocationRotationPeriods
+            .Where(p => p.IsActive && p.StartDate <= targetDate && p.EndDate >= targetDate)
+            .FirstOrDefaultAsync(ct);
+
+        items.Add(new GuardReadinessItemDto(
+            "ACTIVE_ROTATION_PERIOD",
+            "Periodo de rotación de ubicaciones activo",
+            activePeriod is not null,
+            activePeriod is not null
+                ? $"Periodo '{activePeriod.Name}' activo ({activePeriod.StartDate:dd/MM/yyyy} – {activePeriod.EndDate:dd/MM/yyyy})."
+                : $"No existe periodo de rotación de ubicaciones que cubra {targetDate:dd/MM/yyyy}. Crea uno en Rotación de Ubicaciones."
+        ));
+
+        // 4. Todos los grupos tienen asignación de ubicación en el periodo activo
+        // Se considera cubierto si tiene asignación a nivel de grupo O al menos un empleado individual asignado
+        if (activePeriod is not null)
+        {
+            var periodId = activePeriod.LocationRotationPeriodId;
+
+            var groupsWithGroupAssignment = await _db.GuardLocationRotationAssignments
+                .Where(a => a.LocationRotationPeriodId == periodId && a.IsActive && a.GroupId != null)
+                .Select(a => a.GroupId!.Value)
+                .Distinct()
+                .ToListAsync(ct);
+
+            var groupsWithEmployeeAssignment = await _db.GuardLocationRotationAssignments
+                .Where(a => a.LocationRotationPeriodId == periodId && a.IsActive && a.EmployeeId != null)
+                .Join(_db.GuardRotationGroupEmployees.Where(ge => ge.IsActive),
+                      a => a.EmployeeId, ge => ge.EmployeeId,
+                      (a, ge) => ge.GroupId)
+                .Distinct()
+                .ToListAsync(ct);
+
+            var assignedGroups = groupsWithGroupAssignment.Union(groupsWithEmployeeAssignment).Distinct().Count();
+
+            var locOk = groupsWithEmployees > 0 && assignedGroups >= groupsWithEmployees;
+            items.Add(new GuardReadinessItemDto(
+                "GROUPS_WITH_LOCATION",
+                "Grupos con ubicación asignada en el periodo",
+                locOk,
+                locOk
+                    ? $"Todos los grupos tienen ubicación asignada en el periodo activo."
+                    : $"{assignedGroups} de {groupsWithEmployees} grupo(s) con empleados tienen ubicación asignada. Completa las asignaciones en el periodo '{activePeriod.Name}'."
+            ));
+        }
+        else
+        {
+            items.Add(new GuardReadinessItemDto(
+                "GROUPS_WITH_LOCATION",
+                "Grupos con ubicación asignada en el periodo",
+                false,
+                "Requiere un periodo de rotación activo (ver punto anterior)."
+            ));
+        }
+
+        var isReady = items.All(i => i.Passed);
+        return new GuardReadinessCheckDto(isReady, items);
+    }
+
     // ─── Helpers de generación ──────────────────────────────────────────────
 
     private async Task<(List<GeneratePreviewItemDto> items, int restDays)> RunGenerationLogicAsync(
@@ -411,15 +551,21 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
             .Where(r => r.Category == "GUARD_PLANNING_STATUS" && r.Name == "PLANNED")
             .Select(r => r.TypeId).FirstOrDefaultAsync(ct);
 
-        // Precargar horarios para eficiencia
         var scheduleMap = await _db.Schedules
             .ToDictionaryAsync(s => s.ScheduleId, s => s, ct);
 
-        // Precargar nombre de ubicación si se proporcionó
-        string? locationName = null;
+        // Precarga: periodos de rotación de ubicación activos en el rango
+        var locationRotationPeriods = await _db.GuardLocationRotationPeriods
+            .Where(p => p.IsActive && p.StartDate <= dto.EndDate && p.EndDate >= dto.StartDate)
+            .Include(p => p.Assignments.Where(a => a.IsActive))
+                .ThenInclude(a => a.Location)
+            .ToListAsync(ct);
+
+        // Nombre de la ubicación solicitada por el usuario (fallback paso 4)
+        string? fallbackLocationName = null;
         if (dto.LocationId.HasValue)
         {
-            locationName = await _db.Set<WsUtaSystem.Models.Guards.GuardServiceLocation>()
+            fallbackLocationName = await _db.Set<WsUtaSystem.Models.Guards.GuardServiceLocation>()
                 .Where(l => l.LocationId == dto.LocationId)
                 .Select(l => l.LocationName)
                 .FirstOrDefaultAsync(ct);
@@ -442,6 +588,15 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
             var activeEmployees = await _groupRepo.GetActiveEmployeesAsync(group.GroupId, dto.StartDate, ct);
             if (!activeEmployees.Any()) continue;
 
+            // Precarga: condiciones especiales de empleados del grupo válidas en el rango
+            var empIds = activeEmployees.Select(e => e.EmployeeId).ToList();
+            var specialRules = await _db.GuardEmployeeSpecialRules
+                .Where(r => r.IsActive && empIds.Contains(r.EmployeeId)
+                    && r.ValidFrom <= dto.EndDate && (r.ValidTo == null || r.ValidTo >= dto.StartDate))
+                .Include(r => r.FixedLocation)
+                .Include(r => r.FixedSchedule)
+                .ToListAsync(ct);
+
             for (var date = dto.StartDate; date <= dto.EndDate; date = date.AddDays(1))
             {
                 int cyclePos = ((date.DayNumber - groupPattern.StartCycleDate.DayNumber) % pattern.CycleDays + pattern.CycleDays) % pattern.CycleDays;
@@ -454,22 +609,85 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
                     if (dto.IncludeRestDays)
                     {
                         foreach (var emp in activeEmployees)
-                            items.Add(MakePreviewItem(emp, group, dto.LocationId, locationName, date, 0, null, "Libre", cycleDay, false, false, null, null, true, true));
+                            items.Add(MakePreviewItem(emp, group, null, null, date, 0, null, "Libre", cycleDay, false, false, null, null, true, true));
                     }
                     continue;
                 }
 
                 if (!patternDetail.ScheduleId.HasValue) continue;
-                scheduleMap.TryGetValue(patternDetail.ScheduleId.Value, out var schedule);
 
                 foreach (var emp in activeEmployees)
                 {
                     if (dto.EmployeeId.HasValue && emp.EmployeeId != dto.EmployeeId) continue;
 
+                    // Condición especial activa del empleado en esta fecha
+                    var rule = specialRules
+                        .Where(r => r.EmployeeId == emp.EmployeeId
+                            && r.ValidFrom <= date && (r.ValidTo == null || r.ValidTo >= date))
+                        .OrderByDescending(r => r.ValidFrom)
+                        .FirstOrDefault();
+
+                    // Solo días hábiles: omitir fin de semana si la regla lo requiere
+                    if (rule?.OnlyWeekDays == true &&
+                        (date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday))
+                    {
+                        restDays++;
+                        if (dto.IncludeRestDays)
+                            items.Add(MakePreviewItem(emp, group, null, null, date, 0, null, "Libre (fin de semana)", cycleDay, false, false, null, null, true, true));
+                        continue;
+                    }
+
+                    // Horario efectivo: FixedScheduleId de condición especial sobreescribe patrón
+                    var effectiveScheduleId = rule?.FixedScheduleId ?? patternDetail.ScheduleId.Value;
+                    scheduleMap.TryGetValue(effectiveScheduleId, out var schedule);
+
+                    // Sin turno nocturno: omitir si la regla lo prohíbe
+                    if (rule?.NoNightShift == true && IsNightSchedule(schedule))
+                    {
+                        restDays++;
+                        if (dto.IncludeRestDays)
+                            items.Add(MakePreviewItem(emp, group, null, null, date, 0, null, "Libre (sin noche)", cycleDay, false, false, null, null, true, true));
+                        continue;
+                    }
+
+                    // ── Resolución de ubicación (5 pasos) ────────────────────
+                    int? resolvedLocationId;
+                    string? resolvedLocationName;
+
+                    if (rule?.FixedLocationId is not null)
+                    {
+                        // Paso 1: ubicación fija en condición especial del empleado
+                        resolvedLocationId = rule.FixedLocationId;
+                        resolvedLocationName = rule.FixedLocation?.LocationName;
+                    }
+                    else
+                    {
+                        // Pasos 2 y 3: rotación de ubicación (empleado > grupo)
+                        (resolvedLocationId, resolvedLocationName) =
+                            ResolveLocationFromRotationPeriods(locationRotationPeriods, group.GroupId, emp.EmployeeId, date);
+                    }
+
+                    if (resolvedLocationId is null)
+                    {
+                        // Paso 4: fallback explícito dto.LocationId
+                        resolvedLocationId = dto.LocationId;
+                        resolvedLocationName = fallbackLocationName;
+                    }
+
+                    if (resolvedLocationId is null)
+                    {
+                        // Paso 5: sin ubicación → conflicto MISSING_LOCATION
+                        items.Add(MakePreviewItem(
+                            emp, group, null, null, date,
+                            effectiveScheduleId, schedule?.ScheduleCode, schedule?.Description ?? "",
+                            cycleDay, false, true, "MISSING_LOCATION",
+                            "No se encontró ubicación para el empleado en esta fecha.", false, false));
+                        continue;
+                    }
+
                     var hasExisting = await _repo.HasActiveShiftOnDateAsync(emp.EmployeeId, date, null, ct);
                     bool willSkip = hasExisting && dto.RegenerateMode != "CANCEL_AND_RECREATE";
 
-                    // Cancelar existente si modo CANCEL_AND_RECREATE y no es dry run
                     if (hasExisting && !dryRun && dto.RegenerateMode == "CANCEL_AND_RECREATE")
                     {
                         var existing = await _db.GuardShiftPlannings
@@ -478,7 +696,6 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
                         willSkip = false;
                     }
 
-                    // Validar conflictos
                     string? conflictType = null;
                     string? conflictMessage = null;
                     bool hasConflict = false;
@@ -486,7 +703,7 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
                     if (!willSkip)
                     {
                         var validateReq = new ValidateGuardAssignmentRequestDto(
-                            emp.EmployeeId, dto.LocationId ?? 0, date, patternDetail.ScheduleId.Value, null, false);
+                            emp.EmployeeId, resolvedLocationId.Value, date, effectiveScheduleId, null, false);
                         var validation = await _validationService.ValidateAsync(validateReq, ct);
 
                         if (!validation.CanAssign)
@@ -498,16 +715,15 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
                         }
                     }
 
-                    // Agregar a planificación si no hay conflicto, no se omite y es confirm
-                    if (!dryRun && !willSkip && !hasConflict && dto.LocationId.HasValue)
+                    if (!dryRun && !willSkip && !hasConflict)
                     {
                         var planning = new WsUtaSystem.Models.Guards.GuardShiftPlanning
                         {
                             EmployeeId = emp.EmployeeId,
                             GroupId = group.GroupId,
-                            LocationId = dto.LocationId.Value,
+                            LocationId = resolvedLocationId.Value,
                             WorkDate = date,
-                            ScheduleId = patternDetail.ScheduleId.Value,
+                            ScheduleId = effectiveScheduleId,
                             PlanningSourceTypeId = sourceTypeId,
                             StatusTypeId = statusTypeId,
                             IsAutoGenerated = true,
@@ -516,13 +732,9 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
                         await _db.GuardShiftPlannings.AddAsync(planning, ct);
                     }
 
-                    var empName = $"{emp.Employee?.People?.FirstName} {emp.Employee?.People?.LastName}".Trim();
-                    if (string.IsNullOrWhiteSpace(empName)) empName = emp.EmployeeId.ToString();
-
                     items.Add(MakePreviewItem(
-                        emp, group, dto.LocationId, locationName, date,
-                        patternDetail.ScheduleId.Value,
-                        schedule?.ScheduleCode, schedule?.Description ?? "",
+                        emp, group, resolvedLocationId, resolvedLocationName, date,
+                        effectiveScheduleId, schedule?.ScheduleCode, schedule?.Description ?? "",
                         cycleDay, willSkip, hasConflict, conflictType, conflictMessage,
                         !hasConflict && !willSkip, false));
                 }
@@ -563,6 +775,20 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
 
         if (dto.Mode == "BY_GROUP" && dto.GroupId.HasValue)
             query = query.Where(g => g.GroupId == dto.GroupId.Value);
+        else if (dto.Mode == "BY_EMPLOYEE" && dto.EmployeeId.HasValue)
+            query = query.Where(g => g.Employees.Any(e => e.EmployeeId == dto.EmployeeId && e.IsActive));
+        else if (dto.Mode == "BY_LOCATION" && dto.LocationId.HasValue)
+        {
+            var groupIdsForLocation = await _db.GuardLocationRotationAssignments
+                .Where(a => a.IsActive && a.LocationId == dto.LocationId && a.GroupId != null
+                    && a.Period!.IsActive
+                    && a.Period.StartDate <= dto.EndDate
+                    && a.Period.EndDate >= dto.StartDate)
+                .Select(a => a.GroupId!.Value)
+                .Distinct()
+                .ToListAsync(ct);
+            query = query.Where(g => groupIdsForLocation.Contains(g.GroupId));
+        }
 
         return await query.ToListAsync(ct);
     }
@@ -577,7 +803,42 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
             items.Count(i => i.ConflictType == "VACATION_CONFLICT"),
             items.Count(i => i.ConflictType == "DOUBLE_SHIFT"),
             items.Count(i => i.ConflictType == "OVERLAP"),
-            items.Count(i => !i.LocationId.HasValue && !i.IsRestDay),
+            items.Count(i => i.ConflictType == "MISSING_LOCATION"),
             items
         );
+
+    // Resuelve la ubicación de un empleado/grupo en una fecha usando los periodos de rotación precargados.
+    // Prioridad: asignación individual del empleado > asignación del grupo.
+    private static (int? locationId, string? locationName) ResolveLocationFromRotationPeriods(
+        List<WsUtaSystem.Models.Guards.GuardLocationRotationPeriod> periods,
+        int groupId, int employeeId, DateOnly date)
+    {
+        var activePeriodAssignments = periods
+            .Where(p => p.StartDate <= date && p.EndDate >= date)
+            .SelectMany(p => p.Assignments)
+            .ToList();
+
+        var empAssignment = activePeriodAssignments
+            .FirstOrDefault(a => a.EmployeeId == employeeId);
+        if (empAssignment is not null)
+            return (empAssignment.LocationId, empAssignment.Location?.LocationName);
+
+        var groupAssignment = activePeriodAssignments
+            .FirstOrDefault(a => a.GroupId == groupId);
+        if (groupAssignment is not null)
+            return (groupAssignment.LocationId, groupAssignment.Location?.LocationName);
+
+        return (null, null);
+    }
+
+    // Determina si un horario corresponde a turno nocturno.
+    // Usa el primer carácter del código (N=Noche) o la hora de entrada como fallback.
+    private static bool IsNightSchedule(Schedules? schedule)
+    {
+        if (schedule is null) return false;
+        if (!string.IsNullOrEmpty(schedule.ScheduleCode))
+            return schedule.ScheduleCode.StartsWith("N", StringComparison.OrdinalIgnoreCase);
+        var hour = schedule.EntryTime.Hour;
+        return hour >= 20 || hour < 6;
+    }
 }

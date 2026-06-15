@@ -15,8 +15,8 @@ public sealed class GeneratedDocument : IAuditable
     /// <summary>FK a la plantilla usada para generar el documento.</summary>
     public int TemplateId { get; set; }
 
-    /// <summary>FK al empleado al que pertenece el documento.</summary>
-    public int EmployeeId { get; set; }
+    /// <summary>FK al empleado al que pertenece el documento. NULL para nuevos ingresos hasta que el orquestador crea el registro.</summary>
+    public int? EmployeeId { get; set; }
 
     /// <summary>
     /// Tipo de entidad de negocio relacionada con el documento.
