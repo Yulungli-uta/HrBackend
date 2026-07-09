@@ -68,5 +68,11 @@ public enum DocumentEntityType
     Agreement,
 
     /// <summary>Oficio institucional.</summary>
-    Oficio
+    Oficio,
+
+    /// <summary>Certificado laboral emitido para autoservicio del empleado.</summary>
+    Certificate,
+
+    /// <summary>Carta de renuncia o jubilación generada para firma del empleado.</summary>
+    ResignationRetirement
 }

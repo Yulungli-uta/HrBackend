@@ -22,4 +22,14 @@ public class Departments : IAuditable{
     public DateTime? UpdatedAt { get; set; }
     public int? UpdatedBy { get; set; }
     public byte[]? RowVersion { get; set; }
+
+    /// <summary>
+    /// Rol institucional crítico del departamento para resolución de firmas
+    /// (FK a HR.ref_Types con Category = 'DEPARTMENT_INSTITUTIONAL_ROLE': RECTORADO, FINANCE, HUMAN_RESOURCE, etc.).
+    /// NULL para la mayoría de departamentos que no cumplen un rol de firma institucional.
+    /// </summary>
+    public int? InstitutionalRoleTypeId { get; set; }
+
+    /// <summary>Tipo de referencia del rol institucional.</summary>
+    public virtual RefTypes? InstitutionalRoleType { get; set; }
 }

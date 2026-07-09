@@ -8,10 +8,11 @@ public sealed record PersonnelActionTypeDto(
     string NumberingPrefix,
     int NumberingYear,
     int NumberingLastSequence,
-    string? TemplateCode,
+    int? DefaultTemplateId,
     bool IsActive,
     bool RequiresAdUserCreation,
     bool RequiresAdUserDisable,
     bool RequiresAdGroupAssignment,
-    string? ActionCategory
+    string? ActionCategory,
+    bool ReachesVigente
 );

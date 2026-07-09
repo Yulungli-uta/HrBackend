@@ -16,6 +16,12 @@ public sealed class PermissionTypesConfiguration : IEntityTypeConfiguration<Perm
         e.HasKey(x => x.TypeId);
         e.Property(x => x.TypeId).HasColumnName("TypeID");
         e.Property(x => x.Name).HasMaxLength(80);
+        e.Property(x => x.ContractTypeId).HasColumnName("ContractTypeID");
+
+        e.HasOne<WsUtaSystem.Models.RefTypes>()
+            .WithMany()
+            .HasForeignKey(x => x.ContractTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -76,9 +82,14 @@ public sealed class PersonnelMovementsConfiguration : IEntityTypeConfiguration<P
         e.Property(x => x.JobId).HasColumnName("JobID");
         e.Property(x => x.OriginDepartmentId).HasColumnName("OriginDepartmentID");
         e.Property(x => x.DestinationDepartmentId).HasColumnName("DestinationDepartmentID");
-        e.Property(x => x.MovementType).HasMaxLength(30);
         e.Property(x => x.DocumentLocation).HasMaxLength(255);
         e.Property(x => x.Reason).HasMaxLength(500);
         e.Property(x => x.PersonnelActionId).HasColumnName("PersonnelActionID");
+
+        e.HasOne(x => x.MovementType)
+            .WithMany()
+            .HasForeignKey(x => x.MovementTypeId)
+            .HasConstraintName("FK_PersonnelMovements_MovementType")
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

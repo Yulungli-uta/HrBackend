@@ -45,4 +45,13 @@ public interface IAttendanceCalculationsReportService
     Task<IReadOnlyList<AttendanceCrossReportDto>> GetAttendanceCrossDataAsync(
         ReportFilterDto filter,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene el detalle de marcaciones para el reporte de asistencia básico.
+    /// </summary>
+    /// <param name="filter">Filtros del reporte.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<AttendanceReportDto>> GetAttendanceDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
 }

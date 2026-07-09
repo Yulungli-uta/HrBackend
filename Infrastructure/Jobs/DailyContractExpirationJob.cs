@@ -20,8 +20,9 @@ public sealed class DailyContractExpirationJob : BaseJob
     public DailyContractExpirationJob(
         IContractExpirationService expirationService,
         IEmployeeProvisioningClient provisioningClient,
-        ILogger<DailyContractExpirationJob> logger)
-        : base(logger)
+        ILogger<DailyContractExpirationJob> logger,
+        IJobExecutionLogService jobExecutionLogService)
+        : base(logger, jobExecutionLogService)
     {
         _expirationService  = expirationService  ?? throw new ArgumentNullException(nameof(expirationService));
         _provisioningClient = provisioningClient ?? throw new ArgumentNullException(nameof(provisioningClient));

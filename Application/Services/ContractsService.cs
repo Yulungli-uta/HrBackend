@@ -17,6 +17,7 @@ using WsUtaSystem.Application.Interfaces.Repositories.Documents;
 using WsUtaSystem.Application.Interfaces.Services.Documents;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
+using WsUtaSystem.Reports.Engine;
 
 namespace WsUtaSystem.Application.Services;
 
@@ -33,6 +34,15 @@ public class ContractsService : Service<Contracts, int>, IContractsService
     private const string StatusVigente = "VIGENTE";
     private const string StatusAnulado = "ANULADO";
 
+    // HR.ref_Types (Category=DOCUMENT_TYPE) — documentos cargados en TBL_StoredFile cuyo
+    // número/fecha alimentan placeholders de plantillas de contrato.
+    private const int DocumentTypeIdResolucionCau = 2061;
+    private const int DocumentTypeIdMemorandoRectorado = 2062;
+
+    // HR.ref_Types (Category=DEPARTMENT_TYPE) — usado para resolver la Facultad real de una
+    // autoridad delegada, subiendo por ParentId si el registro quedó a nivel de Carrera/Dirección.
+    private const int DepartmentTypeIdFacultad = 128;
+
     private readonly IContractsRepository _repository;
     private readonly AppDbContext _db;
 
@@ -48,6 +58,8 @@ public class ContractsService : Service<Contracts, int>, IContractsService
     private readonly IParametersRepository _parametersRepository;
     // Orquestador reutilizable: centraliza EnsureEmployee + RepositoryUta + UpdateEmail + SendEmail
     private readonly IEmployeeProvisioningOrchestrator _provisioningOrchestrator;
+    private readonly IEmployeeLaborRegimeService _laborRegimeService;
+    private readonly IPersonnelMovementsService _movementsService;
 
     public ContractsService(
         IContractsRepository repo,
@@ -62,7 +74,9 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         IHttpContextAccessor httpContext,
         ILogger<ContractsService> logger,
         IParametersRepository parametersRepository,
-        IEmployeeProvisioningOrchestrator provisioningOrchestrator
+        IEmployeeProvisioningOrchestrator provisioningOrchestrator,
+        IEmployeeLaborRegimeService laborRegimeService,
+        IPersonnelMovementsService movementsService
     ) : base(repo)
     {
         _repository                = repo                       ?? throw new ArgumentNullException(nameof(repo));
@@ -78,6 +92,8 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         _logger                    = logger                     ?? throw new ArgumentNullException(nameof(logger));
         _parametersRepository      = parametersRepository       ?? throw new ArgumentNullException(nameof(parametersRepository));
         _provisioningOrchestrator  = provisioningOrchestrator  ?? throw new ArgumentNullException(nameof(provisioningOrchestrator));
+        _laborRegimeService        = laborRegimeService         ?? throw new ArgumentNullException(nameof(laborRegimeService));
+        _movementsService          = movementsService           ?? throw new ArgumentNullException(nameof(movementsService));
     }
 
     // -------------------------------------------------------
@@ -208,7 +224,142 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             await tx.CommitAsync(ct);
         });
 
+        // Registrar el régimen laboral del contrato (no bloquea la creación del contrato si falla).
+        if (isRootContract && created is not null && created.LaborRegimeID.HasValue)
+            await RegisterLaborRegimeFromContractAsync(created, ct);
+
+        // Registrar el movimiento (aplica a raíz y adendum) si cambia de departamento.
+        if (created is not null)
+            await RegisterMovementFromContractAsync(created, ct);
+
         return created!;
+    }
+
+    /// <summary>
+    /// Registra un movimiento de personal cuando el departamento de este contrato/adendum
+    /// difiere del departamento del contrato/adendum inmediatamente anterior de la persona
+    /// (o de <c>Employees.DepartmentId</c> si no tiene ninguno previo). Si es el mismo
+    /// departamento, no se crea nada — no hubo cambio real. No bloquea la creación del contrato.
+    /// </summary>
+    private async Task RegisterMovementFromContractAsync(Contracts contract, CancellationToken ct)
+    {
+        try
+        {
+            var employeeId = await _db.Employees
+                .AsNoTracking()
+                .Where(e => e.PersonID == contract.PersonID && e.IsActive)
+                .Select(e => e.EmployeeId)
+                .FirstOrDefaultAsync(ct);
+
+            if (employeeId == 0)
+            {
+                _logger.LogInformation(
+                    "[MOVEMENT] Registro omitido: sin empleado activo para PersonID={PersonID} (ContractID={ContractID}).",
+                    contract.PersonID, contract.ContractID);
+                return;
+            }
+
+            if (!contract.JobID.HasValue)
+            {
+                _logger.LogInformation(
+                    "[MOVEMENT] Registro omitido: contrato sin JobID. ContractID={ContractID}.",
+                    contract.ContractID);
+                return;
+            }
+
+            var previousDepartmentId = await _db.Set<Contracts>()
+                .AsNoTracking()
+                .Where(c => c.PersonID == contract.PersonID && c.ContractID != contract.ContractID)
+                .OrderByDescending(c => c.StartDate)
+                .ThenByDescending(c => c.ContractID)
+                .Select(c => (int?)c.DepartmentID)
+                .FirstOrDefaultAsync(ct);
+
+            var originDepartmentId = previousDepartmentId ?? await _db.Employees
+                .AsNoTracking()
+                .Where(e => e.EmployeeId == employeeId)
+                .Select(e => e.DepartmentId)
+                .FirstOrDefaultAsync(ct);
+
+            if (originDepartmentId == contract.DepartmentID)
+                return; // mismo departamento — no hubo cambio real
+
+            var movementTypeId = await _db.RefTypes
+                .AsNoTracking()
+                .Where(r => r.Category == "MOVEMENT_TYPE" && r.Name == "CONTRATO" && r.IsActive)
+                .Select(r => (int?)r.TypeId)
+                .FirstOrDefaultAsync(ct);
+
+            await _movementsService.CreateAsync(new PersonnelMovements
+            {
+                EmployeeId = employeeId,
+                ContractId = contract.ContractID,
+                JobId = contract.JobID.Value,
+                OriginDepartmentId = originDepartmentId,
+                DestinationDepartmentId = contract.DepartmentID,
+                MovementDate = DateOnly.FromDateTime(contract.StartDate),
+                MovementTypeId = movementTypeId,
+                IsActive = true,
+                CreatedBy = _currentUser.EmployeeId,
+                CreatedAt = DateTime.Now,
+            }, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[MOVEMENT] ERROR registrando movimiento para ContractID={ContractID}.", contract.ContractID);
+        }
+    }
+
+    /// <summary>
+    /// Da de alta (o deja igual si ya existe activo) el régimen laboral del empleado a partir
+    /// de un contrato raíz recién creado. No crea cuenta AD ni empleado nuevo: si el empleado
+    /// activo aún no existe (aprovisionamiento pendiente por otro flujo), se omite en silencio.
+    /// </summary>
+    private async Task RegisterLaborRegimeFromContractAsync(Contracts contract, CancellationToken ct)
+    {
+        try
+        {
+            var employeeId = await _db.Employees
+                .AsNoTracking()
+                .Where(e => e.PersonID == contract.PersonID && e.IsActive)
+                .Select(e => e.EmployeeId)
+                .FirstOrDefaultAsync(ct);
+
+            if (employeeId == 0)
+            {
+                _logger.LogInformation(
+                    "[LABOR-REGIME] Registro omitido: sin empleado activo para PersonID={PersonID} (ContractID={ContractID}).",
+                    contract.PersonID, contract.ContractID);
+                return;
+            }
+
+            await _laborRegimeService.CreateAsync(new DTOs.EmployeeLaborRegime.EmployeeLaborRegimeCreateDto
+            {
+                EmployeeId = employeeId,
+                LaborRegimeId = contract.LaborRegimeID!.Value,
+                DepartmentId = contract.DepartmentID,
+                JobId = contract.JobID,
+                IsIndefinite = false, // los contratos siempre son a plazo; el nombramiento se registra vía acción de personal
+                DocumentType = "CONTRACT",
+                DocumentNumber = contract.ContractCode,
+                SourceContractId = contract.ContractID,
+                EffectiveFrom = DateOnly.FromDateTime(contract.StartDate),
+            }, _currentUser.EmployeeId, ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Ya tiene ese régimen activo (ej. addendum o reintento) — no es un error de negocio bloqueante.
+            _logger.LogInformation(ex,
+                "[LABOR-REGIME] Registro omitido para ContractID={ContractID}: {Message}",
+                contract.ContractID, ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[LABOR-REGIME] ERROR registrando régimen laboral para ContractID={ContractID}.",
+                contract.ContractID);
+        }
     }
 
     public async Task ValidateCanCreateContractAsync(int? certificationId, CancellationToken ct = default)
@@ -362,6 +513,11 @@ public class ContractsService : Service<Contracts, int>, IContractsService
 
             if (toStatusName == StatusAnulado && contract.ParentID is null)
                 await ReverseContractRequestOnCancellationAsync(contractId, contract.CertificationID, ct);
+
+            // 2026-07-06: mismo control que en UploadSignedDocumentAsync — si este
+            // cambio de estado manual formaliza un adendum, anula a su padre.
+            if ((toStatusName == StatusFirmadoCargado || toStatusName == StatusVigente) && contract.ParentID.HasValue)
+                await AnnulParentContractAsync(contract.ParentID.Value, contractId, userId ?? 0, ct);
 
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
@@ -656,6 +812,20 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             .FirstOrDefaultAsync(x => x.ContractID == contractId, ct)
             ?? throw new KeyNotFoundException($"Contrato id={contractId} no existe.");
 
+        // 2026-07-06: el frontend ya oculta el botón de generar/regenerar a partir de
+        // FIRMADO_CARGADO, pero el backend no lo exigía — ForceRegenerate=true podía
+        // saltarse IsDocumentFrozen y sobreescribir el documento de un contrato ya
+        // firmado/vigente. Este bloqueo es incondicional (no se salta con ForceRegenerate).
+        var statusName = await _db.RefTypes
+            .AsNoTracking()
+            .Where(x => x.TypeId == contract.Status && x.Category == ContractStatusCategory)
+            .Select(x => x.Name)
+            .FirstOrDefaultAsync(ct);
+
+        if (statusName is not null && statusName != StatusBorrador && statusName != StatusGenerado)
+            throw new InvalidOperationException(
+                $"No se puede generar/regenerar el documento en estado '{statusName}' — el contrato ya fue firmado y cargado.");
+
         if (contract.IsDocumentFrozen && !request.ForceRegenerate)
             throw new InvalidOperationException(
                 "El documento del contrato está congelado. Use ForceRegenerate=true para regenerarlo.");
@@ -666,12 +836,21 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             .Select(e => (int?)e.EmployeeId)
             .FirstOrDefaultAsync(ct);
 
-        var templateId = await ResolveContractTemplateIdAsync(contract.ContractTypeID, ct);
+        // Si el contrato ya tiene un documento generado, reutilizar exactamente la misma versión
+        // de plantilla usada originalmente (aunque ahora esté Archived), para no alterar el
+        // contenido legal de un documento ya emitido al publicarse una nueva versión.
+        var templateId = contract.GeneratedDocumentId.HasValue
+            ? await _db.Set<GeneratedDocument>()
+                .AsNoTracking()
+                .Where(d => d.DocumentId == contract.GeneratedDocumentId.Value)
+                .Select(d => (int?)d.TemplateId)
+                .FirstOrDefaultAsync(ct)
+              ?? await ResolveContractTemplateIdAsync(contract.ContractTypeID, contract.IsDelegation, ct)
+            : await ResolveContractTemplateIdAsync(contract.ContractTypeID, contract.IsDelegation, ct);
 
         // Resolver responsables del contrato para variables de plantilla
-        var (authorityName, authorityTitle) = await ResolveEmployeeInfoAsync(contract.AuthorityNominatorId, ct);
-        var (directorName, directorTitle)   = await ResolveEmployeeInfoAsync(contract.DthDirectorId, ct);
-        var (registrarName, _)              = await ResolveEmployeeInfoAsync(contract.CreatedBy, ct);
+        var (directorName, directorTitle) = await ResolveEmployeeInfoAsync(contract.DthDirectorId, ct);
+        var (registrarName, _)            = await ResolveEmployeeInfoAsync(contract.CreatedBy, ct);
 
         var mergedOverrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         static void SetOv(Dictionary<string, string> d, string key, string? value)
@@ -681,9 +860,153 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         SetOv(mergedOverrides, "DTH_DIRECTOR_NAME",     directorName);
         SetOv(mergedOverrides, "DTH_DIRECTOR_FULLNAME", directorName);
         SetOv(mergedOverrides, "DTH_DIRECTOR_TITLE",    directorTitle);
-        SetOv(mergedOverrides, "AUTHORITY_NAME",        authorityName);
-        SetOv(mergedOverrides, "AUTHORITY_TITLE",       authorityTitle);
         SetOv(mergedOverrides, "REGISTRAR_NAME",        registrarName);
+
+        // Número del contrato, autogenerado al crear (ContractType.NumberingPrefix/Year/LastSequence).
+        // CONTRACT_NUMBER está marcado como Manual en la plantilla CONTRATO_PROFESOR_OCASIONAL,
+        // así que el resolver automático no lo toca salvo que se pase aquí como override.
+        SetOv(mergedOverrides, "CONTRACT_NUMBER", contract.ContractCode);
+
+        // Rol que desempeñará el contratado según el texto del contrato (ej. "Profesor Ocasional",
+        // "Técnico Docente"); EMPLOYEE_CONTRACT_ROLE está marcado como Manual en las plantillas,
+        // así que se resuelve aquí como override en vez de depender del resolver automático.
+        var contractTypeForRole = await _db.ContractType
+            .AsNoTracking()
+            .FirstOrDefaultAsync(ct2 => ct2.ContractTypeId == contract.ContractTypeID, ct);
+        SetOv(mergedOverrides, "EMPLOYEE_CONTRACT_ROLE", contractTypeForRole?.Name);
+
+        // Fecha de suscripción en palabras (autorización del contrato, o hoy si aún no se autoriza).
+        // CONTRATO_PROFESOR_OCASIONAL usa CONTRACT_DATE_DAY_WORDS/CONTRACT_DATE_MONTH/CONTRACT_DATE_YEAR_WORDS
+        // en vez de DATE_DAY_WORDS/DATE_MONTH_NAME/DATE_YEAR_WORDS; se escriben ambos nombres.
+        var subscriptionDate = contract.AuthorizationDate ?? DateTime.Now;
+        var dayWords   = SpanishTextHelper.DayToWords(subscriptionDate);
+        var monthName  = SpanishTextHelper.MonthName(subscriptionDate);
+        var yearWords  = SpanishTextHelper.YearToWords(subscriptionDate);
+        SetOv(mergedOverrides, "DATE_DAY_WORDS",          dayWords);
+        SetOv(mergedOverrides, "DATE_MONTH_NAME",         monthName);
+        SetOv(mergedOverrides, "DATE_YEAR_WORDS",         yearWords);
+        SetOv(mergedOverrides, "CONTRACT_DATE_DAY_WORDS", dayWords);
+        SetOv(mergedOverrides, "CONTRACT_DATE_MONTH",     monthName);
+        SetOv(mergedOverrides, "CONTRACT_DATE_YEAR_WORDS", yearWords);
+
+        // CONTRATO_PROFESOR_OCASIONAL usa DTH_REGISTRY_DATE_LONG (formato largo en palabras) en vez
+        // de DTH_REGISTRY_DATE (formato corto); se escriben ambos.
+        var registryNow = DateTime.Now;
+        SetOv(mergedOverrides, "DTH_REGISTRY_DATE", SpanishTextHelper.ShortDate(registryNow));
+        SetOv(mergedOverrides, "DTH_REGISTRY_DATE_LONG",
+            $"{registryNow.Day} de {SpanishTextHelper.MonthName(registryNow)} de {registryNow.Year}");
+
+        // ELABORATOR_FULLNAME (CONTRATO_PROFESOR_OCASIONAL) representa a quien elaboró este
+        // contrato específico — se usa el mismo valor dinámico que REGISTRAR_NAME (creador del
+        // registro) en vez de depender únicamente del nombre estático de InstitutionalConfig.
+        SetOv(mergedOverrides, "ELABORATOR_FULLNAME", registrarName);
+
+        // Remuneración y partida presupuestaria, desde la certificación financiera del contrato
+        if (contract.CertificationID.HasValue)
+        {
+            var certification = await _db.Set<FinancialCertification>()
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.CertificationId == contract.CertificationID.Value, ct);
+
+            if (certification is not null)
+            {
+                var salary = certification.RmuCon ?? certification.RmuHour ?? 0;
+                SetOv(mergedOverrides, "SALARY_WORDS",  SpanishTextHelper.AmountToWords(salary));
+                SetOv(mergedOverrides, "SALARY_AMOUNT", salary.ToString("N2"));
+                SetOv(mergedOverrides, "BUDGET_ITEM",   certification.Budget);
+                // ACCION_PERSONAL y CONTRATO_PROFESOR_OCASIONAL usan BUDGET_CODE en vez de
+                // BUDGET_ITEM; se escriben ambos nombres (mismo patrón que el resto de campos
+                // con nomenclatura divergente entre plantillas).
+                SetOv(mergedOverrides, "BUDGET_CODE",   certification.Budget);
+            }
+        }
+
+        // Número/fecha de Resolución CAU y Memorando de Rectorado: se toman del documento más
+        // reciente cargado para este contrato con el DocumentTypeId correspondiente
+        // (HR.ref_Types: RESOLUCION_CAU=2061, MEMORANDO_RECTORADO=2062), en vez de pedírselos
+        // de nuevo al usuario si ya los adjuntó en la sección de documentos del contrato.
+        var cauResolution = await _db.StoredFiles
+            .AsNoTracking()
+            .Where(f => f.EntityType == "CONTRACT" && f.EntityId == contract.ContractID.ToString()
+                     && f.DocumentTypeId == DocumentTypeIdResolucionCau && f.Status == 1)
+            .OrderByDescending(f => f.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+
+        if (cauResolution is not null)
+        {
+            SetOv(mergedOverrides, "CAU_RESOLUTION_NUMBER", cauResolution.DocumentReferenceNumber);
+            SetOv(mergedOverrides, "CAU_RESOLUTION_DATE",
+                cauResolution.DocumentReferenceDate.HasValue
+                    ? SpanishTextHelper.ShortDate(cauResolution.DocumentReferenceDate.Value.ToDateTime(TimeOnly.MinValue))
+                    : null);
+        }
+
+        var rectorMemo = await _db.StoredFiles
+            .AsNoTracking()
+            .Where(f => f.EntityType == "CONTRACT" && f.EntityId == contract.ContractID.ToString()
+                     && f.DocumentTypeId == DocumentTypeIdMemorandoRectorado && f.Status == 1)
+            .OrderByDescending(f => f.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+
+        if (rectorMemo is not null)
+        {
+            var memoDate = rectorMemo.DocumentReferenceDate.HasValue
+                ? SpanishTextHelper.ShortDate(rectorMemo.DocumentReferenceDate.Value.ToDateTime(TimeOnly.MinValue))
+                : null;
+
+            // CONTRATO_PROFESOR_OCASIONAL usa RECTOR_MEMO_*; las plantillas CONTRATO_TECNICO_* usan MEMORANDUM_*.
+            SetOv(mergedOverrides, "RECTOR_MEMO_NUMBER", rectorMemo.DocumentReferenceNumber);
+            SetOv(mergedOverrides, "RECTOR_MEMO_DATE",   memoDate);
+            SetOv(mergedOverrides, "MEMORANDUM_NUMBER",  rectorMemo.DocumentReferenceNumber);
+            SetOv(mergedOverrides, "MEMORANDUM_DATE",    memoDate);
+        }
+
+        // Si el contrato se firma por delegación, sobrescribir la autoridad firmante (Decano)
+        // y los datos de la delegación, resueltos dinámicamente desde HR.tbl_DepartmentAuthorities
+        // en vez de hardcodear nombres/resoluciones.
+        if (contract.IsDelegation && contract.AuthorityNominatorId.HasValue)
+        {
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            var delegateAuthority = await _db.DepartmentAuthorities
+                .AsNoTracking()
+                .Include(a => a.Employee).ThenInclude(e => e!.People)
+                .Include(a => a.Department)
+                .Include(a => a.AuthorityType)
+                .Where(a => a.EmployeeId == contract.AuthorityNominatorId.Value
+                         && a.IsActive
+                         && a.StartDate <= today
+                         && (a.EndDate == null || a.EndDate >= today))
+                .OrderByDescending(a => a.StartDate)
+                .FirstOrDefaultAsync(ct);
+
+            if (delegateAuthority is not null)
+            {
+                var person = delegateAuthority.Employee?.People;
+                var fullName = person is null ? null : $"{person.FirstName} {person.LastName}".Trim();
+
+                // Cargo real del delegado (Decano/Director/etc.) desde el catálogo AUTHORITY_TYPE,
+                // en vez de un fallback hardcodeado a "Decano".
+                var authorityRoleName = delegateAuthority.AuthorityType?.Name ?? delegateAuthority.Denomination;
+
+                // Nombre de la Facultad: si el registro de autoridad quedó asociado a un departamento
+                // que no es de tipo FACULTAD (ej. una Carrera), se sube por ParentId hasta encontrarla.
+                var facultyName = await ResolveFacultyNameAsync(delegateAuthority.Department, ct);
+
+                // Algunas plantillas usan AUTHORITY_NAME/AUTHORITY_ID (TÉCNICO_*) y otras
+                // AUTHORITY_FULLNAME/AUTHORITY_IDCARD (PROFESOR_OCASIONAL); se escriben ambos
+                // nombres para no romper ninguna de las dos convenciones existentes.
+                SetOv(mergedOverrides, "AUTHORITY_NAME",        fullName);
+                SetOv(mergedOverrides, "AUTHORITY_FULLNAME",    fullName);
+                SetOv(mergedOverrides, "AUTHORITY_TITLE",       delegateAuthority.Denomination ?? authorityRoleName);
+                SetOv(mergedOverrides, "AUTHORITY_ID",          person?.IdCard);
+                SetOv(mergedOverrides, "AUTHORITY_IDCARD",      person?.IdCard);
+                SetOv(mergedOverrides, "FACULTY_ROLE",          authorityRoleName);
+                SetOv(mergedOverrides, "AUTHORITY_ROLE",        authorityRoleName);
+                SetOv(mergedOverrides, "FACULTY_NAME",          facultyName ?? delegateAuthority.Department?.Name);
+                SetOv(mergedOverrides, "DELEGATION_RESOLUTION", delegateAuthority.ResolutionCode);
+                SetOv(mergedOverrides, "DELEGATION_DATE",       SpanishTextHelper.ShortDate(delegateAuthority.StartDate.ToDateTime(TimeOnly.MinValue)));
+            }
+        }
 
         // Los overrides manuales del request tienen máxima prioridad
         if (request.Overrides is not null)
@@ -783,6 +1106,13 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             updatedBy,
             ct);
 
+        // 2026-07-06: un adendum firmado y cargado anula automáticamente a su
+        // contrato padre — la cadena de vigencia pasa siempre al adendum más
+        // reciente. Antes de este control, un contrato y su adendum podían
+        // quedar "vigentes" simultáneamente sin ninguna validación.
+        if (contract.ParentID.HasValue)
+            await AnnulParentContractAsync(contract.ParentID.Value, contractId, updatedBy, ct);
+
         // Disparar aprovisionamiento AD si el tipo de contrato lo requiere (solo contratos raíz)
         if (contract.ParentID is null)
         {
@@ -793,17 +1123,20 @@ public class ContractsService : Service<Contracts, int>, IContractsService
                 .FirstOrDefaultAsync(ct);
 
             if (contractType?.RequiresAdUserCreation == true)
-            {
-                var (provisioned, provisioningId) = await TriggerProvisioningAsync(
-                    contract.PersonID, contract.DepartmentID, contractId, updatedBy, ct);
-
-                if (provisioned)
-                    await UpdateContractDocumentStatusAsync(
-                        contract, StatusVigente,
-                        "Cuenta institucional creada automáticamente al cargar documento firmado.",
-                        updatedBy, ct);
-            }
+                await TriggerProvisioningAsync(contract.PersonID, contract.DepartmentID, contractId, updatedBy, ct);
         }
+
+        // 2026-07-06: FIRMADO_CARGADO + documento cargado siempre pasa a VIGENTE,
+        // para contratos raíz Y adendums. Antes, VIGENTE solo se disparaba si el
+        // aprovisionamiento AD tenía éxito — un contrato cuyo tipo no requería AD
+        // (RequiresAdUserCreation=false), o cuyo aprovisionamiento fallaba, se
+        // quedaba en FIRMADO_CARGADO para siempre (confirmado: 0 contratos en
+        // VIGENTE en producción). El aprovisionamiento AD es un efecto secundario
+        // independiente de que el contrato esté vigente, no un prerequisito.
+        await UpdateContractDocumentStatusAsync(
+            contract, StatusVigente,
+            "Contrato vigente tras firma y carga de documento.",
+            updatedBy, ct);
     }
 
     public async Task FinalizeDocumentAsync(
@@ -894,6 +1227,48 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             ct);
     }
 
+    private static readonly string[] ClosedContractStatuses =
+        [StatusAnulado, StatusFinalizado, "VENCIDO", "RENUNCIA"];
+
+    /// <summary>
+    /// Anula el contrato padre cuando su adendum queda formalizado (firmado y
+    /// cargado). No pisa un estado terminal más específico que el padre ya
+    /// pudiera tener (ej. FINALIZADO, VENCIDO), y es un no-op si ya está anulado
+    /// (cadena de varios adendums sucesivos).
+    /// </summary>
+    private async Task AnnulParentContractAsync(int parentContractId, int addendumContractId, int updatedBy, CancellationToken ct)
+    {
+        var parent = await _db.Set<Contracts>().FirstOrDefaultAsync(x => x.ContractID == parentContractId, ct);
+        if (parent is null)
+            return;
+
+        var parentStatusName = await _db.RefTypes
+            .AsNoTracking()
+            .Where(x => x.TypeId == parent.Status && x.Category == ContractStatusCategory)
+            .Select(x => x.Name)
+            .FirstOrDefaultAsync(ct);
+
+        if (parentStatusName is not null && ClosedContractStatuses.Contains(parentStatusName))
+            return;
+
+        var anuladoId = await GetContractStatusIdAsync(StatusAnulado, ct);
+
+        parent.Status = anuladoId;
+        parent.UpdatedAt = DateTime.Now;
+        parent.UpdatedBy = updatedBy > 0 ? updatedBy : null;
+
+        _db.ContractStatusHistories.Add(new ContractStatusHistory
+        {
+            ContractID   = parentContractId,
+            StatusTypeID = anuladoId,
+            Comment      = $"Anulado automáticamente por adendum ContractID={addendumContractId}.",
+            ChangedBy    = updatedBy > 0 ? updatedBy : _currentUser.EmployeeId,
+            ChangedAt    = DateTime.Now,
+        });
+
+        await _db.SaveChangesAsync(ct);
+    }
+
     private async Task<int> GetContractStatusIdAsync(string statusName, CancellationToken ct)
     {
         var statusId = await _db.RefTypes
@@ -943,6 +1318,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
 
     private async Task<int> ResolveContractTemplateIdAsync(
         int contractTypeId,
+        bool isDelegation,
         CancellationToken ct)
     {
         var contractType = await _db.ContractType
@@ -950,13 +1326,19 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             .FirstOrDefaultAsync(x => x.ContractTypeId == contractTypeId, ct)
             ?? throw new KeyNotFoundException($"Tipo de contrato id={contractTypeId} no existe.");
 
-        if (contractType.DefaultTemplateId.HasValue)
+        // Si el contrato es por delegación y existe una plantilla de delegación vinculada, usarla;
+        // en cualquier otro caso (sin delegación, o sin plantilla de delegación configurada), usar la plantilla por defecto.
+        var preferredTemplateId = isDelegation && contractType.DelegationTemplateId.HasValue
+            ? contractType.DelegationTemplateId
+            : contractType.DefaultTemplateId;
+
+        if (preferredTemplateId.HasValue)
         {
             var template = await _templateRepository.GetByIdAsync(
-                contractType.DefaultTemplateId.Value,
+                preferredTemplateId.Value,
                 ct)
                 ?? throw new KeyNotFoundException(
-                    $"La plantilla {contractType.DefaultTemplateId.Value} no existe.");
+                    $"La plantilla {preferredTemplateId.Value} no existe.");
 
             if (template.Status != DocumentTemplateStatus.Published)
                 throw new InvalidOperationException(
@@ -1105,6 +1487,29 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         return row is null ? (null, null) : (row.Name, row.JobTitle);
     }
 
+    /// <summary>
+    /// Resuelve el nombre de la Facultad real a partir del departamento de una autoridad delegada,
+    /// subiendo por ParentId si el registro quedó asociado a un departamento de otro tipo (ej. Carrera).
+    /// Limita la subida a 5 niveles para evitar bucles ante datos jerárquicos corruptos.
+    /// </summary>
+    private async Task<string?> ResolveFacultyNameAsync(Departments? department, CancellationToken ct)
+    {
+        var current = department;
+        for (var i = 0; i < 5 && current is not null; i++)
+        {
+            if (current.DepartmentType == DepartmentTypeIdFacultad)
+                return current.Name;
+
+            if (!current.ParentId.HasValue) break;
+
+            current = await _db.Departments
+                .AsNoTracking()
+                .FirstOrDefaultAsync(d => d.DepartmentId == current!.ParentId.Value, ct);
+        }
+
+        return null;
+    }
+
     /// <inheritdoc />
     public async Task<IReadOnlyList<ContractReportDto>> GetForReportAsync(ReportFilterDto filter, CancellationToken ct = default)
     {
@@ -1125,12 +1530,15 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             from cbe  in cbeg.DefaultIfEmpty()
             join cbp  in _db.People.AsNoTracking()         on cbe.PersonID      equals cbp.PersonId   into cbpg
             from cbp  in cbpg.DefaultIfEmpty()
+            join owner in _db.Employees.AsNoTracking()     on c.PersonID        equals owner.PersonID into ownerg
+            from owner in ownerg.DefaultIfEmpty()
             where (!filter.StartDate.HasValue         || c.StartDate >= filter.StartDate.Value)
                && (!filter.EndDate.HasValue           || c.StartDate <= filter.EndDate.Value)
                && (!filter.DepartmentId.HasValue      || c.DepartmentID    == filter.DepartmentId.Value)
                && (!filter.ContractTypeId.HasValue    || c.ContractTypeID  == filter.ContractTypeId.Value)
                && (!filter.LaborRegimeId.HasValue     || c.LaborRegimeID   == filter.LaborRegimeId.Value)
                && (!filter.CreatedByEmployeeId.HasValue || c.CreatedBy     == filter.CreatedByEmployeeId.Value)
+               && (!filter.EmployeeId.HasValue        || (owner != null && owner.EmployeeId == filter.EmployeeId.Value))
                && (string.IsNullOrEmpty(filter.Status) || (rs != null && rs.Name == filter.Status))
             orderby c.StartDate descending
             select new ContractReportDto

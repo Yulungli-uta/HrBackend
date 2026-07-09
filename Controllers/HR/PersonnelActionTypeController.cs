@@ -95,4 +95,15 @@ public sealed class PersonnelActionTypeController : ControllerBase
         await _svc.DeleteAsync(id, ct);
         return NoContent();
     }
+
+    /// <summary>Actualiza únicamente la plantilla predeterminada, sin afectar el resto del tipo de acción.</summary>
+    [HttpPatch("{id:int}/default-template")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetDefaultTemplate(
+        [FromRoute] int id, [FromBody] SetDefaultTemplateRequest body, CancellationToken ct)
+    {
+        await _svc.SetDefaultTemplateAsync(id, body.TemplateId, ct);
+        return NoContent();
+    }
 }

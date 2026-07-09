@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using WsUtaSystem.Application.DTOs.EmployeeLaborRegime;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
@@ -12,16 +13,19 @@ public sealed class ContractExpirationService : IContractExpirationService
 
     private readonly AppDbContext _db;
     private readonly IEmployeeProvisioningClient _provisioningClient;
+    private readonly IEmployeeLaborRegimeService _laborRegimeService;
     private readonly ILogger<ContractExpirationService> _logger;
 
     public ContractExpirationService(
         AppDbContext db,
         IEmployeeProvisioningClient provisioningClient,
+        IEmployeeLaborRegimeService laborRegimeService,
         ILogger<ContractExpirationService> logger)
     {
-        _db                = db                ?? throw new ArgumentNullException(nameof(db));
-        _provisioningClient = provisioningClient ?? throw new ArgumentNullException(nameof(provisioningClient));
-        _logger            = logger            ?? throw new ArgumentNullException(nameof(logger));
+        _db                  = db                  ?? throw new ArgumentNullException(nameof(db));
+        _provisioningClient  = provisioningClient   ?? throw new ArgumentNullException(nameof(provisioningClient));
+        _laborRegimeService  = laborRegimeService   ?? throw new ArgumentNullException(nameof(laborRegimeService));
+        _logger              = logger               ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<int> ProcessExpiredContractsAsync(string serviceToken, CancellationToken ct = default)
@@ -95,21 +99,40 @@ public sealed class ContractExpirationService : IContractExpirationService
                         "ContractID={ContractID} marcado VENCIDO.", contract.ContractID);
                 }
 
+                employeeMap.TryGetValue(contract.PersonID, out var employeeId);
+
+                // Cerrar el régimen laboral que originó este contrato (si se registró).
+                if (employeeId > 0)
+                    await CloseLaborRegimeForContractAsync(contract.ContractID, ct);
+
                 if (contractTypes.TryGetValue(contract.ContractTypeID, out var requiresDisable)
                     && requiresDisable)
                 {
-                    if (employeeMap.TryGetValue(contract.PersonID, out var employeeId) && employeeId > 0)
+                    if (employeeId > 0)
                     {
-                        var result = await _provisioningClient.DisableAsync(employeeId, serviceToken, ct);
-                        if (result?.Success == true)
+                        var hasOtherActiveRegime = await _db.Set<EmployeeLaborRegime>()
+                            .AsNoTracking()
+                            .AnyAsync(r => r.EmployeeId == employeeId && r.IsActive, ct);
+
+                        if (hasOtherActiveRegime)
+                        {
                             _logger.LogInformation(
-                                "Cuenta AD deshabilitada: EmployeeId={EmployeeId} (ContractID={ContractID}).",
+                                "Disable omitido: EmployeeId={EmployeeId} (ContractID={ContractID}) aún tiene otro régimen laboral activo.",
                                 employeeId, contract.ContractID);
+                        }
                         else
-                            _logger.LogWarning(
-                                "Error al deshabilitar AD: EmployeeId={EmployeeId} (ContractID={ContractID}): {Error}",
-                                employeeId, contract.ContractID,
-                                result?.ErrorMessage ?? "sin respuesta de RepositoryUta");
+                        {
+                            var result = await _provisioningClient.DisableAsync(employeeId, serviceToken, ct);
+                            if (result?.Success == true)
+                                _logger.LogInformation(
+                                    "Cuenta AD deshabilitada: EmployeeId={EmployeeId} (ContractID={ContractID}).",
+                                    employeeId, contract.ContractID);
+                            else
+                                _logger.LogWarning(
+                                    "Error al deshabilitar AD: EmployeeId={EmployeeId} (ContractID={ContractID}): {Error}",
+                                    employeeId, contract.ContractID,
+                                    result?.ErrorMessage ?? "sin respuesta de RepositoryUta");
+                        }
                     }
                     else
                     {
@@ -132,5 +155,31 @@ public sealed class ContractExpirationService : IContractExpirationService
             "Proceso de contratos vencidos finalizado: {Processed}/{Total}.", processed, expired.Count);
 
         return processed;
+    }
+
+    /// <summary>Cierra el régimen laboral activo originado por este contrato, si existe.</summary>
+    private async Task CloseLaborRegimeForContractAsync(int contractId, CancellationToken ct)
+    {
+        try
+        {
+            var regimeId = await _db.Set<EmployeeLaborRegime>()
+                .AsNoTracking()
+                .Where(r => r.SourceContractId == contractId && r.IsActive)
+                .Select(r => r.Id)
+                .FirstOrDefaultAsync(ct);
+
+            if (regimeId == 0) return;
+
+            await _laborRegimeService.CloseAsync(
+                regimeId,
+                new EmployeeLaborRegimeCloseDto { EffectiveTo = DateOnly.FromDateTime(DateTime.Today) },
+                changedBy: null,
+                ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[LABOR-REGIME] ERROR cerrando régimen laboral para ContractID={ContractID}.", contractId);
+        }
     }
 }

@@ -25,6 +25,16 @@ public class ContractTypeRepository : ServiceAwareEfRepository<ContractType, int
         await _db.SaveChangesAsync(ct);
     }
 
+    public async Task SetDelegationTemplateAsync(int contractTypeId, int? templateId, CancellationToken ct = default)
+    {
+        var entity = await _db.Set<ContractType>()
+            .FirstOrDefaultAsync(x => x.ContractTypeId == contractTypeId, ct)
+            ?? throw new KeyNotFoundException($"ContractType id={contractTypeId} no existe.");
+
+        entity.DelegationTemplateId = templateId;
+        await _db.SaveChangesAsync(ct);
+    }
+
     public async Task<(string DocumentNumber, int Year, int Sequence)> ConsumeNextNumberAsync(
         int contractTypeId,
         int year,

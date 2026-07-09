@@ -39,6 +39,8 @@ public sealed class CurrentUserService : ICurrentUserService
         ?? User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
         ?? User?.FindFirst("userId")?.Value;
 
+    public Guid? UserId => Guid.TryParse(Subject, out var id) ? id : null;
+
     // ✅ Negocio (INT) - SOLO employeeId
     public int? EmployeeId
     {
@@ -132,6 +134,34 @@ public sealed class CurrentUserService : ICurrentUserService
         if (myId is null || myId <= 0) return null;
 
         return await GetMeDetailsAsync(myId.Value, ct);
+    }
+
+    public async Task<int?> GetEmployeeTypeAsync(CancellationToken ct = default)
+    {
+        // Intento 1: resolver por EmployeeId (claim del JWT).
+        var myId = EmployeeId;
+        if (myId is not null && myId > 0)
+        {
+            var me = await GetMeDetailsAsync(myId.Value, ct);
+            if (me is not null) return me.EmployeeType;
+        }
+
+        // Intento 2: resolver por email cuando el JWT no lleva el claim employeeId.
+        var email = Email;
+        if (string.IsNullOrWhiteSpace(email)) return null;
+
+        var ctx = Ctx;
+        const string emailMeCacheKey = "__CurrentUser_EmployeeDetails_ByEmail";
+        if (ctx is not null &&
+            ctx.Items.TryGetValue(emailMeCacheKey, out var cached) &&
+            cached is VwEmployeeDetails c)
+            return c.EmployeeType;
+
+        var byEmail = await _employeeDetails.GetByEmailAsync(email, ct);
+        if (byEmail is not null && ctx is not null)
+            ctx.Items[emailMeCacheKey] = byEmail;
+
+        return byEmail?.EmployeeType;
     }
 
     private CurrentBossInfo? TryGetBossFromCache()

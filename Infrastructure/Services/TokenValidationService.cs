@@ -47,6 +47,7 @@ public class TokenValidationService : ITokenValidationService
     private readonly ILogger<TokenValidationService> _logger;
     
     private readonly string _authServiceUrl;
+    private readonly string _validateTokenUrl;
     private readonly string? _clientId;
     private readonly bool _enableCaching;
     private readonly int _cacheDurationMinutes;
@@ -65,6 +66,7 @@ public class TokenValidationService : ITokenValidationService
         
         // Leer configuración
         _authServiceUrl = _configuration["AuthService:Url"] ?? "http://localhost:5010";
+        _validateTokenUrl = _configuration["AuthService:ValidateTokenUrl"] ?? "/api/auth/validate-token";
         _clientId = _configuration["AuthService:ClientId"];
         _enableCaching = bool.TryParse(_configuration["AuthService:EnableCaching"], out var caching) && caching;
         _cacheDurationMinutes = int.TryParse(_configuration["AuthService:CacheDurationMinutes"], out var duration) ? duration : 2;
@@ -114,7 +116,7 @@ public class TokenValidationService : ITokenValidationService
             };
 
             var response = await client.PostAsJsonAsync(
-                $"{_authServiceUrl}/api/auth/validate-token",
+                $"{_authServiceUrl.TrimEnd('/')}/{_validateTokenUrl.TrimStart('/')}",
                 request
             );
             //_logger.LogInformation($"***********************respuesta del consumo PostAsJsonAsync {response.StatusCode}, body: {await response.Content.ReadAsStringAsync()}");

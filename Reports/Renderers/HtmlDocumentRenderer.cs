@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 using PuppeteerSharp;
+using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using WsUtaSystem.Reports.Abstractions;
 
 namespace WsUtaSystem.Reports.Renderers
@@ -9,6 +11,14 @@ namespace WsUtaSystem.Reports.Renderers
     public sealed class HtmlDocumentRenderer : IDocumentRenderer
     {
         private readonly ILogger<HtmlDocumentRenderer> _logger;
+
+        // Convención genérica: cualquier plantilla puede declarar
+        // <meta name="DOCUMENT_CODE" content="..."/> en su <head> para que el footer del PDF
+        // muestre el código/número del documento (contrato, acción de personal, etc.) sin que
+        // este renderer necesite saber de qué tipo de documento se trata.
+        private static readonly Regex DocumentCodeMetaPattern = new(
+            "<meta\\s+name=\"DOCUMENT_CODE\"\\s+content=\"([^\"]*)\"\\s*/?>",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         public HtmlDocumentRenderer(ILogger<HtmlDocumentRenderer> logger)
         {
@@ -53,11 +63,16 @@ namespace WsUtaSystem.Reports.Renderers
                 Format = PuppeteerSharp.Media.PaperFormat.A4,
                 PrintBackground = true,
                 PreferCSSPageSize = true,
+                DisplayHeaderFooter = true,
+                // Header vacío explícito: si no se especifica, Chromium dibuja su propio
+                // encabezado por defecto (fecha + título + URL), que no queremos en el PDF.
+                HeaderTemplate = "<span></span>",
+                FooterTemplate = BuildFooterTemplate(ExtractDocumentCode(html)),
                 MarginOptions = new PuppeteerSharp.Media.MarginOptions
                 {
                     Top = "0mm",
                     Right = "0mm",
-                    Bottom = "0mm",
+                    Bottom = "12mm",
                     Left = "0mm"
                 }
             });
@@ -104,6 +119,27 @@ namespace WsUtaSystem.Reports.Renderers
             builder.AppendLine("</html>");
 
             return builder.ToString();
+        }
+
+        private static string? ExtractDocumentCode(string html)
+        {
+            var match = DocumentCodeMetaPattern.Match(html);
+            return match.Success ? match.Groups[1].Value : null;
+        }
+
+        /// <summary>
+        /// Footer genérico para cualquier documento: numeración de página (calculada por
+        /// Chromium, siempre correcta sin importar el largo del documento) + el código del
+        /// documento si la plantilla lo declaró vía <c>DOCUMENT_CODE</c>.
+        /// </summary>
+        private static string BuildFooterTemplate(string? documentCode)
+        {
+            var codeSuffix = string.IsNullOrWhiteSpace(documentCode)
+                ? string.Empty
+                : $" &mdash; {WebUtility.HtmlEncode(documentCode)}";
+
+            return $"<div style=\"width:100%;font-size:8px;color:#666;font-family:Arial,Helvetica,sans-serif;text-align:center;\">" +
+                   $"Página <span class=\"pageNumber\"></span> de <span class=\"totalPages\"></span>{codeSuffix}</div>";
         }
 
         private static async Task EnsureChromiumAsync()

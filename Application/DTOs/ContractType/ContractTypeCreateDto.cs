@@ -10,6 +10,7 @@
         public string? ContractText { get; set; }
         public string? ContractCode { get; set; }
         public int? DefaultTemplateId { get; set; }
+        public int? DelegationTemplateId { get; set; }
         public string? NumberingPrefix { get; set; }
         public bool RequiresAdUserCreation { get; set; } = false;
         public bool RequiresAdUserDisable { get; set; } = false;

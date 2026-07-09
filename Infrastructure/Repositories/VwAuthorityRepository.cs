@@ -23,11 +23,14 @@ public class VwAuthorityRepository : IVwAuthorityRepository
             .ToListAsync(ct);
 
     /// <inheritdoc/>
-    public async Task<IEnumerable<VwAuthority>> GetActiveAsync(CancellationToken ct = default) =>
-        await _db.VwAuthority.AsNoTracking()
-            .Where(a => a.IsActive && a.EndDate == null)
+    public async Task<IEnumerable<VwAuthority>> GetActiveAsync(CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        return await _db.VwAuthority.AsNoTracking()
+            .Where(a => a.IsActive && (a.EndDate == null || a.EndDate >= today))
             .OrderByDescending(a => a.StartDate)
             .ToListAsync(ct);
+    }
 
     /// <inheritdoc/>
     public async Task<IEnumerable<VwAuthority>> GetByDepartmentAsync(
@@ -61,7 +64,10 @@ public class VwAuthorityRepository : IVwAuthorityRepository
         var query = _db.VwAuthority.AsNoTracking();
 
         if (onlyActive)
-            query = query.Where(a => a.IsActive && a.EndDate == null);
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            query = query.Where(a => a.IsActive && (a.EndDate == null || a.EndDate >= today));
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {

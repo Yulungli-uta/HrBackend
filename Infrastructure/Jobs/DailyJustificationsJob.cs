@@ -12,8 +12,9 @@ public sealed class DailyJustificationsJob : BaseJob
 
     public DailyJustificationsJob(
         IJustificationsService justificationsService,
-        ILogger<DailyJustificationsJob> logger)
-        : base(logger)
+        ILogger<DailyJustificationsJob> logger,
+        IJobExecutionLogService jobExecutionLogService)
+        : base(logger, jobExecutionLogService)
     {
         _justificationsService = justificationsService;
         _logger = logger;

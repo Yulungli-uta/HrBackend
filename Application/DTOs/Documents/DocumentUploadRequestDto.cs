@@ -16,6 +16,13 @@
         public string EntityId { get; set; } = default!;
         public string? RelativePath { get; set; }
         public int? DocumentTypeId { get; set; }
+
+        /// <summary>Número de resolución/oficio (opcional), aplicado a todos los archivos del lote.</summary>
+        public string? DocumentReferenceNumber { get; set; }
+
+        /// <summary>Fecha de la resolución/oficio (opcional), aplicada a todos los archivos del lote.</summary>
+        public DateOnly? DocumentReferenceDate { get; set; }
+
         public List<IFormFile> Files { get; set; } = new();
     }
 }

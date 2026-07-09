@@ -5,6 +5,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.PersonnelActions;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Interfaces.Services.Documents;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -25,15 +26,18 @@ public sealed class PersonnelActionsController : ControllerBase
 {
     private readonly IPersonnelActionService _personnelActionService;
     private readonly ICurrentUserService _currentUser;
+    private readonly IUserAccessScopeService _accessScopeService;
     private readonly ILogger<PersonnelActionsController> _logger;
 
     public PersonnelActionsController(
         IPersonnelActionService personnelActionService,
         ICurrentUserService currentUser,
+        IUserAccessScopeService accessScopeService,
         ILogger<PersonnelActionsController> logger)
     {
         _personnelActionService = personnelActionService;
         _currentUser            = currentUser;
+        _accessScopeService     = accessScopeService;
         _logger                 = logger;
     }
 
@@ -53,7 +57,14 @@ public sealed class PersonnelActionsController : ControllerBase
         [FromQuery] PersonnelActionQueryFilter filter,
         CancellationToken ct)
     {
-        var result = await _personnelActionService.GetPagedAsync(filter, ct);
+        // null = sin restricción de departamento (GLOBAL o sin scopes asignados aún).
+        var allowedDeptIds = _currentUser.EmployeeId.HasValue
+            ? await _accessScopeService.GetAllowedDepartmentIdsAsync(_currentUser.EmployeeId.Value, "PERSONNEL_ACTIONS", ct)
+            : null;
+
+        var effectiveFilter = allowedDeptIds is null ? filter : filter with { AllowedDepartmentIds = allowedDeptIds };
+
+        var result = await _personnelActionService.GetPagedAsync(effectiveFilter, ct);
         return Ok(result);
     }
 
@@ -105,6 +116,24 @@ public sealed class PersonnelActionsController : ControllerBase
         CancellationToken ct)
     {
         var createdBy = _currentUser.EmployeeId ?? 0;
+
+        // Control de departamento se aplica solo al destino (a dónde va la persona).
+        // El origen puede ser de cualquier departamento. Si no hay destino, se valida
+        // contra el origen (única referencia de departamento disponible para la acción).
+        var departmentToValidate = request.DestinationDepartmentId ?? request.OriginDepartmentId;
+        if (_currentUser.EmployeeId.HasValue && departmentToValidate.HasValue)
+        {
+            try
+            {
+                await _accessScopeService.EnsureDepartmentAllowedAsync(
+                    _currentUser.EmployeeId.Value, "PERSONNEL_ACTIONS", departmentToValidate.Value, ct);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+            }
+        }
+
         var result = await _personnelActionService.CreateAsync(request, createdBy, ct);
 
         _logger.LogInformation(

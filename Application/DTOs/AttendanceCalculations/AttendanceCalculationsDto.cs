@@ -12,6 +12,7 @@ public class AttendanceCalculationsDto
     public int TotalWorkedMinutes { get; set; }
     public int RegularMinutes { get; set; }
     public int OvertimeMinutes { get; set; }
+    public int? DetectedOvertimeMinutes { get; set; }
     public int NightMinutes { get; set; }
     public int HolidayMinutes { get; set; }
 
@@ -32,6 +33,7 @@ public class AttendanceCalculationsDto
     public int UnpaidLeaveMinutes { get; set; }
     public int VacationDeductedMinutes { get; set; }
     public int RecoveredMinutes { get; set; }
+    public int? RecoveryExecutedMinutes { get; set; }
 
     public bool JustificationApply { get; set; }
     public bool HasPermission { get; set; }

@@ -224,4 +224,93 @@ public sealed class DocumentTemplatesController : ControllerBase
         await _fieldService.DeleteAsync(fieldId, ct);
         return NoContent();
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // VERSIONAMIENTO
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Crea una nueva versión de una plantilla existente.
+    /// La nueva versión copia el contenido y campos del origen y queda en estado Draft.
+    /// </summary>
+    [HttpPost("{id:int}/version")]
+    [ProducesResponseType(typeof(CreateVersionResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CreateVersion(
+        [FromRoute] int id,
+        [FromBody] CreateVersionRequest request,
+        CancellationToken ct)
+    {
+        var createdBy = _currentUser.EmployeeId ?? 0;
+        var result = await _templateService.CreateVersionAsync(id, request.Version, createdBy, ct);
+        return CreatedAtAction(nameof(GetById), new { id = result.NewTemplateId }, result);
+    }
+
+    /// <summary>
+    /// Obtiene el historial de versiones de todas las plantillas con el mismo código.
+    /// </summary>
+    [HttpGet("code/{code}/versions")]
+    [ProducesResponseType(typeof(IReadOnlyList<TemplateVersionSummaryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetVersionsByCode([FromRoute] string code, CancellationToken ct)
+    {
+        var result = await _templateService.GetVersionsByCodeAsync(code, ct);
+        return Ok(result);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // IMPORTACIÓN DE TEXTO DE CONTRATO
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Obtiene los tipos de contrato relevantes para una plantilla (misma familia documental
+    /// o que la tienen configurada como plantilla por defecto), para alimentar el selector
+    /// del modal de importación de texto de contrato.
+    /// </summary>
+    /// <param name="id">Identificador de la plantilla.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    [HttpGet("{id:int}/contract-types")]
+    [ProducesResponseType(typeof(IReadOnlyList<TemplateContractTypeOptionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetContractTypesForTemplate([FromRoute] int id, CancellationToken ct)
+    {
+        var result = await _templateService.GetContractTypesForTemplateAsync(id, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Obtiene los tipos de acción de personal relevantes para una plantilla, para alimentar
+    /// el diálogo "Usar esta versión" en el editor.
+    /// </summary>
+    [HttpGet("{id:int}/action-types")]
+    [ProducesResponseType(typeof(IReadOnlyList<TemplateActionTypeOptionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetActionTypesForTemplate([FromRoute] int id, CancellationToken ct)
+    {
+        var result = await _templateService.GetActionTypesForTemplateAsync(id, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Analiza el ContractText de un tipo de contrato y retorna el texto original
+    /// junto con los placeholders legados {N} detectados para facilitar la migración.
+    /// </summary>
+    [HttpGet("contract-types/{contractTypeId:int}/import-text")]
+    [ProducesResponseType(typeof(ImportContractTextResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ImportContractText([FromRoute] int contractTypeId, CancellationToken ct)
+    {
+        var result = await _templateService.ImportContractTextAsync(contractTypeId, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Extrae los tokens {{CAMPO}} de un fragmento HTML arbitrario.
+    /// Útil para detectar los campos que necesita una plantilla antes de guardarla.
+    /// </summary>
+    [HttpPost("extract-tokens")]
+    [ProducesResponseType(typeof(ExtractTokensResponse), StatusCodes.Status200OK)]
+    public IActionResult ExtractTokens([FromBody] ExtractTokensRequest request)
+    {
+        var result = _templateService.ExtractTokens(request);
+        return Ok(result);
+    }
 }

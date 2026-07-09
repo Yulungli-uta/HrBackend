@@ -16,4 +16,7 @@ public interface IPersonnelActionTypeRepository : IRepository<PersonnelActionTyp
         int personnelActionTypeId,
         int year,
         CancellationToken ct = default);
+
+    /// <summary>Actualiza únicamente la plantilla predeterminada de un tipo de acción, sin afectar el resto de campos.</summary>
+    Task SetDefaultTemplateAsync(int personnelActionTypeId, int? templateId, CancellationToken ct = default);
 }

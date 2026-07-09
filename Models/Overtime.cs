@@ -13,4 +13,8 @@ public class Overtime {
   public decimal ActualHours { get; set; }
   public decimal PaymentAmount { get; set; }
   public DateTime CreatedAt { get; set; }
+  /// <summary>Referencia al plan de horas extra (tbl_TimePlanningEmployees) que originó esta línea, cuando aplica autorización planificada.</summary>
+  public int? PlanEmployeeId { get; set; }
+  /// <summary>Régimen laboral (ref_Types CONTRACT_TYPE) que originó la línea. Siempre 57=LOSEP para filas generadas por el pipeline de asistencia, único régimen que genera horas extra.</summary>
+  public int? LaborRegimeId { get; set; }
 }

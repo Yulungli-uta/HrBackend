@@ -12,6 +12,8 @@ public class AttendanceCalculations
     public int TotalWorkedMinutes { get; set; }
     public int RegularMinutes { get; set; }
     public int OvertimeMinutes { get; set; }
+    /// <summary>Detección automática de sp_ProcessAttendanceBaseDay (trabajado fuera de horario), antes de que la planificación verificada sobreescriba OvertimeMinutes con el monto autorizado/pagado.</summary>
+    public int? DetectedOvertimeMinutes { get; set; }
     public int NightMinutes { get; set; }
     public int HolidayMinutes { get; set; }
 
@@ -31,7 +33,10 @@ public class AttendanceCalculations
     public int PaidLeaveMinutes { get; set; }
     public int UnpaidLeaveMinutes { get; set; }
     public int VacationDeductedMinutes { get; set; }
+    /// <summary>Minutos recuperados vía sp_ProcessAttendanceRecoveryDay (tbl_TimeRecoveryLogs) — perdonan la ausencia del día.</summary>
     public int RecoveredMinutes { get; set; }
+    /// <summary>Minutos ejecutados contra un plan tbl_TimePlanning (PlanType='Recovery') — abonan a tbl_TimeBalances.RecoveryPendingMin, no perdonan la ausencia del día. Campo distinto a RecoveredMinutes.</summary>
+    public int? RecoveryExecutedMinutes { get; set; }
 
     public bool JustificationApply { get; set; }
     public bool HasPermission { get; set; }

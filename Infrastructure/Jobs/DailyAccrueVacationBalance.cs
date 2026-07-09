@@ -17,8 +17,9 @@ public sealed class DailyAccrueVacationBalance : BaseJob
     public DailyAccrueVacationBalance(
         ITimeBalancesService timeService,
         ILogger<DailyAccrueVacationBalance> logger,
-        ICurrentUserService currentUserService)
-        : base(logger)
+        ICurrentUserService currentUserService,
+        IJobExecutionLogService jobExecutionLogService)
+        : base(logger, jobExecutionLogService)
     {
         _timeService = timeService;
         _logger = logger;

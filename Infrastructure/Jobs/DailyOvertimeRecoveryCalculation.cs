@@ -11,8 +11,9 @@ public sealed class DailyOvertimeRecoveryCalculation : BaseJob
     private readonly ILogger<DailyOvertimeRecoveryCalculation> _logger;
     public DailyOvertimeRecoveryCalculation(
         IAttendanceCalculationService attendanceService,
-        ILogger<DailyOvertimeRecoveryCalculation> logger)
-        : base(logger)
+        ILogger<DailyOvertimeRecoveryCalculation> logger,
+        IJobExecutionLogService jobExecutionLogService)
+        : base(logger, jobExecutionLogService)
     {
         _attendanceService = attendanceService;
         _logger = logger;   

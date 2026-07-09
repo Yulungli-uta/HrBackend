@@ -20,12 +20,14 @@ public class AttendanceCalculationService : IAttendanceCalculationService
     public async Task ProcessAttendanceRunRangeAsync(
         DateTime fromDate,
         DateTime toDate,
+        int? employeeId = null,
         CancellationToken ct = default)
     {
         _logger.LogInformation(
-            "Processing attendance pipeline from {FromDate:yyyy-MM-dd} to {ToDate:yyyy-MM-dd}",
+            "Processing attendance pipeline from {FromDate:yyyy-MM-dd} to {ToDate:yyyy-MM-dd} employeeId={EmployeeId}",
             fromDate,
-            toDate);
+            toDate,
+            employeeId);
 
         var connection = _db.Database.GetDbConnection();
         await using var command = connection.CreateCommand();
@@ -37,6 +39,7 @@ public class AttendanceCalculationService : IAttendanceCalculationService
         command.Parameters.Add(new SqlParameter("@FromDate", fromDate.Date));
         command.Parameters.Add(new SqlParameter("@ToDate", toDate.Date));
         command.Parameters.Add(new SqlParameter("@Debug", false));
+        command.Parameters.Add(new SqlParameter("@FilterEmployeeID", (object?)employeeId ?? DBNull.Value));
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(ct);
@@ -51,11 +54,13 @@ public class AttendanceCalculationService : IAttendanceCalculationService
 
     public async Task ProcessAttendanceRunDateAsync(
         DateTime workDate,
+        int? employeeId = null,
         CancellationToken ct = default)
     {
         _logger.LogInformation(
-            "Processing attendance pipeline for date {WorkDate:yyyy-MM-dd}",
-            workDate);
+            "Processing attendance pipeline for date {WorkDate:yyyy-MM-dd} employeeId={EmployeeId}",
+            workDate,
+            employeeId);
 
         var connection = _db.Database.GetDbConnection();
         await using var command = connection.CreateCommand();
@@ -66,6 +71,7 @@ public class AttendanceCalculationService : IAttendanceCalculationService
 
         command.Parameters.Add(new SqlParameter("@WorkDate", workDate.Date));
         command.Parameters.Add(new SqlParameter("@Debug", false));
+        command.Parameters.Add(new SqlParameter("@FilterEmployeeID", (object?)employeeId ?? DBNull.Value));
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(ct);
@@ -83,7 +89,7 @@ public class AttendanceCalculationService : IAttendanceCalculationService
         DateTime toDate,
         CancellationToken ct = default)
     {
-        return ProcessAttendanceRunRangeAsync(fromDate, toDate, ct);
+        return ProcessAttendanceRunRangeAsync(fromDate, toDate, employeeId: null, ct: ct);
     }
 
     [Obsolete("Legacy method. Use the attendance pipeline instead.")]

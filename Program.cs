@@ -40,6 +40,7 @@ builder.Services.AddGenericRepositories();
 
 // ── 7. Dominio RH: todos los repositorios y servicios por entidad ─────────────
 builder.Services.AddDomainServices();
+builder.Services.AddAcademicPromotionServices(builder.Configuration);
 
 // ── 8. Módulo Docflow ─────────────────────────────────────────────────────────
 builder.Services.AddDocflowServices();

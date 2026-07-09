@@ -2,18 +2,20 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
-using WsUtaSystem.Application.Interfaces.Reports;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Reports.Abstractions;
 using WsUtaSystem.Reports.Core;
 
 namespace WsUtaSystem.Reports.Sources;
 
 /// <summary>
-/// Origen de datos para el reporte de registros de asistencia (migración v1→v2).
+/// Origen de datos para el reporte de registros de asistencia.
+/// Consulta <c>HR.tbl_AttendanceCalculations</c> vía EF Core
+/// (<see cref="IAttendanceCalculationsReportService"/>), arquitectura v2 genérica.
 /// </summary>
 public sealed class AttendanceReportSource : IReportSource
 {
-    private readonly IReportRepository _repository;
+    private readonly IAttendanceCalculationsReportService _service;
     private readonly ILogger<AttendanceReportSource> _logger;
 
     public ReportType ReportType => ReportType.Attendance;
@@ -39,10 +41,10 @@ public sealed class AttendanceReportSource : IReportSource
         new(ColStatus,     "Estado",           Width: 1.2f, Alignment: ColumnAlignment.Center),
     ];
 
-    public AttendanceReportSource(IReportRepository repository, ILogger<AttendanceReportSource> logger)
+    public AttendanceReportSource(IAttendanceCalculationsReportService service, ILogger<AttendanceReportSource> logger)
     {
-        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
-        _logger     = logger     ?? throw new ArgumentNullException(nameof(logger));
+        _service = service ?? throw new ArgumentNullException(nameof(service));
+        _logger  = logger  ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<ReportDefinition> BuildAsync(ReportFilterDto filter, HttpContext context)
@@ -54,7 +56,7 @@ public sealed class AttendanceReportSource : IReportSource
             "Building Attendance report. Start={Start}, End={End}, EmployeeId={Emp}",
             filter.StartDate, filter.EndDate, filter.EmployeeId);
 
-        var data    = await _repository.GetAttendanceReportDataAsync(filter);
+        var data    = await _service.GetAttendanceDataAsync(filter, context.RequestAborted);
         var records = data?.ToList() ?? [];
 
         _logger.LogInformation("Attendance report: {Count} records.", records.Count);

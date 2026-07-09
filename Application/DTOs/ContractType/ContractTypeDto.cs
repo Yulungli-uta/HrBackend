@@ -11,6 +11,7 @@
         public string? ContractCode { get; set; }
         public int? DocumentTemplateTypeId { get; set; }
         public int? DefaultTemplateId { get; set; }
+        public int? DelegationTemplateId { get; set; }
         public string? NumberingPrefix { get; set; }
         public int NumberingYear { get; set; }
         public int NumberingLastSequence { get; set; }

@@ -60,6 +60,9 @@ public class ContractsCreateDto
     public int? AuthorityNominatorId { get; set; }
     public int? DthDirectorId { get; set; }
 
+    /// <summary>Indica si la firma se realiza por delegación (AuthorityNominatorId = el delegado).</summary>
+    public bool IsDelegation { get; set; } = false;
+
     /// <summary>
     /// Régimen laboral. Si no se envía explícitamente, el servicio lo auto-puebla
     /// desde tbl_contractRequest vía CertificationID.

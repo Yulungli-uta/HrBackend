@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
-using WsUtaSystem.Application.Services.Reports.Configuration;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Models;
 using WsUtaSystem.Reports.Abstractions;
 
@@ -25,8 +25,7 @@ namespace WsUtaSystem.Reports.Renderers;
 /// </remarks>
 public sealed class InstitutionalDocumentRenderer : IDocumentRenderer
 {
-    private readonly ReportConfiguration _config;
-    private readonly IWebHostEnvironment _env;
+    private readonly IInstitutionalLogoService _logoService;
     private readonly ILogger<InstitutionalDocumentRenderer> _logger;
 
     // Colores institucionales UTA
@@ -36,13 +35,11 @@ public sealed class InstitutionalDocumentRenderer : IDocumentRenderer
     private static readonly string TextColor      = "#1A1A1A";
 
     public InstitutionalDocumentRenderer(
-        ReportConfiguration config,
-        IWebHostEnvironment env,
+        IInstitutionalLogoService logoService,
         ILogger<InstitutionalDocumentRenderer> logger)
     {
-        _config = config ?? throw new ArgumentNullException(nameof(config));
-        _env    = env    ?? throw new ArgumentNullException(nameof(env));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _logoService = logoService ?? throw new ArgumentNullException(nameof(logoService));
+        _logger      = logger      ?? throw new ArgumentNullException(nameof(logger));
 
         QuestPDF.Settings.License = LicenseType.Community;
     }
@@ -83,15 +80,15 @@ public sealed class InstitutionalDocumentRenderer : IDocumentRenderer
 
     private void ComposeHeader(IContainer container)
     {
-        var logoPath = Path.Combine(_env.WebRootPath ?? string.Empty, _config.Images.LogoPath ?? string.Empty);
-        var hasLogo  = !string.IsNullOrEmpty(_config.Images.LogoPath) && File.Exists(logoPath);
+        var logoPath = _logoService.GetLogoFilePath();
+        var hasLogo  = logoPath is not null;
 
         container.BorderBottom(1).BorderColor(PrimaryColor).PaddingBottom(8).Row(row =>
         {
             // Logo institucional
             if (hasLogo)
             {
-                row.ConstantItem(80).Image(logoPath).FitArea();
+                row.ConstantItem(80).Image(logoPath!).FitArea();
             }
             else
             {
@@ -125,7 +122,7 @@ public sealed class InstitutionalDocumentRenderer : IDocumentRenderer
             var title = ExtractMetaValue(htmlContent, "DOCUMENT_TITLE");
             if (!string.IsNullOrEmpty(title))
             {
-                col.Item().AlignCenter().Text(title)
+                col.Item().AlignCenter().Text(System.Net.WebUtility.HtmlDecode(title))
                     .Bold().FontSize(14).FontColor("#1A1A1A");
             }
 
@@ -133,7 +130,7 @@ public sealed class InstitutionalDocumentRenderer : IDocumentRenderer
             var actionNumber = ExtractMetaValue(htmlContent, "ACTION_NUMBER");
             if (!string.IsNullOrEmpty(actionNumber))
             {
-                col.Item().AlignCenter().Text($"N° {actionNumber}")
+                col.Item().AlignCenter().Text($"N° {System.Net.WebUtility.HtmlDecode(actionNumber)}")
                     .FontSize(11).FontColor("#555555");
             }
 
@@ -154,13 +151,86 @@ public sealed class InstitutionalDocumentRenderer : IDocumentRenderer
             ? htmlContent[(bodyStart + 6)..bodyEnd]
             : htmlContent;
 
-        // Procesar secciones de tabla (<table class="doc-section">)
-        var sections = ExtractSections(body);
+        // Una tabla HTML genérica de N columnas (ej. campo *_TABLE_HTML, ver
+        // DocumentTemplateEngine — HISTORY_TABLE_HTML, DISTRIBUTIVO_TABLE_HTML,
+        // HORARIO_TABLE_HTML) se renderiza como tabla QuestPDF real; el texto antes/después
+        // sigue el parser de secciones existente (label:valor de 2 columnas o texto libre).
+        var tableMatch = System.Text.RegularExpressions.Regex.Match(
+            body, @"<table[^>]*>(.*?)</table>",
+            System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
+        if (tableMatch.Success)
+        {
+            var before = body[..tableMatch.Index];
+            var after  = body[(tableMatch.Index + tableMatch.Length)..];
+
+            RenderSections(col, ExtractSections(before));
+            col.Item().Element(c => RenderGenericTable(c, tableMatch.Groups[1].Value));
+            RenderSections(col, ExtractSections(after));
+            return;
+        }
+
+        RenderSections(col, ExtractSections(body));
+    }
+
+    private static void RenderSections(ColumnDescriptor col, List<DocumentSection> sections)
+    {
         foreach (var section in sections)
         {
             col.Item().Element(c => RenderSection(c, section));
         }
+    }
+
+    /// <summary>
+    /// Renderiza una tabla HTML de ancho arbitrario (cualquier número de columnas, con o sin
+    /// &lt;th&gt; de encabezado) como una tabla QuestPDF real. A diferencia de
+    /// <see cref="ExtractSections"/> (fijo a 2 columnas label/valor), esta soporta N columnas.
+    /// </summary>
+    private static void RenderGenericTable(IContainer container, string tableInnerHtml)
+    {
+        var rowPattern = new System.Text.RegularExpressions.Regex(
+            @"<tr[^>]*>(.*?)</tr>",
+            System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var cellPattern = new System.Text.RegularExpressions.Regex(
+            @"<t[hd][^>]*>(.*?)</t[hd]>",
+            System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        var rows = new List<(bool IsHeader, List<string> Cells)>();
+        foreach (System.Text.RegularExpressions.Match rowMatch in rowPattern.Matches(tableInnerHtml))
+        {
+            var rowHtml = rowMatch.Groups[1].Value;
+            var isHeader = System.Text.RegularExpressions.Regex.IsMatch(rowHtml, "<th", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var cells = cellPattern.Matches(rowHtml)
+                .Select(m => StripHtmlTags(m.Groups[1].Value).Trim())
+                .ToList();
+            if (cells.Count > 0)
+                rows.Add((isHeader, cells));
+        }
+
+        if (rows.Count == 0) return;
+
+        var columnCount = rows.Max(r => r.Cells.Count);
+
+        container.Border(1).BorderColor(BorderColor).Table(table =>
+        {
+            table.ColumnsDefinition(cols =>
+            {
+                for (var i = 0; i < columnCount; i++) cols.RelativeColumn();
+            });
+
+            foreach (var (isHeader, cells) in rows)
+            {
+                for (var i = 0; i < columnCount; i++)
+                {
+                    var text = i < cells.Count ? cells[i] : string.Empty;
+                    var cell = table.Cell().Padding(3).BorderBottom(0.5f).BorderColor(BorderColor);
+                    if (isHeader)
+                        cell.Background(SecondaryColor).Text(text).Bold().FontSize(8);
+                    else
+                        cell.Text(text).FontSize(8);
+                }
+            }
+        });
     }
 
     private static void RenderSection(IContainer container, DocumentSection section)
@@ -298,13 +368,12 @@ public sealed class InstitutionalDocumentRenderer : IDocumentRenderer
 
     private static string StripHtmlTags(string html)
     {
-        return System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " ")
-            .Replace("&nbsp;", " ")
-            .Replace("&amp;", "&")
-            .Replace("&lt;", "<")
-            .Replace("&gt;", ">")
-            .Replace("&quot;", "\"")
-            .Trim();
+        // WebUtility.HtmlDecode decodifica entidades nombradas Y numéricas (&#237; -> í).
+        // El reemplazo manual anterior solo cubría 5 entidades básicas y dejaba pasar
+        // como texto literal las entidades numéricas que WebUtility.HtmlEncode genera
+        // en DocumentTemplateEngine para cualquier caracter no-ASCII (tildes, Ñ).
+        var withoutTags = System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " ");
+        return System.Net.WebUtility.HtmlDecode(withoutTags).Trim();
     }
 
     // ── Modelos internos de parsing ──────────────────────────────────────────────

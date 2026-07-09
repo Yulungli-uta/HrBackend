@@ -41,6 +41,37 @@ public interface IDocumentTemplateRepository
 
     /// <summary>Cambia el estado de una plantilla.</summary>
     Task UpdateStatusAsync(int templateId, DocumentTemplateStatus status, CancellationToken ct = default);
+
+    /// <summary>Obtiene todas las versiones de plantillas con el mismo código, ordenadas por fecha de creación descendente.</summary>
+    Task<IReadOnlyList<TemplateVersionSummaryDto>> GetVersionsByCodeAsync(string templateCode, CancellationToken ct = default);
+
+    /// <summary>Archiva todas las versiones Published del mismo TemplateCode excepto la indicada.</summary>
+    Task ArchiveOtherPublishedVersionsAsync(string templateCode, int keepPublishedId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Repunta hacia <paramref name="newTemplateId"/> todos los consumidores (ContractType.DefaultTemplateId,
+    /// ContractType.DelegationTemplateId, PersonnelActionType.DefaultTemplateId) que apuntaban a
+    /// <paramref name="oldTemplateId"/>, para que no queden huérfanos al archivar una versión.
+    /// </summary>
+    Task RepointTemplateConsumersAsync(int oldTemplateId, int newTemplateId, CancellationToken ct = default);
+
+    /// <summary>Obtiene el ContractText de un ContractType para importación a plantilla.</summary>
+    Task<(int ContractTypeId, string ContractTypeName, string? ContractText)?> GetContractTypeTextAsync(int contractTypeId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene los tipos de contrato relevantes para una plantilla: los que la tienen
+    /// como <c>DefaultTemplateId</c>, más los que comparten la misma familia documental
+    /// (<c>ContractType.DocumentTemplateTypeId</c> resuelto contra <c>RefTypes</c> cuyo
+    /// <c>Name == DocumentTemplate.TemplateType</c> y <c>Category == "DOCUMENT_TEMPLATE_TYPE"</c>).
+    /// </summary>
+    Task<IReadOnlyList<TemplateContractTypeOptionDto>> GetContractTypesForTemplateAsync(int templateId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene los tipos de acción de personal relevantes para una plantilla: los activos de
+    /// tipo <c>ACCION_PERSONAL</c> (o el <c>TemplateType</c> de la plantilla), marcando cuáles
+    /// ya la tienen como <c>DefaultTemplateId</c>.
+    /// </summary>
+    Task<IReadOnlyList<TemplateActionTypeOptionDto>> GetActionTypesForTemplateAsync(int templateId, CancellationToken ct = default);
 }
 
 // ── IDocumentTemplateFieldRepository ────────────────────────────────────────────

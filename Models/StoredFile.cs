@@ -43,5 +43,11 @@ namespace WsUtaSystem.Models
         // Computed column in DB: FilePathHash (binary(32))
         // Puedes mapearla si quieres leerla, o ignorarla.
         public byte[]? FilePathHash { get; set; }
+
+        /// <summary>Número de resolución/oficio cuando DocumentTypeId es referenciable en plantillas (ej. RESOLUCION_CAU, MEMORANDO_RECTORADO).</summary>
+        public string? DocumentReferenceNumber { get; set; }
+
+        /// <summary>Fecha de la resolución/oficio referenciado.</summary>
+        public DateOnly? DocumentReferenceDate { get; set; }
     }
 }

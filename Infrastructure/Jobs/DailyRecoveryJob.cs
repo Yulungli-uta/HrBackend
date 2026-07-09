@@ -12,8 +12,9 @@ public sealed class DailyRecoveryJob : BaseJob
 
     public DailyRecoveryJob(
         IRecoveryService recoveryService,
-        ILogger<DailyRecoveryJob> logger)
-        : base(logger)
+        ILogger<DailyRecoveryJob> logger,
+        IJobExecutionLogService jobExecutionLogService)
+        : base(logger, jobExecutionLogService)
     {
         _recoveryService = recoveryService;
         _logger = logger;

@@ -253,6 +253,30 @@ CREATE TABLE [HR].[tbl_AttendanceCalculations] (
 );
 GO
 
+-- 2026-07-06: separar los dos sistemas que antes colisionaban en la misma
+-- columna. OvertimeMinutes/RecoveredMinutes NO cambian de significado — se
+-- agregan estos 2 campos para que cada sistema tenga su propio lugar:
+--   DetectedOvertimeMinutes: detección automática de sp_ProcessAttendanceBaseDay
+--     (trabajado fuera de horario), antes de que la planificación verificada
+--     sobreescriba OvertimeMinutes con el monto realmente autorizado/pagado.
+--   RecoveryExecutedMinutes: minutos ejecutados por sp_ProcessTimePlanningForEmployeeDay
+--     contra un plan tbl_TimePlanning (PlanType='Recovery') — abona a
+--     tbl_TimeBalances.RecoveryPendingMin, NO perdona la ausencia del día
+--     (eso lo hace RecoveredMinutes, vía sp_ProcessAttendanceRecoveryDay).
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_AttendanceCalculations]') AND name = 'DetectedOvertimeMinutes'
+)
+    ALTER TABLE [HR].[tbl_AttendanceCalculations] ADD [DetectedOvertimeMinutes] INT DEFAULT ((0)) NULL;
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_AttendanceCalculations]') AND name = 'RecoveryExecutedMinutes'
+)
+    ALTER TABLE [HR].[tbl_AttendanceCalculations] ADD [RecoveryExecutedMinutes] INT DEFAULT ((0)) NULL;
+GO
+
 -- ------------------------------------------------------------
 IF OBJECT_ID('[HR].[tbl_AttendancePunches]') IS NULL
 CREATE TABLE [HR].[tbl_AttendancePunches] (
@@ -393,6 +417,8 @@ CREATE TABLE [HR].[tbl_contract_type] (
     [UpdatedBy] INT NULL,
     [DocumentTemplateTypeID] INT NULL,
     [DefaultTemplateID] INT NULL,
+    -- Plantilla alterna a usar cuando el contrato se firma por delegación (Contracts.IsDelegation = 1).
+    [DelegationTemplateId] INT NULL,
     [NumberingPrefix] NVARCHAR(50) NULL,
     [NumberingYear] INT DEFAULT (datepart(year,getdate())) NOT NULL,
     [NumberingLastSequence] INT DEFAULT ((0)) NOT NULL,
@@ -505,6 +531,9 @@ CREATE TABLE [HR].[tbl_Contracts] (
     [SignedDocumentStoredFileId] INT NULL,
     [AuthorityNominatorId] INT NULL,
     [DthDirectorId] INT NULL,
+    -- Indica si la firma se realiza por delegación (AuthorityNominatorId = el delegado) o
+    -- directamente por la máxima autoridad (Rector/a). Punto de filtro explícito.
+    [IsDelegation] BIT DEFAULT ((0)) NOT NULL,
     [LaborRegimeID] INT NULL,
     [WorkModalityID] INT NULL,
     [ContractedHours] DECIMAL(5,2) NULL
@@ -580,7 +609,10 @@ CREATE TABLE [HR].[tbl_Departments] (
     [RowVersion] TIMESTAMP NOT NULL,
     [CreatedBy] INT NULL,
     [UpdatedBy] INT NULL,
-    [DepartmentScope] INT NULL
+    [DepartmentScope] INT NULL,
+    -- Rol institucional crítico para resolución de firmas (RECTORADO, FINANCE, HUMAN_RESOURCE, etc.)
+    -- Ver HR.ref_Types con Category = 'DEPARTMENT_INSTITUTIONAL_ROLE'. FK en 02_constraints.sql.
+    [InstitutionalRoleTypeId] INT NULL
 );
 GO
 
@@ -629,6 +661,9 @@ GO
 IF OBJECT_ID('[HR].[tbl_DocumentTemplates]') IS NULL
 CREATE TABLE [HR].[tbl_DocumentTemplates] (
     [TemplateID] INT IDENTITY(1,1) NOT NULL,
+    -- TemplateCode se repite entre varias filas: cada fila es una versión (Draft/Published/Archived)
+    -- de la misma familia de plantilla. La vigente es la única que puede estar Published
+    -- (ver índice único filtrado UX_DocumentTemplates_TemplateCode_Published).
     [TemplateCode] NVARCHAR(50) NOT NULL,
     [Name] NVARCHAR(150) NOT NULL,
     [Description] NVARCHAR(500) NULL,
@@ -646,6 +681,19 @@ CREATE TABLE [HR].[tbl_DocumentTemplates] (
     [UpdatedAt] DATETIME2 NULL,
     [UpdatedBy] INT NULL
 );
+GO
+
+-- Garantiza por base de datos que nunca existan dos versiones Published del mismo TemplateCode
+-- al mismo tiempo, sin importar qué código de aplicación toque el Status.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_DocumentTemplates_TemplateCode_Published')
+CREATE UNIQUE INDEX UX_DocumentTemplates_TemplateCode_Published
+    ON [HR].[tbl_DocumentTemplates]([TemplateCode])
+    WHERE [Status] = 'PUBLISHED';
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_DocumentTemplates_TemplateCode')
+CREATE INDEX IX_DocumentTemplates_TemplateCode
+    ON [HR].[tbl_DocumentTemplates]([TemplateCode]);
 GO
 
 -- ------------------------------------------------------------
@@ -1311,6 +1359,28 @@ CREATE TABLE [HR].[tbl_Overtime] (
 );
 GO
 
+-- 2026-07-06 (punto 6): trazabilidad al plan de origen. Nullable porque filas
+-- históricas/manuales sin plan asociado deben seguir siendo válidas. Cuando
+-- hubo más de un plan de Overtime el mismo día, representa el plan "ganador"
+-- del desempate por Factor, no todos los que contribuyeron ese día.
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_Overtime]') AND name = 'PlanEmployeeID'
+)
+    ALTER TABLE [HR].[tbl_Overtime] ADD [PlanEmployeeID] INT NULL;
+GO
+
+-- 2026-07-06 (Fase 3, propuesta multi-régimen): régimen laboral que originó
+-- la línea. Siempre 57 (LOSEP) para filas escritas por el pipeline de
+-- asistencia, porque solo ese régimen genera horas extra (confirmado). Nullable
+-- por filas históricas previas a este cambio.
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_Overtime]') AND name = 'LaborRegimeId'
+)
+    ALTER TABLE [HR].[tbl_Overtime] ADD [LaborRegimeId] INT NULL;
+GO
+
 -- ------------------------------------------------------------
 IF OBJECT_ID('[HR].[tbl_OvertimeConfig]') IS NULL
 CREATE TABLE [HR].[tbl_OvertimeConfig] (
@@ -1318,6 +1388,21 @@ CREATE TABLE [HR].[tbl_OvertimeConfig] (
     [Factor] DECIMAL(5,2) NOT NULL,
     [Description] NVARCHAR(200) NULL
 );
+GO
+
+-- Tope opcional de horas extra por tipo (Fase 4, punto 11). NULL = sin tope activo.
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_OvertimeConfig]') AND name = 'MaxDailyMinutes'
+)
+    ALTER TABLE [HR].[tbl_OvertimeConfig] ADD [MaxDailyMinutes] INT NULL;
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_OvertimeConfig]') AND name = 'MaxWeeklyMinutes'
+)
+    ALTER TABLE [HR].[tbl_OvertimeConfig] ADD [MaxWeeklyMinutes] INT NULL;
 GO
 
 -- ------------------------------------------------------------
@@ -1363,6 +1448,17 @@ CREATE TABLE [HR].[tbl_PayrollLines] (
     [UnitValue] DECIMAL(12,2) DEFAULT ((0)) NOT NULL,
     [Notes] NVARCHAR(300) NULL
 );
+GO
+
+-- 2026-07-06 (Fase 3, propuesta multi-régimen): régimen laboral que originó la
+-- línea (hoy solo poblado por horas extra, siempre 57=LOSEP). Descuentos y
+-- subsidios todavía colapsan al régimen principal, no separan por línea, así
+-- que quedan NULL por ahora.
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_PayrollLines]') AND name = 'LaborRegimeId'
+)
+    ALTER TABLE [HR].[tbl_PayrollLines] ADD [LaborRegimeId] INT NULL;
 GO
 
 -- ------------------------------------------------------------
@@ -1440,7 +1536,8 @@ CREATE TABLE [HR].[tbl_PermissionTypes] (
     [AttachedFile] BIT DEFAULT ((1)) NULL,
     [LeadTimeHours] INT DEFAULT ((0)) NULL,
     [IsMedical] BIT DEFAULT ((0)) NOT NULL,
-    [IsActive] BIT DEFAULT ((1)) NOT NULL
+    [IsActive] BIT DEFAULT ((1)) NOT NULL,
+    [ContractTypeID] INT NULL
 );
 GO
 
@@ -1454,7 +1551,10 @@ CREATE TABLE [HR].[tbl_personnel_action_type] (
     [NumberingPrefix] NVARCHAR(30) NOT NULL,
     [NumberingYear] INT DEFAULT (datepart(year,getdate())) NOT NULL,
     [NumberingLastSequence] INT DEFAULT ((0)) NOT NULL,
-    [TemplateCode] NVARCHAR(80) NULL,
+    -- FK a la plantilla documental (DocumentTemplates.TemplateID) usada por defecto para este
+    -- tipo de acción. Antes era un código de texto libre (TemplateCode) que en realidad guardaba
+    -- el TemplateType, no un código de plantilla específico — se convirtió a FK real.
+    [DefaultTemplateId] INT NULL,
     [IsActive] BIT DEFAULT ((1)) NOT NULL,
     [CreatedAt] DATETIME2 DEFAULT (getdate()) NULL,
     [CreatedBy] INT NULL,
@@ -1464,6 +1564,18 @@ CREATE TABLE [HR].[tbl_personnel_action_type] (
     [RequiresAdUserDisable] BIT DEFAULT ((0)) NOT NULL,
     [RequiresAdGroupAssignment] BIT DEFAULT ((0)) NOT NULL
 );
+GO
+
+-- 2026-07-06 (propuesta VIGENTE en Acciones de Personal): marca qué tipos
+-- participan en la cadena de "acción vigente" del empleado (Nombramiento,
+-- Traslado, Encargo, Cambio de Sueldo, Asistencia/Horario). Los que no
+-- participan (Comisión, Licencia, Sanción, Vulnerabilidad, Vacaciones) siguen
+-- yendo directo FIRMADO_CARGADO → FINALIZADO, sin pasar por VIGENTE.
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_personnel_action_type]') AND name = 'ReachesVigente'
+)
+    ALTER TABLE [HR].[tbl_personnel_action_type] ADD [ReachesVigente] BIT NOT NULL DEFAULT ((0));
 GO
 
 -- ------------------------------------------------------------
@@ -1526,7 +1638,9 @@ IF OBJECT_ID('[HR].[tbl_PersonnelMovements]') IS NULL
 CREATE TABLE [HR].[tbl_PersonnelMovements] (
     [MovementID] INT IDENTITY(1,1) NOT NULL,
     [EmployeeID] INT NOT NULL,
-    [ContractID] INT NOT NULL,
+    -- Nullable 2026-07-01: los movimientos originados por Acción de Personal
+    -- (Traslado, Encargo) no tienen contrato asociado.
+    [ContractID] INT NULL,
     [JobID] INT NOT NULL,
     [OriginDepartmentID] INT NULL,
     [DestinationDepartmentID] INT NOT NULL,
@@ -1767,8 +1881,20 @@ CREATE TABLE [HR].[TBL_StoredFile] (
     [DeletedAt] DATETIME2 NULL,
     [DeletedBy] INT NULL,
     [FilePathHash] BINARY(32) NULL,
-    [DocumentTypeId] INT NULL
+    [DocumentTypeId] INT NULL,
+    -- Número/fecha de la resolución u oficio cuando DocumentTypeId corresponde a un
+    -- documento referenciable en plantillas de contratos (ej. RESOLUCION_CAU, MEMORANDO_RECTORADO).
+    [DocumentReferenceNumber] NVARCHAR(100) NULL,
+    [DocumentReferenceDate] DATE NULL
 );
+GO
+
+IF COL_LENGTH('[HR].[TBL_StoredFile]', 'DocumentReferenceNumber') IS NULL
+    ALTER TABLE [HR].[TBL_StoredFile] ADD [DocumentReferenceNumber] NVARCHAR(100) NULL;
+GO
+
+IF COL_LENGTH('[HR].[TBL_StoredFile]', 'DocumentReferenceDate') IS NULL
+    ALTER TABLE [HR].[TBL_StoredFile] ADD [DocumentReferenceDate] DATE NULL;
 GO
 
 -- ------------------------------------------------------------
@@ -1827,6 +1953,15 @@ CREATE TABLE [HR].[tbl_TimeBalanceMovements] (
 );
 GO
 
+-- 2026-07-06 (Fase 3, propuesta multi-régimen): régimen que originó el
+-- movimiento. Nullable por historial previo a este cambio.
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_TimeBalanceMovements]') AND name = 'LaborRegimeId'
+)
+    ALTER TABLE [HR].[tbl_TimeBalanceMovements] ADD [LaborRegimeId] INT NULL;
+GO
+
 -- ------------------------------------------------------------
 IF OBJECT_ID('[HR].[tbl_TimeBalances]') IS NULL
 CREATE TABLE [HR].[tbl_TimeBalances] (
@@ -1836,6 +1971,20 @@ CREATE TABLE [HR].[tbl_TimeBalances] (
     [LastUpdated] DATETIME2 DEFAULT (getdate()) NOT NULL,
     [RowVersion] TIMESTAMP NOT NULL
 );
+GO
+
+-- 2026-07-06 (Fase 3, propuesta multi-régimen): saldo separado por régimen
+-- laboral en vez de uno solo por empleado. Backfill ya ejecutado en
+-- producción: filas existentes -> régimen IsPrincipal (o el único activo, o
+-- EmployeeType como espejo para empleados inactivos sin fila en
+-- tbl_EmployeeLaborRegime); régimen secundario de empleados multi-régimen
+-- arranca en 0 (no se inventa historia). La PK pasó de (EmployeeID) a
+-- (EmployeeID, LaborRegimeId) — ver 02_constraints.sql.
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_TimeBalances]') AND name = 'LaborRegimeId'
+)
+    ALTER TABLE [HR].[tbl_TimeBalances] ADD [LaborRegimeId] INT NOT NULL DEFAULT (57);
 GO
 
 -- ------------------------------------------------------------
@@ -1903,6 +2052,15 @@ CREATE TABLE [HR].[tbl_TimePlanningExecution] (
 );
 GO
 
+-- Minutos trabajados fuera de la ventana planificada (antes del inicio o
+-- después del fin del plan) — antes se descartaban en silencio.
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_TimePlanningExecution]') AND name = 'ExceededMinutes'
+)
+    ALTER TABLE [HR].[tbl_TimePlanningExecution] ADD [ExceededMinutes] INT DEFAULT ((0)) NULL;
+GO
+
 -- ------------------------------------------------------------
 IF OBJECT_ID('[HR].[tbl_TimeRecoveryLogs]') IS NULL
 CREATE TABLE [HR].[tbl_TimeRecoveryLogs] (
@@ -1947,6 +2105,12 @@ CREATE TABLE [HR].[tbl_Trainings] (
     [EndDate] DATE NOT NULL,
     [Hours] INT NOT NULL,
     [ApprovalTypeID] INT NULL,
+    -- Direccion (recibida/impartida), modalidad y pais: agregados para el
+    -- modulo de promocion academica docente (academic-promotion). Catalogos
+    -- ref_Types: TRAINING_DIRECTION, TRAINING_MODALITY. Pais: HR.tbl_Countries.
+    [TrainingDirectionTypeID] INT NULL,
+    [ModalityTypeID] INT NULL,
+    [CountryID] NVARCHAR(10) NULL,
     [CreatedAt] DATETIME2 DEFAULT (getdate()) NOT NULL,
     [CreatedBy] INT NULL,
     [UpdatedAt] DATETIME2 NULL,
@@ -1994,5 +2158,202 @@ CREATE TABLE [HR].[tbl_WorkExperiences] (
     [CreatedBy] INT NULL,
     [UpdatedAt] DATETIME2 NULL,
     [UpdatedBy] INT NULL
+);
+GO
+
+-- ============================================================================
+-- Tabla: HR.tbl_Languages
+-- Propósito: certificaciones de idioma del empleado (hoja de vida / perfil
+-- personal), igual dominio que WorkExperiences/Publications/Trainings.
+-- Consumida tambien por el modulo de promocion academica docente.
+-- Catalogos: LANGUAGE (idioma), LANGUAGE_LEVEL (A1..C2, marco CEFR).
+-- ============================================================================
+-- ------------------------------------------------------------
+IF OBJECT_ID('[HR].[tbl_Languages]') IS NULL
+CREATE TABLE [HR].[tbl_Languages] (
+    [LanguageID] INT IDENTITY(1,1) NOT NULL,
+    [PersonID] INT NOT NULL,
+    [LanguageTypeID] INT NOT NULL,
+    [LevelTypeID] INT NOT NULL,
+    [ReferenceFramework] NVARCHAR(50) DEFAULT ('CEFR') NULL,
+    [CertifyingInstitution] NVARCHAR(150) NULL,
+    [CountryID] NVARCHAR(10) NULL,
+    [IssueDate] DATE NOT NULL,
+    [ExpirationDate] DATE NULL,
+    [CreatedAt] DATETIME2 DEFAULT (getdate()) NOT NULL,
+    [CreatedBy] INT NULL,
+    [UpdatedAt] DATETIME2 NULL,
+    [UpdatedBy] INT NULL
+);
+GO
+
+-- Catalogos ref_Types requeridos por tbl_Languages.
+IF NOT EXISTS (SELECT 1 FROM [HR].[ref_Types] WHERE [Category] = 'LANGUAGE' AND [Name] = 'ENGLISH')
+INSERT INTO [HR].[ref_Types] ([Category], [Name], [Description], [IsActive])
+VALUES ('LANGUAGE', 'ENGLISH', 'Inglés', 1),
+       ('LANGUAGE', 'FRENCH', 'Francés', 1),
+       ('LANGUAGE', 'GERMAN', 'Alemán', 1),
+       ('LANGUAGE', 'PORTUGUESE', 'Portugués', 1),
+       ('LANGUAGE', 'ITALIAN', 'Italiano', 1),
+       ('LANGUAGE', 'OTHER', 'Otro', 1);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM [HR].[ref_Types] WHERE [Category] = 'LANGUAGE_LEVEL' AND [Name] = 'A1')
+INSERT INTO [HR].[ref_Types] ([Category], [Name], [Description], [IsActive])
+VALUES ('LANGUAGE_LEVEL', 'A1', 'A1 - Principiante', 1),
+       ('LANGUAGE_LEVEL', 'A2', 'A2 - Básico', 1),
+       ('LANGUAGE_LEVEL', 'B1', 'B1 - Intermedio', 1),
+       ('LANGUAGE_LEVEL', 'B2', 'B2 - Intermedio alto', 1),
+       ('LANGUAGE_LEVEL', 'C1', 'C1 - Avanzado', 1),
+       ('LANGUAGE_LEVEL', 'C2', 'C2 - Dominio', 1);
+GO
+
+-- Catalogos ref_Types requeridos por tbl_Trainings (direccion/modalidad, ver ALTER arriba).
+IF NOT EXISTS (SELECT 1 FROM [HR].[ref_Types] WHERE [Category] = 'TRAINING_DIRECTION' AND [Name] = 'RECEIVED_TRAINING')
+INSERT INTO [HR].[ref_Types] ([Category], [Name], [Description], [IsActive])
+VALUES ('TRAINING_DIRECTION', 'RECEIVED_TRAINING', 'Capacitación recibida', 1),
+       ('TRAINING_DIRECTION', 'GIVEN_TRAINING', 'Capacitación impartida', 1);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM [HR].[ref_Types] WHERE [Category] = 'TRAINING_MODALITY' AND [Name] = 'ONLINE')
+INSERT INTO [HR].[ref_Types] ([Category], [Name], [Description], [IsActive])
+VALUES ('TRAINING_MODALITY', 'ONLINE', 'En línea', 1),
+       ('TRAINING_MODALITY', 'IN_PERSON', 'Presencial', 1),
+       ('TRAINING_MODALITY', 'HYBRID', 'Híbrida', 1);
+GO
+
+-- Directorio de documentos de soporte para certificaciones de idioma
+-- (mismo motor DocumentsController/StoredFile ya usado en el resto del sistema).
+IF NOT EXISTS (SELECT 1 FROM [HR].[TBL_DirectoryParameters] WHERE [Code] = 'HR_LANGUAGE_CERTIFICATION')
+INSERT INTO [HR].[TBL_DirectoryParameters] ([Code], [PhysicalPath], [RelativePath], [Description], [Extension], [MaxSizeMB], [Status])
+VALUES ('HR_LANGUAGE_CERTIFICATION', '\\nas11.uta.edu.ec\ArchUTA1\HR\languages\', '\\nas11.uta.edu.ec\ArchUTA1\HR\languages\', 'Certificados de idioma del empleado', '.pdf', 10, 1);
+GO
+
+-- ============================================================================
+-- Tabla: HR.tbl_UserAccessScopes
+-- Propósito: define qué departamentos/facultades puede ver o gestionar un
+-- usuario, por módulo/trámite (Contratos, Acciones de Personal, u otros
+-- trámites futuros vía ref_Types), evitando que vea datos de toda la
+-- institución. Genérico y extensible: agregar un trámite nuevo solo
+-- requiere una fila más en ACCESS_MODULE_TYPE, sin tocar el esquema.
+-- ============================================================================
+
+-- ------------------------------------------------------------
+IF OBJECT_ID('[HR].[tbl_UserAccessScopes]') IS NULL
+CREATE TABLE [HR].[tbl_UserAccessScopes] (
+    [Id]               INT IDENTITY(1,1) NOT NULL,
+
+    -- Empleado (HR.tbl_Employees) al que se le otorga el acceso.
+    -- En runtime se cruza contra ICurrentUserService.EmployeeId (claim del JWT).
+    [EmployeeId]       INT NOT NULL,
+
+    -- Módulo al que aplica esta asignación.
+    -- FK -> HR.ref_Types con Category = 'ACCESS_MODULE_TYPE'
+    -- Valores: CONTRACTS, PERSONNEL_ACTIONS (extensible)
+    [ModuleTypeId]     INT NOT NULL,
+
+    -- Tipo de alcance del acceso.
+    -- FK -> HR.ref_Types con Category = 'ACCESS_SCOPE_TYPE'
+    -- Valores: GLOBAL (ve todo, ignora DepartmentId),
+    --          DEPARTMENT_TREE (ese departamento + todos sus hijos, ej. una Facultad completa),
+    --          DEPARTMENT_ONLY (solo ese departamento exacto, sin hijos)
+    [ScopeTypeId]      INT NOT NULL,
+
+    -- Departamento/Facultad asignado. NULL únicamente cuando ScopeTypeId = GLOBAL.
+    -- FK -> HR.tbl_Departments
+    [DepartmentId]     INT NULL,
+
+    [IsActive]         BIT DEFAULT ((1)) NOT NULL,
+    -- Vigencia de la asignación. AssignedAt = inicio. ExpiresAt NULL = sin fecha de fin.
+    [AssignedAt]       DATETIME2 DEFAULT (sysutcdatetime()) NOT NULL,
+    [ExpiresAt]        DATETIME2 NULL,
+    [AssignedBy]       NVARCHAR(320) NULL,
+    [Reason]           NVARCHAR(300) NULL,
+
+    [CreatedAt]        DATETIME2 DEFAULT (getdate()) NOT NULL,
+    [CreatedBy]        INT NULL,
+    [UpdatedAt]        DATETIME2 NULL,
+    [UpdatedBy]        INT NULL,
+    [RowVersion]       TIMESTAMP NOT NULL
+);
+GO
+
+-- ============================================================================
+-- Tabla: HR.tbl_UserAccessScopeHistory
+-- Propósito: historial inmutable de cada cambio (asignación, modificación,
+-- remoción) sobre tbl_UserAccessScopes. Independiente de la fila "viva",
+-- así nunca se pierde el rastro aunque esa fila se reactive o desactive.
+-- ============================================================================
+
+-- ============================================================================
+-- Tabla: HR.tbl_EmployeeLaborRegime
+-- Propósito: régimen(es) laboral(es) (LOSEP/LOES/CT) vigentes o históricos de
+-- un empleado. Un empleado puede tener varias filas activas simultáneas (ej.
+-- nombramiento LOSEP en Dirección Administrativa + contrato LOES ocasional
+-- como docente en otra facultad). Reemplaza a HR.tbl_Employees.EmployeeType
+-- como fuente de verdad; ese campo se mantiene como espejo del régimen
+-- IsPrincipal para no romper a los consumidores existentes.
+-- ============================================================================
+
+-- ------------------------------------------------------------
+IF OBJECT_ID('[HR].[tbl_EmployeeLaborRegime]') IS NULL
+CREATE TABLE [HR].[tbl_EmployeeLaborRegime] (
+    [Id]                       INT IDENTITY(1,1) NOT NULL,
+    [EmployeeId]               INT NOT NULL,
+
+    -- FK -> HR.ref_Types (Category='CONTRACT_TYPE'). 57=LOSEP, 58=LOES, 59=Código Trabajo.
+    [LaborRegimeId]            INT NOT NULL,
+
+    -- Departamento/cargo donde se ejerce ESTE régimen (no el del empleado en general).
+    [DepartmentId]             INT NULL,
+    [JobId]                    INT NULL,
+
+    -- true = nombramiento (fijo/provisional, sin vencimiento); false = régimen temporal.
+    [IsIndefinite]             BIT DEFAULT ((0)) NOT NULL,
+
+    -- 'CONTRACT' | 'PERSONNEL_ACTION'
+    [DocumentType]             NVARCHAR(20) NOT NULL,
+    [DocumentNumber]           NVARCHAR(50) NULL,
+    [SourceContractId]         INT NULL,
+    [SourcePersonnelActionId]  INT NULL,
+
+    [EffectiveFrom]            DATE NOT NULL,
+    [EffectiveTo]              DATE NULL,
+    [IsActive]                 BIT DEFAULT ((1)) NOT NULL,
+
+    -- Calculado por la aplicación: nombramiento gana; si ninguno, gana LOSEP.
+    [IsPrincipal]              BIT DEFAULT ((0)) NOT NULL,
+
+    [CreatedAt]                DATETIME2 DEFAULT (getdate()) NOT NULL,
+    [CreatedBy]                INT NULL,
+    [UpdatedAt]                DATETIME2 NULL,
+    [UpdatedBy]                INT NULL,
+    [RowVersion]               TIMESTAMP NOT NULL
+);
+GO
+
+-- ------------------------------------------------------------
+IF OBJECT_ID('[HR].[tbl_UserAccessScopeHistory]') IS NULL
+CREATE TABLE [HR].[tbl_UserAccessScopeHistory] (
+    [Id]               BIGINT IDENTITY(1,1) NOT NULL,
+
+    -- Referencia informativa a la fila viva (no se borra aunque la fila ya no exista).
+    [ScopeId]          INT NULL,
+
+    [EmployeeId]       INT NOT NULL,
+    [ModuleTypeId]     INT NOT NULL,
+
+    -- 'Assigned' | 'Modified' | 'Removed'
+    [ChangeType]       NVARCHAR(20) NOT NULL,
+
+    -- Snapshot de los valores ANTES y DESPUÉS del cambio (para auditoría completa).
+    [PreviousScopeTypeId]  INT NULL,
+    [PreviousDepartmentId] INT NULL,
+    [NewScopeTypeId]       INT NULL,
+    [NewDepartmentId]      INT NULL,
+
+    [ChangedBy]        NVARCHAR(320) NOT NULL,
+    [ChangeReason]     NVARCHAR(300) NULL,
+    [ChangeDateTime]   DATETIME2 DEFAULT (sysutcdatetime()) NOT NULL
 );
 GO

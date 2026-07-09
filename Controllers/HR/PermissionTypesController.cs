@@ -1,9 +1,8 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
-using System.ComponentModel.DataAnnotations;
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.PermissionTypes;
 using WsUtaSystem.Application.Interfaces.Services;
-using WsUtaSystem.Infrastructure.Controller;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -14,12 +13,39 @@ public class PermissionTypesController : ControllerBase
 {
     private readonly IPermissionTypesService _svc;
     private readonly IMapper _mapper;
-    public PermissionTypesController(IPermissionTypesService svc, IMapper mapper) { _svc = svc; _mapper = mapper; }
+    private readonly ICurrentUserService _currentUser;
+
+    public PermissionTypesController(
+        IPermissionTypesService svc,
+        IMapper mapper,
+        ICurrentUserService currentUser)
+    {
+        _svc = svc;
+        _mapper = mapper;
+        _currentUser = currentUser;
+    }
 
     /// <summary>Lista todos los registros de PermissionTypes.</summary>
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<PermissionTypesDto>>(await _svc.GetAllAsync(ct)));
+
+    /// <summary>
+    /// Retorna los tipos de permiso activos disponibles para TODOS los regímenes laborales
+    /// activos del empleado actualmente autenticado (incluye los de régimen NULL = todos).
+    /// Fuente: HR.tbl_EmployeeLaborRegime — un empleado con más de un régimen activo
+    /// (ej. nombramiento LOSEP + contrato LOES) ve los tipos de permiso de ambos.
+    /// </summary>
+    [HttpGet("available")]
+    public async Task<IActionResult> GetAvailable(CancellationToken ct)
+    {
+        var employeeId = _currentUser.EmployeeId;
+        if (employeeId is null)
+            return Ok(_mapper.Map<List<PermissionTypesDto>>(await _svc.GetAllAsync(ct)));
+
+        var items = await _svc.GetAvailableForEmployeeAsync(employeeId.Value, ct);
+        return Ok(_mapper.Map<List<PermissionTypesDto>>(items));
+    }
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>

@@ -176,6 +176,26 @@ public sealed class DocumentTemplateService : IDocumentTemplateService
             throw new InvalidOperationException(
                 $"Transición de estado inválida: {currentStatus} → {newStatus}.");
 
+        // Al publicar: archivar otras versiones Published del mismo TemplateCode (el índice único
+        // filtrado UX_DocumentTemplates_TemplateCode_Published exige que solo una esté Published).
+        // Además, repuntar ContractType.DefaultTemplateId/DelegationTemplateId y
+        // PersonnelActionType.DefaultTemplateId de las versiones archivadas hacia la nueva versión
+        // publicada, para que ningún consumidor quede apuntando a un TemplateId archivado
+        // (ResolveContractTemplateIdAsync/GenerateDocumentForActionAsync exigen Published).
+        if (newStatus == DocumentTemplateStatus.Published)
+        {
+            var siblings = await _templateRepository.GetVersionsByCodeAsync(template.TemplateCode, ct);
+            var previouslyPublishedIds = siblings
+                .Where(v => v.TemplateId != templateId && v.Status == DocumentTemplateStatus.Published)
+                .Select(v => v.TemplateId)
+                .ToList();
+
+            await _templateRepository.ArchiveOtherPublishedVersionsAsync(template.TemplateCode, templateId, ct);
+
+            foreach (var oldTemplateId in previouslyPublishedIds)
+                await _templateRepository.RepointTemplateConsumersAsync(oldTemplateId, templateId, ct);
+        }
+
         await _templateRepository.UpdateStatusAsync(templateId, newStatus, ct);
 
         _logger.LogInformation(
@@ -195,23 +215,27 @@ public sealed class DocumentTemplateService : IDocumentTemplateService
 
         var fields = await _fieldRepository.GetByTemplateIdAsync(request.TemplateId, ct);
 
-        Dictionary<string, string> resolvedValues;
+        // El resolver ya soporta employeeId nulo (omite las fuentes Employee/Contract/Movement
+        // pero sí resuelve los campos System, como LOGO_URL o INSTITUTION_NAME, que no dependen
+        // de un empleado). Llamarlo siempre evita que la vista previa "de muestra" rompa esos
+        // campos institucionales mostrando el placeholder literal en vez del valor real.
+        var resolvedValues = await _fieldResolver.ResolveAsync(
+            fields,
+            request.EmployeeId,
+            request.EntityId,
+            request.ManualOverrides,
+            ct);
 
-        if (request.EmployeeId.HasValue)
+        if (!request.EmployeeId.HasValue)
         {
-            resolvedValues = await _fieldResolver.ResolveAsync(
-                fields,
-                request.EmployeeId.Value,
-                request.EntityId,
-                request.ManualOverrides,
-                ct);
-        }
-        else
-        {
-            // Datos de muestra cuando no se especifica empleado
-            resolvedValues = fields.ToDictionary(
-                f => f.FieldName,
-                f => f.DefaultValue ?? $"[{f.Label}]");
+            // Datos de muestra para los campos que sí dependen de un empleado/contrato y que el
+            // resolver no pudo completar sin esa información — solo rellena los vacíos, nunca
+            // sobreescribe un valor que el resolver sí logró resolver (ej. campos System).
+            foreach (var field in fields)
+            {
+                if (!resolvedValues.TryGetValue(field.FieldName, out var value) || string.IsNullOrEmpty(value))
+                    resolvedValues[field.FieldName] = field.DefaultValue ?? $"[{field.Label}]";
+            }
         }
 
         // Los overrides manuales tienen prioridad máxima
@@ -241,5 +265,139 @@ public sealed class DocumentTemplateService : IDocumentTemplateService
         return new PreviewTemplateResponse(
             HtmlContent:      renderedHtml,
             UnresolvedFields: unresolvedFields);
+    }
+
+    /// <inheritdoc />
+    public async Task<CreateVersionResponse> CreateVersionAsync(
+        int sourceTemplateId,
+        string newVersion,
+        int createdBy,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(newVersion);
+
+        var source = await _templateRepository.GetByIdAsync(sourceTemplateId, ct)
+            ?? throw new KeyNotFoundException($"Plantilla {sourceTemplateId} no encontrada.");
+
+        var versionTrimmed = newVersion.Trim();
+
+        // Verificar que no exista ya esa versión exacta para el mismo código
+        var existing = await _templateRepository.GetVersionsByCodeAsync(source.TemplateCode, ct);
+        if (existing.Any(v => string.Equals(v.Version, versionTrimmed, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException(
+                $"Ya existe la versión '{versionTrimmed}' para el código '{source.TemplateCode}'.");
+
+        // No permitir crear otra versión si ya hay una Draft sin terminar (publicar/asignar):
+        // evita que se acumulen borradores abandonados sin completar su ciclo de vida.
+        var pendingDraft = existing.FirstOrDefault(v => v.Status == DocumentTemplateStatus.Draft);
+        if (pendingDraft is not null)
+            throw new InvalidOperationException(
+                $"Ya existe una versión '{pendingDraft.Version}' en Borrador sin publicar para '{source.TemplateCode}'. " +
+                "Termine de editarla y publíquela antes de crear una nueva versión.");
+
+        var newTemplate = new DocumentTemplate
+        {
+            TemplateCode      = source.TemplateCode,
+            Name              = source.Name,
+            Description       = source.Description,
+            TemplateType      = source.TemplateType,
+            Version           = versionTrimmed,
+            LayoutType        = source.LayoutType,
+            Status            = DocumentTemplateStatus.Draft,
+            HtmlContent       = source.HtmlContent,
+            CssStyles         = source.CssStyles,
+            MetaJson          = source.MetaJson,
+            RequiresSignature = source.RequiresSignature,
+            RequiresApproval  = source.RequiresApproval,
+            CreatedAt         = DateTime.UtcNow,
+            CreatedBy         = createdBy
+        };
+
+        var newId = await _templateRepository.CreateAsync(newTemplate, ct);
+
+        // Copiar los campos de la versión origen
+        var sourceFields = await _fieldRepository.GetByTemplateIdAsync(sourceTemplateId, ct);
+        foreach (var f in sourceFields)
+        {
+            await _fieldRepository.CreateAsync(new DocumentTemplateField
+            {
+                TemplateId     = newId,
+                FieldName      = f.FieldName,
+                Label          = f.Label,
+                SourceType     = f.SourceType,
+                SourceProperty = f.SourceProperty,
+                DataType       = f.DataType,
+                FormatPattern  = f.FormatPattern,
+                DefaultValue   = f.DefaultValue,
+                IsRequired     = f.IsRequired,
+                IsEditable     = f.IsEditable,
+                SortOrder      = f.SortOrder,
+                HelpText       = f.HelpText
+            }, ct);
+        }
+
+        _logger.LogInformation(
+            "DocumentTemplateService: nueva versión '{Version}' de '{Code}' creada con ID {Id} por usuario {User}.",
+            versionTrimmed, source.TemplateCode, newId, createdBy);
+
+        return new CreateVersionResponse(newId, versionTrimmed, source.TemplateCode);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<TemplateVersionSummaryDto>> GetVersionsByCodeAsync(
+        string templateCode,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(templateCode);
+        return await _templateRepository.GetVersionsByCodeAsync(templateCode.ToUpperInvariant().Trim(), ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<ImportContractTextResponse> ImportContractTextAsync(int contractTypeId, CancellationToken ct = default)
+    {
+        var row = await _templateRepository.GetContractTypeTextAsync(contractTypeId, ct)
+            ?? throw new KeyNotFoundException($"Tipo de contrato {contractTypeId} no encontrado.");
+
+        var rawText = row.ContractText ?? string.Empty;
+
+        // Detectar placeholders legados {0}, {1}, {9_1}, etc.
+        var matches = System.Text.RegularExpressions.Regex.Matches(rawText, @"\{(\d+(?:_\d+)?)\}");
+
+        var placeholders = matches
+            .GroupBy(m => m.Value)
+            .Select(g =>
+            {
+                var firstMatch = g.First();
+                var start = Math.Max(0, firstMatch.Index - 40);
+                var length = Math.Min(80, rawText.Length - start);
+                return new LegacyPlaceholderDto(
+                    Placeholder: g.Key,
+                    Occurrences: g.Count(),
+                    Context: rawText.Substring(start, length).Replace("\n", " ").Replace("\r", ""));
+            })
+            .OrderBy(p => p.Placeholder)
+            .ToList();
+
+        return new ImportContractTextResponse(
+            ContractTypeId:   row.ContractTypeId,
+            ContractTypeName: row.ContractTypeName,
+            RawText:          rawText,
+            Placeholders:     placeholders);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<TemplateContractTypeOptionDto>> GetContractTypesForTemplateAsync(int templateId, CancellationToken ct = default)
+        => await _templateRepository.GetContractTypesForTemplateAsync(templateId, ct);
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<TemplateActionTypeOptionDto>> GetActionTypesForTemplateAsync(int templateId, CancellationToken ct = default)
+        => await _templateRepository.GetActionTypesForTemplateAsync(templateId, ct);
+
+    /// <inheritdoc />
+    public ExtractTokensResponse ExtractTokens(ExtractTokensRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var tokens = _templateEngine.ExtractTokens(request.HtmlContent);
+        return new ExtractTokensResponse(tokens);
     }
 }

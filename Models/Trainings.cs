@@ -17,6 +17,9 @@ public class Trainings : IAuditable
   public DateOnly EndDate{get;set;}
   public int Hours{get;set;}
   public int? ApprovalTypeId{get;set;}
+  public int? TrainingDirectionTypeId{get;set;}
+  public int? ModalityTypeId{get;set;}
+  public string? CountryId{get;set;}
   public DateTime? CreatedAt { get; set; }
   public int? CreatedBy { get; set; }
   public DateTime? UpdatedAt { get; set; }

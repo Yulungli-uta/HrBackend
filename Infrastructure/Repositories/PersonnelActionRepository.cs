@@ -51,6 +51,15 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
         if (filter.EndDate.HasValue)
             query = query.Where(x => x.action.ActionDate <= filter.EndDate.Value);
 
+        if (filter.AllowedDepartmentIds is { Count: > 0 } allowedDeptIds)
+        {
+            // Se valida contra el destino; si no hay destino, se usa el origen como referencia.
+            query = query.Where(x =>
+                (x.action.DestinationDepartmentId.HasValue
+                    ? allowedDeptIds.Contains(x.action.DestinationDepartmentId.Value)
+                    : x.action.OriginDepartmentId.HasValue && allowedDeptIds.Contains(x.action.OriginDepartmentId.Value)));
+        }
+
         var totalCount = await query.CountAsync(ct);
 
         var items = await query
@@ -223,7 +232,10 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             result.action.CreatedAt,
             result.action.CreatedBy,
             result.action.UpdatedAt,
-            result.action.UpdatedBy
+            result.action.UpdatedBy,
+            result.actionType.ReachesVigente,
+            result.actionType.RequiresAdUserCreation,
+            result.actionType.RequiresAdUserDisable
         );
     }
 

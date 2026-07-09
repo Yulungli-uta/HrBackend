@@ -20,10 +20,23 @@
     al menos un GuardShiftPlanning activo en la fecha, por lo que un guardia
     que coincidentalmente tenga EmployeeSchedule nunca se procesa dos veces.
 */
+-- Fase 4 (2026-07-03): forzar sesión correcta antes de compilar el SP, mismo
+-- motivo documentado en 06_procedures.sql (evita el error 1934/QUOTED_IDENTIFIER
+-- si quien despliega este archivo tiene una sesión con la config incorrecta).
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
 CREATE OR ALTER PROCEDURE HR.sp_ProcessGuardAttendanceDate
 (
     @WorkDate DATE,
-    @Debug    BIT = 0
+    @Debug    BIT = 0,
+    -- 2026-07-06: filtro opcional. NULL = comportamiento actual (todos los
+    -- guardias con turno activo ese día). Con valor, acota el reproceso al
+    -- guardia indicado (titular o reemplazo). Evita que un reproceso acotado
+    -- por empleado en sp_ProcessAttendanceRunDate termine tocando a todos
+    -- los guardias de la fecha.
+    @FilterEmployeeID INT = NULL
 )
 AS
 BEGIN
@@ -109,7 +122,10 @@ BEGIN
     LEFT JOIN HR.vw_EmployeeDetails ved
         ON ved.EmployeeID = ISNULL(gsc.ReplacementEmployeeId, gsp.EmployeeId)
     WHERE gsp.WorkDate            = @WorkDate
-      AND gsp.IsActiveForAssignment = 1;
+      AND gsp.IsActiveForAssignment = 1
+      AND (@FilterEmployeeID IS NULL
+           OR gsp.EmployeeId = @FilterEmployeeID
+           OR ISNULL(gsc.ReplacementEmployeeId, gsp.EmployeeId) = @FilterEmployeeID);
 
     IF NOT EXISTS (SELECT 1 FROM #GuardShifts)
     BEGIN
@@ -188,6 +204,21 @@ BEGIN
                 @EmployeeID = @EffectiveEmpId,
                 @WorkDate   = @WorkDate;
 
+            /* 4b-bis. Fase 4 punto 4.5: consolidar horas extra/recuperación
+               planificadas hacia HR.tbl_Overtime. Antes de este fix, los
+               guardias nunca pasaban por este paso (el pipeline normal sí lo
+               hace vía sp_ProcessAttendanceRunDate) y su horas extra
+               ejecutadas jamás llegaban a facturarse. Se le pasa el horario
+               ya resuelto del turno (@EntryTime/@ExitTime) porque
+               sp_ProcessTimePlanningForEmployeeDay resuelve por defecto
+               contra tbl_EmployeeSchedules, tabla que los guardias no usan. */
+            EXEC HR.sp_ProcessAttendancePlanningDay
+                @EmployeeID        = @EffectiveEmpId,
+                @WorkDate          = @WorkDate,
+                @Debug             = @Debug,
+                @OverrideEntryTime = @EntryTime,
+                @OverrideExitTime  = @ExitTime;
+
             EXEC HR.sp_ProcessAttendanceFinalizeDay
                 @EmployeeID   = @EffectiveEmpId,
                 @WorkDate     = @WorkDate,
@@ -206,16 +237,25 @@ BEGIN
 
             /* 4d. Actualizar estado del turno:
                    COMPLETED  si hay al menos una picada válida (TotalWorkedMinutes > 0)
-                   ABSENT     si no hubo picadas                                       */
-            DECLARE @TotalWorked INT = 0;
-            SELECT @TotalWorked = ISNULL(TotalWorkedMinutes, 0)
-            FROM HR.tbl_AttendanceCalculations
-            WHERE EmployeeID = @EffectiveEmpId AND WorkDate = @WorkDate;
+                   ABSENT     si no hubo picadas
+               2026-07-06: solo se evalúa si @WorkDate ya pasó (hoy o antes).
+               Antes, reprocesar una fecha futura sin marcaciones (el turno
+               todavía no ocurre) marcaba ABSENT a un guardia que ni siquiera
+               ha llegado su turno — confirmado con la prueba controlada de
+               PlanEmployeeID, donde 50 guardias reales quedaron ABSENT por
+               error al reprocesar 2026-07-15 antes de que llegara la fecha. */
+            IF @WorkDate <= CAST(GETDATE() AS DATE)
+            BEGIN
+                DECLARE @TotalWorked INT = 0;
+                SELECT @TotalWorked = ISNULL(TotalWorkedMinutes, 0)
+                FROM HR.tbl_AttendanceCalculations
+                WHERE EmployeeID = @EffectiveEmpId AND WorkDate = @WorkDate;
 
-            UPDATE HR.tbl_GuardShiftPlanning
-            SET StatusTypeId = CASE WHEN @TotalWorked > 0 THEN @StatusCompleted ELSE @StatusAbsent END,
-                UpdatedAt    = GETDATE()
-            WHERE PlanningId = @PlanningId;
+                UPDATE HR.tbl_GuardShiftPlanning
+                SET StatusTypeId = CASE WHEN @TotalWorked > 0 THEN @StatusCompleted ELSE @StatusAbsent END,
+                    UpdatedAt    = GETDATE()
+                WHERE PlanningId = @PlanningId;
+            END
 
         END TRY
         BEGIN CATCH

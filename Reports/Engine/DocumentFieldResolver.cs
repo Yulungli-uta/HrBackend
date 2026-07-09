@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using WsUtaSystem.Application.Common.Enums;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
 using WsUtaSystem.Reports.Abstractions;
@@ -27,13 +28,19 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
 {
     private readonly AppDbContext _db;
     private readonly IConfiguration _config;
+    private readonly IInstitutionalLogoService _logoService;
     private readonly ILogger<DocumentFieldResolver> _logger;
 
-    public DocumentFieldResolver(AppDbContext db, IConfiguration config, ILogger<DocumentFieldResolver> logger)
+    public DocumentFieldResolver(
+        AppDbContext db,
+        IConfiguration config,
+        IInstitutionalLogoService logoService,
+        ILogger<DocumentFieldResolver> logger)
     {
-        _db     = db     ?? throw new ArgumentNullException(nameof(db));
-        _config = config ?? throw new ArgumentNullException(nameof(config));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _db          = db          ?? throw new ArgumentNullException(nameof(db));
+        _config      = config      ?? throw new ArgumentNullException(nameof(config));
+        _logoService = logoService ?? throw new ArgumentNullException(nameof(logoService));
+        _logger      = logger      ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <inheritdoc />
@@ -102,7 +109,7 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
                 .AsNoTracking()
                 .FirstOrDefaultAsync(c => c.ContractID == entityId.Value, ct);
         }
-        else
+        else if (employee is not null)
         {
             // Contrato activo más reciente del empleado
             contract = await _db.Contracts
@@ -137,8 +144,16 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
         {
             movement = await _db.PersonnelMovements
                 .AsNoTracking()
+                .Include(m => m.MovementType)
                 .FirstOrDefaultAsync(m => m.MovementId == entityId.Value, ct);
         }
+
+        // ── Cargar autoridades institucionales activas (Rector, Vicerrector, Director financiero/RRHH...) ──
+        // Se resuelven dinámicamente desde HR.tbl_DepartmentAuthorities + HR.tbl_Departments.InstitutionalRoleTypeId,
+        // sin IDs ni nombres quemados en código ni en appsettings.
+        Dictionary<string, (string Name, string Title)>? authorities = null;
+        if (fields.Any(f => f.SourceType == FieldSourceType.System))
+            authorities = await LoadActiveAuthoritiesAsync(ct);
 
         // ── Resolver cada campo ──────────────────────────────────────────────────
         foreach (var field in fields)
@@ -153,7 +168,7 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
             // 2. Resolución automática: saltar campos de empleado/contrato si no hay datos
             string? resolved = null;
             if (field.SourceType == FieldSourceType.System)
-                resolved = ResolveField(field, employee, contract, contractType, department, job, movement);
+                resolved = ResolveSystemField(field.FieldName, authorities);
             else if (employee is not null)
                 resolved = ResolveField(field, employee, contract, contractType, department, job, movement);
 
@@ -184,7 +199,6 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
             FieldSourceType.Employee => ResolveEmployeeField(field.FieldName, employee),
             FieldSourceType.Contract => ResolveContractField(field.FieldName, contract, contractType, department, job),
             FieldSourceType.Movement => ResolveMovementField(field.FieldName, movement),
-            FieldSourceType.System   => ResolveSystemField(field.FieldName, _config),
             FieldSourceType.Manual   => null,
             _                        => null
         };
@@ -233,8 +247,11 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
         {
             "CONTRACT_CODE"        => contract.ContractCode,
             "CONTRACT_TYPE"        => contractType?.Name,
-            "CONTRACT_STARTDATE"   => contract.StartDate.ToString("dd/MM/yyyy"),
-            "CONTRACT_ENDDATE"     => contract.EndDate.ToString("dd/MM/yyyy"),
+            // Alias: CONTRATO_PROFESOR_OCASIONAL usa CONTRACT_START_DATE/CONTRACT_END_DATE
+            // (con guión bajo extra) en vez de la convención CONTRACT_STARTDATE/ENDDATE
+            // usada por las plantillas CONTRATO_TECNICO_*.
+            "CONTRACT_STARTDATE" or "CONTRACT_START_DATE" => contract.StartDate.ToString("dd/MM/yyyy"),
+            "CONTRACT_ENDDATE"   or "CONTRACT_END_DATE"   => contract.EndDate.ToString("dd/MM/yyyy"),
             "CONTRACT_DESCRIPTION" => contract.ContractDescription,
             "CONTRACT_RMU"         => null,
             "DEPARTMENT_NAME"      => department?.Name,
@@ -257,18 +274,69 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
         return fieldName.ToUpperInvariant() switch
         {
             "MOVEMENT_DATE"   => movement.MovementDate.ToString("dd/MM/yyyy"),
-            "MOVEMENT_TYPE"   => movement.MovementType,
+            "MOVEMENT_TYPE"   => movement.MovementType?.Name,
             "MOVEMENT_REASON" => movement.Reason,
             _                 => null
         };
     }
 
-    private static string? ResolveSystemField(string fieldName, IConfiguration config)
+    /// <summary>
+    /// Carga las autoridades institucionales activas vigentes hoy, agrupadas por el código de rol
+    /// (HR.ref_Types.Category = 'DEPARTMENT_INSTITUTIONAL_ROLE', ej. RECTORADO, FINANCE, HUMAN_RESOURCE).
+    /// Solo considera tipos de autoridad que representan a la máxima autoridad del rol
+    /// (Rector, Vicerrector, Director) para evitar traer Coordinadores/Secretarios del mismo departamento.
+    /// </summary>
+    private async Task<Dictionary<string, (string Name, string Title)>> LoadActiveAuthoritiesAsync(CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+
+        var rows = await _db.DepartmentAuthorities
+            .AsNoTracking()
+            .Include(a => a.Employee).ThenInclude(e => e!.People)
+            .Include(a => a.AuthorityType)
+            .Include(a => a.Department).ThenInclude(d => d!.InstitutionalRoleType)
+            .Where(a => a.IsActive
+                     && a.Department!.InstitutionalRoleType != null
+                     && (a.AuthorityType!.Name == "Rector" || a.AuthorityType.Name == "Vicerrector" || a.AuthorityType.Name == "Director")
+                     && a.StartDate <= today
+                     && (a.EndDate == null || a.EndDate >= today))
+            .ToListAsync(ct);
+
+        var result = new Dictionary<string, (string Name, string Title)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var roleCode = row.Department!.InstitutionalRoleType!.Name;
+            if (result.ContainsKey(roleCode)) continue; // ya resuelto por otra fila del mismo rol
+
+            var person = row.Employee?.People;
+            var fullName = person is null ? string.Empty : $"{person.FirstName} {person.LastName}".Trim();
+            var title = row.Denomination ?? row.AuthorityType!.Name;
+
+            result[roleCode] = (fullName, title);
+        }
+
+        return result;
+    }
+
+    private string? ResolveSystemField(
+        string fieldName,
+        Dictionary<string, (string Name, string Title)>? authorities)
     {
         var now = DateTime.Now;
 
-        // Leer config institucional (sección InstitutionalConfig en appsettings.json)
-        string Cfg(string key) => config[$"InstitutionalConfig:{key}"] ?? string.Empty;
+        // Leer config institucional (sección InstitutionalConfig en appsettings.json) — fallback
+        // cuando no hay una autoridad activa registrada en HR.tbl_DepartmentAuthorities.
+        string Cfg(string key) => _config[$"InstitutionalConfig:{key}"] ?? string.Empty;
+
+        string AuthorityName(string roleCode, string cfgFallbackKey) =>
+            authorities is not null && authorities.TryGetValue(roleCode, out var a) && a.Name.Length > 0
+                ? a.Name
+                : Cfg(cfgFallbackKey);
+
+        string AuthorityTitle(string roleCode, string cfgFallbackKey) =>
+            authorities is not null && authorities.TryGetValue(roleCode, out var a) && a.Name.Length > 0
+                ? a.Title
+                : Cfg(cfgFallbackKey);
 
         return fieldName.ToUpperInvariant() switch
         {
@@ -279,17 +347,34 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
             "SYSTEM_DAY"          => now.Day.ToString("00"),
             "INSTITUTION_NAME"    => "Universidad Técnica de Ambato",
             "INSTITUTION_SHORT"   => "UTA",
+            // Logo institucional embebido como data URI: una sola fuente (IInstitutionalLogoService)
+            // compartida con los renderers de QuestPDF, para que la vista previa y el PDF final
+            // (Chromium headless) usen siempre el mismo archivo.
+            "LOGO_URL"            => _logoService.GetLogoDataUri(),
             // Fechas del documento
             "APPROVAL_DATE"       => now.ToString("dd/MM/yyyy"),
             "NOTIFICATION_DATE"   => now.ToString("dd/MM/yyyy"),
             "NOTIFICATION_HOUR"   => now.ToString("HH:mm"),
-            // Responsables institucionales (leídos de configuración)
-            "DTH_DIRECTOR_NAME"   => Cfg("DthDirectorName"),
-            "DTH_DIRECTOR_TITLE"  => Cfg("DthDirectorTitle"),
-            "AUTHORITY_NAME"      => Cfg("AuthorityName"),
-            "AUTHORITY_TITLE"     => Cfg("AuthorityTitle"),
+            // Firma del servidor: se asume igual al momento de generación del documento
+            "EMPLOYEE_SIGNATURE_DATE" => now.ToString("dd/MM/yyyy"),
+            "EMPLOYEE_SIGNATURE_HOUR" => now.ToString("HH:mm"),
+            // Autoridades institucionales — resueltas dinámicamente desde DepartmentAuthority;
+            // si no hay autoridad activa para el rol, cae al valor estático de InstitutionalConfig.
+            "AUTHORITY_NAME"             => AuthorityName("RECTORADO", "AuthorityName"),
+            "AUTHORITY_TITLE"            => AuthorityTitle("RECTORADO", "AuthorityTitle"),
+            // Alias: CONTRATO_PROFESOR_OCASIONAL usa RECTOR_FULLNAME en vez de AUTHORITY_NAME
+            // para referirse a la misma autoridad (Rectorado).
+            "RECTOR_FULLNAME"            => AuthorityName("RECTORADO", "AuthorityName"),
+            "VICERECTOR_NAME"            => AuthorityName("VICERRECTORADO", "VicerectorName"),
+            "VICERECTOR_TITLE"           => AuthorityTitle("VICERRECTORADO", "VicerectorTitle"),
+            "FINANCIAL_DIRECTOR_NAME"    => AuthorityName("FINANCE", "FinancialDirectorName"),
+            "FINANCIAL_DIRECTOR_TITLE"   => AuthorityTitle("FINANCE", "FinancialDirectorTitle"),
+            "DTH_DIRECTOR_NAME"          => AuthorityName("HUMAN_RESOURCE", "DthDirectorName"),
+            "DTH_DIRECTOR_TITLE"         => AuthorityTitle("HUMAN_RESOURCE", "DthDirectorTitle"),
             "ELABORATOR_NAME"     => Cfg("ElaboratorName"),
             "ELABORATOR_TITLE"    => Cfg("ElaboratorTitle"),
+            // Alias: CONTRATO_PROFESOR_OCASIONAL usa ELABORATOR_FULLNAME en vez de ELABORATOR_NAME.
+            "ELABORATOR_FULLNAME" => Cfg("ElaboratorName"),
             "REVIEWER_NAME"       => Cfg("ReviewerName"),
             "REVIEWER_TITLE"      => Cfg("ReviewerTitle"),
             "REGISTRAR_NAME"      => Cfg("RegistrarName"),

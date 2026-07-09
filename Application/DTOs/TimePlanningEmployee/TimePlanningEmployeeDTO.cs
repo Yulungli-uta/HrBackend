@@ -34,11 +34,7 @@ namespace WsUtaSystem.Application.DTOs.TimePlanningEmployee
 
         public int? EmployeeStatusTypeID { get; set; }
 
-        [Range(0, double.MaxValue, ErrorMessage = "El monto de pago debe ser positivo")]
-        public decimal? PaymentAmount { get; set; }
-
         public bool? IsEligible { get; set; }
-        public string? EligibilityReason { get; set; }
     }
 
     public class TimePlanningEmployeeResponseDTO
@@ -56,9 +52,7 @@ namespace WsUtaSystem.Application.DTOs.TimePlanningEmployee
         public int? ActualMinutes { get; set; }
         public int EmployeeStatusTypeID { get; set; }
         public string EmployeeStatusName { get; set; } = string.Empty;
-        public decimal? PaymentAmount { get; set; }
         public bool IsEligible { get; set; }
-        public string? EligibilityReason { get; set; }
         public DateTime CreatedAt { get; set; }
 
         // Porcentaje de completado

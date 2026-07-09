@@ -29,17 +29,28 @@ public sealed class PersonnelActionType : IAuditable
     /// <summary>Último número de secuencia emitido para el año actual.</summary>
     public int NumberingLastSequence { get; set; } = 0;
 
-    /// <summary>Código de la plantilla documental por defecto (ej: "ACCION_PERSONAL_V1").</summary>
-    public string? TemplateCode { get; set; }
+    /// <summary>FK a la plantilla documental (DocumentTemplate.TemplateId) usada por defecto para este tipo de acción.</summary>
+    public int? DefaultTemplateId { get; set; }
+
+    /// <summary>Plantilla documental usada por defecto.</summary>
+    public DocumentTemplate? DefaultTemplate { get; set; }
 
     /// <summary>Indica si este tipo de acción está disponible para uso.</summary>
     public bool IsActive { get; set; } = true;
 
     /// <summary>
     /// Categoría funcional de la acción. Permite agrupar y filtrar en reportes.
-    /// Valores: MOVEMENT, ENTRY, ECONOMIC, LEAVE, DISCIPLINARY, EXIT.
+    /// Valores en uso: MOVEMENT, ENTRY, SALARY_CHANGE, SCHEDULE, LEAVE, DISCIPLINARY, VULNERABILITY, VACATION.
     /// </summary>
     public string? ActionCategory { get; set; }
+
+    /// <summary>
+    /// 2026-07-06: si es true, esta acción participa en la cadena de "acción vigente"
+    /// del empleado — al cargar el documento firmado, transiciona automáticamente
+    /// FIRMADO_CARGADO → VIGENTE (en vez del flujo manual a FINALIZADO), y cierra a
+    /// FINALIZADO la acción que estuviera vigente para ese empleado en ese momento.
+    /// </summary>
+    public bool ReachesVigente { get; set; } = false;
 
     // ── Integración Active Directory ─────────────────────────────────────────────
 

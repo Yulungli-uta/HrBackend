@@ -34,6 +34,24 @@ public interface IDocumentTemplateService
 
     /// <summary>Previsualiza el HTML de una plantilla con datos reales o de muestra.</summary>
     Task<PreviewTemplateResponse> PreviewAsync(PreviewTemplateRequest request, CancellationToken ct = default);
+
+    /// <summary>Crea una nueva versión de una plantilla existente (mismo TemplateCode, nueva versión).</summary>
+    Task<CreateVersionResponse> CreateVersionAsync(int sourceTemplateId, string newVersion, int createdBy, CancellationToken ct = default);
+
+    /// <summary>Obtiene todas las versiones de plantillas con el mismo código.</summary>
+    Task<IReadOnlyList<TemplateVersionSummaryDto>> GetVersionsByCodeAsync(string templateCode, CancellationToken ct = default);
+
+    /// <summary>Analiza el ContractText de un tipo de contrato y retorna los placeholders legados detectados.</summary>
+    Task<ImportContractTextResponse> ImportContractTextAsync(int contractTypeId, CancellationToken ct = default);
+
+    /// <summary>Obtiene los tipos de contrato relevantes para importar texto en una plantilla específica.</summary>
+    Task<IReadOnlyList<TemplateContractTypeOptionDto>> GetContractTypesForTemplateAsync(int templateId, CancellationToken ct = default);
+
+    /// <summary>Obtiene los tipos de acción de personal relevantes para una plantilla específica.</summary>
+    Task<IReadOnlyList<TemplateActionTypeOptionDto>> GetActionTypesForTemplateAsync(int templateId, CancellationToken ct = default);
+
+    /// <summary>Extrae los tokens {{CAMPO}} de un fragmento HTML.</summary>
+    ExtractTokensResponse ExtractTokens(ExtractTokensRequest request);
 }
 
 // ── IDocumentTemplateFieldService ────────────────────────────────────────────────

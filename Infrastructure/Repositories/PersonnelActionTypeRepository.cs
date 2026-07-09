@@ -18,6 +18,16 @@ public sealed class PersonnelActionTypeRepository
             .OrderBy(x => x.Name)
             .ToListAsync(ct);
 
+    public async Task SetDefaultTemplateAsync(int personnelActionTypeId, int? templateId, CancellationToken ct = default)
+    {
+        var entity = await _db.Set<PersonnelActionType>()
+            .FirstOrDefaultAsync(x => x.PersonnelActionTypeId == personnelActionTypeId, ct)
+            ?? throw new KeyNotFoundException($"PersonnelActionType id={personnelActionTypeId} no existe.");
+
+        entity.DefaultTemplateId = templateId;
+        await _db.SaveChangesAsync(ct);
+    }
+
     public async Task<(string DocumentNumber, int Year, int Sequence)> ConsumeNextNumberAsync(
         int personnelActionTypeId,
         int year,

@@ -12,8 +12,9 @@ public sealed class DailyAttendanceCalculationJob : BaseJob
 
     public DailyAttendanceCalculationJob(
         IAttendanceCalculationService attendanceService,
-        ILogger<DailyAttendanceCalculationJob> logger)
-        : base(logger)
+        ILogger<DailyAttendanceCalculationJob> logger,
+        IJobExecutionLogService jobExecutionLogService)
+        : base(logger, jobExecutionLogService)
     {
         _attendanceService = attendanceService;
         _logger = logger;
@@ -33,6 +34,7 @@ public sealed class DailyAttendanceCalculationJob : BaseJob
         await _attendanceService.ProcessAttendanceRunRangeAsync(
             targetDate,
             targetDate,
-            cancellationToken);
+            employeeId: null,
+            ct: cancellationToken);
     }
 }

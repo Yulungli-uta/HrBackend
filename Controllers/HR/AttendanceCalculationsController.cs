@@ -14,15 +14,18 @@ public class AttendanceCalculationsController : ControllerBase
     private readonly IAttendanceCalculationService _attendanceProcessService;
     private readonly IAttendanceCalculationsService _attendanceQueryService;
     private readonly IMapper _mapper;
+    private readonly IJobExecutionLogService _jobExecutionLogService;
 
     public AttendanceCalculationsController(
         IAttendanceCalculationsService attendanceQueryService,
         IMapper mapper,
-        IAttendanceCalculationService attendanceProcessService)
+        IAttendanceCalculationService attendanceProcessService,
+        IJobExecutionLogService jobExecutionLogService)
     {
         _attendanceQueryService = attendanceQueryService;
         _mapper = mapper;
         _attendanceProcessService = attendanceProcessService;
+        _jobExecutionLogService = jobExecutionLogService;
     }
 
     /// <summary>Lista todos los registros de AttendanceCalculations.</summary>
@@ -81,10 +84,39 @@ public class AttendanceCalculationsController : ControllerBase
         [FromBody] AttendanceCalculationRequestDto request,
         CancellationToken ct)
     {
-        await _attendanceProcessService.ProcessAttendanceRunRangeAsync(
-            request.FromDate,
-            request.ToDate,
-            ct);
+        long? logId = null;
+        try
+        {
+            logId = await _jobExecutionLogService.StartAsync("DailyAttendanceCalculationJob", "Manual", ct);
+        }
+        catch
+        {
+            // El logging de auditoría nunca debe bloquear la ejecución real.
+        }
+
+        try
+        {
+            await _attendanceProcessService.ProcessAttendanceRunRangeAsync(
+                request.FromDate,
+                request.ToDate,
+                employeeId: request.EmployeeId,
+                ct: ct);
+        }
+        catch (Exception ex)
+        {
+            if (logId.HasValue)
+            {
+                try { await _jobExecutionLogService.FinishAsync(logId.Value, "Failed", ex.Message, ct); }
+                catch { /* no bloquear el manejo del error real */ }
+            }
+            throw;
+        }
+
+        if (logId.HasValue)
+        {
+            try { await _jobExecutionLogService.FinishAsync(logId.Value, "Success", null, ct); }
+            catch { /* no bloquear la respuesta */ }
+        }
 
         return Ok(new
         {
@@ -101,7 +133,35 @@ public class AttendanceCalculationsController : ControllerBase
         [FromBody] DateTime workDate,
         CancellationToken ct)
     {
-        await _attendanceProcessService.ProcessAttendanceRunDateAsync(workDate, ct);
+        long? logId = null;
+        try
+        {
+            logId = await _jobExecutionLogService.StartAsync("DailyAttendanceCalculationJob", "Manual", ct);
+        }
+        catch
+        {
+            // El logging de auditoría nunca debe bloquear la ejecución real.
+        }
+
+        try
+        {
+            await _attendanceProcessService.ProcessAttendanceRunDateAsync(workDate, employeeId: null, ct: ct);
+        }
+        catch (Exception ex)
+        {
+            if (logId.HasValue)
+            {
+                try { await _jobExecutionLogService.FinishAsync(logId.Value, "Failed", ex.Message, ct); }
+                catch { /* no bloquear el manejo del error real */ }
+            }
+            throw;
+        }
+
+        if (logId.HasValue)
+        {
+            try { await _jobExecutionLogService.FinishAsync(logId.Value, "Success", null, ct); }
+            catch { /* no bloquear la respuesta */ }
+        }
 
         return Ok(new
         {

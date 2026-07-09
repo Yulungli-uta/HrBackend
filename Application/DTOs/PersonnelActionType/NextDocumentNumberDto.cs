@@ -7,3 +7,6 @@ public sealed record NextDocumentNumberDto(
     int Year,
     int Sequence
 );
+
+/// <summary>Solicitud para vincular una plantilla predeterminada a un tipo de acción de personal.</summary>
+public sealed record SetDefaultTemplateRequest(int? TemplateId);

@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
-using WsUtaSystem.Application.Services.Reports.Configuration;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Reports.Abstractions;
 
 namespace WsUtaSystem.Reports.Renderers;
@@ -17,8 +17,7 @@ namespace WsUtaSystem.Reports.Renderers;
 /// </summary>
 public sealed class PersonalActionDocumentRenderer : IDocumentRenderer
 {
-    private readonly ReportConfiguration _config;
-    private readonly IWebHostEnvironment _env;
+    private readonly IInstitutionalLogoService _logoService;
     private readonly ILogger<PersonalActionDocumentRenderer> _logger;
 
     private static readonly string BorderColor = "#444444";
@@ -27,13 +26,11 @@ public sealed class PersonalActionDocumentRenderer : IDocumentRenderer
     private static readonly string TextColor = "#111111";
 
     public PersonalActionDocumentRenderer(
-        ReportConfiguration config,
-        IWebHostEnvironment env,
+        IInstitutionalLogoService logoService,
         ILogger<PersonalActionDocumentRenderer> logger)
     {
-        _config = config ?? throw new ArgumentNullException(nameof(config));
-        _env = env ?? throw new ArgumentNullException(nameof(env));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _logoService = logoService ?? throw new ArgumentNullException(nameof(logoService));
+        _logger      = logger      ?? throw new ArgumentNullException(nameof(logger));
 
         QuestPDF.Settings.License = LicenseType.Community;
     }
@@ -457,10 +454,9 @@ public sealed class PersonalActionDocumentRenderer : IDocumentRenderer
 
     private void ComposeLogoCell(IContainer container)
     {
-        var logoPath = Path.Combine(_env.WebRootPath ?? string.Empty, _config.Images.LogoPath ?? string.Empty);
-        var hasLogo = !string.IsNullOrWhiteSpace(_config.Images.LogoPath) && File.Exists(logoPath);
+        var logoPath = _logoService.GetLogoFilePath();
 
-        if (hasLogo)
+        if (logoPath is not null)
         {
             container.Padding(2).Image(logoPath).FitArea();
             return;

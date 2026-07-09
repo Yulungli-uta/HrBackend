@@ -9,7 +9,7 @@ public class PersonnelMovementsCreateDto
     public int OriginDepartmentId { get; set; }
     public int DestinationDepartmentId { get; set; }
     public DateOnly MovementDate { get; set; }
-    public string? MovementType { get; set; }
+    public int? MovementTypeId { get; set; }
     public string DocumentLocation { get; set; }
     public string Reason { get; set; }
     public bool IsActive { get; set; }

@@ -1,6 +1,7 @@
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Services.Reports.Configuration;
 using WsUtaSystem.Reports.Abstractions;
 using WsUtaSystem.Reports.Core;
@@ -28,6 +29,7 @@ public sealed class PdfReportRenderer : IReportRenderer
 {
     private readonly ReportConfiguration _config;
     private readonly IWebHostEnvironment _env;
+    private readonly IInstitutionalLogoService _logoService;
     private readonly ILogger<PdfReportRenderer> _logger;
 
     /// <inheritdoc/>
@@ -36,11 +38,13 @@ public sealed class PdfReportRenderer : IReportRenderer
     public PdfReportRenderer(
         ReportConfiguration config,
         IWebHostEnvironment env,
+        IInstitutionalLogoService logoService,
         ILogger<PdfReportRenderer> logger)
     {
-        _config = config ?? throw new ArgumentNullException(nameof(config));
-        _env    = env    ?? throw new ArgumentNullException(nameof(env));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _config      = config      ?? throw new ArgumentNullException(nameof(config));
+        _env         = env         ?? throw new ArgumentNullException(nameof(env));
+        _logoService = logoService ?? throw new ArgumentNullException(nameof(logoService));
+        _logger      = logger      ?? throw new ArgumentNullException(nameof(logger));
 
         // Configurar licencia de QuestPDF una sola vez
         QuestPDF.Settings.License = LicenseType.Community;
@@ -107,8 +111,8 @@ public sealed class PdfReportRenderer : IReportRenderer
                 // Fallback: cabecera de texto con logo
                 column.Item().Row(row =>
                 {
-                    var logoPath = Path.Combine(_env.ContentRootPath, _config.Images.LogoPath);
-                    if (File.Exists(logoPath))
+                    var logoPath = _logoService.GetLogoFilePath();
+                    if (logoPath is not null)
                         row.ConstantItem(60).Height(60).Image(logoPath);
 
                     row.RelativeItem().Column(col =>

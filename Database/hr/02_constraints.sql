@@ -442,9 +442,17 @@ IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK__tbl_Time__D18
         ADD CONSTRAINT [PK__tbl_Time__D1822466B9467EFC] PRIMARY KEY CLUSTERED ([MovementID]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK__tbl_Time__7AD04FF13895AF94')
+-- 2026-07-06 (Fase 3, propuesta multi-régimen): PK cambiada de (EmployeeID) a
+-- (EmployeeID, LaborRegimeId) — un saldo por régimen activo, no uno solo por
+-- empleado. Ejecutado y verificado en producción (674 -> 676 filas).
+IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK_TimeBalances_Employee_Regime')
+BEGIN
+    IF EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK__tbl_Time__7AD04FF13895AF94')
+        ALTER TABLE [HR].[tbl_TimeBalances] DROP CONSTRAINT [PK__tbl_Time__7AD04FF13895AF94];
+
     ALTER TABLE [HR].[tbl_TimeBalances]
-        ADD CONSTRAINT [PK__tbl_Time__7AD04FF13895AF94] PRIMARY KEY CLUSTERED ([EmployeeID]);
+        ADD CONSTRAINT [PK_TimeBalances_Employee_Regime] PRIMARY KEY CLUSTERED ([EmployeeID], [LaborRegimeId]);
+END
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK_TimePlanning')
@@ -470,6 +478,11 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK_TimeRecoveryPlans')
     ALTER TABLE [HR].[tbl_TimeRecoveryPlans]
         ADD CONSTRAINT [PK_TimeRecoveryPlans] PRIMARY KEY CLUSTERED ([RecoveryPlanID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK_Languages')
+    ALTER TABLE [HR].[tbl_Languages]
+        ADD CONSTRAINT [PK_Languages] PRIMARY KEY CLUSTERED ([LanguageID]);
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK_Trainings')
@@ -521,11 +534,6 @@ IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_DocumentTempla
         ADD CONSTRAINT [UQ_DocumentTemplateFields_TemplateFieldName] UNIQUE ([TemplateID], [FieldName]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_DocumentTemplates_TemplateCode')
-    ALTER TABLE [HR].[tbl_DocumentTemplates]
-        ADD CONSTRAINT [UQ_DocumentTemplates_TemplateCode] UNIQUE ([TemplateCode]);
-GO
-
 IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_Employees_Email')
     ALTER TABLE [HR].[tbl_Employees]
         ADD CONSTRAINT [UQ_Employees_Email] UNIQUE ([Email]);
@@ -571,10 +579,30 @@ IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_TeacherStr_Act
         ADD CONSTRAINT [UQ_TeacherStr_ActiveEmployee] UNIQUE ([EmployeeID], [StartDate]);
 GO
 
+-- 2026-07-06: cierra el hueco que permitió insertar el mismo plan/log de
+-- recuperación varias veces (encontrado con datos reales duplicados).
+IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_TimeRecoveryPlans_Employee_Date_Range')
+    ALTER TABLE [HR].[tbl_TimeRecoveryPlans]
+        ADD CONSTRAINT [UQ_TimeRecoveryPlans_Employee_Date_Range] UNIQUE ([EmployeeID], [PlanDate], [FromTime], [ToTime]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_TimeRecoveryLogs_Plan_ExecutedDate')
+    ALTER TABLE [HR].[tbl_TimeRecoveryLogs]
+        ADD CONSTRAINT [UQ_TimeRecoveryLogs_Plan_ExecutedDate] UNIQUE ([RecoveryPlanID], [ExecutedDate]);
+GO
+
 -- ============================================================
 -- BLOQUE 3: FOREIGN KEYS
 -- (Ordenadas topológicamente: tablas independientes primero)
 -- ============================================================
+
+-- --- Tabla: tbl_Departments ---
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Departments_InstitutionalRoleType')
+    ALTER TABLE [HR].[tbl_Departments]
+        ADD CONSTRAINT [FK_Departments_InstitutionalRoleType]
+            FOREIGN KEY ([InstitutionalRoleTypeId])
+            REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
 
 -- --- Tabla: tbl_contract_status_transitions ---
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_contract_status_transitions_to')
@@ -985,6 +1013,57 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Trainings_Certifi
             REFERENCES [HR].[ref_Types] ([TypeID]);
 GO
 
+-- Direccion/modalidad/pais: agregados para academic-promotion (ver 01_tables.sql).
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Trainings_TrainingDirectionType')
+    ALTER TABLE [HR].[tbl_Trainings]
+        ADD CONSTRAINT [FK_Trainings_TrainingDirectionType]
+            FOREIGN KEY ([TrainingDirectionTypeID])
+            REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Trainings_ModalityType')
+    ALTER TABLE [HR].[tbl_Trainings]
+        ADD CONSTRAINT [FK_Trainings_ModalityType]
+            FOREIGN KEY ([ModalityTypeID])
+            REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Trainings_Country')
+    ALTER TABLE [HR].[tbl_Trainings]
+        ADD CONSTRAINT [FK_Trainings_Country]
+            FOREIGN KEY ([CountryID])
+            REFERENCES [HR].[tbl_Countries] ([CountryID]);
+GO
+
+-- --- Tabla: tbl_Languages ---
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Languages_Person')
+    ALTER TABLE [HR].[tbl_Languages]
+        ADD CONSTRAINT [FK_Languages_Person]
+            FOREIGN KEY ([PersonID])
+            REFERENCES [HR].[tbl_People] ([PersonID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Languages_LanguageType')
+    ALTER TABLE [HR].[tbl_Languages]
+        ADD CONSTRAINT [FK_Languages_LanguageType]
+            FOREIGN KEY ([LanguageTypeID])
+            REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Languages_LevelType')
+    ALTER TABLE [HR].[tbl_Languages]
+        ADD CONSTRAINT [FK_Languages_LevelType]
+            FOREIGN KEY ([LevelTypeID])
+            REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Languages_Country')
+    ALTER TABLE [HR].[tbl_Languages]
+        ADD CONSTRAINT [FK_Languages_Country]
+            FOREIGN KEY ([CountryID])
+            REFERENCES [HR].[tbl_Countries] ([CountryID]);
+GO
+
 -- --- Tabla: tbl_BankAccounts ---
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_BankAccounts_AccountType')
     ALTER TABLE [HR].[tbl_BankAccounts]
@@ -1065,6 +1144,13 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_PersonnelActions_
         ADD CONSTRAINT [FK_PersonnelActions_UpdatedBy]
             FOREIGN KEY ([UpdatedBy])
             REFERENCES [HR].[tbl_Employees] ([EmployeeID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_PersonnelActionType_DefaultTemplate')
+    ALTER TABLE [HR].[tbl_personnel_action_type]
+        ADD CONSTRAINT [FK_PersonnelActionType_DefaultTemplate]
+            FOREIGN KEY ([DefaultTemplateId])
+            REFERENCES [HR].[tbl_DocumentTemplates] ([TemplateID]);
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_PersonnelActions_ActionType')
@@ -1851,6 +1937,13 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_contract_type_Per
             REFERENCES [HR].[ref_Types] ([TypeID]);
 GO
 
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_ContractType_DelegationTemplate')
+    ALTER TABLE [HR].[tbl_contract_type]
+        ADD CONSTRAINT [FK_ContractType_DelegationTemplate]
+            FOREIGN KEY ([DelegationTemplateId])
+            REFERENCES [HR].[tbl_DocumentTemplates] ([TemplateID]);
+GO
+
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_contract_type_DocumentTemplateType')
     ALTER TABLE [HR].[tbl_contract_type]
         ADD CONSTRAINT [FK_contract_type_DocumentTemplateType]
@@ -2311,6 +2404,15 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Overtime_Employee
             REFERENCES [HR].[tbl_Employees] ([EmployeeID]);
 GO
 
+-- 2026-07-06 (punto 6): trazabilidad al plan de origen. Nullable, no rompe
+-- filas existentes/manuales sin plan asociado.
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Overtime_PlanEmployee')
+    ALTER TABLE [HR].[tbl_Overtime]
+        ADD CONSTRAINT [FK_Overtime_PlanEmployee]
+            FOREIGN KEY ([PlanEmployeeID])
+            REFERENCES [HR].[tbl_TimePlanningEmployees] ([PlanEmployeeID]);
+GO
+
 -- --- Tabla: tbl_TimeRecoveryLogs ---
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_TimeRecoveryLogs_Plan')
     ALTER TABLE [HR].[tbl_TimeRecoveryLogs]
@@ -2692,4 +2794,135 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Departments_Depar
         ADD CONSTRAINT [FK_Departments_DepartmentType]
             FOREIGN KEY ([DepartmentType])
             REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
+
+-- --- Tabla: tbl_UserAccessScopes ---
+IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK_HR_UserAccessScopes')
+    ALTER TABLE [HR].[tbl_UserAccessScopes]
+        ADD CONSTRAINT [PK_HR_UserAccessScopes] PRIMARY KEY CLUSTERED ([Id]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_UserAccessScopes_ModuleType')
+    ALTER TABLE [HR].[tbl_UserAccessScopes]
+        ADD CONSTRAINT [FK_UserAccessScopes_ModuleType]
+            FOREIGN KEY ([ModuleTypeId]) REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_UserAccessScopes_ScopeType')
+    ALTER TABLE [HR].[tbl_UserAccessScopes]
+        ADD CONSTRAINT [FK_UserAccessScopes_ScopeType]
+            FOREIGN KEY ([ScopeTypeId]) REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_UserAccessScopes_Department')
+    ALTER TABLE [HR].[tbl_UserAccessScopes]
+        ADD CONSTRAINT [FK_UserAccessScopes_Department]
+            FOREIGN KEY ([DepartmentId]) REFERENCES [HR].[tbl_Departments] ([DepartmentID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_UserAccessScopes_Employee_Module_Active')
+    CREATE NONCLUSTERED INDEX [IX_UserAccessScopes_Employee_Module_Active]
+        ON [HR].[tbl_UserAccessScopes] ([EmployeeId], [ModuleTypeId], [IsActive]);
+GO
+
+-- --- Tabla: tbl_EmployeeLaborRegime ---
+IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK_HR_EmployeeLaborRegime')
+    ALTER TABLE [HR].[tbl_EmployeeLaborRegime]
+        ADD CONSTRAINT [PK_HR_EmployeeLaborRegime] PRIMARY KEY CLUSTERED ([Id]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_EmployeeLaborRegime_Employee')
+    ALTER TABLE [HR].[tbl_EmployeeLaborRegime]
+        ADD CONSTRAINT [FK_EmployeeLaborRegime_Employee]
+            FOREIGN KEY ([EmployeeId]) REFERENCES [HR].[tbl_Employees] ([EmployeeId]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_EmployeeLaborRegime_RefTypes')
+    ALTER TABLE [HR].[tbl_EmployeeLaborRegime]
+        ADD CONSTRAINT [FK_EmployeeLaborRegime_RefTypes]
+            FOREIGN KEY ([LaborRegimeId]) REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_EmployeeLaborRegime_Department')
+    ALTER TABLE [HR].[tbl_EmployeeLaborRegime]
+        ADD CONSTRAINT [FK_EmployeeLaborRegime_Department]
+            FOREIGN KEY ([DepartmentId]) REFERENCES [HR].[tbl_Departments] ([DepartmentID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_EmployeeLaborRegime_Job')
+    ALTER TABLE [HR].[tbl_EmployeeLaborRegime]
+        ADD CONSTRAINT [FK_EmployeeLaborRegime_Job]
+            FOREIGN KEY ([JobId]) REFERENCES [HR].[tbl_jobs] ([JobID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_EmployeeLaborRegime_Employee_Active')
+    CREATE NONCLUSTERED INDEX [IX_EmployeeLaborRegime_Employee_Active]
+        ON [HR].[tbl_EmployeeLaborRegime] ([EmployeeId], [IsActive]);
+GO
+
+-- Un solo régimen del mismo tipo activo por empleado a la vez.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_EmployeeLaborRegime_Employee_Regime_Active')
+    CREATE UNIQUE NONCLUSTERED INDEX [IX_EmployeeLaborRegime_Employee_Regime_Active]
+        ON [HR].[tbl_EmployeeLaborRegime] ([EmployeeId], [LaborRegimeId])
+        WHERE [IsActive] = (1);
+GO
+
+-- --- Tabla: tbl_UserAccessScopeHistory ---
+IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK_HR_UserAccessScopeHistory')
+    ALTER TABLE [HR].[tbl_UserAccessScopeHistory]
+        ADD CONSTRAINT [PK_HR_UserAccessScopeHistory] PRIMARY KEY CLUSTERED ([Id]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_UserAccessScopeHistory_Employee')
+    CREATE NONCLUSTERED INDEX [IX_UserAccessScopeHistory_Employee]
+        ON [HR].[tbl_UserAccessScopeHistory] ([EmployeeId], [ChangeDateTime]);
+GO
+
+-- ============================================================
+-- BLOQUE 4: CHECK CONSTRAINTS (fechas/rangos)
+-- 2026-07-06: agregado tras encontrar tbl_TimePlanning.PlanID=17 con
+-- EndDate anterior a StartDate — ese plan nunca podía ejecutarse ni
+-- pagarse, sin ningún error visible para quien lo creó.
+-- ============================================================
+
+-- WITH NOCHECK: existe una fila real (PlanID=17) que ya viola esta regla
+-- (EndDate anterior a StartDate). No se adivina cuál sería la fecha correcta
+-- de ese dato histórico — se protege todo INSERT/UPDATE nuevo hacia adelante
+-- y se deja esa fila puntual para revisión manual del usuario.
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_TimePlanning_EndDate_GE_StartDate')
+    ALTER TABLE [HR].[tbl_TimePlanning] WITH NOCHECK
+        ADD CONSTRAINT [CK_TimePlanning_EndDate_GE_StartDate] CHECK ([EndDate] >= [StartDate]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_TimeRecoveryPlans_ToTime_GT_FromTime')
+    ALTER TABLE [HR].[tbl_TimeRecoveryPlans]
+        ADD CONSTRAINT [CK_TimeRecoveryPlans_ToTime_GT_FromTime] CHECK ([ToTime] > [FromTime]);
+GO
+
+-- 2026-07-06: sp_Overtime_Price/sp_Payroll_Discounts/sp_Payroll_Subsidies usaban
+-- MERGE ... ON 1=0, que nunca hace match, así que cada reproceso del mismo período
+-- insertaba líneas de nómina duplicadas. Esta UNIQUE respalda a nivel de esquema
+-- el fix de llave real aplicado en esos 3 procedimientos (tbl_PayrollLines estaba
+-- vacía en producción al momento de agregarla, no requirió limpieza previa).
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_PayrollLines_Payroll_Line_Concept')
+    CREATE UNIQUE INDEX [UQ_PayrollLines_Payroll_Line_Concept]
+        ON [HR].[tbl_PayrollLines] ([PayrollID], [LineType], [Concept]);
+GO
+
+-- 2026-07-06 (propuesta VIGENTE en Acciones de Personal): CHK_PersonnelActions_Status
+-- ya existía en producción (creado fuera de estos scripts) sin permitir 'VIGENTE'.
+-- Se recrea con el valor agregado — tipos con ReachesVigente=1 ahora transicionan
+-- FIRMADO_CARGADO -> VIGENTE automáticamente al cargar el documento firmado.
+IF EXISTS (
+    SELECT 1 FROM sys.check_constraints
+    WHERE name = 'CHK_PersonnelActions_Status' AND definition NOT LIKE '%VIGENTE%'
+)
+    ALTER TABLE [HR].[tbl_PersonnelActions] DROP CONSTRAINT [CHK_PersonnelActions_Status];
+
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CHK_PersonnelActions_Status')
+    ALTER TABLE [HR].[tbl_PersonnelActions] WITH CHECK
+        ADD CONSTRAINT [CHK_PersonnelActions_Status]
+        CHECK ([Status]='ANULADO' OR [Status]='FINALIZADO' OR [Status]='VIGENTE'
+               OR [Status]='FIRMADO_CARGADO' OR [Status]='PENDIENTE_FIRMAS'
+               OR [Status]='GENERADO' OR [Status]='BORRADOR');
 GO

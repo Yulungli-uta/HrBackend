@@ -61,6 +61,12 @@ public sealed class DepartmentsConfiguration : IEntityTypeConfiguration<Departme
         e.Property(x => x.DepartmentId).HasColumnName("DepartmentID");
         e.Property(x => x.Name).HasMaxLength(120).IsRequired();
         e.Ignore(x => x.RowVersion);
+
+        e.HasOne(x => x.InstitutionalRoleType)
+            .WithMany()
+            .HasForeignKey(x => x.InstitutionalRoleTypeId)
+            .HasConstraintName("FK_Departments_InstitutionalRoleType")
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 

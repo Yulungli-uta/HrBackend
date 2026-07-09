@@ -85,7 +85,9 @@ public sealed class VwUserRoleConfiguration : IEntityTypeConfiguration<VwUserRol
     public void Configure(EntityTypeBuilder<VwUserRole> e)
     {
         e.HasNoKey();
-        e.ToView("vw_UserRoles", "dbo");
+        // La vista vive en el esquema auth (junto con tbl_Roles/tbl_MenuItems/tbl_RoleMenuItems),
+        // no en dbo -- confirmado contra INFORMATION_SCHEMA.VIEWS.
+        e.ToView("vw_UserRoles", "auth");
     }
 }
 
@@ -94,7 +96,7 @@ public sealed class VwRoleMenuItemConfiguration : IEntityTypeConfiguration<VwRol
     public void Configure(EntityTypeBuilder<VwRoleMenuItem> e)
     {
         e.HasNoKey();
-        e.ToView("vw_RoleMenuItems", "dbo");
+        e.ToView("vw_RoleMenuItems", "auth");
     }
 }
 

@@ -18,12 +18,18 @@ public class ContractsController : ControllerBase
     private readonly IContractsService _service;
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUser;
+    private readonly IUserAccessScopeService _accessScopeService;
 
-    public ContractsController(IContractsService service, IMapper mapper, ICurrentUserService currentUser)
+    public ContractsController(
+        IContractsService service,
+        IMapper mapper,
+        ICurrentUserService currentUser,
+        IUserAccessScopeService accessScopeService)
     {
         _service = service;
         _mapper = mapper;
         _currentUser = currentUser;
+        _accessScopeService = accessScopeService;
     }
 
     /// <summary>Lista todos los contratos.</summary>
@@ -58,16 +64,23 @@ public class ContractsController : ControllerBase
         var hasYear = year.HasValue && year.Value > 0;
         var ascending = string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
 
+        // null = sin restricción de departamento (GLOBAL o sin scopes asignados aún).
+        List<int>? allowedDeptIds = _currentUser.EmployeeId.HasValue
+            ? await _accessScopeService.GetAllowedDepartmentIdsAsync(_currentUser.EmployeeId.Value, "CONTRACTS", ct)
+            : null;
+        var hasDeptScope = allowedDeptIds is not null;
+
         System.Linq.Expressions.Expression<Func<Contracts, bool>>? predicate = null;
 
-        if (hasSearch || statusTypeId.HasValue || certificationId.HasValue || hasYear)
+        if (hasSearch || statusTypeId.HasValue || certificationId.HasValue || hasYear || hasDeptScope)
         {
             predicate = c =>
                 (!hasSearch || c.ContractCode.ToLower().Contains(term) ||
                     (c.ContractDescription != null && c.ContractDescription.ToLower().Contains(term))) &&
                 (!statusTypeId.HasValue    || c.Status == statusTypeId.Value) &&
                 (!certificationId.HasValue || c.CertificationID == certificationId.Value) &&
-                (!hasYear                  || (c.CreatedAt != null && c.CreatedAt.Value.Year == year!.Value));
+                (!hasYear                  || (c.CreatedAt != null && c.CreatedAt.Value.Year == year!.Value)) &&
+                (!hasDeptScope             || allowedDeptIds!.Contains(c.DepartmentID));
         }
 
         var pagedEntities = predicate is not null
@@ -167,6 +180,20 @@ public class ContractsController : ControllerBase
     public async Task<IActionResult> Create(ContractsCreateDto dto, CancellationToken ct)
     {
         var entity = _mapper.Map<Contracts>(dto);
+
+        if (_currentUser.EmployeeId.HasValue)
+        {
+            try
+            {
+                await _accessScopeService.EnsureDepartmentAllowedAsync(
+                    _currentUser.EmployeeId.Value, "CONTRACTS", entity.DepartmentID, ct);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = ex.Message });
+            }
+        }
+
         var created = await _service.CreateAndNotifyAsync(entity, ct);
 
         GenerateContractDocumentResponse? document = null;

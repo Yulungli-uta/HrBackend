@@ -6,6 +6,19 @@
 SET NOCOUNT ON;
 GO
 
+-- Fase 2-4 (2026-07-03): forzar estas dos configuraciones de sesión ANTES de
+-- crear/alterar cualquier procedimiento en este archivo. SQL Server graba
+-- ANSI_NULLS/QUOTED_IDENTIFIER dentro del procedimiento al momento de
+-- compilarlo, y los usa siempre en su ejecución sin importar la sesión de
+-- quien lo llame después. Si quien despliega este script tiene
+-- QUOTED_IDENTIFIER OFF, cualquier CREATE OR ALTER queda "envenenado" y
+-- operaciones como MERGE fallan en tiempo de ejecución (error 1934). Puesto
+-- una sola vez aquí protege a TODOS los procedimientos del archivo.
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
+
 -- [sp_Attendance_CalcNightMinutes]
 
 --Minutos nocturnos  --(Distribuye minutos trabajados en [NIGHT_START, NIGHT_END])
@@ -1011,12 +1024,17 @@ END
 GO
 
 -- [sp_GetEmployeesReport]
-CREATE    PROCEDURE [HR].[sp_GetEmployeesReport]
+CREATE OR ALTER PROCEDURE [HR].[sp_GetEmployeesReport]
     @StartDate DATE = NULL,
     @EndDate DATE = NULL,
     @DepartmentId INT = NULL,
     @FacultyId INT = NULL,
-    @EmployeeType NVARCHAR(50) = NULL,
+    -- 2026-07-03: era NVARCHAR(50) pero e.EmployeeType es INT (TypeID de
+    -- ref_Types, Category='CONTRACT_TYPE'). El tipo suelto ocultaba que el
+    -- DTO del frontend mandaba el valor bajo un campo string equivocado
+    -- (mismo bug que en sp_GetReportAttendanceSumary). Corregido a INT para
+    -- que coincida con la columna real, sin depender de conversión implícita.
+    @EmployeeType INT = NULL,
     @IsActive BIT = NULL
 AS
 BEGIN
@@ -1159,7 +1177,7 @@ GO
    - DAILY: Catch-up, pero NO permitido si ya se acreditó el mes con MONTHLY
 
    ============================================================ */
-CREATE   PROCEDURE HR.sp_hr_AccrueVacationBalance
+CREATE OR ALTER PROCEDURE HR.sp_hr_AccrueVacationBalance
 (
     @EmployeeID INT,
     @AsOfDate DATE = NULL,
@@ -1298,10 +1316,14 @@ BEGIN
                 GOTO ErrorExit;
             END
 
+            -- 3.1: redondeo consistente con MONTHLY/DAILY (antes truncaba con CAST directo)
             SET @TotalEarnedMinutes = CAST(
-                (DATEDIFF(DAY, @HireDate, @AsOfDate) / 365.25) *
-                @VacationPerYear *
-                @MinutesPerDay
+                ROUND(
+                    (DATEDIFF(DAY, @HireDate, @AsOfDate) / 365.25) *
+                    @VacationPerYear *
+                    @MinutesPerDay,
+                    0
+                )
                 AS INT
             );
 
@@ -1323,14 +1345,17 @@ BEGIN
                 GOTO SuccessExit;
             END
 
+            -- 2026-07-06: acumulación de vacaciones LOSEP siempre (57) — LOES
+            -- se calcula distinto (jornada por dedicación académica), ver
+            -- procedimientos LOES pendientes de diseño con la regla confirmada.
             UPDATE HR.tbl_TimeBalances
             SET VacationAvailableMin = VacationAvailableMin + @Delta,
                 LastUpdated = GETDATE()
-            WHERE EmployeeID = @EmployeeID;
+            WHERE EmployeeID = @EmployeeID AND LaborRegimeId = 57;
 
             INSERT INTO HR.tbl_TimeBalanceMovements
             (EmployeeID, DeltaVacationMin, DeltaRecoveryMin, MovementAt,
-             SourceModule, SourceTable, SourceID, PerformedByEmpID, Note)
+             SourceModule, SourceTable, SourceID, PerformedByEmpID, Note, LaborRegimeId)
             VALUES
             (@EmployeeID, @Delta, 0, GETDATE(),
              'VACATION_ACCRUAL_TOTAL', 'CALC', @SourceID, @PerformedByEmpID,
@@ -1342,7 +1367,8 @@ BEGIN
                  N' Delta:+' + CAST(@Delta AS NVARCHAR(50)) +
                  N' | ' + CAST(@VacationPerYear AS NVARCHAR(50)) + N'd/año',
                  400
-             )
+             ),
+             57
             );
 
             SET @StatusCode = 200;
@@ -1411,12 +1437,46 @@ BEGIN
                 GOTO ErrorExit;
             END
 
-            SET @DaysInMonth = DAY(EOMONTH(DATEFROMPARTS(@Year, @Month, 1)));
+            /* ============================================================
+               PUNTO 3.4 — Liquidación proporcional al dar de baja a mitad
+               de mes. Se busca el último contrato del empleado cuyo
+               EndDate cae dentro de @Year/@Month y que NO tiene un
+               addendum (ParentID) que lo extienda más allá de esa fecha —
+               misma verificación de "contrato realmente terminado" que ya
+               usa ContractExpirationService.ProcessExpiredContractsAsync
+               (Application/Services/ContractExpirationService.cs), para no
+               reinventar la regla. Si el empleado tuviera más de un
+               contrato "terminal" con EndDate en el mismo mes (caso raro:
+               múltiples contratos simultáneos), se toma el de EndDate más
+               reciente — simplificación deliberada; no existe una regla de
+               negocio explícita para desempatar varios contratos
+               terminales simultáneos en el mismo mes.
+            ============================================================ */
+            DECLARE @PeriodStart DATE = DATEFROMPARTS(@Year, @Month, 1);
+            DECLARE @PeriodEnd   DATE = EOMONTH(@PeriodStart);
+            DECLARE @TerminationDate DATE = NULL;
 
-            IF @Year = YEAR(@HireDate) AND @Month = MONTH(@HireDate)
-            BEGIN
-                SET @DaysInMonth = DATEDIFF(DAY, @HireDate, EOMONTH(@HireDate)) + 1;
-            END
+            SELECT TOP 1 @TerminationDate = CAST(c.EndDate AS DATE)
+            FROM HR.tbl_Contracts c
+            INNER JOIN HR.tbl_Employees e ON e.PersonID = c.PersonID
+            WHERE e.EmployeeID = @EmployeeID
+              AND CAST(c.EndDate AS DATE) BETWEEN @PeriodStart AND @PeriodEnd
+              AND NOT EXISTS (
+                  SELECT 1 FROM HR.tbl_Contracts a
+                  WHERE a.ParentID = c.ContractID
+                    AND a.EndDate >= c.EndDate
+              )
+            ORDER BY c.EndDate DESC;
+
+            -- Recorta el período al rango realmente trabajado dentro del mes:
+            -- desde HireDate si contrató a mitad de mes, hasta TerminationDate
+            -- si terminó a mitad de mes (cubre también el caso de contratar
+            -- y terminar dentro del mismo mes calendario).
+            IF (@HireDate > @PeriodStart) SET @PeriodStart = @HireDate;
+            IF (@TerminationDate IS NOT NULL AND @TerminationDate < @PeriodEnd) SET @PeriodEnd = @TerminationDate;
+
+            SET @DaysInMonth = DATEDIFF(DAY, @PeriodStart, @PeriodEnd) + 1;
+            IF @DaysInMonth < 0 SET @DaysInMonth = 0;
 
             SET @MonthlyEarnedMinutes = (@DaysInMonth / 365.25) * @VacationPerYear * @MinutesPerDay;
             SET @Delta = CAST(ROUND(@MonthlyEarnedMinutes, 0) AS INT);
@@ -1428,14 +1488,15 @@ BEGIN
                 GOTO ErrorExit;
             END
 
+            -- 2026-07-06: LOSEP siempre (57) — ver nota en modo TOTAL.
             UPDATE HR.tbl_TimeBalances
             SET VacationAvailableMin = VacationAvailableMin + @Delta,
                 LastUpdated = GETDATE()
-            WHERE EmployeeID = @EmployeeID;
+            WHERE EmployeeID = @EmployeeID AND LaborRegimeId = 57;
 
             INSERT INTO HR.tbl_TimeBalanceMovements
             (EmployeeID, DeltaVacationMin, DeltaRecoveryMin, MovementAt,
-             SourceModule, SourceTable, SourceID, PerformedByEmpID, Note)
+             SourceModule, SourceTable, SourceID, PerformedByEmpID, Note, LaborRegimeId)
             VALUES
             (@EmployeeID, @Delta, 0, GETDATE(),
              'VACATION_ACCRUAL_MONTHLY', 'CALC', @SourceID, @PerformedByEmpID,
@@ -1446,7 +1507,8 @@ BEGIN
                  N' Acred:+' + CAST(@Delta AS NVARCHAR(50)) +
                  N' (' + CAST(CAST(@Delta AS DECIMAL(18,2)) / NULLIF(@MinutesPerDay,0) AS NVARCHAR(50)) + N'd)',
                  400
-             )
+             ),
+             57
             );
 
             SET @StatusCode = 200;
@@ -1525,14 +1587,15 @@ BEGIN
                 GOTO ErrorExit;
             END
 
+            -- 2026-07-06: LOSEP siempre (57) — ver nota en modo TOTAL.
             UPDATE HR.tbl_TimeBalances
             SET VacationAvailableMin = VacationAvailableMin + @Delta,
                 LastUpdated = GETDATE()
-            WHERE EmployeeID = @EmployeeID;
+            WHERE EmployeeID = @EmployeeID AND LaborRegimeId = 57;
 
             INSERT INTO HR.tbl_TimeBalanceMovements
             (EmployeeID, DeltaVacationMin, DeltaRecoveryMin, MovementAt,
-             SourceModule, SourceTable, SourceID, PerformedByEmpID, Note)
+             SourceModule, SourceTable, SourceID, PerformedByEmpID, Note, LaborRegimeId)
             VALUES
             (@EmployeeID, @Delta, 0, GETDATE(),
              'VACATION_ACCRUAL_DAILY', 'CALC', @SourceID, @PerformedByEmpID,
@@ -1543,7 +1606,8 @@ BEGIN
                  N' Desde:' + CONVERT(NVARCHAR(10), @LastAccrualDate, 120) +
                  N' | +' + CAST(@Delta AS NVARCHAR(50)) + N'min',
                  400
-             )
+             ),
+             57
             );
 
             SET @StatusCode = 200;
@@ -1625,7 +1689,7 @@ GO
    7) SP: Consumir reserva (APROBAR) - auditoría
    - CORREGIDO: transaction-safe
    ============================================================ */
-CREATE   PROCEDURE HR.sp_hr_ConsumeReservation
+CREATE OR ALTER PROCEDURE HR.sp_hr_ConsumeReservation
 (
     @ReserveSourceID NVARCHAR(128),
     @PerformedByEmpID INT = NULL,
@@ -1673,18 +1737,21 @@ BEGIN
             RETURN;
         END
 
+        -- 2026-07-06: LOSEP siempre (57) — este mecanismo de reserva/consumo
+        -- es exclusivo de LOSEP, ver nota en sp_hr_AccrueVacationBalance.
         INSERT INTO HR.tbl_TimeBalanceMovements
         (
             EmployeeID, DeltaVacationMin, DeltaRecoveryMin,
             MovementAt, SourceModule, SourceTable, SourceID,
-            PerformedByEmpID, Note
+            PerformedByEmpID, Note, LaborRegimeId
         )
         VALUES
         (
             @EmployeeID, 0, 0,
             GETDATE(), 'RESERVATION_CONSUME', 'SYSTEM', @ReserveSourceID + N'|USE',
             @PerformedByEmpID,
-            N'Consumo (aprobación) de reserva: ' + @ReserveSourceID
+            N'Consumo (aprobación) de reserva: ' + @ReserveSourceID,
+            57
         );
 
         IF @StartedTran=1 COMMIT TRAN;
@@ -1718,7 +1785,7 @@ GO
    10) SP: Debitar recuperación (pago)
    - (ajustado a transaction-safe)
    ============================================================ */
-CREATE   PROCEDURE HR.sp_hr_DebitRecoveryBalance
+CREATE OR ALTER PROCEDURE HR.sp_hr_DebitRecoveryBalance
 (
     @RecoveryLogID INT,
     @PerformedByEmpID INT = NULL,
@@ -1773,9 +1840,12 @@ BEGIN
             RETURN;
         END
 
+        -- 2026-07-06: LOSEP siempre (57) — tiempo de recuperación (atrasos/
+        -- horario fijo) es exclusivo de LOSEP, igual que horas extra (LOES no
+        -- tiene horario de oficina fijo contra el cual generar atrasos).
         SELECT @Balance = RecoveryPendingMin
         FROM HR.tbl_TimeBalances
-        WHERE EmployeeID=@EmployeeID;
+        WHERE EmployeeID=@EmployeeID AND LaborRegimeId = 57;
 
         IF @Balance < @MinutesRecovered
         BEGIN
@@ -1789,20 +1859,21 @@ BEGIN
         UPDATE HR.tbl_TimeBalances
         SET RecoveryPendingMin = RecoveryPendingMin - @MinutesRecovered,
             LastUpdated = GETDATE()
-        WHERE EmployeeID=@EmployeeID;
+        WHERE EmployeeID=@EmployeeID AND LaborRegimeId = 57;
 
         INSERT INTO HR.tbl_TimeBalanceMovements
         (
             EmployeeID, DeltaVacationMin, DeltaRecoveryMin,
             MovementAt, SourceModule, SourceTable, SourceID,
-            PerformedByEmpID, Note
+            PerformedByEmpID, Note, LaborRegimeId
         )
         VALUES
         (
             @EmployeeID, 0, -@MinutesRecovered,
             GETDATE(), 'RECOVERY_USE', 'tbl_TimeRecoveryLogs', @SourceID,
             @PerformedByEmpID,
-            N'Pago recuperación. -' + CAST(@MinutesRecovered AS NVARCHAR(20)) + N' min'
+            N'Pago recuperación. -' + CAST(@MinutesRecovered AS NVARCHAR(20)) + N' min',
+            57
         );
 
         IF @StartedTran=1 COMMIT TRAN;
@@ -1834,8 +1905,12 @@ GO
 
 /* ============================================================
    3) SP: Asegurar fila en HR.tbl_TimeBalances
+   2026-07-06 (Fase 3, propuesta multi-régimen): ahora asegura una fila POR
+   CADA régimen activo del empleado (antes era una sola fila por EmployeeID).
+   Un empleado con 2 regímenes simultáneos (ej. nombramiento LOSEP + contrato
+   docencia LOES) necesita 2 saldos independientes, no uno mezclado.
    ============================================================ */
-CREATE   PROCEDURE HR.sp_hr_EnsureTimeBalanceRow
+CREATE OR ALTER PROCEDURE HR.sp_hr_EnsureTimeBalanceRow
 (
     @EmployeeID INT
 )
@@ -1843,10 +1918,26 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    INSERT INTO HR.tbl_TimeBalances (EmployeeID, LaborRegimeId, VacationAvailableMin, RecoveryPendingMin)
+    SELECT elr.EmployeeId, elr.LaborRegimeId, 0, 0
+    FROM HR.tbl_EmployeeLaborRegime elr
+    WHERE elr.EmployeeId = @EmployeeID
+      AND elr.IsActive = 1
+      AND NOT EXISTS (
+          SELECT 1 FROM HR.tbl_TimeBalances tb
+          WHERE tb.EmployeeID = elr.EmployeeId AND tb.LaborRegimeId = elr.LaborRegimeId
+      );
+
+    -- Respaldo: si el empleado no tiene ninguna fila activa en
+    -- tbl_EmployeeLaborRegime (dato incompleto), se asegura al menos una fila
+    -- con el régimen espejo de tbl_Employees.EmployeeType, para no dejar al
+    -- empleado sin ningún saldo por un hueco de datos.
     IF NOT EXISTS (SELECT 1 FROM HR.tbl_TimeBalances WHERE EmployeeID = @EmployeeID)
     BEGIN
-        INSERT INTO HR.tbl_TimeBalances(EmployeeID, VacationAvailableMin, RecoveryPendingMin)
-        VALUES(@EmployeeID, 0, 0);
+        INSERT INTO HR.tbl_TimeBalances (EmployeeID, LaborRegimeId, VacationAvailableMin, RecoveryPendingMin)
+        SELECT @EmployeeID, ISNULL(e.EmployeeType, 57), 0, 0
+        FROM HR.tbl_Employees e
+        WHERE e.EmployeeID = @EmployeeID;
     END
 END
 
@@ -1856,9 +1947,14 @@ GO
 
 /* ============================================================
    11) SP: Consultar saldos + últimos movimientos
-   (lo dejo igual; no requiere transacción)
+   2026-07-06 (Fase 3, propuesta multi-régimen): antes devolvía una sola fila
+   de saldo por empleado (LEFT JOIN 1:1). Ahora tbl_TimeBalances tiene una
+   fila por régimen activo, así que este SELECT devuelve una fila POR
+   RÉGIMEN — un empleado con 2 regímenes simultáneos ve sus 2 saldos por
+   separado, no uno mezclado. Los movimientos siguen siendo por empleado (la
+   columna LaborRegimeId ahí es nullable/histórica, no se filtra por ahora).
    ============================================================ */
-CREATE   PROCEDURE HR.sp_hr_GetEmployeeBalances
+CREATE OR ALTER PROCEDURE HR.sp_hr_GetEmployeeBalances
 (
     @EmployeeID INT
 )
@@ -1878,6 +1974,9 @@ BEGIN
         e.EmployeeID,
         p.FirstName + ' ' + p.LastName AS EmployeeName,
         e.HireDate,
+        tb.LaborRegimeId,
+        rt.Name AS LaborRegimeName,
+        tb.IsPrincipal,
         ISNULL(tb.VacationAvailableMin,0) AS VacationMinutes,
         CAST(ISNULL(tb.VacationAvailableMin,0) / CAST(@MinutesPerDay AS DECIMAL(10,2)) AS DECIMAL(10,2)) AS VacationDays,
         ISNULL(tb.RecoveryPendingMin,0) AS RecoveryMinutes,
@@ -1885,8 +1984,15 @@ BEGIN
         tb.LastUpdated
     FROM HR.tbl_Employees e
     INNER JOIN HR.tbl_People p ON p.PersonID = e.PersonID
-    LEFT JOIN HR.tbl_TimeBalances tb ON tb.EmployeeID = e.EmployeeID
-    WHERE e.EmployeeID = @EmployeeID;
+    LEFT JOIN (
+        SELECT tb.*, elr.IsPrincipal
+        FROM HR.tbl_TimeBalances tb
+        LEFT JOIN HR.tbl_EmployeeLaborRegime elr
+            ON elr.EmployeeId = tb.EmployeeID AND elr.LaborRegimeId = tb.LaborRegimeId AND elr.IsActive = 1
+    ) tb ON tb.EmployeeID = e.EmployeeID
+    LEFT JOIN HR.ref_Types rt ON rt.TypeId = tb.LaborRegimeId AND rt.Category = 'CONTRACT_TYPE'
+    WHERE e.EmployeeID = @EmployeeID
+    ORDER BY CASE WHEN tb.IsPrincipal = 1 THEN 0 ELSE 1 END, tb.LaborRegimeId;
 
     SELECT TOP 20
         MovementID, MovementAt, SourceModule, SourceID,
@@ -1904,7 +2010,7 @@ GO
 /* ============================================================
    2) SP: Obtener parámetros del sistema
    ============================================================ */
-CREATE   PROCEDURE HR.sp_hr_GetVacationParams
+CREATE OR ALTER PROCEDURE HR.sp_hr_GetVacationParams
 (
     @VacationPerYear DECIMAL(10,2) OUTPUT,
     @MinutesPerDay   INT OUTPUT
@@ -1942,7 +2048,7 @@ GO
    9) SP: Procesar deuda de recuperación
    - (Puedes corregirlo igual, pero lo dejo como estaba salvo transaction-safe)
    ============================================================ */
-CREATE   PROCEDURE HR.sp_hr_ProcessRecoveryBalance
+CREATE OR ALTER PROCEDURE HR.sp_hr_ProcessRecoveryBalance
 (
     @EmployeeID INT,
     @StartDate DATE,
@@ -2011,23 +2117,25 @@ BEGIN
             RETURN;
         END
 
+        -- 2026-07-06: LOSEP siempre (57) — ver nota en sp_hr_DebitRecoveryBalance.
         UPDATE HR.tbl_TimeBalances
         SET RecoveryPendingMin = ISNULL(RecoveryPendingMin,0) + @NetMovement,
             LastUpdated = GETDATE()
-        WHERE EmployeeID=@EmployeeID;
+        WHERE EmployeeID=@EmployeeID AND LaborRegimeId = 57;
 
         INSERT INTO HR.tbl_TimeBalanceMovements
         (
             EmployeeID, DeltaVacationMin, DeltaRecoveryMin,
             MovementAt, SourceModule, SourceTable, SourceID,
-            PerformedByEmpID, Note
+            PerformedByEmpID, Note, LaborRegimeId
         )
         VALUES
         (
             @EmployeeID, 0, @NetMovement,
             GETDATE(), 'RECOVERY_PROCESS', 'tbl_AttendanceCalculations', @SourceID,
             @PerformedByEmpID,
-            N'Procesamiento recuperación. Neto=' + CAST(@NetMovement AS NVARCHAR(20)) + N' min'
+            N'Procesamiento recuperación. Neto=' + CAST(@NetMovement AS NVARCHAR(20)) + N' min',
+            57
         );
 
         IF @StartedTran=1 COMMIT TRAN;
@@ -2064,7 +2172,7 @@ GO
    - CORREGIDO: no libera si la reserva no existe o no es negativa
    - CORREGIDO: evita doble liberación
    ============================================================ */
-CREATE   PROCEDURE HR.sp_hr_ReleaseReservation
+CREATE OR ALTER PROCEDURE HR.sp_hr_ReleaseReservation
 (
     @ReserveSourceID NVARCHAR(128),
     @PerformedByEmpID INT = NULL,
@@ -2150,16 +2258,17 @@ BEGIN
 
         SET @ReleaseAmount = ABS(@ReservedDelta);
 
+        -- 2026-07-06: LOSEP siempre (57) — ver nota en sp_hr_AccrueVacationBalance.
         UPDATE HR.tbl_TimeBalances
         SET VacationAvailableMin = VacationAvailableMin + @ReleaseAmount,
             LastUpdated = GETDATE()
-        WHERE EmployeeID = @EmployeeID;
+        WHERE EmployeeID = @EmployeeID AND LaborRegimeId = 57;
 
         INSERT INTO HR.tbl_TimeBalanceMovements
         (
             EmployeeID, DeltaVacationMin, DeltaRecoveryMin,
             MovementAt, SourceModule, SourceTable, SourceID,
-            PerformedByEmpID, Note
+            PerformedByEmpID, Note, LaborRegimeId
         )
         VALUES
         (
@@ -2167,7 +2276,8 @@ BEGIN
             GETDATE(), 'RESERVATION_RELEASE', 'SYSTEM', @ReserveSourceID + N'|REL',
             @PerformedByEmpID,
             N'Liberación de reserva: ' + @ReserveSourceID +
-            N'. Devuelto=' + CAST(@ReleaseAmount AS NVARCHAR(20)) + N' min'
+            N'. Devuelto=' + CAST(@ReleaseAmount AS NVARCHAR(20)) + N' min',
+            57
         );
 
         IF @StartedTran=1 COMMIT TRAN;
@@ -2202,7 +2312,7 @@ GO
    - CORREGIDO: transaction-safe
    - SourceID estándar: PERM_RESERVE|<PermissionID>
    ============================================================ */
-CREATE   PROCEDURE HR.sp_hr_ReservePermissionBalance
+CREATE OR ALTER PROCEDURE HR.sp_hr_ReservePermissionBalance
 (
     @PermissionID INT,
     @PerformedByEmpID INT = NULL,
@@ -2282,9 +2392,12 @@ BEGIN
             RETURN;
         END
 
+        -- 2026-07-06: LOSEP siempre (57) — tbl_Permissions no distingue régimen
+        -- todavía, y este mecanismo de reserva es LOSEP por ahora (ver nota en
+        -- sp_hr_AccrueVacationBalance).
         SELECT @Balance = VacationAvailableMin
         FROM HR.tbl_TimeBalances
-        WHERE EmployeeID=@EmployeeID;
+        WHERE EmployeeID=@EmployeeID AND LaborRegimeId = 57;
 
         IF @Balance < @ChargedMinutes
         BEGIN
@@ -2298,13 +2411,13 @@ BEGIN
         UPDATE HR.tbl_TimeBalances
         SET VacationAvailableMin = VacationAvailableMin - @ChargedMinutes,
             LastUpdated = GETDATE()
-        WHERE EmployeeID=@EmployeeID;
+        WHERE EmployeeID=@EmployeeID AND LaborRegimeId = 57;
 
         INSERT INTO HR.tbl_TimeBalanceMovements
         (
             EmployeeID, DeltaVacationMin, DeltaRecoveryMin,
             MovementAt, SourceModule, SourceTable, SourceID,
-            PerformedByEmpID, Note
+            PerformedByEmpID, Note, LaborRegimeId
         )
         VALUES
         (
@@ -2314,7 +2427,8 @@ BEGIN
             N'Reserva permiso. BaseMin=' + CAST(@BaseMinutes AS NVARCHAR(20)) +
             N' Factor(7/5)=' + CAST(@Factor AS NVARCHAR(20)) +
             N' CobradoMin=' + CAST(@ChargedMinutes AS NVARCHAR(20)) +
-            N' Rango=' + CONVERT(VARCHAR(19), @StartDate, 120) + N' a ' + CONVERT(VARCHAR(19), @EndDate, 120)
+            N' Rango=' + CONVERT(VARCHAR(19), @StartDate, 120) + N' a ' + CONVERT(VARCHAR(19), @EndDate, 120),
+            57
         );
 
         IF @StartedTran=1 COMMIT TRAN;
@@ -2343,7 +2457,7 @@ END
 GO
 
 -- [sp_hr_ReserveVacationBalance]
-CREATE   PROCEDURE HR.sp_hr_ReserveVacationBalance
+CREATE OR ALTER PROCEDURE HR.sp_hr_ReserveVacationBalance
 (
     @VacationID INT,
     @PerformedByEmpID INT = NULL,
@@ -2407,9 +2521,14 @@ BEGIN
 
         EXEC HR.sp_hr_EnsureTimeBalanceRow @EmployeeID=@EmployeeID;
 
+        -- 3.3: días calendario reales del período (proporcional a cada día,
+        -- sin depender del día de la semana en que arranca la vacación).
+        -- @WorkingDays/@FullWeeks se conservan solo para el texto informativo
+        -- de auditoría (Note más abajo), ya no participan del cálculo de
+        -- minutos cobrados.
         SET @WorkingDays = HR.fn_hr_CountWorkingDays(@StartDate, @EndDate);
         SET @FullWeeks = @WorkingDays / 5;
-        SET @ChargedDays = @WorkingDays + (@FullWeeks * 2);
+        SET @ChargedDays = DATEDIFF(DAY, @StartDate, @EndDate) + 1;
 
         SET @ChargedMinutes = @ChargedDays * @MinutesPerDay;
         SET @SourceID = 'VAC_RESERVE|' + CAST(@VacationID AS NVARCHAR(20));
@@ -2422,9 +2541,13 @@ BEGIN
             RETURN;
         END
 
+        -- 3.2: UPDLOCK+HOLDLOCK para que dos reservas concurrentes del mismo
+        -- empleado se serialicen sobre esta fila y no puedan leer el mismo
+        -- saldo "viejo" y dejarlo en negativo (condición de carrera).
+        -- 2026-07-06: LOSEP siempre (57) — ver nota en sp_hr_AccrueVacationBalance.
         SELECT @Balance = VacationAvailableMin
-        FROM HR.tbl_TimeBalances
-        WHERE EmployeeID=@EmployeeID;
+        FROM HR.tbl_TimeBalances WITH (UPDLOCK, HOLDLOCK)
+        WHERE EmployeeID=@EmployeeID AND LaborRegimeId = 57;
 
         IF @Balance < @ChargedMinutes
         BEGIN
@@ -2438,13 +2561,13 @@ BEGIN
         UPDATE HR.tbl_TimeBalances
         SET VacationAvailableMin = VacationAvailableMin - @ChargedMinutes,
             LastUpdated = GETDATE()
-        WHERE EmployeeID=@EmployeeID;
+        WHERE EmployeeID=@EmployeeID AND LaborRegimeId = 57;
 
         INSERT INTO HR.tbl_TimeBalanceMovements
         (
             EmployeeID, DeltaVacationMin, DeltaRecoveryMin,
             MovementAt, SourceModule, SourceTable, SourceID,
-            PerformedByEmpID, Note
+            PerformedByEmpID, Note, LaborRegimeId
         )
         VALUES
         (
@@ -2455,7 +2578,8 @@ BEGIN
             N' Laborables=' + CAST(@WorkingDays AS NVARCHAR(10)) +
             N' Semanas=' + CAST(@FullWeeks AS NVARCHAR(10)) +
             N' DiasCobrados=' + CAST(@ChargedDays AS NVARCHAR(10)) +
-            N' MinCobrados=' + CAST(@ChargedMinutes AS NVARCHAR(20))
+            N' MinCobrados=' + CAST(@ChargedMinutes AS NVARCHAR(20)),
+            57
         );
 
         IF @StartedTran=1 COMMIT TRAN;
@@ -2483,39 +2607,516 @@ END
 
 GO
 
--- [sp_InsertReportAudit]
+-- [sp_hr_AccrueVacationBalance_LOES]
 
-CREATE PROCEDURE [HR].[sp_InsertReportAudit]
-    @UserId UNIQUEIDENTIFIER,
-    @UserEmail NVARCHAR(255),
-    @ReportType NVARCHAR(50),
-    @ReportFormat NVARCHAR(10),
-    @FiltersApplied NVARCHAR(MAX) = NULL,
-    @FileSizeBytes BIGINT = NULL,
-    @GenerationTimeMs INT = NULL,
-    @ClientIp NVARCHAR(50) = NULL,
-    @Success BIT = 1,
-    @ErrorMessage NVARCHAR(MAX) = NULL,
-    @FileName NVARCHAR(255) = NULL
+/*
+  HR.sp_hr_AccrueVacationBalance_LOES
+  =====================================
+  2026-07-06 (propuesta multi-régimen, regla confirmada por el usuario):
+  el vínculo LOES se calcula de forma independiente al LOSEP porque la
+  diferencia no está solo en los días, sino en la JORNADA sobre la que se
+  convierte ese derecho: LOSEP usa la jornada administrativa completa fija
+  (WORK_MINUTES_PER_DAY=480), LOES usa la dedicación académica registrada en
+  su contrato vigente (tbl_Contracts.ContractedHours, ej. 40h/semana=tiempo
+  completo, 20h/semana=medio tiempo).
+
+  SUPUESTO EXPLÍCITO PENDIENTE DE CONFIRMAR: se reutiliza el mismo
+  VACATION_PER_YEAR (30, hoy global) que LOSEP, porque el usuario no indicó un
+  número de días distinto para LOES — solo que la jornada de conversión es
+  distinta. Si legalmente LOES acumula un número de días/año diferente al de
+  LOSEP, ese valor debe confirmarse aparte y agregarse como parámetro propio.
+
+  2026-07-06 (tarde): agregado @Mode ('MONTHLY' | 'TOTAL'), mismo patrón que
+  sp_hr_AccrueVacationBalance. DAILY no se construyó — no se pidió y evita
+  anticipar un caso no confirmado.
+*/
+CREATE OR ALTER PROCEDURE HR.sp_hr_AccrueVacationBalance_LOES
+(
+    @EmployeeID INT,
+    @AsOfDate DATE = NULL,
+    @Mode VARCHAR(10) = 'MONTHLY',
+    @PerformedByEmpID INT = NULL,
+    @StatusCode INT OUTPUT,
+    @Message NVARCHAR(500) OUTPUT
+)
 AS
 BEGIN
     SET NOCOUNT ON;
-    
-    INSERT INTO [HR].[tbl_ReportAudit] (
-        UserId, UserEmail, ReportType, ReportFormat, FiltersApplied,
-        GeneratedAt, FileSizeBytes, GenerationTimeMs, ClientIp,
-        Success, ErrorMessage, FileName
-    )
-    VALUES (
-        @UserId, @UserEmail, @ReportType, @ReportFormat, @FiltersApplied,
-        GETUTCDATE(), @FileSizeBytes, @GenerationTimeMs, @ClientIp,
-        @Success, @ErrorMessage, @FileName
-    );
-    
-    SELECT SCOPE_IDENTITY() AS AuditId;
+
+    DECLARE
+        @HireDate DATE,
+        @EmployeeName NVARCHAR(50),
+        @PersonID INT,
+        @VacationPerYear DECIMAL(10,2),
+        @UnusedMinutesPerDay INT,
+        @ContractedHours DECIMAL(5,2),
+        @MinutesPerDayLOES DECIMAL(18,6),
+        @Year INT,
+        @Month INT,
+        @PeriodStart DATE,
+        @PeriodEnd DATE,
+        @TerminationDate DATE,
+        @DaysInMonth INT,
+        @TotalEarnedMinutes INT,
+        @AlreadyCredited INT,
+        @Delta INT,
+        @SourceID NVARCHAR(128),
+        @StartedTran BIT = 0,
+        @SavepointName NVARCHAR(128) = 'sp_AccrueLOES_' + CAST(NEWID() AS NVARCHAR(36));
+
+    SET @AsOfDate = ISNULL(@AsOfDate, CAST(GETDATE() AS DATE));
+    SET @StatusCode = 0;
+    SET @Message = N'';
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @StartedTran = 1;
+            BEGIN TRANSACTION;
+        END
+        ELSE
+        BEGIN
+            SAVE TRANSACTION @SavepointName;
+        END
+
+        IF UPPER(@Mode) NOT IN ('TOTAL', 'MONTHLY')
+        BEGIN
+            SET @StatusCode = 400;
+            SET @Message = N'Modo inválido. Use: TOTAL o MONTHLY';
+            GOTO ErrorExit;
+        END
+
+        SELECT
+            @HireDate = HireDate,
+            @EmployeeName = LEFT(FirstName + ' ' + LastName, 50)
+        FROM HR.vw_EmployeeDetails ved WITH (UPDLOCK)
+        WHERE EmployeeID = @EmployeeID;
+
+        SELECT @PersonID = PersonID FROM HR.tbl_Employees WHERE EmployeeID = @EmployeeID;
+
+        IF @HireDate IS NULL
+        BEGIN
+            SET @StatusCode = 404;
+            SET @Message = LEFT(N'Empleado no existe o inactivo (ID:' + CAST(@EmployeeID AS NVARCHAR(10)) + N')', 500);
+            GOTO ErrorExit;
+        END
+
+        IF @HireDate > @AsOfDate
+        BEGIN
+            SET @StatusCode = 400;
+            SET @Message = N'HireDate posterior a AsOfDate';
+            GOTO ErrorExit;
+        END
+
+        -- Dedicación académica: contrato LOES vigente en @AsOfDate (mismo
+        -- criterio de vigencia que HR.fn_ResolveEmployeeRate).
+        SELECT TOP 1 @ContractedHours = c.ContractedHours
+        FROM HR.tbl_Contracts c
+        LEFT JOIN HR.ref_Types rt ON rt.TypeId = c.Status AND rt.Category = 'CONTRACT_STATUS'
+        WHERE c.PersonID = @PersonID
+          AND c.LaborRegimeID = 58
+          AND c.StartDate <= @AsOfDate
+          AND (c.EndDate IS NULL OR c.EndDate >= @AsOfDate)
+        ORDER BY CASE WHEN rt.Name = 'ANULADO' THEN 1 ELSE 0 END ASC, c.ContractID DESC;
+
+        IF @ContractedHours IS NULL OR @ContractedHours <= 0
+        BEGIN
+            SET @StatusCode = 404;
+            SET @Message = N'No existe contrato LOES vigente con ContractedHours válido para este empleado en la fecha.';
+            GOTO ErrorExit;
+        END
+
+        -- Jornada LOES: horas semanales contratadas / 5 días laborables * 60.
+        SET @MinutesPerDayLOES = (@ContractedHours / 5.0) * 60.0;
+
+        EXEC HR.sp_hr_GetVacationParams
+            @VacationPerYear = @VacationPerYear OUTPUT,
+            @MinutesPerDay   = @UnusedMinutesPerDay OUTPUT;
+
+        IF @VacationPerYear IS NULL OR @VacationPerYear <= 0
+        BEGIN
+            SET @StatusCode = 500;
+            SET @Message = N'Error al obtener VACATION_PER_YEAR';
+            GOTO ErrorExit;
+        END
+
+        EXEC HR.sp_hr_EnsureTimeBalanceRow @EmployeeID = @EmployeeID;
+
+        ------------------------------------------------------------
+        -- MODO TOTAL: todo lo acumulado desde HireDate hasta @AsOfDate,
+        -- menos lo ya acreditado antes (por TOTAL o MONTHLY), igual criterio
+        -- que sp_hr_AccrueVacationBalance.
+        ------------------------------------------------------------
+        IF UPPER(@Mode) = 'TOTAL'
+        BEGIN
+            SET @SourceID = 'VAC_LOES_TOTAL|' + CONVERT(VARCHAR(8), @AsOfDate, 112);
+
+            IF EXISTS (
+                SELECT 1
+                FROM HR.tbl_TimeBalanceMovements WITH (UPDLOCK, HOLDLOCK)
+                WHERE EmployeeID = @EmployeeID
+                  AND SourceModule = 'VACATION_ACCRUAL_LOES_TOTAL'
+                  AND SourceID = @SourceID
+            )
+            BEGIN
+                SET @StatusCode = 409;
+                SET @Message = LEFT(N'LOES TOTAL ya ejecutado: ' + CONVERT(NVARCHAR(10), @AsOfDate, 120), 500);
+                GOTO ErrorExit;
+            END
+
+            SET @TotalEarnedMinutes = CAST(
+                ROUND(
+                    (DATEDIFF(DAY, @HireDate, @AsOfDate) / 365.25) *
+                    @VacationPerYear *
+                    @MinutesPerDayLOES,
+                    0
+                )
+                AS INT
+            );
+
+            SELECT @AlreadyCredited = ISNULL(SUM(DeltaVacationMin), 0)
+            FROM HR.tbl_TimeBalanceMovements
+            WHERE EmployeeID = @EmployeeID
+              AND SourceModule IN ('VACATION_ACCRUAL_LOES_TOTAL', 'VACATION_ACCRUAL_LOES_MONTHLY');
+
+            SET @Delta = @TotalEarnedMinutes - @AlreadyCredited;
+
+            IF @Delta <= 0
+            BEGIN
+                SET @StatusCode = 204;
+                SET @Message = LEFT(
+                    N'LOES TOTAL: Sin delta. Teórico=' + CAST(@TotalEarnedMinutes AS NVARCHAR(50)) +
+                    N' YaAcred=' + CAST(@AlreadyCredited AS NVARCHAR(50)),
+                    500
+                );
+                GOTO SuccessExit;
+            END
+
+            UPDATE HR.tbl_TimeBalances
+            SET VacationAvailableMin = VacationAvailableMin + @Delta,
+                LastUpdated = GETDATE()
+            WHERE EmployeeID = @EmployeeID AND LaborRegimeId = 58;
+
+            INSERT INTO HR.tbl_TimeBalanceMovements
+            (EmployeeID, DeltaVacationMin, DeltaRecoveryMin, MovementAt,
+             SourceModule, SourceTable, SourceID, PerformedByEmpID, Note, LaborRegimeId)
+            VALUES
+            (@EmployeeID, @Delta, 0, GETDATE(),
+             'VACATION_ACCRUAL_LOES_TOTAL', 'CALC', @SourceID, @PerformedByEmpID,
+             LEFT(
+                 N'[LOES TOTAL] ' + @EmployeeName +
+                 N' | ' + CONVERT(NVARCHAR(10), @HireDate, 120) + N'->' + CONVERT(NVARCHAR(10), @AsOfDate, 120) +
+                 N' | Dedicación=' + CAST(@ContractedHours AS NVARCHAR(10)) + N'h/sem' +
+                 N' Teórico:' + CAST(@TotalEarnedMinutes AS NVARCHAR(50)) +
+                 N' YaAcred:' + CAST(@AlreadyCredited AS NVARCHAR(50)) +
+                 N' Delta:+' + CAST(@Delta AS NVARCHAR(50)),
+                 500
+             ),
+             58
+            );
+
+            SET @StatusCode = 200;
+            SET @Message = LEFT(N'✓ LOES TOTAL: +' + CAST(@Delta AS NVARCHAR(50)) + N' min', 500);
+            GOTO SuccessExit;
+        END
+
+        ------------------------------------------------------------
+        -- MODO MONTHLY (default, recomendado)
+        ------------------------------------------------------------
+        SET @Year = YEAR(@AsOfDate);
+        SET @Month = MONTH(@AsOfDate);
+        SET @SourceID = 'VAC_LOES_MONTHLY|' + CAST(@Year AS VARCHAR(4)) + RIGHT('0' + CAST(@Month AS VARCHAR(2)), 2);
+
+        IF EXISTS (
+            SELECT 1
+            FROM HR.tbl_TimeBalanceMovements WITH (UPDLOCK, HOLDLOCK)
+            WHERE EmployeeID = @EmployeeID
+              AND SourceModule = 'VACATION_ACCRUAL_LOES_MONTHLY'
+              AND SourceID = @SourceID
+        )
+        BEGIN
+            SET @StatusCode = 409;
+            SET @Message = LEFT(N'LOES MONTHLY ya ejecutado: ' + CAST(@Year AS VARCHAR(4)) + N'-' + CAST(@Month AS VARCHAR(2)), 500);
+            GOTO ErrorExit;
+        END
+
+        SET @PeriodStart = DATEFROMPARTS(@Year, @Month, 1);
+        SET @PeriodEnd = EOMONTH(@AsOfDate);
+
+        -- Fin de vínculo LOES dentro del mes (mismo criterio que la versión
+        -- LOSEP: contrato LOES cuyo EndDate cae en el mes, sin adendum
+        -- posterior que lo extienda).
+        SELECT TOP 1 @TerminationDate = CAST(c.EndDate AS DATE)
+        FROM HR.tbl_Contracts c
+        WHERE c.PersonID = @PersonID
+          AND c.LaborRegimeID = 58
+          AND CAST(c.EndDate AS DATE) BETWEEN @PeriodStart AND @PeriodEnd
+          AND NOT EXISTS (
+              SELECT 1 FROM HR.tbl_Contracts a
+              WHERE a.ParentID = c.ContractID AND a.EndDate >= c.EndDate
+          )
+        ORDER BY c.EndDate DESC;
+
+        IF (@HireDate > @PeriodStart) SET @PeriodStart = @HireDate;
+        IF (@TerminationDate IS NOT NULL AND @TerminationDate < @PeriodEnd) SET @PeriodEnd = @TerminationDate;
+
+        SET @DaysInMonth = DATEDIFF(DAY, @PeriodStart, @PeriodEnd) + 1;
+        IF @DaysInMonth < 0 SET @DaysInMonth = 0;
+
+        SET @Delta = CAST(ROUND((@DaysInMonth / 365.25) * @VacationPerYear * @MinutesPerDayLOES, 0) AS INT);
+
+        IF @Delta <= 0
+        BEGIN
+            SET @StatusCode = 400;
+            SET @Message = N'LOES MONTHLY: Delta calculado es 0. Revise ContractedHours/parámetros.';
+            GOTO ErrorExit;
+        END
+
+        UPDATE HR.tbl_TimeBalances
+        SET VacationAvailableMin = VacationAvailableMin + @Delta,
+            LastUpdated = GETDATE()
+        WHERE EmployeeID = @EmployeeID AND LaborRegimeId = 58;
+
+        INSERT INTO HR.tbl_TimeBalanceMovements
+        (EmployeeID, DeltaVacationMin, DeltaRecoveryMin, MovementAt,
+         SourceModule, SourceTable, SourceID, PerformedByEmpID, Note, LaborRegimeId)
+        VALUES
+        (@EmployeeID, @Delta, 0, GETDATE(),
+         'VACATION_ACCRUAL_LOES_MONTHLY', 'CALC', @SourceID, @PerformedByEmpID,
+         LEFT(
+             N'[LOES MONTHLY] ' + @EmployeeName +
+             N' | ' + LEFT(DATENAME(MONTH, @AsOfDate), 3) + N'-' + CAST(@Year AS NVARCHAR(4)) +
+             N' | Dedicación=' + CAST(@ContractedHours AS NVARCHAR(10)) + N'h/sem' +
+             N' JornadaMin=' + CAST(CAST(@MinutesPerDayLOES AS DECIMAL(10,2)) AS NVARCHAR(20)) +
+             N' Días:' + CAST(@DaysInMonth AS NVARCHAR(10)) +
+             N' Acred:+' + CAST(@Delta AS NVARCHAR(50)),
+             500
+         ),
+         58
+        );
+
+        SET @StatusCode = 200;
+        SET @Message = LEFT(N'✓ LOES MONTHLY: +' + CAST(@Delta AS NVARCHAR(50)) + N' min', 500);
+        GOTO SuccessExit;
+
+    ErrorExit:
+        IF @StartedTran = 1
+        BEGIN
+            IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        END
+        ELSE
+        BEGIN
+            IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION @SavepointName;
+        END
+        RETURN;
+
+    SuccessExit:
+        IF @StartedTran = 1 AND @@TRANCOUNT > 0 COMMIT TRANSACTION;
+        RETURN;
+
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0
+        BEGIN
+            IF @StartedTran = 1
+            BEGIN
+                IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+            END
+            ELSE
+            BEGIN
+                IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION @SavepointName;
+            END
+        END
+        SET @StatusCode = ERROR_NUMBER();
+        SET @Message = ERROR_MESSAGE();
+        THROW;
+    END CATCH
 END
 
 GO
+
+-- [sp_hr_ReserveVacationBalance_LOES]
+
+/*
+  HR.sp_hr_ReserveVacationBalance_LOES
+  =======================================
+  2026-07-06. Espejo de sp_hr_ReserveVacationBalance pero contra el saldo
+  LOES (LaborRegimeId=58) — mismo cálculo de días calendario reales del
+  período, cobrando contra HR.tbl_Vacations.Status='Planned'. No usa jornada
+  distinta aquí porque la vacación ya se solicita en días calendario, no en
+  horas de dedicación (esa distinción solo aplica en la ACUMULACIÓN, no en el
+  descuento de días tomados).
+*/
+CREATE OR ALTER PROCEDURE HR.sp_hr_ReserveVacationBalance_LOES
+(
+    @VacationID INT,
+    @PerformedByEmpID INT = NULL,
+    @StatusCode INT OUTPUT,
+    @Message NVARCHAR(500) OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE
+        @EmployeeID INT,
+        @StartDate DATE,
+        @EndDate DATE,
+        @ChargedDays INT,
+        @MinutesPerDay INT,
+        @ChargedMinutes INT,
+        @Balance INT,
+        @SourceID NVARCHAR(128),
+        @StartedTran BIT = 0;
+
+    SET @StatusCode = 0;
+    SET @Message = N'';
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @StartedTran=1;
+            BEGIN TRAN;
+        END
+        ELSE
+        BEGIN
+            SAVE TRAN SP_RVB_LOES;
+        END
+
+        SELECT @MinutesPerDay = CAST(Pvalues AS INT)
+        FROM hr.TBL_PARAMETERS
+        WHERE name='WORK_MINUTES_PER_DAY' AND IsActive=1;
+
+        IF @MinutesPerDay IS NULL OR @MinutesPerDay <= 0
+            RAISERROR('WORK_MINUTES_PER_DAY invalido', 16, 1);
+
+        SELECT
+            @EmployeeID = EmployeeID,
+            @StartDate = StartDate,
+            @EndDate = EndDate
+        FROM HR.tbl_Vacations
+        WHERE VacationID=@VacationID
+          AND Status='Planned';
+
+        IF @EmployeeID IS NULL
+        BEGIN
+            SET @StatusCode = 1;
+            SET @Message = N'Vacación no existe o no está Planned';
+            IF @StartedTran=1 ROLLBACK TRAN ELSE ROLLBACK TRAN SP_RVB_LOES;
+            RETURN;
+        END
+
+        EXEC HR.sp_hr_EnsureTimeBalanceRow @EmployeeID=@EmployeeID;
+
+        SET @ChargedDays = DATEDIFF(DAY, @StartDate, @EndDate) + 1;
+        SET @ChargedMinutes = @ChargedDays * @MinutesPerDay;
+        SET @SourceID = 'VAC_LOES_RESERVE|' + CAST(@VacationID AS NVARCHAR(20));
+
+        IF EXISTS (SELECT 1 FROM HR.tbl_TimeBalanceMovements WHERE EmployeeID=@EmployeeID AND SourceID=@SourceID)
+        BEGIN
+            SET @StatusCode = 1;
+            SET @Message = N'Reserva ya existe: ' + @SourceID;
+            IF @StartedTran=1 ROLLBACK TRAN ELSE ROLLBACK TRAN SP_RVB_LOES;
+            RETURN;
+        END
+
+        SELECT @Balance = VacationAvailableMin
+        FROM HR.tbl_TimeBalances WITH (UPDLOCK, HOLDLOCK)
+        WHERE EmployeeID=@EmployeeID AND LaborRegimeId = 58;
+
+        IF @Balance < @ChargedMinutes
+        BEGIN
+            SET @StatusCode = -1;
+            SET @Message = N'Saldo LOES insuficiente. Disponible=' + CAST(@Balance AS NVARCHAR(20))
+                         + N' min, Requerido=' + CAST(@ChargedMinutes AS NVARCHAR(20)) + N' min';
+            IF @StartedTran=1 ROLLBACK TRAN ELSE ROLLBACK TRAN SP_RVB_LOES;
+            RETURN;
+        END
+
+        UPDATE HR.tbl_TimeBalances
+        SET VacationAvailableMin = VacationAvailableMin - @ChargedMinutes,
+            LastUpdated = GETDATE()
+        WHERE EmployeeID=@EmployeeID AND LaborRegimeId = 58;
+
+        INSERT INTO HR.tbl_TimeBalanceMovements
+        (
+            EmployeeID, DeltaVacationMin, DeltaRecoveryMin,
+            MovementAt, SourceModule, SourceTable, SourceID,
+            PerformedByEmpID, Note, LaborRegimeId
+        )
+        VALUES
+        (
+            @EmployeeID, -@ChargedMinutes, 0,
+            GETDATE(), 'VACATION_RESERVE_LOES', 'tbl_Vacations', @SourceID,
+            @PerformedByEmpID,
+            N'Reserva vacaciones LOES. Rango=' + CONVERT(VARCHAR(10),@StartDate,120) + N' a ' + CONVERT(VARCHAR(10),@EndDate,120) +
+            N' DiasCobrados=' + CAST(@ChargedDays AS NVARCHAR(10)) +
+            N' MinCobrados=' + CAST(@ChargedMinutes AS NVARCHAR(20)),
+            58
+        );
+
+        IF @StartedTran=1 COMMIT TRAN;
+        SET @StatusCode = 0;
+        SET @Message = N'Reserva vacaciones LOES OK. MinCobrados=' + CAST(@ChargedMinutes AS NVARCHAR(20));
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0
+        BEGIN
+            IF @StartedTran=1
+            BEGIN
+                IF @@TRANCOUNT>0 ROLLBACK TRAN;
+            END
+            ELSE
+            BEGIN
+                IF @@TRANCOUNT>0 ROLLBACK TRAN SP_RVB_LOES;
+            END
+        END
+
+        SET @StatusCode = ERROR_NUMBER();
+        SET @Message = ERROR_MESSAGE();
+        THROW;
+    END CATCH
+END
+
+GO
+
+-- [sp_InsertReportAudit]
+-- ELIMINADO 2026-07-01: reemplazado por inserción vía Entity Framework Core
+-- (ReportAuditRepository.CreateAuditAsync). Respaldo completo del script en
+-- Database/hr/99_legacy_sp_backup_20260701.sql
+
+-- CREATE PROCEDURE [HR].[sp_InsertReportAudit]
+--     @UserId UNIQUEIDENTIFIER,
+--     @UserEmail NVARCHAR(255),
+--     @ReportType NVARCHAR(50),
+--     @ReportFormat NVARCHAR(10),
+--     @FiltersApplied NVARCHAR(MAX) = NULL,
+--     @FileSizeBytes BIGINT = NULL,
+--     @GenerationTimeMs INT = NULL,
+--     @ClientIp NVARCHAR(50) = NULL,
+--     @Success BIT = 1,
+--     @ErrorMessage NVARCHAR(MAX) = NULL,
+--     @FileName NVARCHAR(255) = NULL
+-- AS
+-- BEGIN
+--     SET NOCOUNT ON;
+--
+--     INSERT INTO [HR].[tbl_ReportAudit] (
+--         UserId, UserEmail, ReportType, ReportFormat, FiltersApplied,
+--         GeneratedAt, FileSizeBytes, GenerationTimeMs, ClientIp,
+--         Success, ErrorMessage, FileName
+--     )
+--     VALUES (
+--         @UserId, @UserEmail, @ReportType, @ReportFormat, @FiltersApplied,
+--         GETUTCDATE(), @FileSizeBytes, @GenerationTimeMs, @ClientIp,
+--         @Success, @ErrorMessage, @FileName
+--     );
+--
+--     SELECT SCOPE_IDENTITY() AS AuditId;
+-- END
+--
+-- GO
 
 -- [sp_Justifications_Apply]
 CREATE   PROCEDURE HR.sp_Justifications_Apply
@@ -3220,6 +3821,148 @@ END
 
 GO
 
+-- [fn_ResolveEmployeeRate]
+
+/*
+  HR.fn_ResolveEmployeeRate
+  ==========================
+  2026-07-06 (Fase 2 de la propuesta de tarifa de nómina/multi-régimen).
+
+  Resuelve la tarifa horaria de un empleado vigente en @AsOfDate, considerando
+  DOS rutas independientes que nunca se mezclan entre sí:
+
+    - CONTRATO: contrato en HR.tbl_Contracts cuyo rango de fechas cubre
+      @AsOfDate (no HOY como hacía el código anterior). Si hay varios
+      contratos superpuestos en el mismo régimen (dato inconsistente o
+      histórico previo al control de la Fase 1 que anula al padre al firmar
+      un adendum), se prioriza el que NO esté ANULADO y, en empate, el más
+      reciente por ContractID.
+    - NOMBRAMIENTO: HR.tbl_PersonnelActions con Status='FIRMADO_CARGADO'
+      (acción ya formalizada, no un borrador) y EffectiveDate <= @AsOfDate,
+      usando NewRmu. Es independiente de tbl_Contracts — antes esta fuente
+      nunca se consultaba, así que un cambio de sueldo por acción de personal
+      sin contrato nuevo asociado quedaba invisible para nómina/horas extra.
+
+  Un empleado puede tener las dos rutas activas a la vez (ej. nombramiento
+  LOSEP + contrato de docencia LOES) — son regímenes distintos, no una
+  duplicación. Esta función devuelve TODAS las filas candidatas (una por
+  régimen/ruta), sin colapsar — cada procedimiento consumidor decide su
+  propio criterio:
+    - sp_Overtime_Price filtra siempre LaborRegimeID=57 (LOSEP), porque solo
+      ese régimen genera horas extra (confirmado 2026-07-06).
+    - sp_Payroll_Discounts/sp_Payroll_Subsidies, que todavía no tienen columna
+      de régimen en su tabla destino (tbl_PayrollLines no separada para estos
+      conceptos), colapsan ellos mismos al régimen IsPrincipal usando la
+      columna IsPrincipal que esta función ya expone.
+
+  2026-07-06: @EmployeeID opcional (NULL = todos los empleados, comportamiento
+  igual que antes — usado por los procedimientos de nómina que procesan un
+  período completo). Con valor, acota el cálculo a un solo empleado desde el
+  origen (ContractCandidates/ActionCandidates), en vez de calcular para los
+  667 empleados y descartar el resto después — pensado para consultas
+  puntuales de un empleado específico.
+*/
+CREATE OR ALTER FUNCTION HR.fn_ResolveEmployeeRate (@AsOfDate DATE, @EmployeeID INT = NULL)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH BaseHours AS (
+        -- MAX(...) sin GROUP BY siempre devuelve exactamente 1 fila (NULL si no
+        -- hay parámetro), a diferencia de un SELECT plano que devolvería 0 filas
+        -- y anularía todo el resultado vía el CROSS JOIN de más abajo.
+        SELECT MAX(TRY_CAST(Pvalues AS INT)) AS BaseHoursPerDay
+        FROM HR.tbl_Parameters WHERE name = 'BASE_HOURS_PER_DAY'
+    ),
+    ContractCandidates AS (
+        SELECT
+            c.PersonID,
+            c.ContractID,
+            c.LaborRegimeID,
+            c.JobID,
+            ROW_NUMBER() OVER (
+                PARTITION BY c.PersonID, c.LaborRegimeID
+                ORDER BY CASE WHEN rt.Name = 'ANULADO' THEN 1 ELSE 0 END ASC, c.ContractID DESC
+            ) AS rn
+        FROM HR.tbl_Contracts c
+        LEFT JOIN HR.ref_Types rt ON rt.TypeId = c.Status AND rt.Category = 'CONTRACT_STATUS'
+        WHERE c.StartDate <= @AsOfDate
+          AND (c.EndDate IS NULL OR c.EndDate >= @AsOfDate)
+          AND (@EmployeeID IS NULL OR EXISTS (
+              SELECT 1 FROM HR.tbl_Employees e2
+              WHERE e2.PersonID = c.PersonID AND e2.EmployeeID = @EmployeeID
+          ))
+    ),
+    ContractRate AS (
+        SELECT
+            e.EmployeeID,
+            cc.LaborRegimeID,
+            og.RMU,
+            'CONTRATO' AS SourceType
+        FROM ContractCandidates cc
+        JOIN HR.tbl_Employees e ON e.PersonID = cc.PersonID
+        LEFT JOIN HR.tbl_jobs j ON j.JobID = cc.JobID
+        LEFT JOIN HR.tbl_Occupational_Groups og ON og.GroupID = j.GroupID
+        WHERE cc.rn = 1 AND og.RMU IS NOT NULL
+    ),
+    ActionCandidates AS (
+        SELECT
+            pa.EmployeeID,
+            pa.ActionID,
+            pa.NewRmu,
+            ROW_NUMBER() OVER (
+                PARTITION BY pa.EmployeeID
+                ORDER BY pa.EffectiveDate DESC, pa.ActionID DESC
+            ) AS rn
+        FROM HR.tbl_PersonnelActions pa
+        -- 2026-07-06: VIGENTE reemplaza a FIRMADO_CARGADO como señal de "esta acción
+        -- es la actual" — antes se usaba una heurística de "la más reciente por fecha"
+        -- porque no existía un estado explícito de vigencia; ahora sí existe (ver
+        -- PersonnelActionService.ReachesVigente). El ROW_NUMBER se conserva como
+        -- respaldo defensivo, aunque solo debería haber una VIGENTE por empleado.
+        WHERE pa.Status = 'VIGENTE'
+          AND pa.EffectiveDate <= @AsOfDate
+          AND pa.NewRmu IS NOT NULL
+          AND (@EmployeeID IS NULL OR pa.EmployeeID = @EmployeeID)
+    ),
+    ActionRate AS (
+        SELECT
+            ac.EmployeeID,
+            -- 57=LOSEP: un nombramiento sin enlace explícito a tbl_EmployeeLaborRegime
+            -- se asume LOSEP por default (es el uso típico del término en el dominio).
+            ISNULL(elr.LaborRegimeId, 57) AS LaborRegimeID,
+            ac.NewRmu AS RMU,
+            'NOMBRAMIENTO' AS SourceType
+        FROM ActionCandidates ac
+        LEFT JOIN HR.tbl_EmployeeLaborRegime elr ON elr.SourcePersonnelActionId = ac.ActionID
+        WHERE ac.rn = 1
+    ),
+    Combined AS (
+        SELECT * FROM ContractRate
+        UNION ALL
+        SELECT * FROM ActionRate
+    )
+    SELECT
+        c.EmployeeID,
+        c.LaborRegimeID,
+        c.RMU,
+        -- 2026-07-06: HR.tbl_Parameters nunca tuvo una fila BASE_HOURS_PER_DAY
+        -- (confirmado: 0 filas en producción). Antes esto hacía que
+        -- @BaseHoursPerDay fuera NULL y el HourRate saliera silenciosamente
+        -- NULL para todos; aquí se usa 8 como respaldo temporal explícito
+        -- hasta que se confirme/siembre el valor real del parámetro.
+        CAST((c.RMU / (ISNULL(bh.BaseHoursPerDay, 8) * 30.0)) AS DECIMAL(12,4)) AS HourRate,
+        c.SourceType,
+        ISNULL(elr.IsPrincipal, 0) AS IsPrincipal
+    FROM Combined c
+    CROSS JOIN BaseHours bh
+    LEFT JOIN HR.tbl_EmployeeLaborRegime elr
+        ON elr.EmployeeId = c.EmployeeID
+       AND elr.LaborRegimeId = c.LaborRegimeID
+       AND elr.IsActive = 1
+);
+GO
+
 -- [sp_Overtime_Price]
 
 
@@ -3229,20 +3972,25 @@ GO
 
 	Valor hora: RMU / (BASE_HOURS_PER_DAY * 30) o desde Payroll.
 	*/
-	CREATE   PROCEDURE HR.sp_Overtime_Price
+	CREATE OR ALTER PROCEDURE HR.sp_Overtime_Price
   @Period CHAR(7) -- 'YYYY-MM'
 AS
 BEGIN
-  DECLARE @BaseHoursPerDay INT = CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='BASE_HOURS_PER_DAY') AS INT);
+  -- 2026-07-06 (Fase 2): la tarifa se resuelve al último día de @Period, no al
+  -- día de hoy — ver HR.fn_ResolveEmployeeRate para el detalle de las 2 rutas
+  -- (Contrato/Nombramiento) que reemplazan el TOP 1 + GETDATE() anterior.
+  -- 2026-07-06 (Fase 3): solo el régimen LOSEP (57) genera horas extra
+  -- (confirmado), así que se filtra explícitamente por régimen y NO por
+  -- IsPrincipal — un docente LOES con nombramiento LOSEP secundario igual
+  -- debe cobrar horas extra por su parte LOSEP. MAX() colapsa el caso raro
+  -- de que existan a la vez un contrato y un nombramiento LOSEP.
+  DECLARE @AsOfDate DATE = EOMONTH(CAST(@Period + '-01' AS DATE));
 
   ;WITH rmu AS (
-    SELECT e.EmployeeID, og.RMU,
-           CAST((og.RMU / (@BaseHoursPerDay*30.0)) AS DECIMAL(12,4)) AS HourRate
-    FROM HR.tbl_Employees e
-    LEFT JOIN HR.tbl_jobs j ON j.JobID = (SELECT TOP 1 JobID FROM HR.tbl_Contracts c 
-                                          WHERE c.PersonID=e.PersonID AND (c.EndDate IS NULL OR c.EndDate >= GETDATE())
-                                          ORDER BY c.StartDate DESC)
-    LEFT JOIN HR.tbl_Occupational_Groups og ON og.GroupID = j.GroupID
+    SELECT EmployeeID, MAX(HourRate) AS HourRate
+    FROM HR.fn_ResolveEmployeeRate(@AsOfDate, DEFAULT)
+    WHERE LaborRegimeID = 57
+    GROUP BY EmployeeID
   ),
   ot AS (
     SELECT o.EmployeeID, o.OvertimeType, o.Hours, oc.Factor
@@ -3261,9 +4009,12 @@ BEGIN
   GROUP BY o.EmployeeID, o.OvertimeType;
 
   -- Generar/actualizar PayrollLines
+  -- 2026-07-06: el ON 1=0 original nunca hacía match, así que cada reproceso
+  -- del mismo período insertaba líneas duplicadas. Se agrega llave real
+  -- (PayrollID+LineType+Concept), respaldada por UQ_PayrollLines_Payroll_Line_Concept.
   MERGE HR.tbl_PayrollLines AS T
   USING (
-    SELECT p.PayrollID, o.EmployeeID, 
+    SELECT p.PayrollID, o.EmployeeID,
            'Overtime' AS LineType,
            CONCAT('HE ', o.OvertimeType) AS Concept,
            o.Hours AS Quantity,
@@ -3271,10 +4022,16 @@ BEGIN
     FROM HR.tbl_Payroll p
     JOIN #OTPrice o ON o.EmployeeID=p.EmployeeID
     WHERE p.Period=@Period
-  ) S ON 1=0
+  ) S
+    ON T.PayrollID = S.PayrollID
+   AND T.LineType  = S.LineType
+   AND T.Concept   = S.Concept
+  WHEN MATCHED THEN
+    UPDATE SET T.Quantity = S.Quantity, T.UnitValue = S.UnitValue, T.LaborRegimeId = 57
   WHEN NOT MATCHED THEN
-    INSERT (PayrollID, LineType, Concept, Quantity, UnitValue)
-    VALUES (S.PayrollID, S.LineType, S.Concept, S.Quantity, S.UnitValue);
+    -- 2026-07-06 (Fase 3): LaborRegimeId=57 (LOSEP) siempre — ver nota arriba.
+    INSERT (PayrollID, LineType, Concept, Quantity, UnitValue, LaborRegimeId)
+    VALUES (S.PayrollID, S.LineType, S.Concept, S.Quantity, S.UnitValue, 57);
 
   DROP TABLE #OTPrice;
 END
@@ -3286,26 +4043,25 @@ GO
 
 --Descuentos y subsidios (nómina)
 --E1) Descuento por atrasos/ausencias
-CREATE   PROCEDURE HR.sp_Payroll_Discounts
+CREATE OR ALTER PROCEDURE HR.sp_Payroll_Discounts
   @Period CHAR(7)
 AS
 BEGIN
-  DECLARE @BaseHoursPerDay INT = CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='BASE_HOURS_PER_DAY') AS INT),
-          @TardyRate       DECIMAL(6,2) = CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='TARDINESS_DISCOUNT_RATE') AS DECIMAL(6,2));
+  -- 2026-07-06 (Fase 2): mismo cambio que sp_Overtime_Price — ver comentario ahí.
+  -- 2026-07-06 (Fase 3): este descuento SÍ se colapsa al régimen principal
+  -- (IsPrincipal), a diferencia de horas extra — tbl_PayrollLines todavía no
+  -- separa este concepto por régimen (pendiente, alcance mayor al esperado,
+  -- ver conversación de la Fase 3).
+  DECLARE @AsOfDate DATE = EOMONTH(CAST(@Period + '-01' AS DATE));
+  DECLARE @TardyRate DECIMAL(6,2) = CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='TARDINESS_DISCOUNT_RATE') AS DECIMAL(6,2));
 
   ;WITH rmu AS (
-    SELECT e.EmployeeID, og.RMU,
-           CAST((og.RMU / (@BaseHoursPerDay*30.0)) AS DECIMAL(12,4)) AS HourRate
-    FROM HR.tbl_Employees e
-    LEFT JOIN HR.tbl_jobs j ON j.JobID = (SELECT TOP 1 JobID FROM HR.tbl_Contracts c 
-                                          WHERE c.PersonID=e.PersonID AND (c.EndDate IS NULL OR c.EndDate >= GETDATE())
-                                          ORDER BY c.StartDate DESC)
-    LEFT JOIN HR.tbl_Occupational_Groups og ON og.GroupID = j.GroupID
+    SELECT EmployeeID, HourRate FROM HR.fn_ResolveEmployeeRate(@AsOfDate, DEFAULT) WHERE IsPrincipal = 1
   ),
   agg AS (
     SELECT ac.EmployeeID,
            SUM(CASE WHEN CONVERT(CHAR(7), ac.WorkDate, 126)=@Period THEN ac.TardinessMin ELSE 0 END) AS TardyMin,
-           SUM(CASE WHEN CONVERT(CHAR(7), ac.WorkDate, 126)=@Period 
+           SUM(CASE WHEN CONVERT(CHAR(7), ac.WorkDate, 126)=@Period
                     THEN GREATEST(0, ac.RequiredMinutes - ac.TotalWorkedMinutes) ELSE 0 END) AS AbsenceMin
     FROM HR.tbl_AttendanceCalculations ac
     GROUP BY ac.EmployeeID
@@ -3321,11 +4077,17 @@ BEGIN
   WHERE p.Period=@Period;
 
   -- Línea de deducción
+  -- 2026-07-06: mismo fix de llave real que sp_Overtime_Price (ver comentario ahí).
   MERGE HR.tbl_PayrollLines AS T
   USING (
     SELECT PayrollID,'Deduction' AS LineType,'Descuento por atrasos/ausencias' AS Concept, QtyHours AS Quantity, UnitValue
     FROM #Disc WHERE QtyHours>0
-  ) S ON 1=0
+  ) S
+    ON T.PayrollID = S.PayrollID
+   AND T.LineType  = S.LineType
+   AND T.Concept   = S.Concept
+  WHEN MATCHED THEN
+    UPDATE SET T.Quantity = S.Quantity, T.UnitValue = S.UnitValue
   WHEN NOT MATCHED THEN
     INSERT (PayrollID, LineType, Concept, Quantity, UnitValue)
     VALUES (S.PayrollID, S.LineType, S.Concept, S.Quantity, S.UnitValue);
@@ -3341,20 +4103,29 @@ GO
 
 --(agrega líneas positivas tipo “Subsidy” si tu política paga recargos)
 
-CREATE   PROCEDURE HR.sp_Payroll_Subsidies
+CREATE OR ALTER PROCEDURE HR.sp_Payroll_Subsidies
   @Period CHAR(7)
 AS
 BEGIN
-  DECLARE @BaseHoursPerDay INT = CAST((SELECT Pvalues FROM HR.tbl_Parameters WHERE name='BASE_HOURS_PER_DAY') AS INT);
+  -- 2026-07-06: fix de 3 bugs encontrados en auditoría de subsidios:
+  --  1) Faltaba el MERGE hacia tbl_PayrollLines (terminaba en un SELECT
+  --     suelto que el C# descartaba con ExecuteNonQueryAsync) — nunca se
+  --     guardaba nada. Ahora sigue el mismo patrón que sp_Overtime_Price.
+  --  2) El CASE nocturno/feriado era mutuamente excluyente — un empleado
+  --     con ambos tipos en el mismo período perdía uno. Ahora se genera
+  --     una fila por cada tipo (UNION ALL), igual que sp_Overtime_Price
+  --     agrupa por OvertimeType.
+  --  3) UnitValue no aplicaba ningún factor de recargo. Ahora reutiliza
+  --     los factores ya configurados en HR.tbl_OvertimeConfig (Nocturna,
+  --     Feriado) en vez de pagar ambos a la tarifa base.
+  --  4) (2026-07-06, Fase 2) tarifa resuelta con GETDATE()/TOP1 en vez del
+  --     período — mismo cambio que sp_Overtime_Price, ver comentario ahí.
+  --  5) (2026-07-06, Fase 3) colapsa al régimen principal (IsPrincipal),
+  --     mismo criterio que sp_Payroll_Discounts — no separado por régimen aún.
+  DECLARE @AsOfDate DATE = EOMONTH(CAST(@Period + '-01' AS DATE));
 
   ;WITH rmu AS (
-    SELECT e.EmployeeID, og.RMU,
-           CAST((og.RMU / (@BaseHoursPerDay*30.0)) AS DECIMAL(12,4)) AS HourRate
-    FROM HR.tbl_Employees e
-    LEFT JOIN HR.tbl_jobs j ON j.JobID = (SELECT TOP 1 JobID FROM HR.tbl_Contracts c 
-                                          WHERE c.PersonID=e.PersonID AND (c.EndDate IS NULL OR c.EndDate >= GETDATE())
-                                          ORDER BY c.StartDate DESC)
-    LEFT JOIN HR.tbl_Occupational_Groups og ON og.GroupID = j.GroupID
+    SELECT EmployeeID, HourRate FROM HR.fn_ResolveEmployeeRate(@AsOfDate, DEFAULT) WHERE IsPrincipal = 1
   ),
   agg AS (
     SELECT EmployeeID,
@@ -3362,23 +4133,129 @@ BEGIN
       SUM(CASE WHEN CONVERT(CHAR(7),WorkDate,126)=@Period THEN HolidayMinutes ELSE 0 END)/60.0 AS HolidayHours
     FROM HR.tbl_AttendanceCalculations
     GROUP BY EmployeeID
+  ),
+  sub AS (
+    SELECT a.EmployeeID,
+           'Recargo nocturno' AS Concept,
+           a.NightHours AS Quantity,
+           r.HourRate * ISNULL(ocN.Factor, 1.0) AS UnitValue
+    FROM agg a
+    JOIN rmu r ON r.EmployeeID = a.EmployeeID
+    LEFT JOIN HR.tbl_OvertimeConfig ocN ON ocN.OvertimeType = 'Nocturna'
+    WHERE a.NightHours > 0
+
+    UNION ALL
+
+    SELECT a.EmployeeID,
+           'Recargo feriado' AS Concept,
+           a.HolidayHours AS Quantity,
+           r.HourRate * ISNULL(ocF.Factor, 1.0) AS UnitValue
+    FROM agg a
+    JOIN rmu r ON r.EmployeeID = a.EmployeeID
+    LEFT JOIN HR.tbl_OvertimeConfig ocF ON ocF.OvertimeType = 'Feriado'
+    WHERE a.HolidayHours > 0
   )
-  SELECT p.PayrollID, a.EmployeeID, 
-         'Subsidy' AS LineType,
-         CASE WHEN a.NightHours>0 THEN 'Recargo nocturno' ELSE 'Recargo feriado' END AS Concept,
-         CASE WHEN a.NightHours>0 THEN a.NightHours ELSE a.HolidayHours END AS Quantity,
-         r.HourRate AS UnitValue
-  FROM HR.tbl_Payroll p
-  JOIN agg a ON a.EmployeeID=p.EmployeeID
-  JOIN rmu r ON r.EmployeeID=a.EmployeeID
-  WHERE p.Period=@Period AND (a.NightHours>0 OR a.HolidayHours>0);
+  -- 2026-07-06: mismo fix de llave real que sp_Overtime_Price (ver comentario ahí).
+  MERGE HR.tbl_PayrollLines AS T
+  USING (
+    SELECT p.PayrollID, s.Concept, s.Quantity, s.UnitValue
+    FROM HR.tbl_Payroll p
+    JOIN sub s ON s.EmployeeID = p.EmployeeID
+    WHERE p.Period = @Period
+  ) S
+    ON T.PayrollID = S.PayrollID
+   AND T.LineType  = 'Subsidy'
+   AND T.Concept   = S.Concept
+  WHEN MATCHED THEN
+    UPDATE SET T.Quantity = S.Quantity, T.UnitValue = S.UnitValue
+  WHEN NOT MATCHED THEN
+    INSERT (PayrollID, LineType, Concept, Quantity, UnitValue)
+    VALUES (S.PayrollID, 'Subsidy', S.Concept, S.Quantity, S.UnitValue);
+END
+
+GO
+
+-- [sp_GetConsolidatedRemunerationReport]
+
+/*
+  HR.sp_GetConsolidatedRemunerationReport
+  =========================================
+  2026-07-06 (Fase 4 de la propuesta de tarifa de nómina/multi-régimen).
+
+  Reporte de solo lectura: consolida, por empleado, el total a pagar/descontar
+  del período a partir de las líneas YA CALCULADAS en tbl_PayrollLines
+  (generadas por sp_Overtime_Price, sp_Payroll_Discounts, sp_Payroll_Subsidies).
+  No recalcula nada — es una vista de presentación sobre datos que ya viven
+  separados por régimen cuando aplica (hoy solo Overtime, siempre LOSEP=57;
+  Deduction/Subsidy siguen sin separar, ver Fase 3).
+
+  Devuelve dos resultsets:
+    1) Detalle por empleado + régimen + tipo de línea (para auditar de dónde
+       sale cada monto).
+    2) Total consolidado por empleado (suma de todas sus líneas, sin importar
+       régimen) — el número final a pagar que pediste poder ver consolidado.
+*/
+CREATE OR ALTER PROCEDURE HR.sp_GetConsolidatedRemunerationReport
+(
+    @Period     CHAR(7),
+    @EmployeeID INT = NULL
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    ;WITH Lines AS (
+        SELECT
+            p.EmployeeID,
+            pl.LaborRegimeId,
+            rt.Name AS LaborRegimeName,
+            pl.LineType,
+            pl.Concept,
+            pl.Quantity,
+            pl.UnitValue,
+            CAST(pl.Quantity * pl.UnitValue AS DECIMAL(12,2)) AS Amount
+        FROM HR.tbl_PayrollLines pl
+        JOIN HR.tbl_Payroll p ON p.PayrollID = pl.PayrollID
+        LEFT JOIN HR.ref_Types rt ON rt.TypeId = pl.LaborRegimeId AND rt.Category = 'CONTRACT_TYPE'
+        WHERE p.Period = @Period
+          AND (@EmployeeID IS NULL OR p.EmployeeID = @EmployeeID)
+    )
+    SELECT
+        l.EmployeeID,
+        p.FirstName + ' ' + p.LastName AS EmployeeName,
+        ISNULL(l.LaborRegimeName, 'Sin régimen asignado') AS LaborRegimeName,
+        l.LineType,
+        l.Concept,
+        l.Quantity,
+        l.UnitValue,
+        -- Overtime (Concept 'Overtime') suma; Deduction resta en el total consolidado
+        CASE WHEN l.LineType = 'Deduction' THEN -l.Amount ELSE l.Amount END AS SignedAmount
+    INTO #Detail
+    FROM Lines l
+    JOIN HR.tbl_Employees e ON e.EmployeeID = l.EmployeeID
+    JOIN HR.tbl_People p ON p.PersonID = e.PersonID;
+
+    -- Resultset 1: detalle por régimen/línea
+    SELECT * FROM #Detail
+    ORDER BY EmployeeID, LaborRegimeName, LineType, Concept;
+
+    -- Resultset 2: total consolidado por empleado (todas las líneas, todos los régimenes)
+    SELECT
+        EmployeeID,
+        EmployeeName,
+        CAST(SUM(SignedAmount) AS DECIMAL(12,2)) AS TotalAPagar
+    FROM #Detail
+    GROUP BY EmployeeID, EmployeeName
+    ORDER BY EmployeeID;
+
+    DROP TABLE #Detail;
 END
 
 GO
 
 -- [sp_ProcessAttendanceBaseDay]
 /*-----  HR.sp_ProcessAttendanceBaseDay -*/
-CREATE   PROCEDURE HR.sp_ProcessAttendanceBaseDay
+CREATE OR ALTER PROCEDURE HR.sp_ProcessAttendanceBaseDay
 (
     @EmployeeID INT,
     @WorkDate DATE,
@@ -3473,6 +4350,22 @@ BEGIN
             SET @LunchEnd = DATEADD(DAY, 1, @LunchEnd);
     END;
 
+    /* ------------------------------------------------------------------
+       PUNTO 9 — Partición en 2 jornadas (mañana/tarde).
+       Guardia de seguridad: solo se activa si el almuerzo es confiable
+       (no NULL, cae dentro del turno y dura 4h o menos). Si los datos
+       de almuerzo están mal cargados (ej. LunchEnd<=LunchStart por error
+       de captura, que ya se interpretó arriba como cruce de medianoche),
+       @SplitJourneys queda en 0 y el cálculo cae al camino de jornada
+       única de siempre (comportamiento sin cambios).
+    ------------------------------------------------------------------ */
+    DECLARE @SplitJourneys BIT = 0;
+
+    IF (@HasLunch = 1 AND @LunchStart IS NOT NULL AND @LunchEnd IS NOT NULL
+        AND @LunchStart >= @ShiftStart AND @LunchEnd <= @ShiftEnd
+        AND DATEDIFF(MINUTE, @LunchStart, @LunchEnd) BETWEEN 1 AND 240)
+        SET @SplitJourneys = 1;
+
     IF (@NightStart IS NOT NULL AND @NightEnd IS NOT NULL)
     BEGIN
         SET @NightStartDT = DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS TIME), @NightStart), @BaseDate);
@@ -3491,6 +4384,18 @@ BEGIN
                        END;
 
     IF @RequiredMin < 0 SET @RequiredMin = 0;
+
+    DECLARE
+        @RequiredMorningMin   INT = 0,
+        @RequiredAfternoonMin INT = 0;
+
+    IF (@SplitJourneys = 1)
+    BEGIN
+        SET @RequiredMorningMin   = DATEDIFF(MINUTE, @ShiftStart, @LunchStart);
+        SET @RequiredAfternoonMin = DATEDIFF(MINUTE, @LunchEnd, @ShiftEnd);
+        IF @RequiredMorningMin   < 0 SET @RequiredMorningMin   = 0;
+        IF @RequiredAfternoonMin < 0 SET @RequiredAfternoonMin = 0;
+    END;
 
     DECLARE
         @WindowStart DATETIME2 = DATEADD(HOUR, -4, @ShiftStart),
@@ -3562,6 +4467,8 @@ BEGIN
         @TotalWorkedSegments FLOAT = 0,
         @InsideShift FLOAT = 0,
         @InsideWorkBands FLOAT = 0,
+        @InsideBlock1Sum FLOAT = 0,
+        @InsideBlock2Sum FLOAT = 0,
         @NightMinutes INT = 0,
         @InsideMinutes FLOAT = 0,
         @OutsideMinutes FLOAT = 0,
@@ -3576,7 +4483,13 @@ BEGIN
         @TotalWorkedMinutes INT = 0,
         @FoodSubsidy INT = 0,
         @HolidayMinutes INT = 0,
-        @FirstInInside DATETIME2 = NULL;
+        @FirstInInside DATETIME2 = NULL,
+        @MorningHasSegment BIT = 0,
+        @AfternoonHasSegment BIT = 0,
+        @MorningLateRaw INT = 0,
+        @AfternoonLateRaw INT = 0,
+        @MorningTardiness INT = 0,
+        @AfternoonTardiness INT = 0;
 
     IF EXISTS (SELECT 1 FROM #Segments)
     BEGIN
@@ -3636,6 +4549,8 @@ BEGIN
             @TotalWorkedSegments = ISNULL(SUM(SegmentMinutes), 0),
             @InsideShift         = ISNULL(SUM(InsideShiftMinutes), 0),
             @InsideWorkBands     = ISNULL(SUM(InsideBlock1 + InsideBlock2), 0),
+            @InsideBlock1Sum     = ISNULL(SUM(InsideBlock1), 0),
+            @InsideBlock2Sum     = ISNULL(SUM(InsideBlock2), 0),
             @NightMinutes        = ISNULL(CAST(SUM(NightMinutes) AS INT), 0)
         FROM SegCalc;
 
@@ -3647,38 +4562,135 @@ BEGIN
         SET @OutsideMinutes = @TotalWorkedSegments - @InsideMinutes;
         IF @OutsideMinutes < 0 SET @OutsideMinutes = 0;
 
-        IF (@InsideMinutes < @RequiredMin)
-            SET @AbsentMinutes = @RequiredMin - CAST(@InsideMinutes AS INT);
-        ELSE
-            SET @AbsentMinutes = 0;
-
-        ;WITH FirstInInsideCTE AS
-        (
-            SELECT TOP 1
-                CASE
-                    WHEN s.StartTime <= @ShiftStart AND s.EndTime > @ShiftStart THEN @ShiftStart
-                    ELSE s.StartTime
-                END AS FirstInInside
-            FROM #Segments s
-            WHERE s.EndTime > @ShiftStart
-            ORDER BY s.StartTime
-        )
-        SELECT @FirstInInside = FirstInInside
-        FROM FirstInInsideCTE;
-
-        IF (@FirstInInside IS NOT NULL)
+        /* PUNTO 9: qué jornada tiene al menos un segmento de marcación
+           (solo se evalúa cuando la partición en 2 jornadas está activa). */
+        IF (@SplitJourneys = 1)
         BEGIN
-            SET @MinutesLate = DATEDIFF(MINUTE, @ShiftStart, @FirstInInside);
-            IF @MinutesLate < 0 SET @MinutesLate = 0;
+            SET @MorningHasSegment = CASE WHEN EXISTS (
+                SELECT 1 FROM #Segments WHERE EndTime > @ShiftStart AND StartTime < @LunchStart
+            ) THEN 1 ELSE 0 END;
+
+            SET @AfternoonHasSegment = CASE WHEN EXISTS (
+                SELECT 1 FROM #Segments WHERE EndTime > @LunchEnd AND StartTime < @ShiftEnd
+            ) THEN 1 ELSE 0 END;
         END;
 
-        SET @TardinessMin = @MinutesLate - @GraceMin;
-        IF @TardinessMin < 0 SET @TardinessMin = 0;
-
-        IF (@LastOut IS NOT NULL AND @LastOut < @ShiftEnd)
-            SET @EarlyLeaveMinutes = DATEDIFF(MINUTE, @LastOut, @ShiftEnd);
+        /* PUNTO 9 — AUSENCIA: con partición en 2 jornadas, cada jornada
+           contribuye a la ausencia de forma independiente (si a una le
+           falta cobertura, no se penaliza el día completo). Sin partición
+           válida, se mantiene el cálculo combinado de siempre. */
+        IF (@SplitJourneys = 1)
+        BEGIN
+            SET @AbsentMinutes =
+                (CASE WHEN @InsideBlock1Sum < @RequiredMorningMin
+                      THEN @RequiredMorningMin - CAST(@InsideBlock1Sum AS INT) ELSE 0 END)
+              + (CASE WHEN @InsideBlock2Sum < @RequiredAfternoonMin
+                      THEN @RequiredAfternoonMin - CAST(@InsideBlock2Sum AS INT) ELSE 0 END);
+        END
         ELSE
-            SET @EarlyLeaveMinutes = 0;
+        BEGIN
+            IF (@InsideMinutes < @RequiredMin)
+                SET @AbsentMinutes = @RequiredMin - CAST(@InsideMinutes AS INT);
+            ELSE
+                SET @AbsentMinutes = 0;
+        END;
+
+        /* PUNTO 9 — TARDANZA / SALIDA ANTICIPADA: con partición en 2
+           jornadas, cada una se evalúa contra su propio inicio/fin, y
+           solo si tiene al menos un segmento (si no tiene marcación ya
+           se contó como ausencia arriba, no se duplica como atraso). */
+        IF (@SplitJourneys = 1)
+        BEGIN
+            IF (@MorningHasSegment = 1)
+            BEGIN
+                SELECT TOP 1 @FirstInInside =
+                    CASE WHEN s.StartTime <= @ShiftStart AND s.EndTime > @ShiftStart THEN @ShiftStart ELSE s.StartTime END
+                FROM #Segments s
+                WHERE s.EndTime > @ShiftStart AND s.StartTime < @LunchStart
+                ORDER BY s.StartTime;
+
+                IF (@FirstInInside IS NOT NULL)
+                BEGIN
+                    SET @MorningLateRaw = DATEDIFF(MINUTE, @ShiftStart, @FirstInInside);
+                    IF @MorningLateRaw < 0 SET @MorningLateRaw = 0;
+                END;
+            END;
+
+            SET @FirstInInside = NULL;
+
+            IF (@AfternoonHasSegment = 1)
+            BEGIN
+                SELECT TOP 1 @FirstInInside =
+                    CASE WHEN s.StartTime <= @LunchEnd AND s.EndTime > @LunchEnd THEN @LunchEnd ELSE s.StartTime END
+                FROM #Segments s
+                WHERE s.EndTime > @LunchEnd AND s.StartTime < @ShiftEnd
+                ORDER BY s.StartTime;
+
+                IF (@FirstInInside IS NOT NULL)
+                BEGIN
+                    SET @AfternoonLateRaw = DATEDIFF(MINUTE, @LunchEnd, @FirstInInside);
+                    IF @AfternoonLateRaw < 0 SET @AfternoonLateRaw = 0;
+                END;
+            END;
+
+            SET @MorningTardiness = @MorningLateRaw - @GraceMin;
+            IF @MorningTardiness < 0 SET @MorningTardiness = 0;
+
+            SET @AfternoonTardiness = @AfternoonLateRaw - @GraceMin;
+            IF @AfternoonTardiness < 0 SET @AfternoonTardiness = 0;
+
+            SET @MinutesLate  = @MorningLateRaw + @AfternoonLateRaw;
+            SET @TardinessMin = @MorningTardiness + @AfternoonTardiness;
+
+            -- Salida anticipada: contra el fin de la tarde si tiene marcación;
+            -- si la tarde no marcó pero la mañana sí, contra el fin de la mañana.
+            IF (@AfternoonHasSegment = 1)
+            BEGIN
+                IF (@LastOut IS NOT NULL AND @LastOut < @ShiftEnd)
+                    SET @EarlyLeaveMinutes = DATEDIFF(MINUTE, @LastOut, @ShiftEnd);
+                ELSE
+                    SET @EarlyLeaveMinutes = 0;
+            END
+            ELSE IF (@MorningHasSegment = 1)
+            BEGIN
+                IF (@LastOut IS NOT NULL AND @LastOut < @LunchStart)
+                    SET @EarlyLeaveMinutes = DATEDIFF(MINUTE, @LastOut, @LunchStart);
+                ELSE
+                    SET @EarlyLeaveMinutes = 0;
+            END
+            ELSE
+                SET @EarlyLeaveMinutes = 0;
+        END
+        ELSE
+        BEGIN
+            ;WITH FirstInInsideCTE AS
+            (
+                SELECT TOP 1
+                    CASE
+                        WHEN s.StartTime <= @ShiftStart AND s.EndTime > @ShiftStart THEN @ShiftStart
+                        ELSE s.StartTime
+                    END AS FirstInInside
+                FROM #Segments s
+                WHERE s.EndTime > @ShiftStart
+                ORDER BY s.StartTime
+            )
+            SELECT @FirstInInside = FirstInInside
+            FROM FirstInInsideCTE;
+
+            IF (@FirstInInside IS NOT NULL)
+            BEGIN
+                SET @MinutesLate = DATEDIFF(MINUTE, @ShiftStart, @FirstInInside);
+                IF @MinutesLate < 0 SET @MinutesLate = 0;
+            END;
+
+            SET @TardinessMin = @MinutesLate - @GraceMin;
+            IF @TardinessMin < 0 SET @TardinessMin = 0;
+
+            IF (@LastOut IS NOT NULL AND @LastOut < @ShiftEnd)
+                SET @EarlyLeaveMinutes = DATEDIFF(MINUTE, @LastOut, @ShiftEnd);
+            ELSE
+                SET @EarlyLeaveMinutes = 0;
+        END;
 
         IF (@InsideMinutes > @RequiredMin)
             SET @OvertimeWithinSchedule = @InsideMinutes - @RequiredMin;
@@ -3721,6 +4733,12 @@ BEGIN
             TotalWorkedMinutes = @TotalWorkedMinutes,
             RegularMinutes = @RegularMinutes,
             OvertimeMinutes = @OvertimeMinutes,
+            -- 2026-07-06: se preserva aquí la detección automática (trabajado
+            -- fuera de horario) ANTES de que sp_ProcessTimePlanningForEmployeeDay
+            -- sobreescriba OvertimeMinutes más adelante en el pipeline con el
+            -- monto verificado/autorizado (el que realmente se paga). Sin este
+            -- campo, la detección original se perdía sin dejar rastro.
+            DetectedOvertimeMinutes = @OvertimeMinutes,
             NightMinutes = @NightMinutes,
             HolidayMinutes = @HolidayMinutes,
             RequiredMinutes = @RequiredMin,
@@ -3765,7 +4783,7 @@ BEGIN
         INSERT
         (
             EmployeeID, WorkDate, FirstPunchIn, LastPunchOut,
-            TotalWorkedMinutes, RegularMinutes, OvertimeMinutes,
+            TotalWorkedMinutes, RegularMinutes, OvertimeMinutes, DetectedOvertimeMinutes,
             NightMinutes, HolidayMinutes,
             RequiredMinutes, ScheduledWorkedMin, OffScheduleMin, AbsentMinutes,
             MinutesLate, TardinessMin, EarlyLeaveMinutes,
@@ -3782,7 +4800,7 @@ BEGIN
         VALUES
         (
             @EmployeeID, @WorkDate, @FirstIn, @LastOut,
-            @TotalWorkedMinutes, @RegularMinutes, @OvertimeMinutes,
+            @TotalWorkedMinutes, @RegularMinutes, @OvertimeMinutes, @OvertimeMinutes,
             @NightMinutes, @HolidayMinutes,
             @RequiredMin, CAST(@InsideMinutes AS INT), @OffScheduleMin, @AbsentMinutes,
             @MinutesLate, @TardinessMin, @EarlyLeaveMinutes,
@@ -4641,7 +5659,7 @@ GO
 -- [sp_ProcessAttendanceLeavesDay]
 
 /*--- HR.sp_ProcessAttendanceLeavesDay -----*/
-CREATE   PROCEDURE HR.sp_ProcessAttendanceLeavesDay
+CREATE OR ALTER PROCEDURE HR.sp_ProcessAttendanceLeavesDay
 (
     @EmployeeID INT,
     @WorkDate   DATE
@@ -4672,6 +5690,7 @@ BEGIN
         @LunchStartT TIME,
         @LunchEndT TIME,
         @RequiredMinutes INT,
+        @AbsentMinutes INT,
         @DayStart DATETIME2,
         @DayEnd DATETIME2,
         @ShiftStart DATETIME2,
@@ -4685,13 +5704,16 @@ BEGIN
         @HasLunch = ScheduledHasLunchBreak,
         @LunchStartT = ScheduledLunchStart,
         @LunchEndT = ScheduledLunchEnd,
-        @RequiredMinutes = ScheduledMinutes
+        @RequiredMinutes = ScheduledMinutes,
+        @AbsentMinutes = AbsentMinutes
     FROM HR.tbl_AttendanceCalculations
     WHERE EmployeeID = @EmployeeID
       AND WorkDate = @WorkDate;
 
     IF @EntryTime IS NULL OR @ExitTime IS NULL
         RETURN;
+
+    SET @AbsentMinutes = ISNULL(@AbsentMinutes, 0);
 
     SET @DayStart = CAST(@WorkDate AS DATETIME2);
     SET @DayEnd   = DATEADD(DAY, 1, @DayStart);
@@ -4829,6 +5851,18 @@ BEGIN
     IF @MedicalLeaveMinutes < 0 SET @MedicalLeaveMinutes = 0;
     IF @VacationDeductedMinutes < 0 SET @VacationDeductedMinutes = 0;
 
+    /* BUG ORIGINAL: VacationMinutes/PermissionMinutes/MedicalLeaveMinutes se
+       calculaban pero nunca se restaban de AbsentMinutes, causando doble
+       penalización (un día de vacación/permiso/licencia aprobada quedaba
+       como ausencia completa Y descontaba el saldo correspondiente).
+       Mismo patrón de clamp que ya usa sp_ProcessAttendanceJustificationsDay
+       para las justificaciones de marcación. */
+    SET @AbsentMinutes = CASE
+                              WHEN (@VacationMinutes + @PermissionMinutes + @MedicalLeaveMinutes) >= @AbsentMinutes
+                                  THEN 0
+                              ELSE @AbsentMinutes - (@VacationMinutes + @PermissionMinutes + @MedicalLeaveMinutes)
+                          END;
+
     SET @HasVacation = CASE WHEN @VacationMinutes > 0 THEN 1 ELSE 0 END;
     SET @HasPermission = CASE WHEN @PermissionMinutes > 0 THEN 1 ELSE 0 END;
     SET @HasMedicalLeave = CASE WHEN @MedicalLeaveMinutes > 0 THEN 1 ELSE 0 END;
@@ -4855,6 +5889,7 @@ BEGIN
         HasVacation = @HasVacation,
         HasPermission = @HasPermission,
         HasMedicalLeave = @HasMedicalLeave,
+        AbsentMinutes = @AbsentMinutes,
         UpdatedAt = GETDATE()
     WHERE EmployeeID = @EmployeeID
       AND WorkDate = @WorkDate;
@@ -4865,11 +5900,15 @@ GO
 -- [sp_ProcessAttendancePlanningDay]
 
 /*--------- HR.sp_ProcessAttendancePlanningDay-----------*/
-CREATE   PROCEDURE HR.sp_ProcessAttendancePlanningDay
+CREATE OR ALTER PROCEDURE HR.sp_ProcessAttendancePlanningDay
 (
-    @EmployeeID INT,
-    @WorkDate   DATE,
-    @Debug      BIT = 0
+    @EmployeeID        INT,
+    @WorkDate          DATE,
+    @Debug             BIT = 0,
+    -- Fase 4 punto 4.5: forwardeado a sp_ProcessTimePlanningForEmployeeDay
+    -- para guardias (horario resuelto vía tbl_GuardShiftPlanning).
+    @OverrideEntryTime TIME = NULL,
+    @OverrideExitTime  TIME = NULL
 )
 AS
 BEGIN
@@ -4887,9 +5926,11 @@ BEGIN
     **********************************************************************/
 
     EXEC HR.sp_ProcessTimePlanningForEmployeeDay
-         @EmployeeID = @EmployeeID,
-         @WorkDate   = @WorkDate,
-         @Debug      = @Debug;
+         @EmployeeID        = @EmployeeID,
+         @WorkDate          = @WorkDate,
+         @Debug             = @Debug,
+         @OverrideEntryTime = @OverrideEntryTime,
+         @OverrideExitTime  = @OverrideExitTime;
 END;
 
 GO
@@ -4976,10 +6017,15 @@ GO
 -- [sp_ProcessAttendanceRunDate]
 
 /*---------HR.sp_ProcessAttendanceRunDate -----------*/
-CREATE   PROCEDURE HR.sp_ProcessAttendanceRunDate
+CREATE OR ALTER PROCEDURE HR.sp_ProcessAttendanceRunDate
 (
-    @WorkDate DATE,
-    @Debug    BIT = 0
+    @WorkDate         DATE,
+    @Debug            BIT = 0,
+    -- 2026-07-03: filtro opcional. NULL = comportamiento actual (todos los
+    -- empleados activos con horario vigente ese día). Con valor, acota el
+    -- reproceso a un solo empleado. Nombre distinto a la variable interna
+    -- @EmployeeID (usada como cursor del loop) para no colisionar con ella.
+    @FilterEmployeeID INT = NULL
 )
 AS
 BEGIN
@@ -5157,6 +6203,7 @@ BEGIN
     LEFT JOIN HR.vw_EmployeeDetails ved
         ON ved.EmployeeID = e.EmployeeID
     WHERE e.IsActive = 1
+      AND (@FilterEmployeeID IS NULL OR e.EmployeeID = @FilterEmployeeID)
       AND NOT EXISTS (
           SELECT 1
           FROM HR.tbl_GuardShiftPlanning gsp
@@ -5266,8 +6313,9 @@ BEGIN
           completamente estabilizados en la fecha.
        ========================================================= */
     EXEC HR.sp_ProcessGuardAttendanceDate
-         @WorkDate = @WorkDate,
-         @Debug    = @Debug;
+         @WorkDate         = @WorkDate,
+         @Debug            = @Debug,
+         @FilterEmployeeID = @FilterEmployeeID;
 END;
 
 GO
@@ -5275,11 +6323,13 @@ GO
 -- [sp_ProcessAttendanceRunRange]
 
 /*---------HR.sp_ProcessAttendanceRunRange---------*/
-CREATE   PROCEDURE HR.sp_ProcessAttendanceRunRange
+CREATE OR ALTER PROCEDURE HR.sp_ProcessAttendanceRunRange
 (
-    @FromDate DATE,
-    @ToDate   DATE,
-    @Debug    BIT = 0
+    @FromDate         DATE,
+    @ToDate           DATE,
+    @Debug            BIT = 0,
+    -- 2026-07-03: filtro opcional, forwardeado a sp_ProcessAttendanceRunDate.
+    @FilterEmployeeID INT = NULL
 )
 AS
 BEGIN
@@ -5309,8 +6359,9 @@ BEGIN
     WHILE @d <= @ToDate
     BEGIN
         EXEC HR.sp_ProcessAttendanceRunDate
-             @WorkDate = @d,
-             @Debug    = @Debug;
+             @WorkDate         = @d,
+             @Debug            = @Debug,
+             @FilterEmployeeID = @FilterEmployeeID;
 
         SET @d = DATEADD(DAY, 1, @d);
     END;
@@ -5319,11 +6370,16 @@ END;
 GO
 
 -- [sp_ProcessTimePlanningForEmployeeDay]
-CREATE   PROCEDURE HR.sp_ProcessTimePlanningForEmployeeDay
+CREATE OR ALTER PROCEDURE HR.sp_ProcessTimePlanningForEmployeeDay
 (
-    @EmployeeID INT,
-    @WorkDate   DATE,
-    @Debug      BIT = 0
+    @EmployeeID        INT,
+    @WorkDate          DATE,
+    @Debug             BIT = 0,
+    -- Fase 4 punto 4.5: horario ya resuelto (guardias, vía tbl_GuardShiftPlanning,
+    -- que no usan tbl_EmployeeSchedules). Si vienen poblados, se usan directo y
+    -- se omite la resolución interna por EmpSched más abajo.
+    @OverrideEntryTime TIME = NULL,
+    @OverrideExitTime  TIME = NULL
 )
 AS
 BEGIN
@@ -5361,25 +6417,34 @@ BEGIN
     DECLARE @EntryTime TIME = NULL,
             @ExitTime  TIME = NULL;
 
-    ;WITH EmpSched AS (
-        SELECT 
-            es.EmployeeID,
-            es.ScheduleID,
-            s.EntryTime,
-            s.ExitTime,
-            ROW_NUMBER() OVER (ORDER BY es.ValidFrom DESC) AS rn
-        FROM HR.tbl_EmployeeSchedules es
-        JOIN HR.tbl_Schedules s 
-             ON s.ScheduleID = es.ScheduleID
-        WHERE es.EmployeeID = @EmployeeID
-          AND es.ValidFrom <= @WorkDate
-          AND (es.ValidTo IS NULL OR es.ValidTo >= @WorkDate)
-    )
-    SELECT 
-        @EntryTime = EntryTime,
-        @ExitTime  = ExitTime
-    FROM EmpSched
-    WHERE rn = 1;
+    IF @OverrideEntryTime IS NOT NULL AND @OverrideExitTime IS NOT NULL
+    BEGIN
+        -- Horario ya resuelto por el llamador (ej. guardias vía tbl_GuardShiftPlanning).
+        SET @EntryTime = @OverrideEntryTime;
+        SET @ExitTime  = @OverrideExitTime;
+    END
+    ELSE
+    BEGIN
+        ;WITH EmpSched AS (
+            SELECT
+                es.EmployeeID,
+                es.ScheduleID,
+                s.EntryTime,
+                s.ExitTime,
+                ROW_NUMBER() OVER (ORDER BY es.ValidFrom DESC) AS rn
+            FROM HR.tbl_EmployeeSchedules es
+            JOIN HR.tbl_Schedules s
+                 ON s.ScheduleID = es.ScheduleID
+            WHERE es.EmployeeID = @EmployeeID
+              AND es.ValidFrom <= @WorkDate
+              AND (es.ValidTo IS NULL OR es.ValidTo >= @WorkDate)
+        )
+        SELECT
+            @EntryTime = EntryTime,
+            @ExitTime  = ExitTime
+        FROM EmpSched
+        WHERE rn = 1;
+    END;
 
     IF @EntryTime IS NULL OR @ExitTime IS NULL
     BEGIN
@@ -5390,7 +6455,7 @@ BEGIN
         -- MOD: Si no hay horario pero sí podría haber quedado HE/Recovery de antes, los ponemos en 0
         UPDATE HR.tbl_AttendanceCalculations
         SET OvertimeMinutes  = 0,
-            recoveredMinutes = 0
+            RecoveryExecutedMinutes = 0
         WHERE EmployeeID = @EmployeeID
           AND WorkDate   = @WorkDate;
 
@@ -5429,7 +6494,16 @@ BEGIN
         AND st.Category = 'PLAN_STATUS'
     WHERE @WorkDate BETWEEN p.StartDate AND p.EndDate
       AND p.PlanType IN ('Overtime','Recovery')
-      AND (st.TypeID IS NULL OR st.Name IN ('Aprobado','En Progreso','Borrador'));
+      -- 2026-07-06: corrección sobre el fix de Fase 4. Se había restringido a
+      -- solo 'Aprobado', pero se confirmó que en el flujo real NINGÚN plan
+      -- llega nunca a ese estado — los endpoints /submit, /approve, /reject de
+      -- TimePlanningsController están comentados (no existen en la API), y el
+      -- formulario de creación del frontend manda siempre 'Borrador' de forma
+      -- hardcodeada. Restringir a solo 'Aprobado' dejaba CERO planes válidos,
+      -- rompiendo el pago de horas extra por completo. Se acepta 'Borrador'
+      -- (el único estado alcanzable hoy) pero se mantiene excluido el caso de
+      -- estado nulo/no clasificado (fail-open real del bug original).
+      AND st.Name IN ('Aprobado', 'Borrador');
 
     IF NOT EXISTS(SELECT 1 FROM #Plans)
     BEGIN
@@ -5439,7 +6513,7 @@ BEGIN
         -- MOD: Si NO hay planificación, NO se permiten HE/REC de cálculo. Se ponen en 0.
         UPDATE HR.tbl_AttendanceCalculations
         SET OvertimeMinutes  = 0,
-            recoveredMinutes = 0
+            RecoveryExecutedMinutes = 0
         WHERE EmployeeID = @EmployeeID
           AND WorkDate   = @WorkDate;
 
@@ -5479,7 +6553,7 @@ BEGIN
         -- MOD: No hay NINGÚN plan válido → HE/Recovery deben quedar en 0
         UPDATE HR.tbl_AttendanceCalculations
         SET OvertimeMinutes  = 0,
-            recoveredMinutes = 0
+            RecoveryExecutedMinutes = 0
         WHERE EmployeeID = @EmployeeID
           AND WorkDate   = @WorkDate;
 
@@ -5514,7 +6588,7 @@ BEGIN
 
         UPDATE HR.tbl_AttendanceCalculations
         SET OvertimeMinutes   = 0,
-            recoveredMinutes  = 0
+            RecoveryExecutedMinutes  = 0
         WHERE EmployeeID = @EmployeeID
           AND WorkDate   = @WorkDate;
 
@@ -5554,13 +6628,27 @@ BEGIN
             w.PlanType,
             w.OvertimeType,
             w.Factor,
-            OverlapStart = CASE 
-                             WHEN @FirstPunchIn > w.PlanStartDT THEN @FirstPunchIn 
-                             ELSE w.PlanStartDT 
+            OverlapStart = CASE
+                             WHEN @FirstPunchIn > w.PlanStartDT THEN @FirstPunchIn
+                             ELSE w.PlanStartDT
                            END,
-            OverlapEnd   = CASE 
-                             WHEN @LastPunchOut < w.PlanEndDT THEN @LastPunchOut 
-                             ELSE w.PlanEndDT 
+            OverlapEnd   = CASE
+                             WHEN @LastPunchOut < w.PlanEndDT THEN @LastPunchOut
+                             ELSE w.PlanEndDT
+                           END,
+            -- Minutos trabajados ANTES de que empezara la ventana planificada
+            -- (llegó más temprano de lo planificado).
+            BeforeMin    = CASE
+                             WHEN @FirstPunchIn < w.PlanStartDT
+                                  THEN DATEDIFF(MINUTE, @FirstPunchIn, w.PlanStartDT)
+                             ELSE 0
+                           END,
+            -- Minutos trabajados DESPUÉS de que terminara la ventana planificada
+            -- (se quedó más tiempo del planificado).
+            AfterMin     = CASE
+                             WHEN @LastPunchOut > w.PlanEndDT
+                                  THEN DATEDIFF(MINUTE, w.PlanEndDT, @LastPunchOut)
+                             ELSE 0
                            END
         FROM PlanWindows w
     )
@@ -5571,11 +6659,17 @@ BEGIN
         o.OvertimeType,
         o.Factor,
         ExecutedMinutes =
-            CASE 
-                WHEN o.OverlapEnd > o.OverlapStart 
+            CASE
+                WHEN o.OverlapEnd > o.OverlapStart
                      THEN DATEDIFF(MINUTE, o.OverlapStart, o.OverlapEnd)
                 ELSE 0
-            END
+            END,
+        -- 2026-07-06: minutos realmente trabajados FUERA de la ventana
+        -- planificada (antes del inicio o después del fin del plan). Antes se
+        -- descartaban en silencio por el recorte MIN/MAX de OverlapStart/End;
+        -- ahora quedan visibles en HR.tbl_TimePlanningExecution.ExceededMinutes
+        -- en vez de perderse.
+        ExceededMinutes = o.BeforeMin + o.AfterMin
     INTO #ExecPlans
     FROM Overlaps o;
 
@@ -5589,7 +6683,7 @@ BEGIN
         
         UPDATE HR.tbl_AttendanceCalculations
         SET OvertimeMinutes  = 0,
-            recoveredMinutes = 0
+            RecoveryExecutedMinutes = 0
         WHERE EmployeeID = @EmployeeID
           AND WorkDate   = @WorkDate;
 
@@ -5610,7 +6704,7 @@ BEGIN
     DECLARE @TotalOvertimeMin INT = 0,
             @TotalRecoveryMin INT = 0;
 
-    SELECT 
+    SELECT
         @TotalOvertimeMin = ISNULL(SUM(CASE WHEN PlanType = 'Overtime' THEN ExecutedMinutes ELSE 0 END), 0),
         @TotalRecoveryMin = ISNULL(SUM(CASE WHEN PlanType = 'Recovery' THEN ExecutedMinutes ELSE 0 END), 0)
     FROM #ExecPlans;
@@ -5621,17 +6715,49 @@ BEGIN
         PRINT 'Minutos ejecutados Recovery: ' + CAST(@TotalRecoveryMin AS VARCHAR(12));
     END;
 
+    -- Fase 4 punto 4.2: tipo/factor real de horas extra a consolidar, en vez de
+    -- hardcodear 'Ordinaria'/1.0. Si el día tuvo más de un plan de Overtime con
+    -- tipos distintos (ej. Ordinaria + Feriado), se toma el de mayor Factor
+    -- (Feriado gana sobre Ordinaria) — simplificación deliberada, tbl_Overtime
+    -- solo admite una fila por EmployeeID+WorkDate.
+    -- 2026-07-06 (punto 6): se captura también el PlanEmployeeID "ganador" para
+    -- trazabilidad en tbl_Overtime. Si hubiera más de un plan de Overtime el
+    -- mismo día (no se encontró ningún caso real hasta ahora), representa el
+    -- plan que ganó el desempate por Factor, NO todos los que contribuyeron
+    -- ese día — la fila de tbl_Overtime sigue siendo una sola por EmployeeID+WorkDate.
+    DECLARE @OvertimeTypeUsed NVARCHAR(50) = 'Ordinaria',
+            @OvertimeFactorUsed DECIMAL(5,2) = 1.0,
+            @WinningPlanEmployeeID INT = NULL;
+
+    SELECT TOP 1
+        @OvertimeTypeUsed      = ISNULL(OvertimeType, 'Ordinaria'),
+        @OvertimeFactorUsed    = ISNULL(Factor, 1.0),
+        @WinningPlanEmployeeID = PlanEmployeeID
+    FROM #ExecPlans
+    WHERE PlanType = 'Overtime'
+    ORDER BY ISNULL(Factor, 1.0) DESC, ExecutedMinutes DESC;
+
     --------------------------------------------------------------------
     -- 8) Actualizar tbl_AttendanceCalculations con minutos verificados
     --------------------------------------------------------------------
+    -- 2026-07-06: OvertimeMinutes sigue siendo el monto final autorizado/pagado
+    -- (correcto, no cambia). RecoveryExecutedMinutes (antes "recoveredMinutes")
+    -- es un campo DISTINTO al RecoveredMinutes que llena sp_ProcessAttendanceRecoveryDay
+    -- desde tbl_TimeRecoveryLogs — este representa minutos ejecutados contra un
+    -- plan de tbl_TimePlanning (PlanType='Recovery'), que abonan a
+    -- tbl_TimeBalances.RecoveryPendingMin (paso 9), NO perdonan la ausencia del
+    -- día. Antes de este fix, este UPDATE pisaba por error RecoveredMinutes
+    -- (el campo de Recovery Day), perdiendo esa información sin afectar el
+    -- cálculo real de AbsentMinutes (que ya se había aplicado antes en el
+    -- pipeline). Ver Database/ATTENDANCE_PIPELINE.md para el detalle completo.
     UPDATE HR.tbl_AttendanceCalculations
-    SET OvertimeMinutes  = @TotalOvertimeMin,
-        recoveredMinutes = @TotalRecoveryMin
+    SET OvertimeMinutes         = @TotalOvertimeMin,
+        RecoveryExecutedMinutes = @TotalRecoveryMin
     WHERE EmployeeID = @EmployeeID
       AND WorkDate   = @WorkDate;
 
     IF @Debug = 1
-        PRINT 'Actualizados OvertimeMinutes y recoveredMinutes en HR.tbl_AttendanceCalculations.';
+        PRINT 'Actualizados OvertimeMinutes y RecoveryExecutedMinutes en HR.tbl_AttendanceCalculations.';
 
     --------------------------------------------------------------------
     -- 9) Actualizar saldo de recuperación en HR.tbl_TimeBalances
@@ -5664,10 +6790,11 @@ BEGIN
     --------------------------------------------------------------------
     MERGE HR.tbl_TimePlanningExecution AS T
     USING (
-        SELECT 
+        SELECT
             ep.PlanEmployeeID,
             @WorkDate AS WorkDate,
             ep.ExecutedMinutes,
+            ep.ExceededMinutes,
             ep.PlanType
         FROM #ExecPlans ep
     ) AS S
@@ -5677,9 +6804,10 @@ BEGIN
         UPDATE SET
             T.TotalMinutes    = S.ExecutedMinutes,
             T.OvertimeMinutes = CASE WHEN S.PlanType = 'Overtime' THEN S.ExecutedMinutes ELSE 0 END,
-            T.RegularMinutes  = CASE WHEN S.PlanType = 'Recovery' THEN S.ExecutedMinutes ELSE T.RegularMinutes END
+            T.RegularMinutes  = CASE WHEN S.PlanType = 'Recovery' THEN S.ExecutedMinutes ELSE T.RegularMinutes END,
+            T.ExceededMinutes = S.ExceededMinutes
     WHEN NOT MATCHED THEN
-        INSERT (PlanEmployeeID, WorkDate, StartTime, EndTime, TotalMinutes, RegularMinutes, OvertimeMinutes, NightMinutes, HolidayMinutes, CreatedAt)
+        INSERT (PlanEmployeeID, WorkDate, StartTime, EndTime, TotalMinutes, RegularMinutes, OvertimeMinutes, NightMinutes, HolidayMinutes, ExceededMinutes, CreatedAt)
         VALUES (
             S.PlanEmployeeID,
             S.WorkDate,
@@ -5690,6 +6818,7 @@ BEGIN
             CASE WHEN S.PlanType = 'Overtime' THEN S.ExecutedMinutes ELSE 0 END,
             0,
             0,
+            S.ExceededMinutes,
             SYSDATETIME()
         );
 
@@ -5697,29 +6826,100 @@ BEGIN
         PRINT 'Actualizada/insertada ejecución en HR.tbl_TimePlanningExecution.';
 
     --------------------------------------------------------------------
+    -- 10.5) Fase 4 punto 4.3: poblar ActualMinutes/ActualHours en
+    --       HR.tbl_TimePlanningEmployees (antes era un campo muerto,
+    --       siempre 0). Se RECALCULA desde HR.tbl_TimePlanningExecution
+    --       (que ya es idempotente por día vía el MERGE anterior) en vez
+    --       de sumar incrementalmente, para que reprocesar el mismo día
+    --       varias veces no duplique el acumulado.
+    --------------------------------------------------------------------
+    UPDATE pe
+    SET pe.ActualMinutes = agg.TotalMin,
+        pe.ActualHours   = CAST(agg.TotalMin AS DECIMAL(10,2)) / 60.0
+    FROM HR.tbl_TimePlanningEmployees pe
+    CROSS APPLY (
+        SELECT SUM(te.TotalMinutes) AS TotalMin
+        FROM HR.tbl_TimePlanningExecution te
+        WHERE te.PlanEmployeeID = pe.PlanEmployeeID
+    ) agg
+    WHERE pe.PlanEmployeeID IN (SELECT DISTINCT PlanEmployeeID FROM #ExecPlans);
+
+    IF @Debug = 1
+        PRINT 'Recalculado ActualMinutes/ActualHours en HR.tbl_TimePlanningEmployees.';
+
+    --------------------------------------------------------------------
     -- 11) Consolidar horas extra en HR.tbl_Overtime (solo Overtime)
     --------------------------------------------------------------------
     IF @TotalOvertimeMin > 0
     BEGIN
-        DECLARE @HoursOT DECIMAL(5,2) = CAST(@TotalOvertimeMin AS DECIMAL(10,2)) / 60.0;
+        -- Fase 4 punto 4.4: tope opcional (NULL = sin tope, sin efecto hoy).
+        -- Trunca solo lo que se PAGA (tbl_Overtime); tbl_AttendanceCalculations
+        -- y tbl_TimePlanningExecution ya quedaron con el minuto real ejecutado
+        -- (pasos 8 y 10), sin recortar — no se oculta el dato real, solo se topa
+        -- lo facturable.
+        DECLARE @MaxDailyMinutes  INT = NULL,
+                @MaxWeeklyMinutes INT = NULL;
+
+        SELECT
+            @MaxDailyMinutes  = MaxDailyMinutes,
+            @MaxWeeklyMinutes = MaxWeeklyMinutes
+        FROM HR.tbl_OvertimeConfig
+        WHERE OvertimeType = @OvertimeTypeUsed;
+
+        DECLARE @PayableOvertimeMin INT = @TotalOvertimeMin;
+
+        IF @MaxDailyMinutes IS NOT NULL AND @PayableOvertimeMin > @MaxDailyMinutes
+            SET @PayableOvertimeMin = @MaxDailyMinutes;
+
+        IF @MaxWeeklyMinutes IS NOT NULL
+        BEGIN
+            -- Semana = lunes a domingo (independiente de @@DATEFIRST: el día 0 de
+            -- SQL Server, 1900-01-01, fue lunes, así que DATEDIFF(WEEK,0,fecha)
+            -- siempre alinea a lunes sin importar la config de sesión).
+            DECLARE @WeekStart DATE = DATEADD(WEEK, DATEDIFF(WEEK, 0, @WorkDate), 0);
+            DECLARE @WeekEnd   DATE = DATEADD(DAY, 6, @WeekStart);
+            DECLARE @AlreadyPaidThisWeekMin INT = 0;
+
+            SELECT @AlreadyPaidThisWeekMin = ISNULL(SUM(Hours * 60), 0)
+            FROM HR.tbl_Overtime
+            WHERE EmployeeID = @EmployeeID
+              AND WorkDate BETWEEN @WeekStart AND @WeekEnd
+              AND WorkDate <> @WorkDate;
+
+            DECLARE @RemainingWeeklyMin INT = @MaxWeeklyMinutes - @AlreadyPaidThisWeekMin;
+            IF @RemainingWeeklyMin < 0 SET @RemainingWeeklyMin = 0;
+
+            IF @PayableOvertimeMin > @RemainingWeeklyMin
+                SET @PayableOvertimeMin = @RemainingWeeklyMin;
+        END;
+
+        DECLARE @HoursOT DECIMAL(5,2) = CAST(@PayableOvertimeMin AS DECIMAL(10,2)) / 60.0;
 
         MERGE HR.tbl_Overtime AS T
         USING (
-            SELECT 
-                @EmployeeID AS EmployeeID,
-                @WorkDate   AS WorkDate,
-                @HoursOT    AS Hours
+            SELECT
+                @EmployeeID             AS EmployeeID,
+                @WorkDate               AS WorkDate,
+                @HoursOT                AS Hours,
+                @OvertimeTypeUsed       AS OvertimeType,
+                @OvertimeFactorUsed     AS Factor,
+                @WinningPlanEmployeeID  AS PlanEmployeeID
         ) AS S
         ON T.EmployeeID = S.EmployeeID
            AND T.WorkDate = S.WorkDate
         WHEN MATCHED THEN
             UPDATE SET
-                T.Hours       = CASE WHEN T.Status IN ('APPROVED','PAID') THEN T.Hours       ELSE S.Hours END,
-                T.ActualHours = CASE WHEN T.Status IN ('APPROVED','PAID') THEN T.ActualHours ELSE S.Hours END,
-                T.Status      = CASE WHEN T.Status IN ('APPROVED','PAID') THEN T.Status      ELSE 'EXECUTED' END
+                T.Hours          = CASE WHEN T.Status IN ('APPROVED','PAID') THEN T.Hours          ELSE S.Hours END,
+                T.ActualHours    = CASE WHEN T.Status IN ('APPROVED','PAID') THEN T.ActualHours    ELSE S.Hours END,
+                T.OvertimeType   = CASE WHEN T.Status IN ('APPROVED','PAID') THEN T.OvertimeType   ELSE S.OvertimeType END,
+                T.Factor         = CASE WHEN T.Status IN ('APPROVED','PAID') THEN T.Factor         ELSE S.Factor END,
+                T.PlanEmployeeID = CASE WHEN T.Status IN ('APPROVED','PAID') THEN T.PlanEmployeeID ELSE S.PlanEmployeeID END,
+                -- 2026-07-06 (Fase 3): siempre 57=LOSEP, único régimen que genera horas extra.
+                T.LaborRegimeId  = CASE WHEN T.Status IN ('APPROVED','PAID') THEN T.LaborRegimeId  ELSE 57 END,
+                T.Status         = CASE WHEN T.Status IN ('APPROVED','PAID') THEN T.Status         ELSE 'EXECUTED' END
         WHEN NOT MATCHED THEN
-            INSERT (EmployeeID, WorkDate, OvertimeType, Hours, Status, Factor, ActualHours, PaymentAmount, CreatedAt)
-            VALUES (S.EmployeeID, S.WorkDate, 'Ordinaria', S.Hours, 'EXECUTED', 1.0, S.Hours, 0, SYSDATETIME());
+            INSERT (EmployeeID, WorkDate, OvertimeType, Hours, Status, Factor, ActualHours, PaymentAmount, PlanEmployeeID, LaborRegimeId, CreatedAt)
+            VALUES (S.EmployeeID, S.WorkDate, S.OvertimeType, S.Hours, 'EXECUTED', S.Factor, S.Hours, 0, S.PlanEmployeeID, 57, SYSDATETIME());
 
         IF @Debug = 1
             PRINT 'Actualizada/insertada consolidación en HR.tbl_Overtime.';

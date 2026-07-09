@@ -60,6 +60,7 @@ public class ContractsUpdateDto
 
     public int? AuthorityNominatorId { get; set; }
     public int? DthDirectorId { get; set; }
+    public bool IsDelegation { get; set; }
 
     public byte[] RowVersion { get; set; } = Array.Empty<byte>();
 }

@@ -1,0 +1,17 @@
+NOTA: Este script (insert_plantillas_tecnico_v2.sql) usa variables @TplDocenteCon/@TplDocenteSin/@TplLabCon/@TplLabSin
+para ilustrar el flujo lógico de carga. En la ejecución real contra la base de datos (2026-06-22) se ejecutó
+statement por statement, resultando en los siguientes TemplateID reales:
+
+  CONTRATO_TECNICO_DOCENTE_DELEGACION       -> TemplateID 3
+  CONTRATO_TECNICO_DOCENTE_SIN_DELEGACION   -> TemplateID 4
+  CONTRATO_TECNICO_LABORATORIO_DELEGACION   -> TemplateID 5
+  CONTRATO_TECNICO_LABORATORIO_SIN_DELEGACION -> TemplateID 6
+
+Vinculación a ContractType:
+  ContractTypeID 52 (CONTRATO TÉCNICO DOCENTE)          -> DefaultTemplateId=4, DelegationTemplateId=3
+  ContractTypeID 53 (CONTRATO TÉCNICO DE LABORATORIO 1) -> DefaultTemplateId=6, DelegationTemplateId=5
+  ContractTypeID 23 (...DOCENTE (DELEGACIÓN))      -> Status='I' (inactivado, duplicado)
+  ContractTypeID 47 (...LABORATORIO 1 (DELEGACIÓN)) -> Status='I' (inactivado, duplicado)
+
+Adicionalmente se corrigió el campo de cédula del Decano delegado de AUTHORITY_IDCARD a AUTHORITY_ID
+para coincidir con el token {{AUTHORITY_ID}} usado en las plantillas HTML.

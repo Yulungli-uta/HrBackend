@@ -59,20 +59,19 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
     public Task<IEnumerable<Permissions>> GetByImmediateBossIdNonMedical(int employeeId, CancellationToken ct)
     { 
         //=> _repository.GetByImmediateBossIdNonMedical(employeeId, ct);
-        _logger.LogInformation("**************** accede a GetByImmediateBossIdNonMedical");
+        //_logger.LogInformation("**************** accede a GetByImmediateBossIdNonMedical");
         return _repository.GetByImmediateBossIdNonMedical(employeeId, ct);
     }
 
     public Task<IEnumerable<Permissions>> GetPendingMedicalPermissions(CancellationToken ct)
     {
-        //=> _repository.GetPendingMedicalPermissions(ct);
-        _logger.LogInformation("**************** accede a GetPendingMedicalPermissions");
+        //=> _repository.GetPendingMedicalPermissions(ct);        
         return _repository.GetPendingMedicalPermissions(ct);
     }
 
     public async Task<Permissions> CreateWithBalanceCheckAsync(Permissions entity, CancellationToken ct)
     {
-        _logger.LogInformation("**************** accede a CreateWithBalanceCheckAsync");
+        //_logger.LogInformation("**************** accede a CreateWithBalanceCheckAsync");
         if (entity is null) throw new ArgumentNullException(nameof(entity));
         ValidateDates(entity);
 
@@ -454,6 +453,7 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
                && (!filter.EndDate.HasValue   || perm.StartDate <= filter.EndDate.Value)
                && (string.IsNullOrEmpty(filter.Status) || perm.Status == filter.Status)
                && (!filter.EmployeeId.HasValue || perm.EmployeeId == filter.EmployeeId.Value)
+               && (!filter.DepartmentId.HasValue || (d != null && d.DepartmentId == filter.DepartmentId.Value))
             orderby perm.StartDate descending
             select new PermissionReportDto
             {

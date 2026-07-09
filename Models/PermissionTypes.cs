@@ -10,8 +10,10 @@ public class PermissionTypes : IAuditable{
   public bool? AttachedFile { get; set; }
   public int? MaxDays { get; set; }
   public int? LeadTimeHours { get; set; }
-  public bool IsMedical { get; set; } = false;    
+  public bool IsMedical { get; set; } = false;
   public bool IsActive  { get; set; } = true;
+  /// <summary>RefTypes.TypeId (Category=CONTRACT_TYPE). Null = aplica a todos los regímenes.</summary>
+  public int? ContractTypeId { get; set; }
   public int? CreatedBy { get; set; }
   public DateTime? CreatedAt { get; set; }
   public int? UpdatedBy { get; set; }

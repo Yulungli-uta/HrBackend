@@ -10,9 +10,7 @@
         public decimal? ActualHours { get; set; } = 0;
         public int? ActualMinutes { get; set; } = 0;
         public int EmployeeStatusTypeID { get; set; }
-        public decimal? PaymentAmount { get; set; } = 0;
         public bool IsEligible { get; set; } = true;
-        public string? EligibilityReason { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
         // Navigation properties

@@ -219,7 +219,6 @@ namespace WsUtaSystem.Application.Services
 
             employee.ActualHours ??= 0m;
             employee.ActualMinutes ??= 0;
-            employee.PaymentAmount ??= 0m;
             employee.IsEligible = true;
             employee.CreatedAt = DateTime.Now;
         }

@@ -116,7 +116,9 @@ namespace WsUtaSystem.Application.Services
                         CreatedAt = DateTime.Now,
 
                         // ✅ tipo aplicado al batch
-                        DocumentTypeId = request.DocumentTypeId
+                        DocumentTypeId = request.DocumentTypeId,
+                        DocumentReferenceNumber = request.DocumentReferenceNumber,
+                        DocumentReferenceDate = request.DocumentReferenceDate
                     };
 
                     var created = await _storedFileService.CreateAsync(entity, ct);
@@ -210,7 +212,9 @@ namespace WsUtaSystem.Application.Services
                     Status = 1,
                     CreatedAt = DateTime.Now,
 
-                    DocumentTypeId = request.DocumentTypeId
+                    DocumentTypeId = request.DocumentTypeId,
+                    DocumentReferenceNumber = request.DocumentReferenceNumber,
+                    DocumentReferenceDate = request.DocumentReferenceDate
                 };
 
                 var created = await _storedFileService.CreateAsync(entity, ct);
@@ -321,7 +325,9 @@ namespace WsUtaSystem.Application.Services
                         Status = 1,
                         CreatedAt = DateTime.Now,
 
-                        DocumentTypeId = it.DocumentTypeId
+                        DocumentTypeId = it.DocumentTypeId,
+                        DocumentReferenceNumber = it.DocumentReferenceNumber,
+                        DocumentReferenceDate = it.DocumentReferenceDate
                     };
 
                     var created = await _storedFileService.CreateAsync(entity, ct);

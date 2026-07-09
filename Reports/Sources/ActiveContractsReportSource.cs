@@ -62,7 +62,13 @@ public sealed class ActiveContractsReportSource : IReportSource
             "Building ActiveContracts report. Dept={Dept}, ContractType={CT}, LaborRegime={LR}, Status={Status}",
             filter.DepartmentId, filter.ContractTypeId, filter.LaborRegimeId, filter.Status ?? "todos");
 
-        var records = await _contractsService.GetForReportAsync(filter, CancellationToken.None);
+        // 2026-07-06: el nombre/documentación del reporte prometía un filtro fijo
+        // Status=VIGENTE, pero nunca se aplicaba — devolvía contratos vencidos
+        // también si el usuario no lo elegía manualmente. Se fuerza aquí, igual
+        // que ActivePersonnelActionsReportSource fuerza sus ActionCategories.
+        var activeFilter = filter with { Status = "VIGENTE" };
+
+        var records = await _contractsService.GetForReportAsync(activeFilter, CancellationToken.None);
 
         _logger.LogInformation("ActiveContracts report: {Count} records.", records.Count);
 
@@ -70,7 +76,7 @@ public sealed class ActiveContractsReportSource : IReportSource
         if (filter.DepartmentId.HasValue)    parts.Add($"Dependencia ID: {filter.DepartmentId}");
         if (filter.ContractTypeId.HasValue)  parts.Add($"Tipo ID: {filter.ContractTypeId}");
         if (filter.LaborRegimeId.HasValue)   parts.Add($"Régimen ID: {filter.LaborRegimeId}");
-        parts.Add(!string.IsNullOrEmpty(filter.Status) ? $"Estado: {filter.Status}" : "Estado: todos");
+        parts.Add($"Estado: {activeFilter.Status}");
         parts.Add($"Total: {records.Count}");
         var subtitle = string.Join(" | ", parts);
 

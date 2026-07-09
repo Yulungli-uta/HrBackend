@@ -29,7 +29,13 @@ public static class QuartzConfiguration
             // JOBS DIARIOS DE ASISTENCIA
             // ========================================
 
-            // 1. Cálculo de asistencia diario - 1:00 AM
+            // 1. Cálculo de asistencia diario - 7:00 AM
+            // Nota (2026-07-03): se había migrado a SQL Server Agent (ver
+            // Database/SqlAgent_DailyAttendanceJob.sql), pero el servicio "SQL Server
+            // Agent" está detenido en el servidor y no hay forma inmediata de
+            // reactivarlo, así que se revierte a correr desde el backend vía Quartz.
+            // Si en algún momento se reactiva SQL Server Agent, volver a comentar este
+            // bloque para evitar doble ejecución.
             var dailyAttendanceKey = new JobKey("DailyAttendanceCalculationJob");
             q.AddJob<DailyAttendanceCalculationJob>(opts => opts.WithIdentity(dailyAttendanceKey));
             q.AddTrigger(opts => opts

@@ -43,7 +43,14 @@ public sealed class DocumentTemplateConfiguration : IEntityTypeConfiguration<Doc
             .HasMaxLength(20)
             .HasDefaultValue(DocumentTemplateStatus.Draft);
 
-        e.HasIndex(x => x.TemplateCode).IsUnique();
+        // TemplateCode se repite entre versiones (Draft/Published/Archived) de la misma plantilla;
+        // solo puede existir una fila Published por TemplateCode a la vez (la "vigente"), forzado
+        // a nivel de BD con un índice único filtrado (ver Database/hr/01_tables.sql).
+        e.HasIndex(x => x.TemplateCode)
+            .IsUnique()
+            .HasFilter("[Status] = N'PUBLISHED'")
+            .HasDatabaseName("UX_DocumentTemplates_TemplateCode_Published");
+        e.HasIndex(x => x.TemplateCode).HasDatabaseName("IX_DocumentTemplates_TemplateCode");
         e.HasIndex(x => new { x.TemplateType, x.Status });
 
         // Relaciones

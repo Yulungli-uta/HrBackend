@@ -173,7 +173,7 @@ td, th { border: 1px solid #000; padding: 2px 4px; vertical-align: top; }
 </table>
 <table class="mt1"><tr>
 <td style="width:70%;font-size:7.5pt;padding:2px 4px">* PRESENTÃ“ LA DECLARACIÃ“N JURADA (nÃºmero 2 del art. 3 RLOSEP)</td>
-<td style="width:10%;text-align:center;font-size:7.5pt;font-weight:bold">SI</td>
+<td style="width:10%;text-align:center;font-size:7.5pt;font-weight:bold">SI {{DECLARACION_JURADA_SI_MARK}}</td>
 <td style="width:20%;text-align:center;font-size:7.5pt;font-weight:bold">NO APLICA {{DECLARACION_JURADA_MARK}}</td>
 </tr></table>
 <table class="mt1"><tr><td style="font-size:7.5pt;font-weight:bold;padding:2px 4px;background-color:#d9d9d9">MOTIVACIÃ“N: (adjuntar anexo si lo posee)</td></tr>
@@ -339,6 +339,7 @@ td, th { border: 1px solid #000; padding: 2px 4px; vertical-align: top; }
     (@TemplateID, 'CB_VACACIONES',      'Checkbox: Vacaciones',          'TEXT',     0, 'MANUAL',   NULL,                          NULL,           280, GETDATE(), NULL),
 
     -- â”€â”€ BLOQUE 5: DeclaraciÃ³n jurada â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    (@TemplateID, 'DECLARACION_JURADA_SI_MARK','Marca declaraciÃ³n jurada (X = SI presentÃ³)','TEXT',1,'MANUAL',NULL,               NULL,           285, GETDATE(), NULL),
     (@TemplateID, 'DECLARACION_JURADA_MARK','Marca declaraciÃ³n jurada (â— = NO APLICA)','TEXT',1,'MANUAL',NULL,                    NULL,           290, GETDATE(), NULL),
 
     -- â”€â”€ BLOQUE 6: MotivaciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -375,8 +376,8 @@ td, th { border: 1px solid #000; padding: 2px 4px; vertical-align: top; }
     (@TemplateID, 'AUTHORITY_TITLE',    'Puesto de la autoridad nominadora','TEXT',  1, 'SYSTEM',   'Config.AuthorityTitle',       'UPPERCASE',    540, GETDATE(), NULL),
 
     -- â”€â”€ BLOQUE 10: Firmas del servidor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    (@TemplateID, 'EMPLOYEE_SIGNATURE_DATE','Fecha de firma del servidor','DATE',    0, 'MANUAL',   NULL,                          'dd-MM-yyyy',   550, GETDATE(), NULL),
-    (@TemplateID, 'EMPLOYEE_SIGNATURE_HOUR','Hora de firma del servidor', 'TEXT',    0, 'MANUAL',   NULL,                          NULL,           560, GETDATE(), NULL),
+    (@TemplateID, 'EMPLOYEE_SIGNATURE_DATE','Fecha de firma del servidor','DATE',    0, 'SYSTEM',   'DateTime.Now',                'dd-MM-yyyy',   550, GETDATE(), NULL),
+    (@TemplateID, 'EMPLOYEE_SIGNATURE_HOUR','Hora de firma del servidor', 'TEXT',    0, 'SYSTEM',   'DateTime.Now',                'HH:mm',        560, GETDATE(), NULL),
     (@TemplateID, 'WITNESS_NAME',       'Nombre del testigo (negativa)', 'TEXT',     0, 'MANUAL',   NULL,                          'UPPERCASE',    570, GETDATE(), NULL),
     (@TemplateID, 'WITNESS_DATE',       'Fecha del testigo',             'DATE',     0, 'MANUAL',   NULL,                          'dd-MM-yyyy',   580, GETDATE(), NULL),
 

@@ -1,249 +1,224 @@
-# Quartz.NET Jobs - Sistema de Asistencia y Nómina
+# Quartz.NET Jobs - HrBackend
 
-## 📋 Descripción General
+## Descripcion general
 
-Este proyecto utiliza **Quartz.NET** para ejecutar automáticamente procedimientos almacenados de asistencia y nómina en horarios programados. Los jobs se ejecutan en segundo plano sin intervención manual.
+Este proyecto usa Quartz.NET para registrar trabajos en segundo plano dentro del proceso ASP.NET Core.
 
----
+La configuracion real esta en:
 
-## 🚀 Configuración Inicial
+- `Program.cs`
+- `Infrastructure/DependencyInjection/QuartzConfiguration.cs`
+- `Infrastructure/Jobs/`
 
-### 1. Instalar Paquetes NuGet
+Importante: los jobs solo se registran si `Quartz:EnableJobs` esta en `true`.
 
-Ejecutar los siguientes comandos en la raíz del proyecto:
+## Activacion
 
-```bash
-dotnet add package Quartz
-dotnet add package Quartz.Extensions.Hosting
-dotnet add package Quartz.Extensions.DependencyInjection
-```
-
-### 2. Registrar Quartz en Program.cs
-
-Agregar la siguiente línea en `Program.cs`:
+`Program.cs` llama:
 
 ```csharp
-using WsUtaSystem.Infrastructure.DependencyInjection;
-
-// ... otras configuraciones ...
-
-// Agregar Quartz.NET Jobs
-builder.Services.AddQuartzJobs();
+builder.Services.AddQuartzJobs(builder.Configuration);
 ```
 
-### 3. Verificar Zona Horaria
-
-La zona horaria por defecto es `America/Guayaquil`. Para cambiarla, editar el archivo:
-`Infrastructure/DependencyInjection/QuartzConfiguration.cs`
+Luego `QuartzConfiguration.AddQuartzJobs(...)` lee:
 
 ```csharp
-const string timeZone = "America/Guayaquil"; // Cambiar aquí
+var enableJobs = configuration.GetValue<bool>("Quartz:EnableJobs");
+
+if (!enableJobs)
+    return services;
 ```
 
----
-
-## 📅 Jobs Configurados
-
-### **Jobs Diarios (Asistencia)**
-
-| Job | Horario | Descripción | Procedimiento |
-|-----|---------|-------------|---------------|
-| **DailyAttendanceCalculationJob** | 2:00 AM | Calcula asistencia del día anterior | `HR.sp_Attendance_CalculateRange` |
-| **DailyNightMinutesCalculationJob** | 3:00 AM | Calcula minutos nocturnos del día anterior | `HR.sp_Attendance_CalcNightMinutes` |
-| **DailyJustificationsJob** | 4:00 AM | Aplica justificaciones aprobadas | `HR.sp_Justifications_Apply` |
-| **DailyRecoveryJob** | 5:00 AM | Aplica recuperaciones de tiempo | `HR.sp_Recovery_Apply` |
-
----
-
-### **Jobs Mensuales (Nómina)**
-
-| Job | Horario | Descripción | Procedimiento |
-|-----|---------|-------------|---------------|
-| **MonthlyOvertimePriceJob** | Día 1 - 2:00 AM | Calcula precio de horas extra del mes anterior | `HR.sp_Overtime_Price` |
-| **MonthlyPayrollDiscountsJob** | Día 1 - 3:00 AM | Calcula descuentos por atrasos/ausencias | `HR.sp_Payroll_Discounts` |
-| **MonthlyPayrollSubsidiesJob** | Día 1 - 4:00 AM | Calcula subsidios y recargos nocturnos/feriados | `HR.sp_Payroll_Subsidies` |
-
----
-
-## 🔧 Formato de Cron Expressions
-
-Quartz.NET utiliza **cron expressions de 6 campos**:
-
-```
-┌─────────── segundos (0-59)
-│ ┌───────── minutos (0-59)
-│ │ ┌─────── horas (0-23)
-│ │ │ ┌───── día del mes (1-31)
-│ │ │ │ ┌─── mes (1-12)
-│ │ │ │ │ ┌─ día de la semana (0-6, 0=Domingo)
-│ │ │ │ │ │
-* * * * * *
-```
-
-### Ejemplos:
-
-- `0 0 2 * * ?` → Todos los días a las 2:00 AM
-- `0 0 3 1 * ?` → Día 1 de cada mes a las 3:00 AM
-- `0 0 9-17 * * 1-5` → Lunes a Viernes, cada hora de 9 AM a 5 PM
-- `0 */15 * * * *` → Cada 15 minutos
-
----
-
-## 🛠️ Personalización de Horarios
-
-Para cambiar los horarios de ejecución, editar el archivo:
-`Infrastructure/DependencyInjection/QuartzConfiguration.cs`
-
-**Ejemplo: Cambiar el horario del cálculo de asistencia a las 6:00 AM:**
-
-```csharp
-q.AddTrigger(opts => opts
-    .ForJob(dailyAttendanceKey)
-    .WithIdentity("DailyAttendanceCalculationTrigger")
-    .WithCronSchedule("0 0 6 * * ?", x => x  // Cambiar de 2 a 6
-        .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
-    .WithDescription("Ejecuta el cálculo de asistencia diariamente a las 6:00 AM")
-    .UsingJobData("TimeZone", timeZone));
-```
-
----
-
-## 📊 Monitoreo y Logs
-
-Los jobs registran información en los logs de la aplicación usando `ILogger`:
-
-```csharp
-_logger.LogInformation("Starting daily attendance calculation for date: {Date}", yesterday);
-_logger.LogError(ex, "Error executing daily attendance calculation job");
-```
-
-Para ver los logs, configurar el nivel de logging en `appsettings.json`:
+Configuracion actual:
 
 ```json
+// appsettings.json
 {
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "WsUtaSystem.Infrastructure.Jobs": "Debug"
-    }
+  "Quartz": {
+    "EnableJobs": false
   }
 }
 ```
 
----
-
-## 🔄 Ejecución Manual de Jobs
-
-Aunque los jobs se ejecutan automáticamente, también puedes ejecutar los procedimientos manualmente mediante los endpoints API:
-
-### **Asistencia:**
-```http
-POST /cv/attendance/calculate-range
-Content-Type: application/json
-
+```json
+// appsettings.Production.json
 {
-  "fromDate": "2025-01-01",
-  "toDate": "2025-01-31",
-  "employeeId": null
+  "Quartz": {
+    "EnableJobs": true
+  }
 }
 ```
 
-### **Nómina:**
-```http
-POST /cv/overtime/price
-Content-Type: application/json
+Por tanto:
 
-{
-  "period": "2025-01"
-}
-```
+- En ambiente que solo carga `appsettings.json`, los jobs quedan apagados.
+- En ambiente `Production`, si carga `appsettings.Production.json`, los jobs quedan activos.
 
----
+## Zona horaria
 
-## ⚠️ Consideraciones Importantes
-
-### **1. DisallowConcurrentExecution**
-Todos los jobs tienen el atributo `[DisallowConcurrentExecution]` para evitar que se ejecuten múltiples instancias al mismo tiempo.
-
-### **2. Orden de Ejecución Diaria**
-Los jobs diarios se ejecutan en secuencia con 1 hora de diferencia para asegurar que los datos estén disponibles:
-
-1. **2:00 AM** - Cálculo de asistencia
-2. **3:00 AM** - Minutos nocturnos (requiere datos de asistencia)
-3. **4:00 AM** - Justificaciones (requiere datos de asistencia)
-4. **5:00 AM** - Recuperaciones (requiere datos de asistencia)
-
-### **3. Zona Horaria**
-Todos los jobs usan la zona horaria configurada (`America/Guayaquil` por defecto). Los cálculos de "día anterior" se basan en esta zona horaria.
-
-### **4. Manejo de Errores**
-Si un job falla, Quartz.NET registrará el error en los logs pero **NO detendrá** los demás jobs. Cada job es independiente.
-
----
-
-## 🧪 Pruebas
-
-### **Verificar que Quartz está funcionando:**
-
-1. Ejecutar la aplicación
-2. Revisar los logs al inicio, deberías ver:
-   ```
-   Quartz Scheduler v3.x.x created.
-   Scheduler started.
-   ```
-
-### **Probar un job manualmente (para desarrollo):**
-
-Puedes crear un endpoint temporal para ejecutar un job inmediatamente:
+Todos los triggers registrados usan:
 
 ```csharp
-[HttpPost("test/run-attendance-job")]
-public async Task<IActionResult> TestAttendanceJob(
-    [FromServices] ISchedulerFactory schedulerFactory)
-{
-    var scheduler = await schedulerFactory.GetScheduler();
-    var jobKey = new JobKey("DailyAttendanceCalculationJob");
-    await scheduler.TriggerJob(jobKey);
-    return Ok("Job triggered");
-}
+const string timeZone = "America/Guayaquil";
 ```
 
----
+Los calculos de "dia anterior" y los horarios de disparo deben interpretarse con esa zona horaria.
 
-## 📚 Recursos Adicionales
+## Jobs programados actualmente
 
-- **Documentación oficial de Quartz.NET:** https://www.quartz-scheduler.net/
-- **Cron Expression Generator:** https://www.freeformatter.com/cron-expression-generator-quartz.html
-- **Zonas horarias .NET:** https://docs.microsoft.com/en-us/dotnet/api/system.timezoneinfo
+Estos son los jobs que SI estan registrados en `QuartzConfiguration.cs`.
 
----
+| JobKey | Clase | Horario | Cron | Funcion |
+|---|---|---:|---|---|
+| `DailyContractExpirationJob` | `DailyContractExpirationJob` | Diario 02:00 | `0 0 2 * * ?` | Procesa contratos vigentes vencidos y deshabilita cuentas AD si corresponde. |
+| `MonthlyAccrueVacationBalanceJob` | `DailyAccrueVacationBalance` | Dia 1 de cada mes 00:30 | `0 30 0 1 * ?` | Acredita vacaciones del mes anterior a empleados activos. |
 
-## 🐛 Solución de Problemas
+## Job revertido de vuelta a Quartz (2026-07-03, mismo día)
 
-### **Los jobs no se ejecutan:**
-1. Verificar que `AddQuartzJobs()` está llamado en `Program.cs`
-2. Revisar logs para errores de Quartz
-3. Verificar que los paquetes NuGet están instalados
+La migración a SQL Server Agent descrita abajo se revirtió el mismo día: el servicio "SQL Server
+Agent" está detenido en el servidor y no había forma inmediata de reactivarlo. El bloque de
+`DailyAttendanceCalculationJob` en `QuartzConfiguration.cs` está de vuelta activo (sin comentar).
+El script `Database/SqlAgent_DailyAttendanceJob.sql` queda en el repo por si en el futuro se
+reactiva el servicio de Agent y se quiere retomar esa migración — en ese caso, comentar de nuevo
+el bloque de Quartz para evitar doble ejecución.
 
-### **Jobs se ejecutan en horario incorrecto:**
-1. Verificar la zona horaria configurada
-2. Revisar las cron expressions
-3. Verificar la hora del servidor
+## (Histórico) Job migrado a SQL Server Agent (2026-07-03)
 
-### **Error de inyección de dependencias:**
-1. Asegurarse de que todos los servicios (IAttendanceCalculationService, etc.) están registrados en DI
-2. Verificar que `UseMicrosoftDependencyInjectionJobFactory()` está configurado
+`DailyAttendanceCalculationJob` (calculo diario de asistencia, antes 07:00 via Quartz) fue
+**dado de baja de Quartz** y movido a **SQL Server Agent**. Motivo: el job corria dentro del
+proceso ASP.NET Core/IIS; si el application pool estaba dormido o reciclado a las 07:00 (idle
+timeout de IIS sin trafico durante la madrugada), el job simplemente no disparaba, sin error
+visible — el scheduler de Quartz (en memoria, no persistente) ni siquiera existia en ese
+instante. SQL Server Agent corre como servicio de Windows independiente de IIS, evitando ese
+problema de raiz.
 
----
+- El bloque `AddJob<DailyAttendanceCalculationJob>`/`AddTrigger` en `QuartzConfiguration.cs`
+  quedo **comentado, no borrado** (para poder revertir facilmente si hiciera falta).
+- El job de SQL Server Agent se crea con `Database/SqlAgent_DailyAttendanceJob.sql` (idempotente,
+  seguro de re-ejecutar). Llama directo a `HR.sp_ProcessAttendanceRunRange` para el dia anterior,
+  envuelto en `TRY/CATCH` con 1 reintento automatico a los 5 minutos.
+- **Importante:** el horario "07:00" del job de SQL Agent es la hora del **reloj del servidor
+  SQL**, no tiene el manejo de zona horaria "America/Guayaquil" que si maneja Quartz.NET. Ver la
+  cabecera de `Database/SqlAgent_DailyAttendanceJob.sql` antes de desplegar.
+- La clase C# `DailyAttendanceCalculationJob.cs` y el metodo
+  `AttendanceCalculationService.ProcessAttendanceRunRangeAsync` **siguen existiendo y
+  compilando** — se usan para el endpoint manual (`POST
+  api/v1/rh/attendance-calculations/process-range`), solo se quito el disparo automatico via
+  Quartz.
 
-## 📝 Notas de Desarrollo
+## Log de ejecuciones de jobs (Fase 0, 2026-07-03)
 
-- Los jobs están en `Infrastructure/Jobs/`
-- La configuración está en `Infrastructure/DependencyInjection/QuartzConfiguration.cs`
-- Cada job hereda de `BaseJob` para funcionalidad común
-- Los jobs usan los mismos servicios que los controladores API
+Todos los jobs de Quartz (via `BaseJob.cs`) y el job de asistencia en SQL Server Agent registran
+cada corrida en `HR.tbl_JobExecutionLog` (inicio, fin, estado `Started`/`Success`/`Failed`,
+mensaje de error si aplica, duracion en ms). Fuente: `Database/hr/09_job_execution_log.sql`.
+Util para diagnosticar el caso de "el job no corrio" sin depender solo de los logs de texto de
+Serilog:
 
----
+```sql
+SELECT TOP 20 * FROM HR.tbl_JobExecutionLog ORDER BY StartedAt DESC;
+```
 
-**Última actualización:** 2025-10-20
+## Jobs registrados sin horario fijo
 
+| JobKey | Clase | Estado | Funcion |
+|---|---|---|---|
+| `DailyStudentEnrollmentSyncJob` | `DailyStudentEnrollmentSyncJob` | Durable, sin trigger cron | Sincroniza matriculas de estudiantes. Requiere `PeriodCode` y opcionalmente `PreviousPeriod`. |
+
+Este job no corre automaticamente porque no tiene trigger con `WithCronSchedule(...)`.
+
+## Jobs existentes pero no programados
+
+Estas clases existen en `Infrastructure/Jobs/`, pero no estan registradas en `QuartzConfiguration.cs`.
+Actualmente no corren de forma automatica.
+
+| Clase | Funcion |
+|---|---|
+| `DailyNightMinutesCalculationJob` | Calcula minutos nocturnos del dia anterior con `CalculateNightMinutesAsync`. |
+| `DailyJustificationsJob` | Aplica justificaciones aprobadas con `ApplyJustificationsAsync`. |
+| `DailyRecoveryJob` | Aplica recuperaciones con `ApplyRecoveryAsync`. |
+| `DailyOvertimeRecoveryCalculation` | Aplica recuperacion/horas extra con `ProcessApplyOvertimeRecovery`. |
+| `MonthlyOvertimePriceJob` | Calcula precio de horas extra del mes anterior con `CalculateOvertimePriceAsync`. |
+| `MonthlyPayrollDiscountsJob` | Calcula descuentos de nomina del mes anterior con `CalculateDiscountsAsync`. |
+| `MonthlyPayrollSubsidiesJob` | Calcula subsidios y recargos del mes anterior con `CalculateSubsidiesAsync`. |
+
+Si alguno de estos debe ejecutarse automaticamente, hay que agregar su `AddJob` y `AddTrigger` en `QuartzConfiguration.cs`.
+
+## Logs esperados
+
+Todos los jobs que heredan de `BaseJob` registran marcas estandar:
+
+```text
+JOB_START
+JOB_OK
+JOB_FAIL
+```
+
+Ejemplos de mensajes especificos:
+
+- `Daily attendance pipeline targetDate=...`
+- `Inicio proceso contratos vencidos...`
+- `Daily accrue vacation balance targetDate=...`
+- `[STUDENT-JOB] ...`
+
+Serilog escribe en:
+
+```text
+logs/log-.txt
+```
+
+Si no aparecen `JOB_START`, `JOB_OK` o `JOB_FAIL`, revisar primero:
+
+1. Que el proceso este corriendo con `Quartz:EnableJobs = true`.
+2. Que el ambiente sea el esperado, por ejemplo `ASPNETCORE_ENVIRONMENT=Production`.
+3. Que se esten revisando los logs de la misma instancia/carpeta donde corre la aplicacion.
+4. Que el job esperado este realmente registrado en `QuartzConfiguration.cs`.
+
+## Formato cron de Quartz
+
+Quartz.NET usa cron de 6 campos:
+
+```text
+segundos minutos horas dia-del-mes mes dia-de-semana
+```
+
+Ejemplos:
+
+- `0 0 2 * * ?`: todos los dias a las 02:00.
+- `0 0 7 * * ?`: todos los dias a las 07:00.
+- `0 30 0 1 * ?`: dia 1 de cada mes a las 00:30.
+
+## Ejecucion manual disponible
+
+Hay endpoints manuales para algunos procesos en `Controllers/HR/ScheduledJobsController.cs`.
+
+| Endpoint | Funcion |
+|---|---|
+| `POST /api/v1/rh/scheduled-jobs/contract-expiration/run` | Ejecuta manualmente el proceso de contratos vencidos. |
+| `POST /api/v1/rh/scheduled-jobs/student-enrollment/run?periodCode=...&previousPeriod=...` | Ejecuta manualmente la sincronizacion de matriculas. |
+
+Estos endpoints no dependen de esperar el trigger cron.
+
+## Consideraciones
+
+- Los jobs usan `[DisallowConcurrentExecution]` para evitar ejecuciones concurrentes del mismo job.
+- `DailyAccrueVacationBalance` se ejecuta en background y usa `ICurrentUserService.EmployeeId`; en un proceso sin request HTTP ese valor normalmente puede ser `null`.
+- La documentacion debe mantenerse alineada con `QuartzConfiguration.cs`; ese archivo es la fuente real de jobs activos.
+
+## Checklist de diagnostico
+
+1. Confirmar `Quartz:EnableJobs`.
+2. Confirmar ambiente cargado por la aplicacion.
+3. Buscar `JOB_START`, `JOB_OK` o `JOB_FAIL` en logs, **o consultar directo
+   `SELECT TOP 20 * FROM HR.tbl_JobExecutionLog ORDER BY StartedAt DESC;`**
+   (cubre tanto jobs de Quartz como el de SQL Server Agent, sin depender de
+   tener acceso a los archivos de log del servidor de aplicaciones).
+4. Confirmar que el job esta registrado en `QuartzConfiguration.cs` —
+   **excepto `DailyAttendanceCalculationJob`, que vive en SQL Server Agent
+   desde 2026-07-03** (ver seccion arriba). Para ese, revisar el historial
+   del job en SSMS (`msdb.dbo.sysjobhistory`) o `tbl_JobExecutionLog` con
+   `Source = 'SQLAgent'`.
+5. Confirmar cron y zona horaria (Quartz usa "America/Guayaquil" explicito;
+   SQL Server Agent usa la hora del reloj del servidor SQL, sin conversion).
+6. Revisar errores `JOB_FAIL` o errores de inyeccion de dependencias.
+
+Ultima actualizacion: 2026-07-03.

@@ -56,9 +56,13 @@ public sealed class DocumentGenerationService : IDocumentGenerationService
         var template = await _templateRepository.GetByIdAsync(request.TemplateId, ct)
             ?? throw new KeyNotFoundException($"Plantilla {request.TemplateId} no encontrada.");
 
-        if (template.Status != DocumentTemplateStatus.Published)
+        // Se permite generar con plantillas Archived: es el caso de regenerar un documento
+        // (contrato o acción de personal) que fue emitido originalmente con una versión anterior,
+        // para no alterar el contenido legal de un documento ya generado al publicarse una v2.
+        // Draft sigue bloqueado porque nunca fue una versión oficialmente publicada.
+        if (template.Status == DocumentTemplateStatus.Draft)
             throw new InvalidOperationException(
-                $"La plantilla '{template.Name}' no está publicada. Estado actual: {template.Status}.");
+                $"La plantilla '{template.Name}' está en borrador y no puede usarse para generar documentos.");
 
         var fields = await _fieldRepository.GetByTemplateIdAsync(request.TemplateId, ct);
 

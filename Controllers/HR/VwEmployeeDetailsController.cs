@@ -89,6 +89,14 @@ namespace WsUtaSystem.Controllers.HR
             return Ok(employees);
         }
 
+        /// <summary>Obtiene empleados por DepartmentID exacto (sin ambigüedad de nombres/tildes).</summary>
+        [HttpGet("department-id/{departmentId:int}")]
+        public async Task<IActionResult> GetByDepartmentId(int departmentId, CancellationToken ct = default)
+        {
+            var employees = await _employeeDetailsService.GetByFiltersAsync(departmentId, null, ct);
+            return Ok(employees);
+        }
+
         [HttpGet("boss/{bossId:int}/subordinates/details")]
         public async Task<IActionResult> GetSubordinatesDetailsByBossId(
         int bossId,

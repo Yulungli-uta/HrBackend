@@ -28,9 +28,19 @@ public sealed class DocumentTemplateEngine : IDocumentTemplateEngine
         return TokenPattern.Replace(htmlContent, match =>
         {
             var token = match.Groups[1].Value.ToUpperInvariant();
-            return resolvedValues.TryGetValue(token, out var value)
-                ? System.Net.WebUtility.HtmlEncode(value)
-                : string.Empty;
+            if (!resolvedValues.TryGetValue(token, out var value))
+                return string.Empty;
+
+            // Convención existente (ya usada por DISTRIBUTIVO_TABLE_HTML/HORARIO_TABLE_HTML,
+            // nunca antes implementada): un campo cuyo nombre termina en _HTML contiene
+            // marcado HTML de confianza construido por el propio backend (nunca entrada de
+            // usuario directa) -- se inserta tal cual, sin HtmlEncode, para que
+            // InstitutionalDocumentRenderer pueda parsear tablas/estructuras dentro de él.
+            // Cualquier otro campo se sigue codificando como texto plano (comportamiento
+            // sin cambios).
+            return token.EndsWith("_HTML", StringComparison.Ordinal)
+                ? value
+                : System.Net.WebUtility.HtmlEncode(value);
         });
     }
 

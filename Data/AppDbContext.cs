@@ -38,10 +38,14 @@ public class AppDbContext : DbContext
     public DbSet<Employees> Employees => Set<Employees>();
     public DbSet<Faculties> Faculties => Set<Faculties>();
     public DbSet<Departments> Departments => Set<Departments>();
+    public DbSet<UserAccessScope> UserAccessScopes => Set<UserAccessScope>();
+    public DbSet<UserAccessScopeHistory> UserAccessScopeHistory => Set<UserAccessScopeHistory>();
     public DbSet<Job> Jobs => Set<Job>();
     public DbSet<OccupationalGroup> OccupationalGroup => Set<OccupationalGroup>();
     public DbSet<Degree> Degree => Set<Degree>();
     public DbSet<DepartmentAuthority> DepartmentAuthorities => Set<DepartmentAuthority>();
+    public DbSet<ReportAudit> ReportAudits => Set<ReportAudit>();
+    public DbSet<EmployeeLaborRegime> EmployeeLaborRegimes => Set<EmployeeLaborRegime>();
 
     // ─────────────────────────────────────────────────────────────────────────
     // DbSets - Módulo Académico: Estudiantes
@@ -113,6 +117,7 @@ public class AppDbContext : DbContext
     public DbSet<CatastrophicIllnesses> CatastrophicIllnesses => Set<CatastrophicIllnesses>();
     public DbSet<FamilyBurden> FamilyBurden => Set<FamilyBurden>();
     public DbSet<Trainings> Trainings => Set<Trainings>();
+    public DbSet<Languages> Languages => Set<Languages>();
     public DbSet<WorkExperiences> WorkExperiences => Set<WorkExperiences>();
     public DbSet<BankAccounts> BankAccounts => Set<BankAccounts>();
     public DbSet<Publications> Publications => Set<Publications>();
@@ -163,6 +168,12 @@ public class AppDbContext : DbContext
     public DbSet<PersonnelAction> PersonnelActions => Set<PersonnelAction>();
     public DbSet<PersonnelActionStatusHistory> PersonnelActionStatusHistories => Set<PersonnelActionStatusHistory>();
     public DbSet<PersonnelActionType> PersonnelActionTypes => Set<PersonnelActionType>();
+    public DbSet<ResignationRetirementRequest> ResignationRetirementRequests => Set<ResignationRetirementRequest>();
+    public DbSet<ResignationRetirementStatusHistory> ResignationRetirementStatusHistories => Set<ResignationRetirementStatusHistory>();
+    public DbSet<EmployeeCertificateRequest> EmployeeCertificateRequests => Set<EmployeeCertificateRequest>();
+    public DbSet<EmployeeCertificateStatusHistory> EmployeeCertificateStatusHistories => Set<EmployeeCertificateStatusHistory>();
+    public DbSet<EmployeeInternalRequest> EmployeeInternalRequests => Set<EmployeeInternalRequest>();
+    public DbSet<EmployeeInternalRequestStatusHistory> EmployeeInternalRequestStatusHistories => Set<EmployeeInternalRequestStatusHistory>();
 
     // ─────────────────────────────────────────────────────────────────────────
     // DbSets - Módulo Docentes

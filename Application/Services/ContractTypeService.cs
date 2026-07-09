@@ -22,27 +22,29 @@ public class ContractTypeService : Service<ContractType, int>, IContractTypeServ
     public Task SetDefaultTemplateAsync(int contractTypeId, int? templateId, CancellationToken ct = default)
         => _repo.SetDefaultTemplateAsync(contractTypeId, templateId, ct);
 
+    public Task SetDelegationTemplateAsync(int contractTypeId, int? templateId, CancellationToken ct = default)
+        => _repo.SetDelegationTemplateAsync(contractTypeId, templateId, ct);
+
     public async Task<ContractTypeWithTemplateDto?> GetWithDefaultTemplateAsync(int contractTypeId, CancellationToken ct = default)
     {
         var ct2 = await _repo.GetWithDefaultTemplateAsync(contractTypeId, ct);
         if (ct2 is null) return null;
 
-        string? templateName    = null;
-        string? templateCode    = null;
-        string? templateVersion = null;
-
-        if (ct2.DefaultTemplateId.HasValue)
+        async Task<(string? Name, string? Code, string? Version)> LoadTemplateAsync(int? templateId)
         {
+            if (!templateId.HasValue) return (null, null, null);
+
             var tpl = await _db.Set<DocumentTemplate>()
                 .AsNoTracking()
-                .Where(t => t.TemplateId == ct2.DefaultTemplateId.Value)
+                .Where(t => t.TemplateId == templateId.Value)
                 .Select(t => new { t.Name, t.TemplateCode, t.Version })
                 .FirstOrDefaultAsync(ct);
 
-            templateName    = tpl?.Name;
-            templateCode    = tpl?.TemplateCode;
-            templateVersion = tpl?.Version;
+            return (tpl?.Name, tpl?.TemplateCode, tpl?.Version);
         }
+
+        var (defaultName, defaultCode, defaultVersion) = await LoadTemplateAsync(ct2.DefaultTemplateId);
+        var (delegationName, delegationCode, delegationVersion) = await LoadTemplateAsync(ct2.DelegationTemplateId);
 
         return new ContractTypeWithTemplateDto(
             ct2.ContractTypeId,
@@ -52,9 +54,13 @@ public class ContractTypeService : Service<ContractType, int>, IContractTypeServ
             ct2.ContractCode,
             ct2.DocumentTemplateTypeId,
             ct2.DefaultTemplateId,
-            templateName,
-            templateCode,
-            templateVersion,
+            defaultName,
+            defaultCode,
+            defaultVersion,
+            ct2.DelegationTemplateId,
+            delegationName,
+            delegationCode,
+            delegationVersion,
             ct2.NumberingPrefix,
             ct2.NumberingYear,
             ct2.NumberingLastSequence,

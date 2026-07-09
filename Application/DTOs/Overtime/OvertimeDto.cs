@@ -14,4 +14,6 @@ public class OvertimeDto
     public decimal ActualHours { get; set; }
     public decimal PaymentAmount { get; set; }
     public DateTime CreatedAt { get; set; }
+    public int? PlanEmployeeId { get; set; }
+    public int? LaborRegimeId { get; set; }
 }

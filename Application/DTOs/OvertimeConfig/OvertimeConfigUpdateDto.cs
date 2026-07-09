@@ -5,4 +5,6 @@ public class OvertimeConfigUpdateDto
     public string OvertimeType { get; set; }
     public decimal Factor { get; set; }
     public string Description { get; set; }
+    public int? MaxDailyMinutes { get; set; }
+    public int? MaxWeeklyMinutes { get; set; }
 }

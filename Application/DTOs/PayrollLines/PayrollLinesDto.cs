@@ -9,4 +9,5 @@ public class PayrollLinesDto
     public decimal Quantity { get; set; }
     public decimal UnitValue { get; set; }
     public string Notes { get; set; }
+    public int? LaborRegimeId { get; set; }
 }

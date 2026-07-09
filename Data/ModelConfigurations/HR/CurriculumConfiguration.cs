@@ -128,6 +128,25 @@ public sealed class TrainingsConfiguration : IEntityTypeConfiguration<Trainings>
         e.Property(x => x.CertifiedBy).HasMaxLength(150);
         e.Property(x => x.CertificateTypeId).HasColumnName("CertificateTypeID");
         e.Property(x => x.ApprovalTypeId).HasColumnName("ApprovalTypeID");
+        e.Property(x => x.TrainingDirectionTypeId).HasColumnName("TrainingDirectionTypeID");
+        e.Property(x => x.ModalityTypeId).HasColumnName("ModalityTypeID");
+        e.Property(x => x.CountryId).HasColumnName("CountryID");
+    }
+}
+
+public sealed class LanguagesConfiguration : IEntityTypeConfiguration<Languages>
+{
+    public void Configure(EntityTypeBuilder<Languages> e)
+    {
+        e.ToTable("tbl_Languages", "HR");
+        e.HasKey(x => x.LanguageId);
+        e.Property(x => x.LanguageId).HasColumnName("LanguageID");
+        e.Property(x => x.PersonId).HasColumnName("PersonID");
+        e.Property(x => x.LanguageTypeId).HasColumnName("LanguageTypeID");
+        e.Property(x => x.LevelTypeId).HasColumnName("LevelTypeID");
+        e.Property(x => x.ReferenceFramework).HasMaxLength(50);
+        e.Property(x => x.CertifyingInstitution).HasMaxLength(150);
+        e.Property(x => x.CountryId).HasColumnName("CountryID");
     }
 }
 

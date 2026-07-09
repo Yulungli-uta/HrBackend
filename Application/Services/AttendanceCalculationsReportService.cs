@@ -99,4 +99,18 @@ public sealed class AttendanceCalculationsReportService : IAttendanceCalculation
 
         return data;
     }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<AttendanceReportDto>> GetAttendanceDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        var data = await _repository.GetAttendanceDataAsync(filter, ct);
+
+        _logger.LogInformation("Reporte de asistencia generado. Total registros: {Count}", data.Count);
+
+        return data;
+    }
 }

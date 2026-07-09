@@ -6,10 +6,12 @@ public interface IAttendanceCalculationService
     Task ProcessAttendanceRunRangeAsync(
         DateTime fromDate,
         DateTime toDate,
+        int? employeeId = null,
         CancellationToken ct = default);
 
     Task ProcessAttendanceRunDateAsync(
         DateTime workDate,
+        int? employeeId = null,
         CancellationToken ct = default);
 
     // Compatibilidad temporal con endpoints / jobs anteriores

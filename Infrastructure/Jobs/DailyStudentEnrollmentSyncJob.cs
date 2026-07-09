@@ -20,8 +20,9 @@ public sealed class DailyStudentEnrollmentSyncJob : BaseJob
     public DailyStudentEnrollmentSyncJob(
         IStudentEnrollmentSyncService syncService,
         IEmployeeProvisioningClient provisioningClient,
-        ILogger<DailyStudentEnrollmentSyncJob> logger)
-        : base(logger)
+        ILogger<DailyStudentEnrollmentSyncJob> logger,
+        IJobExecutionLogService jobExecutionLogService)
+        : base(logger, jobExecutionLogService)
     {
         _syncService        = syncService        ?? throw new ArgumentNullException(nameof(syncService));
         _provisioningClient = provisioningClient ?? throw new ArgumentNullException(nameof(provisioningClient));

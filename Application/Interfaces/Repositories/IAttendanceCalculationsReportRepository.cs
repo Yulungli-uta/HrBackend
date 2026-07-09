@@ -58,4 +58,14 @@ public interface IAttendanceCalculationsReportRepository
     Task<IReadOnlyList<AttendanceCrossReportDto>> GetAttendanceCrossDataAsync(
         ReportFilterDto filter,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene el detalle de marcaciones (entrada/salida/horas/estado) por empleado y día,
+    /// para el reporte de asistencia básico.
+    /// </summary>
+    /// <param name="filter">Filtros del reporte: StartDate, EndDate, EmployeeId, DepartmentId.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<AttendanceReportDto>> GetAttendanceDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
 }

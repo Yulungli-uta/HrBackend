@@ -83,6 +83,9 @@ public class Contracts : IAuditable{
     public int? AuthorityNominatorId { get; set; }
     public int? DthDirectorId { get; set; }
 
+    /// <summary>Indica si la firma se realiza por delegación (AuthorityNominatorId = el delegado) en vez de la máxima autoridad.</summary>
+    public bool IsDelegation { get; set; } = false;
+
     /// <summary>Régimen laboral del contrato (LOSEP/LOES/CT). Auto-poblado desde la solicitud al crear.</summary>
     public int? LaborRegimeID { get; set; }
 

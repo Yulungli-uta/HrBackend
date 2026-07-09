@@ -30,6 +30,7 @@ public sealed class ContractsConfiguration : IEntityTypeConfiguration<Contracts>
         e.Property(x => x.IsDocumentFrozen).HasColumnName("IsDocumentFrozen").HasDefaultValue(false);
         e.Property(x => x.AuthorityNominatorId).HasColumnName("AuthorityNominatorID");
         e.Property(x => x.DthDirectorId).HasColumnName("DthDirectorID");
+        e.Property(x => x.IsDelegation).HasColumnName("IsDelegation").HasDefaultValue(false);
         e.Property(x => x.LaborRegimeID).HasColumnName("LaborRegimeID");
         e.Property(x => x.WorkModalityID).HasColumnName("WorkModalityID");
         e.Property(x => x.ContractedHours).HasColumnName("ContractedHours").HasColumnType("DECIMAL(5,2)");
@@ -71,12 +72,17 @@ public sealed class ContractTypeConfiguration : IEntityTypeConfiguration<Contrac
         e.Property(x => x.ContractTypeId).HasColumnName("ContractTypeID");
         e.Property(x => x.DocumentTemplateTypeId).HasColumnName("DocumentTemplateTypeID");
         e.Property(x => x.DefaultTemplateId).HasColumnName("DefaultTemplateID");
+        e.Property(x => x.DelegationTemplateId).HasColumnName("DelegationTemplateId");
         e.Property(x => x.NumberingPrefix).HasMaxLength(30);
         e.Property(x => x.NumberingYear).HasDefaultValue(DateTime.Now.Year);
         e.Property(x => x.NumberingLastSequence).HasDefaultValue(0);
         e.HasOne(x => x.DefaultTemplate)
             .WithMany()
             .HasForeignKey(x => x.DefaultTemplateId)
+            .OnDelete(DeleteBehavior.Restrict);
+        e.HasOne(x => x.DelegationTemplate)
+            .WithMany()
+            .HasForeignKey(x => x.DelegationTemplateId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
@@ -94,10 +100,13 @@ public sealed class PersonnelActionTypeConfiguration : IEntityTypeConfiguration<
         e.Property(x => x.NumberingPrefix).HasMaxLength(30).IsRequired();
         e.Property(x => x.NumberingYear).HasDefaultValue(DateTime.Now.Year);
         e.Property(x => x.NumberingLastSequence).HasDefaultValue(0);
-        e.Property(x => x.TemplateCode).HasMaxLength(100);
         e.Property(x => x.IsActive).HasDefaultValue(true);
         e.Property(x => x.ActionCategory).HasMaxLength(30);
         e.HasIndex(x => x.Code).IsUnique();
+        e.HasOne(x => x.DefaultTemplate)
+            .WithMany()
+            .HasForeignKey(x => x.DefaultTemplateId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 

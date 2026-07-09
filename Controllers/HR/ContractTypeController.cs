@@ -85,6 +85,22 @@ public class ContractTypeController : ControllerBase
     }
 
     /// <summary>
+    /// Asigna o quita la plantilla de delegación de un tipo de contrato (usada cuando
+    /// Contracts.IsDelegation = true). Enviar <c>templateId: null</c> para desvincular.
+    /// </summary>
+    [HttpPatch("{id:int}/delegation-template")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetDelegationTemplate(
+        [FromRoute] int id,
+        [FromBody] SetDelegationTemplateRequest request,
+        CancellationToken ct)
+    {
+        await _svc.SetDelegationTemplateAsync(id, request.TemplateId, ct);
+        return NoContent();
+    }
+
+    /// <summary>
     /// Genera y reserva el siguiente número de documento para el tipo de contrato indicado.
     /// El número tiene el formato {prefix}-{year}-{seq:D3} (ej: CONT-OCAS-2026-001).
     /// </summary>

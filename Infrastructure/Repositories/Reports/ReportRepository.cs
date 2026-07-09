@@ -29,7 +29,7 @@ public class ReportRepository : IReportRepository
             StartDate    = filter.StartDate,
             EndDate      = filter.EndDate,
             DepartmentId = filter.DepartmentId,
-            EmployeeType = filter.EmployeeType,
+            EmployeeType = filter.EmployeeTypeId,
             IsActive     = filter.IsActive
         };
         return await connection.QueryAsync<EmployeeReportDto>(
@@ -72,7 +72,7 @@ public class ReportRepository : IReportRepository
             StartDate    = filter.StartDate ?? DateTime.Now.AddMonths(-1),
             EndDate      = filter.EndDate   ?? DateTime.Now,
             EmployeeId   = filter.EmployeeId,
-            EmployeeType = filter.EmployeeType
+            EmployeeType = filter.EmployeeTypeId
         };
         return await connection.QueryAsync<AttendanceSumaryDto>(
             "[HR].[sp_GetReportAttendanceSumary]", parameters,

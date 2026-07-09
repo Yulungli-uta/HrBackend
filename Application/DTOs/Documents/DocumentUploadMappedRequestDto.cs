@@ -15,6 +15,12 @@
     {
         public int? DocumentTypeId { get; set; }
 
+        /// <summary>Número de resolución/oficio (opcional), por archivo.</summary>
+        public string? DocumentReferenceNumber { get; set; }
+
+        /// <summary>Fecha de la resolución/oficio (opcional), por archivo.</summary>
+        public DateOnly? DocumentReferenceDate { get; set; }
+
         // IMPORTANTE: el binder soporta Items[0].File, Items[1].File, etc.
         public IFormFile File { get; set; } = default!;
     }

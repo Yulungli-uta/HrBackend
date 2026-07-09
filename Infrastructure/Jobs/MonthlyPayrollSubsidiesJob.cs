@@ -11,8 +11,9 @@ public sealed class MonthlyPayrollSubsidiesJob : BaseJob
 
     public MonthlyPayrollSubsidiesJob(
         IPayrollSubsidiesService subsidiesService,
-        ILogger<MonthlyPayrollSubsidiesJob> logger)
-        : base(logger)
+        ILogger<MonthlyPayrollSubsidiesJob> logger,
+        IJobExecutionLogService jobExecutionLogService)
+        : base(logger, jobExecutionLogService)
     {
         _subsidiesService = subsidiesService;
     }

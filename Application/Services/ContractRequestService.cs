@@ -251,6 +251,7 @@ public class ContractRequestService : Service<ContractRequest, int>, IContractRe
                && (!filter.EndDate.HasValue   || (r.StartDate.HasValue && r.StartDate <= filter.EndDate.Value))
                && (string.IsNullOrEmpty(filter.Status) ||
                    (r.Status.HasValue && statusMap.ContainsKey(r.Status.Value) && statusMap[r.Status.Value] == filter.Status))
+               && (!filter.DepartmentId.HasValue || r.DepartmentId == filter.DepartmentId.Value)
             orderby r.CreatedAt descending
             select new ContractRequestReportDto
             {

@@ -12,6 +12,10 @@ public sealed record ContractTypeWithTemplateDto(
     string? DefaultTemplateName,
     string? DefaultTemplateCode,
     string? DefaultTemplateVersion,
+    int? DelegationTemplateId,
+    string? DelegationTemplateName,
+    string? DelegationTemplateCode,
+    string? DelegationTemplateVersion,
     string? NumberingPrefix,
     int NumberingYear,
     int NumberingLastSequence,
@@ -30,3 +34,6 @@ public sealed record ContractNextNumberDto(
 
 /// <summary>Request para asignar la plantilla por defecto a un tipo de contrato.</summary>
 public sealed record SetDefaultTemplateRequest(int? TemplateId);
+
+/// <summary>Request para asignar la plantilla de delegación a un tipo de contrato.</summary>
+public sealed record SetDelegationTemplateRequest(int? TemplateId);

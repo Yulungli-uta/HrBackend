@@ -30,7 +30,12 @@ public sealed class PersonnelActionService : IPersonnelActionService
             ["BORRADOR"]         = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "GENERADO", "ANULADO" },
             ["GENERADO"]         = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "PENDIENTE_FIRMAS", "BORRADOR", "ANULADO" },
             ["PENDIENTE_FIRMAS"] = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "FIRMADO_CARGADO", "GENERADO", "ANULADO" },
-            ["FIRMADO_CARGADO"]  = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "FINALIZADO", "ANULADO" },
+            // 2026-07-06: VIGENTE agregado — solo para tipos con ReachesVigente=1
+            // (Nombramiento, Traslado, Encargo, Cambio de Sueldo, Asistencia/Horario).
+            // La transición FIRMADO_CARGADO->VIGENTE es automática al cargar el
+            // documento firmado (ver UploadSignedDocumentAsync), no un paso manual.
+            ["FIRMADO_CARGADO"]  = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "FINALIZADO", "VIGENTE", "ANULADO" },
+            ["VIGENTE"]          = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "FINALIZADO" },
             ["FINALIZADO"]       = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             ["ANULADO"]          = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
             // Compatibilidad con registros históricos creados antes de la migración de estados
@@ -52,6 +57,8 @@ public sealed class PersonnelActionService : IPersonnelActionService
     // Orquestador reutilizable: centraliza EnsureEmployee + RepositoryUta + UpdateEmail + SendEmail
     private readonly IEmployeeProvisioningOrchestrator _provisioningOrchestrator;
     private readonly IEmployeeProvisioningClient _provisioningClient;
+    private readonly IEmployeeLaborRegimeService _laborRegimeService;
+    private readonly IPersonnelMovementsService _movementsService;
 
     public PersonnelActionService(
         IPersonnelActionRepository actionRepository,
@@ -63,7 +70,9 @@ public sealed class PersonnelActionService : IPersonnelActionService
         AppDbContext db,
         ILogger<PersonnelActionService> logger,
         IEmployeeProvisioningOrchestrator provisioningOrchestrator,
-        IEmployeeProvisioningClient provisioningClient)
+        IEmployeeProvisioningClient provisioningClient,
+        IEmployeeLaborRegimeService laborRegimeService,
+        IPersonnelMovementsService movementsService)
     {
         _actionRepository          = actionRepository;
         _personnelActionType       = personnelActionType;
@@ -75,6 +84,8 @@ public sealed class PersonnelActionService : IPersonnelActionService
         _logger                    = logger;
         _provisioningOrchestrator  = provisioningOrchestrator;
         _provisioningClient        = provisioningClient;
+        _movementsService          = movementsService;
+        _laborRegimeService        = laborRegimeService;
     }
 
     /// <inheritdoc />
@@ -269,10 +280,16 @@ public sealed class PersonnelActionService : IPersonnelActionService
         var action = await _actionRepository.GetByIdAsync(actionId, ct)
             ?? throw new KeyNotFoundException($"Acción de personal {actionId} no encontrada.");
 
-        var terminalStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            { "FINALIZADO", "ANULADO", "CANCELLED" };
+        // 2026-07-06: FIRMADO_CARGADO agregado — el frontend ya oculta el botón de
+        // generar/regenerar a partir de ese estado, pero el backend no lo exigía. Un
+        // documento ya firmado y cargado no debe poder regenerarse (sobreescribiría el
+        // registro de un documento que ya tiene una firma física real asociada).
+        // 2026-07-06: VIGENTE agregado — nuevo estado que tampoco debe permitir
+        // regenerar el documento (mismo motivo que FIRMADO_CARGADO/FINALIZADO).
+        var blockedStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { "FIRMADO_CARGADO", "VIGENTE", "FINALIZADO", "ANULADO", "CANCELLED" };
 
-        if (terminalStatuses.Contains(action.Status))
+        if (blockedStatuses.Contains(action.Status))
             throw new InvalidOperationException(
                 $"No se puede generar documento en estado '{action.Status}'.");
 
@@ -338,6 +355,52 @@ public sealed class PersonnelActionService : IPersonnelActionService
 
         if (actionType?.RequiresAdUserDisable == true)
             await TriggerActionDisableAsync(actionId, updatedBy, ct);
+
+        // 2026-07-06: tipos con ReachesVigente=1 (Nombramiento, Traslado, Encargo,
+        // Cambio de Sueldo, Asistencia/Horario) pasan automáticamente a VIGENTE al
+        // cargar el documento firmado — no requieren el paso manual de "Finalizar".
+        // VIGENTE es la fuente de verdad de la que se lee el sueldo/departamento/
+        // horario actual del empleado (ver HR.fn_ResolveEmployeeRate).
+        if (actionType?.ReachesVigente == true)
+        {
+            await TransitionStatusAsync(actionId, "FIRMADO_CARGADO", "VIGENTE",
+                "Vigente automáticamente al cargar el documento firmado.", updatedBy, ct);
+
+            await CloseSupersededVigenteActionAsync(actionId, action.EmployeeId, updatedBy, ct);
+
+            // 2026-07-06: movida aquí desde FinalizeAsync — las acciones con
+            // ReachesVigente=1 ya no pasan por FinalizeAsync (van directo y
+            // automático a VIGENTE), así que el registro de movimiento/régimen
+            // debe dispararse en este punto en vez de esperar a FINALIZADO. El
+            // método ya es defensivo (no hace nada si faltan
+            // DestinationJobId/DestinationDepartmentId), así que es seguro
+            // llamarlo para los 5 tipos ReachesVigente=1, no solo MOVEMENT.
+            await RegisterMovementAndRegimeFromActionAsync(actionId, updatedBy, ct);
+        }
+    }
+
+    /// <summary>
+    /// 2026-07-06: solo puede haber una acción VIGENTE por empleado a la vez, sin
+    /// importar el tipo — al llegar una acción nueva a VIGENTE, cierra (pasa a
+    /// FINALIZADO) cualquier otra acción de ese mismo empleado que estuviera
+    /// VIGENTE en ese momento.
+    /// </summary>
+    private async Task CloseSupersededVigenteActionAsync(int newActionId, int? employeeId, int updatedBy, CancellationToken ct)
+    {
+        if (!employeeId.HasValue || employeeId.Value == 0)
+            return;
+
+        var previousVigenteId = await _db.PersonnelActions
+            .AsNoTracking()
+            .Where(a => a.EmployeeId == employeeId.Value
+                     && a.ActionId != newActionId
+                     && a.Status == "VIGENTE")
+            .Select(a => (int?)a.ActionId)
+            .FirstOrDefaultAsync(ct);
+
+        if (previousVigenteId.HasValue)
+            await TransitionStatusAsync(previousVigenteId.Value, "VIGENTE", "FINALIZADO",
+                $"Cerrada automáticamente al quedar vigente la acción {newActionId}.", updatedBy, ct);
     }
 
     /// <inheritdoc />
@@ -355,6 +418,13 @@ public sealed class PersonnelActionService : IPersonnelActionService
                 "No se puede finalizar sin haber cargado el documento firmado.");
 
         await TransitionStatusAsync(actionId, action.Status, "FINALIZADO", comment, updatedBy, ct);
+
+        // 2026-07-06: el registro de movimiento/régimen para tipos ReachesVigente=1
+        // (antes solo MOVEMENT) se movió a UploadSignedDocumentAsync, porque esos
+        // tipos ya no llegan aquí manualmente — pasan directo y automático a VIGENTE.
+        // Este método FinalizeAsync ahora solo lo alcanzan tipos con
+        // ReachesVigente=0 (Comisión, Licencia, Sanción, Vulnerabilidad, Vacaciones),
+        // que no representan cambio de puesto/departamento.
     }
 
     /// <inheritdoc />
@@ -394,15 +464,15 @@ public sealed class PersonnelActionService : IPersonnelActionService
             status: DocumentTemplateStatus.Published,
             ct: ct);
 
+        if (templates.Count == 0)
+            throw new InvalidOperationException("No hay plantilla ACCION_PERSONAL publicada para previsualización.");
+
         _logger.LogInformation(
             "Plantilla ACCION_PERSONAL seleccionada. TemplateId={TemplateId}, Code={Code}, Name={Name}, Type={Type}",
             templates[0].TemplateId,
             templates[0].TemplateCode,
             templates[0].Name,
             templates[0].TemplateType);
-
-        if (templates.Count == 0)
-            throw new InvalidOperationException("No hay plantilla ACCION_PERSONAL publicada para previsualización.");
 
         var pdfBase64 = await _documentGenerationService.PreviewAsync(
             templates[0].TemplateId, employeeId, overrides, ct);
@@ -469,27 +539,39 @@ public sealed class PersonnelActionService : IPersonnelActionService
     {
         
         var personalAction = await _actionRepository.GetByIdAsync(actionId, ct);
-        _logger.LogInformation($"*****************Actionid: {actionId}, ActionTypeId: {personalAction.ActionTypeId} ");
-
         var personnelActionType = await _personnelActionType.GetByIdAsync(personalAction.ActionTypeId, ct);
 
-        //var templates = await _templateRepository.GetByIdAsync(personnelActionType.TemplateCode, ct);
+        // Si la acción ya tiene un documento generado, reutilizar exactamente la misma versión
+        // de plantilla usada originalmente (aunque ahora esté Archived), para no alterar el
+        // contenido legal de un documento ya emitido al publicarse una nueva versión.
+        int? templateId = personalAction.GeneratedDocumentId.HasValue
+            ? await _db.Set<GeneratedDocument>()
+                .AsNoTracking()
+                .Where(d => d.DocumentId == personalAction.GeneratedDocumentId.Value)
+                .Select(d => (int?)d.TemplateId)
+                .FirstOrDefaultAsync(ct)
+            : null;
 
-        //_logger.LogInformation($"********************* templates: {templates.Name}, description: {templates.Description}");
-
-        var templates = await _templateRepository.GetAllAsync(
-            //templateType: "ACCION_PERSONAL",
-            templateType: personnelActionType.TemplateCode,
-            status: DocumentTemplateStatus.Published,
-            ct: ct);
-
-
-        if (templates.Count == 0)
+        if (templateId is null)
         {
-            _logger.LogWarning(
-                "PersonnelActionService: sin plantilla publicada ACCION_PERSONAL para acción {ActionId}.",
-                actionId);
-            return null;
+            if (!personnelActionType.DefaultTemplateId.HasValue)
+            {
+                _logger.LogWarning(
+                    "PersonnelActionService: el tipo de acción {ActionTypeId} no tiene plantilla asignada (acción {ActionId}).",
+                    personalAction.ActionTypeId, actionId);
+                return null;
+            }
+
+            var template = await _templateRepository.GetByIdAsync(personnelActionType.DefaultTemplateId.Value, ct);
+            if (template is null || template.Status != DocumentTemplateStatus.Published)
+            {
+                _logger.LogWarning(
+                    "PersonnelActionService: la plantilla {TemplateId} del tipo de acción {ActionTypeId} no está publicada (acción {ActionId}).",
+                    personnelActionType.DefaultTemplateId, personalAction.ActionTypeId, actionId);
+                return null;
+            }
+
+            templateId = template.TemplateId;
         }
 
         // Resolver campos del formulario desde datos reales de la acción
@@ -511,7 +593,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         try
         {
             var generateRequest = new GenerateDocumentRequest(
-                TemplateId:      templates[0].TemplateId,
+                TemplateId:      templateId.Value,
                 EmployeeId:      employeeId is > 0 ? employeeId : null,
                 EntityType:      DocumentEntityType.PersonnelAction,
                 EntityId:        contractId,
@@ -544,6 +626,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         var r = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         Set(r, "DOC_NUMBER",         d.ActionNumber);
+        Set(r, "ACTA_NUMBER",        d.ActionNumber);
         Set(r, "ELABORATION_DATE",   d.ActionDate.ToString("dd/MM/yyyy"));
         Set(r, "EFFECTIVE_FROM",     d.EffectiveDate?.ToString("dd/MM/yyyy"));
         Set(r, "EFFECTIVE_TO",       d.EndDate is DateOnly ed && ed != DateOnly.MaxValue
@@ -561,7 +644,9 @@ public sealed class PersonnelActionService : IPersonnelActionService
         Set(r, "EMPLOYEE_IDCARD",    d.EmployeeIdCard);
 
         // Clasificación de la acción
-        r["DECLARACION_JURADA_MARK"]       = d.SwornDeclaration ? "X" : string.Empty;
+        // SwornDeclaration=true → presentó la declaración (marca en SI); false → marca en NO APLICA.
+        r["DECLARACION_JURADA_SI_MARK"]    = d.SwornDeclaration ? "X" : string.Empty;
+        r["DECLARACION_JURADA_MARK"]       = d.SwornDeclaration ? string.Empty : "X";
         Set(r, "CURRENT_INSTITUTIONAL_PROCESS", d.InstitutionalProcessName);
         Set(r, "CURRENT_MANAGEMENT_LEVEL",      d.ManagementLevelName);
 
@@ -579,6 +664,14 @@ public sealed class PersonnelActionService : IPersonnelActionService
 
         var cb = MapActionTypeToCheckbox(d.ActionTypeName);
         if (cb is not null) r[cb] = "X";
+
+        // El formulario oficial UTA tiene dos casillas "REINGRESO" en filas distintas;
+        // mientras no exista una subclasificación que las diferencie, se marcan ambas juntas.
+        if (cb == "CB_REINGRESO") r["CB_REINGRESO2"] = "X";
+
+        // Detalle libre solo cuando corresponde a la casilla marcada (reutiliza Observations).
+        if (cb == "CB_OTRO")    Set(r, "ACTION_OTHER_DETAIL",   d.Observations);
+        if (cb == "CB_ENCARGO") Set(r, "ACTION_ENCARGO_DETAIL", d.Observations);
 
         return r;
 
@@ -640,7 +733,11 @@ public sealed class PersonnelActionService : IPersonnelActionService
                     a.DestinationJobId,
                     a.OriginJobId,
                     a.GeneratedDocumentId,
-                    a.ContractId
+                    a.ContractId,
+                    a.ActionTypeId,
+                    a.ActionNumber,
+                    a.EffectiveDate,
+                    a.ActionDate
                 })
                 .FirstOrDefaultAsync(ct);
 
@@ -738,11 +835,116 @@ public sealed class PersonnelActionService : IPersonnelActionService
                     "[ACTION] ✓ EmployeeId actualizado. ActionId={ActionId} | EmployeeId={EmployeeId}",
                     actionId, result.EmployeeId.Value);
             }
+            // El régimen inicial y el movimiento de INGRESO para el empleado nuevo
+            // ya quedan registrados dentro de EmployeeProvisioningOrchestrator.EnsureEmployeeAsync.
         }
         catch (Exception ex)
         {
             _logger.LogError(ex,
                 "[ACTION] ERROR en aprovisionamiento. ActionId={ActionId}", actionId);
+        }
+    }
+
+    /// <summary>
+    /// Registra el movimiento de personal (y el régimen laboral, si la acción lo establece)
+    /// para acciones de categoría MOVEMENT (Traslado, Encargo) sobre empleados ya existentes.
+    /// Se invoca desde <see cref="FinalizeAsync"/>, cuando la acción queda FINALIZADA
+    /// (estado terminal — ya no puede anularse). No bloquea la finalización si falla.
+    /// </summary>
+    private async Task RegisterMovementAndRegimeFromActionAsync(int actionId, int updatedBy, CancellationToken ct)
+    {
+        var action = await _db.PersonnelActions
+            .AsNoTracking()
+            .Where(a => a.ActionId == actionId)
+            .Select(a => new
+            {
+                a.EmployeeId,
+                a.EmployeeTypeId,
+                a.ContractId,
+                a.DestinationDepartmentId,
+                a.OriginDepartmentId,
+                a.DestinationJobId,
+                a.ActionTypeId,
+                a.ActionNumber,
+                a.EffectiveDate,
+                a.ActionDate,
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (action is null || (action.EmployeeId ?? 0) == 0)
+        {
+            _logger.LogWarning(
+                "[MOVEMENT] Registro omitido: sin EmployeeId para ActionId={ActionId}.", actionId);
+            return;
+        }
+
+        var effectiveFrom = action.EffectiveDate ?? action.ActionDate;
+        var actionType = await _personnelActionType.GetByIdAsync(action.ActionTypeId, ct);
+
+        try
+        {
+            if (action.DestinationJobId.HasValue && action.DestinationDepartmentId.HasValue)
+            {
+                var movementTypeId = actionType?.Code is null
+                    ? null
+                    : await _db.RefTypes
+                        .AsNoTracking()
+                        .Where(r => r.Category == "MOVEMENT_TYPE" && r.Name == actionType.Code && r.IsActive)
+                        .Select(r => (int?)r.TypeId)
+                        .FirstOrDefaultAsync(ct);
+
+                await _movementsService.CreateAsync(new PersonnelMovements
+                {
+                    EmployeeId = action.EmployeeId!.Value,
+                    ContractId = action.ContractId,
+                    JobId = action.DestinationJobId.Value,
+                    OriginDepartmentId = action.OriginDepartmentId,
+                    DestinationDepartmentId = action.DestinationDepartmentId.Value,
+                    MovementDate = effectiveFrom,
+                    MovementTypeId = movementTypeId,
+                    PersonnelActionId = actionId,
+                    IsActive = true,
+                    CreatedBy = updatedBy,
+                    CreatedAt = DateTime.Now,
+                }, ct);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "[MOVEMENT] Registro omitido: sin DestinationJobId/DestinationDepartmentId. ActionId={ActionId}.",
+                    actionId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[MOVEMENT] ERROR registrando movimiento para ActionId={ActionId}.", actionId);
+        }
+
+        if (!action.EmployeeTypeId.HasValue) return;
+
+        try
+        {
+            await _laborRegimeService.CreateAsync(new DTOs.EmployeeLaborRegime.EmployeeLaborRegimeCreateDto
+            {
+                EmployeeId = action.EmployeeId!.Value,
+                LaborRegimeId = action.EmployeeTypeId.Value,
+                DepartmentId = action.DestinationDepartmentId,
+                JobId = action.DestinationJobId,
+                IsIndefinite = false,
+                DocumentType = "PERSONNEL_ACTION",
+                DocumentNumber = action.ActionNumber,
+                SourcePersonnelActionId = actionId,
+                EffectiveFrom = effectiveFrom,
+            }, updatedBy, ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogInformation(ex,
+                "[LABOR-REGIME] Registro omitido para ActionId={ActionId}: {Message}", actionId, ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[LABOR-REGIME] ERROR registrando régimen laboral para ActionId={ActionId}.", actionId);
         }
     }
 

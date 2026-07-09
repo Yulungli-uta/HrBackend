@@ -46,6 +46,8 @@ namespace WsUtaSystem.Application.DTOs.TimePlanningExecution
         public int OvertimeMinutes { get; set; }
         public int NightMinutes { get; set; }
         public int HolidayMinutes { get; set; }
+        /// <summary>Minutos realmente trabajados fuera de la ventana planificada (antes del inicio o después del fin del plan).</summary>
+        public int ExceededMinutes { get; set; }
         public int? VerifiedBy { get; set; }
         public string? VerifiedByName { get; set; }
         public DateTime? VerifiedAt { get; set; }

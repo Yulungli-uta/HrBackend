@@ -14,4 +14,7 @@ public interface IPersonnelActionTypeService : IService<PersonnelActionType, int
     /// El número tiene el formato {prefix}-{year}-{seq:D3} (ej: DAP-2026-001).
     /// </summary>
     Task<NextDocumentNumberDto> GetNextNumberAsync(int personnelActionTypeId, CancellationToken ct = default);
+
+    /// <summary>Actualiza únicamente la plantilla predeterminada de un tipo de acción, sin afectar el resto de campos.</summary>
+    Task SetDefaultTemplateAsync(int personnelActionTypeId, int? templateId, CancellationToken ct = default);
 }

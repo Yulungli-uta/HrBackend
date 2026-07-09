@@ -12,6 +12,7 @@
         public int OvertimeMinutes { get; set; } = 0;
         public int NightMinutes { get; set; } = 0;
         public int HolidayMinutes { get; set; } = 0;
+        public int ExceededMinutes { get; set; } = 0;
         public int? VerifiedBy { get; set; }
         public DateTime? VerifiedAt { get; set; }
         public string? Comments { get; set; }

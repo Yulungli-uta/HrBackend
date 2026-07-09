@@ -2,18 +2,20 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
-using WsUtaSystem.Application.Interfaces.Reports;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Reports.Abstractions;
 using WsUtaSystem.Reports.Core;
 
 namespace WsUtaSystem.Reports.Sources;
 
 /// <summary>
-/// Origen de datos para el reporte de dependencias/departamentos (migración v1→v2).
+/// Origen de datos para el reporte de dependencias/departamentos.
+/// Consulta EF Core directamente (arquitectura v2 genérica) — ya no depende de
+/// HR.tbl_Faculties, tabla obsoleta eliminada del esquema real.
 /// </summary>
 public sealed class DepartmentsReportSource : IReportSource
 {
-    private readonly IReportRepository _repository;
+    private readonly IDepartmentsReportService _service;
     private readonly ILogger<DepartmentsReportSource> _logger;
 
     public ReportType ReportType => ReportType.Departments;
@@ -39,10 +41,10 @@ public sealed class DepartmentsReportSource : IReportSource
         new(ColStatus,    "Estado",            Width: 1.0f, Alignment: ColumnAlignment.Center),
     ];
 
-    public DepartmentsReportSource(IReportRepository repository, ILogger<DepartmentsReportSource> logger)
+    public DepartmentsReportSource(IDepartmentsReportService service, ILogger<DepartmentsReportSource> logger)
     {
-        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
-        _logger     = logger     ?? throw new ArgumentNullException(nameof(logger));
+        _service = service ?? throw new ArgumentNullException(nameof(service));
+        _logger  = logger  ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<ReportDefinition> BuildAsync(ReportFilterDto filter, HttpContext context)
@@ -54,7 +56,7 @@ public sealed class DepartmentsReportSource : IReportSource
             "Building Departments report. IncludeInactive={IncludeInactive}",
             filter.IncludeInactive);
 
-        var data    = await _repository.GetDepartmentsReportDataAsync(filter);
+        var data    = await _service.GetDepartmentsDataAsync(filter, context.RequestAborted);
         var records = data?.ToList() ?? [];
 
         _logger.LogInformation("Departments report: {Count} records.", records.Count);

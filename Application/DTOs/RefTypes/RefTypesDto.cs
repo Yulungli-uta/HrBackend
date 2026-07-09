@@ -8,4 +8,5 @@ public class RefTypesDto
     public string Description { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string? Metadata { get; set; }
 }

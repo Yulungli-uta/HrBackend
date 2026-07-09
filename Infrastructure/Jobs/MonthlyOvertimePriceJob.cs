@@ -11,8 +11,9 @@ public sealed class MonthlyOvertimePriceJob : BaseJob
 
     public MonthlyOvertimePriceJob(
         IOvertimePriceService overtimeService,
-        ILogger<MonthlyOvertimePriceJob> logger)
-        : base(logger)
+        ILogger<MonthlyOvertimePriceJob> logger,
+        IJobExecutionLogService jobExecutionLogService)
+        : base(logger, jobExecutionLogService)
     {
         _overtimeService = overtimeService;
     }

@@ -63,11 +63,51 @@ public class TimeBalancesService : Service<TimeBalances, int>, ITimeBalancesServ
             .Select(e => e.EmployeeId)     // <-- si tu ID se llama distinto, cámbialo
             .ToList();
 
+        // PUNTO 3.4: además de los activos, incluir empleados inactivos cuyo
+        // último contrato (sin addendum que lo extienda) haya terminado DENTRO
+        // del mes que se está acreditando, para que reciban su liquidación
+        // proporcional final (HR.sp_hr_AccrueVacationBalance modo MONTHLY ya
+        // prorratea contra ese EndDate). No se incluyen inactivos de meses
+        // anteriores — esos ya no deben seguir acreditando. Reutiliza la misma
+        // verificación de "contrato realmente terminado" que
+        // ContractExpirationService.ProcessExpiredContractsAsync (sin addendum
+        // vigente con EndDate posterior). Solo aplica en modo MONTHLY, que es
+        // el único que hoy tiene la lógica de prorrateo por EndDate en el SP.
+        var employeeIdsToProcess = activeEmployeeIds;
+
+        if (string.Equals(mode, "MONTHLY", StringComparison.OrdinalIgnoreCase))
+        {
+            var periodStart = new DateTime(asOfDate.Year, asOfDate.Month, 1);
+            var periodEndExclusive = periodStart.AddMonths(1);
+
+            var terminatedPersonIds = await _db.Set<Contracts>()
+                .AsNoTracking()
+                .Where(c => c.EndDate >= periodStart && c.EndDate < periodEndExclusive
+                         && !_db.Set<Contracts>().Any(a => a.ParentID == c.ContractID && a.EndDate >= c.EndDate))
+                .Select(c => c.PersonID)
+                .Distinct()
+                .ToListAsync(ct);
+
+            var terminatedThisMonthIds = employees
+                .Where(e => !e.IsActive && terminatedPersonIds.Contains(e.PersonID))
+                .Select(e => e.EmployeeId)
+                .ToList();
+
+            if (terminatedThisMonthIds.Count > 0)
+            {
+                _logger.LogInformation(
+                    "AccrueVacationBalance incluyendo {Count} empleado(s) inactivo(s) con baja dentro del período {PeriodStart:yyyy-MM}",
+                    terminatedThisMonthIds.Count, periodStart);
+            }
+
+            employeeIdsToProcess = activeEmployeeIds.Concat(terminatedThisMonthIds).Distinct().ToList();
+        }
+
         _logger.LogInformation(
             "AccrueVacationBalance ALL employees count={Count} asOfDate={AsOfDate:yyyy-MM-dd} mode={Mode}",
-            activeEmployeeIds.Count, asOfDate, mode);
+            employeeIdsToProcess.Count, asOfDate, mode);
 
-        foreach (var empId in activeEmployeeIds)
+        foreach (var empId in employeeIdsToProcess)
         {
             ct.ThrowIfCancellationRequested();
 

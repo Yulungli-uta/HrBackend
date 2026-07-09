@@ -96,7 +96,18 @@ public sealed record PersonnelActionDetailDto(
     DateTime? CreatedAt,
     int? CreatedBy,
     DateTime? UpdatedAt,
-    int? UpdatedBy
+    int? UpdatedBy,
+
+    // 2026-07-06: si el tipo de esta acción participa en la cadena de "vigente"
+    // (Nombramiento, Traslado, Encargo, Cambio de Sueldo, Asistencia/Horario).
+    bool ActionTypeReachesVigente,
+
+    // 2026-07-06: encontrados sin poblar — el frontend (UploadSignedDocumentDialog.tsx,
+    // PersonnelActionActions.tsx) ya los esperaba con este mismo nombre para disparar
+    // el aprovisionamiento/deshabilitación automática de AD al cargar el documento
+    // firmado, pero el DTO nunca los incluía — siempre llegaban como undefined/false.
+    bool ActionTypeRequiresAdUserCreation,
+    bool ActionTypeRequiresAdUserDisable
 );
 
 // ── Solicitudes ──────────────────────────────────────────────────────────────────
@@ -202,7 +213,13 @@ public sealed record PersonnelActionQueryFilter(
     DateOnly? StartDate,
     DateOnly? EndDate,
     int Page = 1,
-    int PageSize = 20
+    int PageSize = 20,
+    /// <summary>
+    /// Departamentos permitidos según el scope de acceso del usuario (UserAccessScope).
+    /// Se valida contra DestinationDepartmentId; si la acción no tiene destino, se usa
+    /// OriginDepartmentId como referencia. Null = sin restricción.
+    /// </summary>
+    IReadOnlyList<int>? AllowedDepartmentIds = null
 );
 
 /// <summary>Resultado paginado de acciones de personal.</summary>

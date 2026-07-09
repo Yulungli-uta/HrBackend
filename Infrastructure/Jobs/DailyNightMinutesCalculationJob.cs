@@ -11,8 +11,9 @@ public sealed class DailyNightMinutesCalculationJob : BaseJob
     private readonly ILogger<DailyNightMinutesCalculationJob> _logger;
     public DailyNightMinutesCalculationJob(
         IAttendanceCalculationService attendanceService,
-        ILogger<DailyNightMinutesCalculationJob> logger)
-        : base(logger)
+        ILogger<DailyNightMinutesCalculationJob> logger,
+        IJobExecutionLogService jobExecutionLogService)
+        : base(logger, jobExecutionLogService)
     {
         _attendanceService = attendanceService;
         _logger = logger;

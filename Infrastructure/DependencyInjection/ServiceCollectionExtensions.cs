@@ -1,6 +1,7 @@
 ﻿using FluentValidation;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using Serilog;
@@ -111,6 +112,10 @@ public static class ServiceCollectionExtensions
         // Elimina los proveedores de logging nativos (Console, Debug, EventSource, etc.)
         builder.Logging.ClearProviders();
 
+        // Ruta del archivo de log: absoluta en Production (appsettings.Production.json),
+        // relativa al working directory en el resto de entornos.
+        var logFilePath = builder.Configuration["Serilog:FilePath"] ?? "logs/log-.txt";
+
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             // Reducir ruido de logs internos de ASP.NET Core y EF Core
@@ -120,8 +125,8 @@ public static class ServiceCollectionExtensions
             .Enrich.FromLogContext()
             // Salida a consola para observabilidad en tiempo real
             .WriteTo.Console()
-            // Archivo rotativo diario en carpeta /logs relativa al directorio de trabajo
-            .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day)
+            // Archivo rotativo diario
+            .WriteTo.File(logFilePath, rollingInterval: RollingInterval.Day)
             .CreateLogger();
 
         // Integra Serilog con el host de ASP.NET Core
@@ -201,6 +206,29 @@ public static class ServiceCollectionExtensions
             {
                 Type = "string",
                 Example = new OpenApiString("00:00:00")
+            });
+
+            // Botón "Authorize" en la UI de Swagger: pega el token JWT (sin el prefijo
+            // "Bearer ") y todas las peticiones "Try it out" lo incluyen automáticamente
+            // en el header Authorization.
+            c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+            {
+                Name = "Authorization",
+                Type = SecuritySchemeType.ApiKey,
+                Scheme = "Bearer",
+                BearerFormat = "JWT",
+                In = ParameterLocation.Header,
+                Description = "Pega el token JWT (sin el prefijo 'Bearer '): eyJhbGciOi..."
+            });
+            c.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                {
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+                    },
+                    Array.Empty<string>()
+                }
             });
 
             // Soporte para herencia y tipos polimórficos en el esquema OpenAPI
@@ -383,6 +411,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<
             WsUtaSystem.Application.Interfaces.Services.IAttendanceCalculationsReportService,
             WsUtaSystem.Application.Services.AttendanceCalculationsReportService>();
+
+        // ── Reportes v2: Dependencias/Departamentos ───────────────────────────────────────
+        services.AddScoped<
+            WsUtaSystem.Application.Interfaces.Repositories.IDepartmentsReportRepository,
+            WsUtaSystem.Infrastructure.Repositories.DepartmentsReportRepository>();
+
+        services.AddScoped<
+            WsUtaSystem.Application.Interfaces.Services.IDepartmentsReportService,
+            WsUtaSystem.Application.Services.DepartmentsReportService>();
 
         services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportSource,
@@ -626,6 +663,25 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPeopleRepository, WsUtaSystem.Infrastructure.Repositories.PeopleRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPeopleService, WsUtaSystem.Application.Services.PeopleService>();
 
+        // ── Módulo: Alcance de acceso por departamento (UserAccessScope) ────────
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IUserAccessScopeRepository, WsUtaSystem.Infrastructure.Repositories.UserAccessScopeRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IUserAccessScopeService, WsUtaSystem.Application.Services.UserAccessScopeService>();
+
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IResignationRetirementRepository, WsUtaSystem.Infrastructure.Repositories.ResignationRetirementRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IResignationRetirementService, WsUtaSystem.Application.Services.ResignationRetirementService>();
+
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEmployeeCertificateRepository, WsUtaSystem.Infrastructure.Repositories.EmployeeCertificateRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmployeeCertificateService, WsUtaSystem.Application.Services.EmployeeCertificateService>();
+
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEmployeeInternalRequestRepository, WsUtaSystem.Infrastructure.Repositories.EmployeeInternalRequestRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmployeeInternalRequestService, WsUtaSystem.Application.Services.EmployeeInternalRequestService>();
+
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmployeeSelfServiceService, WsUtaSystem.Application.Services.EmployeeSelfServiceService>();
+
+        // ── Módulo: Régimen laboral por empleado (EmployeeLaborRegime) ──────────
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEmployeeLaborRegimeRepository, WsUtaSystem.Infrastructure.Repositories.EmployeeLaborRegimeRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmployeeLaborRegimeService, WsUtaSystem.Application.Services.EmployeeLaborRegimeService>();
+
         // ── Módulo: Permisos ──────────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPermissionTypesRepository, WsUtaSystem.Infrastructure.Repositories.PermissionTypesRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPermissionTypesService, WsUtaSystem.Application.Services.PermissionTypesService>();
@@ -684,6 +740,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITrainingsRepository, WsUtaSystem.Infrastructure.Repositories.TrainingsRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITrainingsService, WsUtaSystem.Application.Services.TrainingsService>();
 
+        // ── Módulo: Idiomas ───────────────────────────────────────────────────
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ILanguagesRepository, WsUtaSystem.Infrastructure.Repositories.LanguagesRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ILanguagesService, WsUtaSystem.Application.Services.LanguagesService>();
+
         // ── Módulo: Vacaciones ────────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IVacationsRepository, WsUtaSystem.Infrastructure.Repositories.VacationsRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVacationsService, WsUtaSystem.Application.Services.VacationsService>();
@@ -726,6 +786,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPayrollDiscountsService, PayrollDiscountsService>();
         services.AddScoped<IPayrollSubsidiesService, PayrollSubsidiesService>();
         services.AddScoped<IEncryptionService, EncryptionService>();
+        services.AddScoped<IJobExecutionLogService, WsUtaSystem.Infrastructure.Services.JobExecutionLogService>();
 
         // ── Módulo: Planificacion de cambio horario ────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IScheduleChangePlanRepository, WsUtaSystem.Infrastructure.Repositories.ScheduleChangePlanRepository>();
@@ -759,6 +820,31 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardLocationRotationService, WsUtaSystem.Application.Services.Guards.GuardLocationRotationService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardEmployeeSpecialRuleService, WsUtaSystem.Application.Services.Guards.GuardEmployeeSpecialRuleService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardVacationService, WsUtaSystem.Application.Services.Guards.GuardVacationService>();
+
+        return services;
+    }
+
+    // =========================================================
+    // ACADEMIC PROMOTION
+    // Perfil académico docente (experiencia, publicaciones, capacitaciones,
+    // investigación, tesis, idiomas, evaluación) con switch mock/BD.
+    // =========================================================
+
+    /// <summary>
+    /// Registra el módulo de perfil académico docente (academic-promotion):
+    /// opciones tipadas (AcademicPromotion en appsettings.json), repositorio
+    /// especializado, servicio orquestador y proveedor de datos mock.
+    /// </summary>
+    public static IServiceCollection AddAcademicPromotionServices(
+        this IServiceCollection services,
+        Microsoft.Extensions.Configuration.IConfiguration configuration)
+    {
+        services.Configure<WsUtaSystem.Application.Common.Options.AcademicPromotionOptions>(
+            configuration.GetSection("AcademicPromotion"));
+
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IAcademicPromotionRepository, WsUtaSystem.Infrastructure.Repositories.AcademicPromotionRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IAcademicPromotionMockProvider, WsUtaSystem.Application.Services.AcademicPromotionMockProvider>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IAcademicPromotionService, WsUtaSystem.Application.Services.AcademicPromotionService>();
 
         return services;
     }
@@ -906,10 +992,17 @@ public static class ServiceCollectionExtensions
         // HttpClient para llamadas al servicio externo de autenticación/validación
         services.AddHttpClient();
 
-        // Servicio de validación de tokens JWT contra el servidor de autenticación
-        services.AddScoped<
-            WsUtaSystem.Infrastructure.Services.ITokenValidationService,
-            WsUtaSystem.Infrastructure.Services.TokenValidationService>();
+        // Servicio de validación de tokens JWT: "Remote" (default, valida contra RepositoryUta
+        // por request) o "Local" (valida la firma RS256 localmente usando JWKS cacheado).
+        services.AddScoped<WsUtaSystem.Infrastructure.Services.ITokenValidationService>(sp =>
+        {
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var mode = cfg["AuthService:ValidationMode"] ?? "Remote";
+
+            return mode.Equals("Local", StringComparison.OrdinalIgnoreCase)
+                ? ActivatorUtilities.CreateInstance<WsUtaSystem.Infrastructure.Services.LocalJwtValidationService>(sp)
+                : ActivatorUtilities.CreateInstance<WsUtaSystem.Infrastructure.Services.TokenValidationService>(sp);
+        });
 
         // Permite acceder a IHttpContextAccessor para leer headers y claims del request actual
         services.AddHttpContextAccessor();
@@ -1014,6 +1107,11 @@ public static class ServiceCollectionExtensions
 
         // ── Motor de plantillas (sustitución de tokens {{CAMPO}}) ─────────────────
         services.AddSingleton<IDocumentTemplateEngine, DocumentTemplateEngine>();
+
+        // ── Logo institucional: fuente única usada por reportes (QuestPDF) y por el
+        //    resolver de campos de plantillas (HTML/Puppeteer). Singleton porque el
+        //    archivo no cambia en tiempo de ejecución.
+        services.AddSingleton<IInstitutionalLogoService, WsUtaSystem.Infrastructure.Services.InstitutionalLogoService>();
 
         // ── Resolver de campos (Employee, Contract, Movement, System, Manual) ─────
         services.AddScoped<IDocumentFieldResolver, DocumentFieldResolver>();

@@ -21,6 +21,11 @@ namespace WsUtaSystem.Models
 
         public DocumentTemplate? DefaultTemplate { get; set; }
 
+        /// <summary>Plantilla alterna a usar cuando el contrato se firma por delegación (Contracts.IsDelegation = true).</summary>
+        public int? DelegationTemplateId { get; set; }
+
+        public DocumentTemplate? DelegationTemplate { get; set; }
+
         /// <summary>Prefijo para numeración de documentos (ej: "CONT-OCAS", "CONT-TITU").</summary>
         public string? NumberingPrefix { get; set; }
 

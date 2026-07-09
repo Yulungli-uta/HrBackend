@@ -7,6 +7,9 @@ public interface IContractTypeService : IService<ContractType, int>
     /// <summary>Asigna o quita la plantilla por defecto de un tipo de contrato.</summary>
     Task SetDefaultTemplateAsync(int contractTypeId, int? templateId, CancellationToken ct = default);
 
+    /// <summary>Asigna o quita la plantilla de delegación de un tipo de contrato.</summary>
+    Task SetDelegationTemplateAsync(int contractTypeId, int? templateId, CancellationToken ct = default);
+
     /// <summary>Obtiene un tipo de contrato con la info de su plantilla por defecto.</summary>
     Task<ContractTypeWithTemplateDto?> GetWithDefaultTemplateAsync(int contractTypeId, CancellationToken ct = default);
 

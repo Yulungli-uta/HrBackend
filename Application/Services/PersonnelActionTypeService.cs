@@ -17,6 +17,9 @@ public sealed class PersonnelActionTypeService
     public Task<List<PersonnelActionType>> GetAllActiveAsync(CancellationToken ct = default)
         => _repo.GetAllActiveAsync(ct);
 
+    public Task SetDefaultTemplateAsync(int personnelActionTypeId, int? templateId, CancellationToken ct = default)
+        => _repo.SetDefaultTemplateAsync(personnelActionTypeId, templateId, ct);
+
     public async Task<NextDocumentNumberDto> GetNextNumberAsync(
         int personnelActionTypeId,
         CancellationToken ct = default)

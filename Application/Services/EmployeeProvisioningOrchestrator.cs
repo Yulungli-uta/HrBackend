@@ -57,6 +57,8 @@ public sealed class EmployeeProvisioningOrchestrator : IEmployeeProvisioningOrch
     private readonly IEmployeeProvisioningClient _provisioningClient;
     private readonly IEmailBuilder _emailBuilder;
     private readonly IParametersRepository _parametersRepository;
+    private readonly IEmployeeLaborRegimeService _laborRegimeService;
+    private readonly IPersonnelMovementsService _movementsService;
     private readonly ILogger<EmployeeProvisioningOrchestrator> _logger;
 
     public EmployeeProvisioningOrchestrator(
@@ -65,6 +67,8 @@ public sealed class EmployeeProvisioningOrchestrator : IEmployeeProvisioningOrch
         IEmployeeProvisioningClient provisioningClient,
         IEmailBuilder emailBuilder,
         IParametersRepository parametersRepository,
+        IEmployeeLaborRegimeService laborRegimeService,
+        IPersonnelMovementsService movementsService,
         ILogger<EmployeeProvisioningOrchestrator> logger)
     {
         _db                   = db;
@@ -72,6 +76,8 @@ public sealed class EmployeeProvisioningOrchestrator : IEmployeeProvisioningOrch
         _provisioningClient   = provisioningClient;
         _emailBuilder         = emailBuilder;
         _parametersRepository = parametersRepository;
+        _laborRegimeService   = laborRegimeService;
+        _movementsService     = movementsService;
         _logger               = logger;
     }
 
@@ -288,7 +294,107 @@ public sealed class EmployeeProvisioningOrchestrator : IEmployeeProvisioningOrch
             created.EmployeeId, request.PersonId,
             request.EmployeeType, request.DepartmentId, hireDate);
 
+        await RegisterInitialRegimeAndMovementAsync(created, request, hireDate, ct);
+
         return created;
+    }
+
+    /// <summary>
+    /// Registra el régimen inicial (IsPrincipal=true) y el movimiento de INGRESO
+    /// para un empleado recién creado. No bloquea el aprovisionamiento si falla.
+    /// </summary>
+    private async Task RegisterInitialRegimeAndMovementAsync(
+        Employees employee, ProvisioningOrchestrationRequest request, DateOnly hireDate, CancellationToken ct)
+    {
+        var (documentType, contractId, actionId) = ParseSourceReference(request.SourceReference);
+
+        try
+        {
+            if (request.EmployeeType > 0)
+            {
+                await _laborRegimeService.CreateAsync(new DTOs.EmployeeLaborRegime.EmployeeLaborRegimeCreateDto
+                {
+                    EmployeeId = employee.EmployeeId,
+                    LaborRegimeId = request.EmployeeType,
+                    DepartmentId = request.DepartmentId,
+                    JobId = request.JobId,
+                    IsIndefinite = false,
+                    DocumentType = documentType,
+                    DocumentNumber = null,
+                    SourceContractId = contractId,
+                    SourcePersonnelActionId = actionId,
+                    EffectiveFrom = hireDate,
+                }, request.UpdatedBy, ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[ORCHESTRATOR][LABOR-REGIME] ERROR registrando régimen inicial. EmployeeId={EmployeeId}",
+                employee.EmployeeId);
+        }
+
+        try
+        {
+            if (request.JobId.HasValue)
+            {
+                var movementTypeId = await ResolveMovementTypeIdAsync("INGRESO", ct);
+                await _movementsService.CreateAsync(new PersonnelMovements
+                {
+                    EmployeeId = employee.EmployeeId,
+                    ContractId = contractId,
+                    JobId = request.JobId.Value,
+                    OriginDepartmentId = null,
+                    DestinationDepartmentId = request.DepartmentId ?? 0,
+                    MovementDate = hireDate,
+                    MovementTypeId = movementTypeId,
+                    PersonnelActionId = actionId,
+                    IsActive = true,
+                    CreatedBy = request.UpdatedBy,
+                    CreatedAt = DateTime.Now,
+                }, ct);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "[ORCHESTRATOR][MOVEMENT] Registro de INGRESO omitido: sin JobId. EmployeeId={EmployeeId}",
+                    employee.EmployeeId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[ORCHESTRATOR][MOVEMENT] ERROR registrando movimiento de INGRESO. EmployeeId={EmployeeId}",
+                employee.EmployeeId);
+        }
+    }
+
+    /// <summary>Parsea "Contract:123" / "PersonnelAction:456" en (DocumentType, ContractId, PersonnelActionId).</summary>
+    private static (string DocumentType, int? ContractId, int? ActionId) ParseSourceReference(string? sourceReference)
+    {
+        if (!string.IsNullOrWhiteSpace(sourceReference))
+        {
+            var parts = sourceReference.Split(':', 2);
+            if (parts.Length == 2 && int.TryParse(parts[1], out var id))
+            {
+                if (parts[0].Equals("Contract", StringComparison.OrdinalIgnoreCase))
+                    return ("CONTRACT", id, null);
+                if (parts[0].Equals("PersonnelAction", StringComparison.OrdinalIgnoreCase))
+                    return ("PERSONNEL_ACTION", null, id);
+            }
+        }
+        return ("MIGRATION", null, null);
+    }
+
+    /// <summary>Resuelve el TypeId de HR.ref_Types (Category='MOVEMENT_TYPE') por nombre.</summary>
+    private async Task<int?> ResolveMovementTypeIdAsync(string name, CancellationToken ct)
+    {
+        var id = await _db.RefTypes
+            .AsNoTracking()
+            .Where(r => r.Category == "MOVEMENT_TYPE" && r.Name == name && r.IsActive)
+            .Select(r => r.TypeId)
+            .FirstOrDefaultAsync(ct);
+        return id == 0 ? null : id;
     }
 
     // ══════════════════════════════════════════════════════════════════════════

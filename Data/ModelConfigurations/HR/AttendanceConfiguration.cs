@@ -116,6 +116,7 @@ public sealed class OvertimeConfiguration : IEntityTypeConfiguration<Overtime>
         e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
         e.Property(x => x.OvertimeType).HasMaxLength(50);
         e.Property(x => x.Status).HasMaxLength(20);
+        e.Property(x => x.PlanEmployeeId).HasColumnName("PlanEmployeeID");
     }
 }
 

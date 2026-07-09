@@ -11,4 +11,5 @@ public class PermissionTypesDto
     public int? LeadTimeHours { get; set; }
     public bool IsMedical { get; set; }
     public bool IsActive { get; set; }
+    public int? ContractTypeId { get; set; }
 }

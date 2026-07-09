@@ -18,6 +18,7 @@ public sealed class RefTypesConfiguration : IEntityTypeConfiguration<RefTypes>
         e.Property(x => x.Category).HasMaxLength(50).IsRequired();
         e.Property(x => x.Name).HasMaxLength(100).IsRequired();
         e.Property(x => x.Description).HasMaxLength(255);
+        e.Property(x => x.Metadata).HasColumnName("Metadata");
     }
 }
 
@@ -113,6 +114,8 @@ public sealed class StoredFileConfiguration : IEntityTypeConfiguration<StoredFil
             .HasColumnType("tinyint")
             .IsRequired();
         e.Property(x => x.CreatedAt).HasDefaultValueSql("GETDATE()");
+        e.Property(x => x.DocumentReferenceNumber).HasMaxLength(100);
+        e.Property(x => x.DocumentReferenceDate).HasColumnType("date");
         e.Property(x => x.FilePathHash)
             .HasColumnType("binary(32)")
             .ValueGeneratedOnAddOrUpdate()

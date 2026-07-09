@@ -121,6 +121,9 @@ public class EntityToDtoProfile : Profile
         CreateMap<WsUtaSystem.Models.Trainings, WsUtaSystem.Application.DTOs.Trainings.TrainingsDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.Trainings, WsUtaSystem.Application.DTOs.Trainings.TrainingsCreateDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.Trainings, WsUtaSystem.Application.DTOs.Trainings.TrainingsUpdateDto>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.Languages, WsUtaSystem.Application.DTOs.Languages.LanguagesDto>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.Languages, WsUtaSystem.Application.DTOs.Languages.LanguagesCreateDto>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.Languages, WsUtaSystem.Application.DTOs.Languages.LanguagesUpdateDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.Vacations, WsUtaSystem.Application.DTOs.Vacations.VacationsDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.Vacations, WsUtaSystem.Application.DTOs.Vacations.VacationsCreateDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.Vacations, WsUtaSystem.Application.DTOs.Vacations.VacationsUpdateDto>().ReverseMap();

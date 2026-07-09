@@ -67,6 +67,7 @@ public class ContractsDto
 
     public int? AuthorityNominatorId { get; set; }
     public int? DthDirectorId { get; set; }
+    public bool IsDelegation { get; set; }
 
     /// <summary>Régimen laboral (LOSEP/LOES/CT). Auto-poblado desde la solicitud. Solo lectura.</summary>
     public int? LaborRegimeID { get; set; }

@@ -96,8 +96,8 @@ public sealed class AttendanceSummaryReportSource : IReportSource
         ArgumentNullException.ThrowIfNull(context);
 
         _logger.LogInformation(
-            "Building AttendanceSummary report. Filter: StartDate={Start}, EndDate={End}, EmployeeId={EmpId}, EmployeeType={EmpType}",
-            filter.StartDate, filter.EndDate, filter.EmployeeId, filter.EmployeeType);
+            "Building AttendanceSummary report. Filter: StartDate={Start}, EndDate={End}, EmployeeId={EmpId}, EmployeeTypeId={EmpTypeId}",
+            filter.StartDate, filter.EndDate, filter.EmployeeId, filter.EmployeeTypeId);
 
         var data = await _repository.GetAttendanceSumaryReportDataAsync(filter);
         var records = data?.ToList() ?? [];
@@ -174,8 +174,8 @@ public sealed class AttendanceSummaryReportSource : IReportSource
         else if (filter.EndDate.HasValue)
             parts.Add($"Hasta: {filter.EndDate:dd/MM/yyyy}");
 
-        if (!string.IsNullOrWhiteSpace(filter.EmployeeType))
-            parts.Add($"Tipo de Empleado: {MapEmployeeType(int.TryParse(filter.EmployeeType, out var t) ? t : 0)}");
+        if (filter.EmployeeTypeId.HasValue)
+            parts.Add($"Tipo de Empleado: {MapEmployeeType(filter.EmployeeTypeId.Value)}");
 
         if (filter.EmployeeId.HasValue)
             parts.Add($"Empleado ID: {filter.EmployeeId}");

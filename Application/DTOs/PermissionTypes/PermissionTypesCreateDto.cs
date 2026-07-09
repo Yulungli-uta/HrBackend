@@ -9,6 +9,7 @@ public class PermissionTypesCreateDto
     public bool? AttachedFile { get; set; }
     public int MaxDays { get; set; }
     public int? LeadTimeHours { get; set; }
-    public bool IsMedical { get; set; } 
+    public bool IsMedical { get; set; }
     public bool IsActive { get; set; }
+    public int? ContractTypeId { get; set; }
 }

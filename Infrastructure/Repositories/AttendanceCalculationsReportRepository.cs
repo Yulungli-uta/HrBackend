@@ -227,4 +227,60 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
 
         return result.AsReadOnly();
     }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<AttendanceReportDto>> GetAttendanceDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        var startDate = filter.StartDate.HasValue
+            ? DateOnly.FromDateTime(filter.StartDate.Value)
+            : DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+
+        var endDate = filter.EndDate.HasValue
+            ? DateOnly.FromDateTime(filter.EndDate.Value)
+            : DateOnly.FromDateTime(DateTime.Today);
+
+        var query = from calc in _db.AttendanceCalculations.AsNoTracking()
+                    join emp in _db.Employees.AsNoTracking()
+                        on calc.EmployeeId equals emp.EmployeeId
+                    join person in _db.People.AsNoTracking()
+                        on emp.PersonID equals person.PersonId
+                    join dept in _db.Departments.AsNoTracking()
+                        on emp.DepartmentId equals dept.DepartmentId into deptGroup
+                    from dept in deptGroup.DefaultIfEmpty()
+                    where calc.WorkDate >= startDate && calc.WorkDate <= endDate
+                    select new { calc, emp, person, dept };
+
+        if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
+            query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
+
+        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
+            query = query.Where(x => x.emp.DepartmentId == filter.DepartmentId.Value);
+
+        var result = await query
+            .OrderBy(x => x.person.LastName)
+            .ThenBy(x => x.person.FirstName)
+            .ThenBy(x => x.calc.WorkDate)
+            .Select(x => new AttendanceReportDto
+            {
+                AttendanceDate       = x.calc.WorkDate.ToDateTime(TimeOnly.MinValue),
+                EmployeeId           = x.calc.EmployeeId,
+                EmployeeName         = x.person.FirstName + " " + x.person.LastName,
+                IdentificationNumber = x.person.IdCard,
+                DepartmentName       = x.dept != null ? x.dept.Name : string.Empty,
+                CheckIn              = x.calc.FirstPunchIn,
+                CheckOut             = x.calc.LastPunchOut,
+                HoursWorked          = x.calc.TotalWorkedMinutes / 60m,
+                Status               = x.calc.TardinessMin > 0 ? "Tardanza"
+                                        : x.calc.FirstPunchIn == null ? "Sin Entrada"
+                                        : x.calc.LastPunchOut == null ? "Sin Salida"
+                                        : "Normal",
+            })
+            .ToListAsync(ct);
+
+        return result.AsReadOnly();
+    }
 }

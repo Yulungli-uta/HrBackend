@@ -22,6 +22,9 @@
         public byte Status { get; set; }
         public DateTime? CreatedAt { get; set; }
 
+        public string? DocumentReferenceNumber { get; set; }
+        public DateOnly? DocumentReferenceDate { get; set; }
+
         // Calculado en backend (NO persistido)
         public string? FullPath { get; set; }
     }
