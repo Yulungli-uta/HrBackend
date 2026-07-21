@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.TimePlanning;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR
@@ -21,11 +22,13 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Lista todas las planificaciones.</summary>
         [HttpGet]
+        [RequirePermission("TIME_PLANNING.READ")]
         public async Task<IActionResult> GetAll(CancellationToken ct) =>
             Ok(_mapper.Map<List<TimePlanningResponseDTO>>(await _svc.GetAllAsync(ct)));
 
         /// <summary>Obtiene una planificación por ID.</summary>
         [HttpGet("{id:int}")]
+        [RequirePermission("TIME_PLANNING.READ")]
         public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
         {
             var planning = await _svc.GetByIdAsync(id, ct);
@@ -37,6 +40,7 @@ namespace WsUtaSystem.Controllers.HR
         /// Retorna lista vacía si no tiene planificaciones — nunca 404.
         /// </summary>
         [HttpGet("boss/{id:int}")]
+        [RequirePermission("TIME_PLANNING.READ")]
         public async Task<IActionResult> GetByCreateId([FromRoute] int id, CancellationToken ct)
         {
             var plannings = await _svc.GetByCreateBy(id, ct);
@@ -47,11 +51,13 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Obtiene planificaciones por empleado.</summary>
         [HttpGet("employee/{employeeId:int}")]
+        [RequirePermission("TIME_PLANNING.READ")]
         public async Task<IActionResult> GetByEmployee([FromRoute] int employeeId, CancellationToken ct) =>
             Ok(_mapper.Map<List<TimePlanningResponseDTO>>(await _svc.GetByEmployeeAsync(employeeId, ct)));
 
         /// <summary>Obtiene planificaciones por estado.</summary>
         [HttpGet("status/{statusTypeId:int}")]
+        [RequirePermission("TIME_PLANNING.READ")]
         public async Task<IActionResult> GetByStatus([FromRoute] int statusTypeId, CancellationToken ct) =>
             Ok(_mapper.Map<List<TimePlanningResponseDTO>>(await _svc.GetByStatusAsync(statusTypeId, ct)));
 
@@ -62,6 +68,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Crea una nueva planificación.</summary>
         [HttpPost]
+        [RequirePermission("TIME_PLANNING.CREATE")]
         public async Task<IActionResult> Create([FromBody] TimePlanningCreateDTO dto, CancellationToken ct)
         {
             //Console.WriteLine($"************varlores recibidos timePlannings {dto.ToString}");
@@ -100,6 +107,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Actualiza una planificación existente.</summary>
         [HttpPut("{id:int}")]
+        [RequirePermission("TIME_PLANNING.UPDATE")]
         public async Task<IActionResult> Update([FromRoute] int id, [FromBody] TimePlanningCreateDTO dto, CancellationToken ct)
         {
             var planning = _mapper.Map<TimePlanning>(dto);
@@ -109,6 +117,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Elimina una planificación por ID.</summary>
         [HttpDelete("{id:int}")]
+        [RequirePermission("TIME_PLANNING.DELETE")]
         public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
         {
             await _svc.DeleteAsync(id, ct);

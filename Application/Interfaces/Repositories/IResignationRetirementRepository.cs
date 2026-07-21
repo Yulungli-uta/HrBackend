@@ -22,6 +22,13 @@ public interface IResignationRetirementRepository
 
     Task<IReadOnlyList<ResignationRetirementStatusHistoryDto>> GetHistoryAsync(int requestId, CancellationToken ct = default);
 
+    /// <summary>
+    /// True si existe un StoredFile ACTIVO con ese FileId, vinculado exactamente a esta solicitud
+    /// (DirectoryCode/EntityType/EntityId de <see cref="ResignationRetirementDocument"/>). Evita
+    /// que se apruebe con el StoredFileId de un archivo ajeno a la solicitud.
+    /// </summary>
+    Task<bool> StoredFileBelongsToRequestAsync(int requestId, int storedFileId, CancellationToken ct = default);
+
     Task AddAsync(ResignationRetirementRequest entity, CancellationToken ct = default);
 
     Task AddHistoryAsync(ResignationRetirementStatusHistory history, CancellationToken ct = default);

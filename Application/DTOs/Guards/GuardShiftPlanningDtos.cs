@@ -82,6 +82,29 @@ public record UpdateGuardShiftPlanningStatusDto(
     string? Notes
 );
 
+// ─── Cancelación de planificación ────────────────────────────────────────────
+// No borra filas: marca IsActiveForAssignment=false (mismo flag que ya usa
+// GenerateAsync al sobrescribir con OverwriteExisting), por lo que el chequeo
+// de "ya está planificado" (HasActiveShiftOnDateAsync) libera la fecha
+// automáticamente sin tocar esa lógica.
+
+public record CancelGuardShiftPlanningDto(
+    string? Notes
+);
+
+// GroupId null = cancela todos los grupos en el rango de fechas indicado.
+public record CancelGuardShiftPlanningRangeDto(
+    int? GroupId,
+    DateOnly StartDate,
+    DateOnly EndDate,
+    string? Notes
+);
+
+public record CancelGuardShiftPlanningResultDto(
+    int Cancelled,
+    List<string> Messages
+);
+
 // ─── Generación Preview / Confirm ───────────────────────────────────────────
 
 public record GeneratePreviewRequestDto(

@@ -5,6 +5,7 @@
         AttendancePunch,
         VacationApproved,
         ContractGenerated,
-        AccountCreated
+        AccountCreated,
+        ResignationRetirementApproved
     }
 }

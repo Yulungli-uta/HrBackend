@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.VwAttendanceDay;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -15,12 +16,14 @@ public class VwAttendanceDayController : ControllerBase
 
     /// <summary>Lista todos los días de asistencia esperados vs trabajados.</summary>
     [HttpGet]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<VwAttendanceDayDto>>(await _svc.GetAllAsync(ct)));
 
     /// <summary>Obtiene asistencia por ID de empleado.</summary>
     /// <param name="employeeId">ID del empleado</param>
     [HttpGet("by-employee/{employeeId:int}")]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetByEmployeeId([FromRoute] int employeeId, CancellationToken ct) =>
         Ok(_mapper.Map<List<VwAttendanceDayDto>>(await _svc.GetByEmployeeIdAsync(employeeId, ct)));
 
@@ -28,6 +31,7 @@ public class VwAttendanceDayController : ControllerBase
     /// <param name="fromDate">Fecha desde</param>
     /// <param name="toDate">Fecha hasta</param>
     [HttpGet("by-date-range")]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetByDateRange([FromQuery] DateTime fromDate, [FromQuery] DateTime toDate, CancellationToken ct) =>
         Ok(_mapper.Map<List<VwAttendanceDayDto>>(await _svc.GetByDateRangeAsync(fromDate, toDate, ct)));
 }

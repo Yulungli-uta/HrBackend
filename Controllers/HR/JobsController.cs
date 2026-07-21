@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Jobs;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR
@@ -82,6 +83,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Crea un nuevo registro.</summary>
         [HttpPost]
+        [RequirePermission("CATALOGS.CREATE")]
         public async Task<IActionResult> Create([FromBody] CreateJobDto dto, CancellationToken ct)
         {
             var entityObj = _mapper.Map<Job>(dto);
@@ -92,6 +94,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Actualiza un registro existente.</summary>
         [HttpPut("{id:int}")]
+        [RequirePermission("CATALOGS.UPDATE")]
         public async Task<IActionResult> Update([FromRoute] int id, [FromBody] UpdateJobDto dto, CancellationToken ct)
         {
             var entityObj = _mapper.Map<Job>(dto);
@@ -101,6 +104,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Elimina un registro por ID.</summary>
         [HttpDelete("{id:int}")]
+        [RequirePermission("CATALOGS.DELETE")]
         public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
         {
             await _svc.DeleteAsync(id, ct);

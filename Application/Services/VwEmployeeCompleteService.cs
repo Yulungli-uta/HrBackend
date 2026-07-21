@@ -48,6 +48,19 @@ namespace WsUtaSystem.Application.Services
             return await _repository.GetPagedAsync(search, page, pageSize, ct);
         }
 
+        /// <inheritdoc/>
+        public async Task<PagedResult<VwEmployeeComplete>> GetPagedAsync(
+            string? search,
+            int? employeeType,
+            string? department,
+            bool? isActive,
+            int page,
+            int pageSize,
+            CancellationToken ct = default)
+        {
+            return await _repository.GetPagedAsync(search, employeeType, department, isActive, page, pageSize, ct);
+        }
+
         public async Task<EmployeeCompleteStatsDto> GetStatsAsync(CancellationToken ct = default)
         {
             return await _repository.GetStatsAsync(ct);

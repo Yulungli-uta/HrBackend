@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using WsUtaSystem.Application.DTOs.Provinces;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -41,6 +42,7 @@ public class ProvincesController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("CATALOGS.CREATE")]
     public async Task<IActionResult> Create([FromBody] ProvincesCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Provinces>(dto);
@@ -51,6 +53,7 @@ public class ProvincesController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("CATALOGS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] string id, [FromBody] ProvincesUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Provinces>(dto);
@@ -60,6 +63,7 @@ public class ProvincesController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("CATALOGS.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] string id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

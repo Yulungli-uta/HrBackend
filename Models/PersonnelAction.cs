@@ -1,4 +1,5 @@
 using WsUtaSystem.Application.Interfaces.Auditable;
+using WsUtaSystem.Application.Common.Interfaces;
 
 namespace WsUtaSystem.Models;
 
@@ -7,10 +8,13 @@ namespace WsUtaSystem.Models;
 /// Captura todos los datos del formulario institucional de la UTA
 /// y se vincula al documento PDF generado.
 /// </summary>
-public sealed class PersonnelAction : IAuditable
+public sealed class PersonnelAction : IAuditable, ISoftDeletable
 {
     /// <summary>Clave primaria autoincremental.</summary>
     public int ActionId { get; set; }
+
+    /// <summary>Soft-delete: true = eliminado lógicamente, excluido de consultas normales.</summary>
+    public bool IsDeleted { get; set; } = false;
 
     /// <summary>FK a hr.tbl_People. Siempre poblado; permite crear el empleado si aún no existe.</summary>
     public int PersonId { get; set; }

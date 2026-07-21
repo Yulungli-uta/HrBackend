@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using WsUtaSystem.Application.DTOs.PersonnelMovements;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -18,12 +19,14 @@ public class PersonnelMovementsController : ControllerBase
 
     /// <summary>Lista todos los registros de PersonnelMovements.</summary>
     [HttpGet]
+    [RequirePermission("PERSONNEL_ACTIONS.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<PersonnelMovementsDto>>(await _svc.GetAllAsync(ct)));
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]
+    [RequirePermission("PERSONNEL_ACTIONS.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
@@ -32,6 +35,7 @@ public class PersonnelMovementsController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("PERSONNEL_ACTIONS.CREATE")]
     public async Task<IActionResult> Create([FromBody] PersonnelMovementsCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<PersonnelMovements>(dto);
@@ -42,6 +46,7 @@ public class PersonnelMovementsController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("PERSONNEL_ACTIONS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] PersonnelMovementsUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<PersonnelMovements>(dto);
@@ -51,6 +56,7 @@ public class PersonnelMovementsController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("PERSONNEL_ACTIONS.CANCEL")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

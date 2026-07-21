@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Interfaces.Services.Academic;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -35,6 +36,7 @@ public class ScheduledJobsController : ControllerBase
     /// los marca VENCIDO y deshabilita cuentas AD si RequiresAdUserDisable = true.
     /// </summary>
     [HttpPost("contract-expiration/run")]
+    [RequirePermission("SCHEDULED_JOBS.MANAGE")]
     public async Task<IActionResult> RunContractExpiration(CancellationToken ct)
     {
         _logger.LogInformation(
@@ -60,6 +62,7 @@ public class ScheduledJobsController : ControllerBase
     /// aprovisiona cuentas AD para nuevos matriculados y deshabilita las de no re-matriculados.
     /// </summary>
     [HttpPost("student-enrollment/run")]
+    [RequirePermission("SCHEDULED_JOBS.MANAGE")]
     public async Task<IActionResult> RunStudentEnrollmentSync(
         [FromQuery] string periodCode,
         [FromQuery] string? previousPeriod,

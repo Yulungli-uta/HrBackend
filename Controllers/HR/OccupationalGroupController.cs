@@ -5,6 +5,7 @@ using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.OccupationalGroup;
 using WsUtaSystem.Models;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -33,6 +34,7 @@ public class OccupationalGroupController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("CATALOGS.CREATE")]
     public async Task<IActionResult> Create([FromBody] OccupationalGroupCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<OccupationalGroup>(dto);
@@ -43,6 +45,7 @@ public class OccupationalGroupController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("CATALOGS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] OccupationalGroupUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<OccupationalGroup>(dto);
@@ -52,6 +55,7 @@ public class OccupationalGroupController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("CATALOGS.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

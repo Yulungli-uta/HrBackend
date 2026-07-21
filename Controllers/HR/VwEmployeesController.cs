@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR
 {
@@ -15,6 +16,7 @@ namespace WsUtaSystem.Controllers.HR
         }
 
         [HttpGet]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetAll()
         {
             var employees = await _employeeService.GetAllEmployeesAsync();
@@ -22,10 +24,14 @@ namespace WsUtaSystem.Controllers.HR
         }
 
         [HttpGet("paged")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetPaged(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20,
             [FromQuery] string? search = null,
+            [FromQuery] int? employeeType = null,
+            [FromQuery] string? department = null,
+            [FromQuery] bool? isActive = null,
             [FromQuery] string? sortBy = null,
             [FromQuery] string? sortDirection = "asc",
             CancellationToken ct = default)
@@ -33,14 +39,17 @@ namespace WsUtaSystem.Controllers.HR
             if (page < 1) page = 1;
             if (pageSize < 1 || pageSize > 200) pageSize = 20;
 
-            var paged = !string.IsNullOrWhiteSpace(search)
-                ? await _employeeService.GetPagedAsync(search, page, pageSize, ct)
-                : await _employeeService.GetPagedAsync(page, pageSize, ct);
+            var paged = employeeType.HasValue || !string.IsNullOrWhiteSpace(department) || isActive.HasValue
+                ? await _employeeService.GetPagedAsync(search, employeeType, department, isActive, page, pageSize, ct)
+                : !string.IsNullOrWhiteSpace(search)
+                    ? await _employeeService.GetPagedAsync(search, page, pageSize, ct)
+                    : await _employeeService.GetPagedAsync(page, pageSize, ct);
 
             return Ok(paged);
         }
 
         [HttpGet("stats")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetStats(CancellationToken ct = default)
         {
             var stats = await _employeeService.GetStatsAsync(ct);
@@ -48,6 +57,7 @@ namespace WsUtaSystem.Controllers.HR
         }
 
         [HttpGet("stats/by-contract-type")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetByContractType(CancellationToken ct = default)
         {
             var result = await _employeeService.GetByContractTypeAsync(ct);
@@ -55,6 +65,7 @@ namespace WsUtaSystem.Controllers.HR
         }
 
         [HttpGet("{id}")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetById(int id)
         {
             var employee = await _employeeService.GetEmployeeByIdAsync(id);
@@ -62,6 +73,7 @@ namespace WsUtaSystem.Controllers.HR
         }
 
         [HttpGet("department/{department}")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetByDepartment(string department)
         {
             var employees = await _employeeService.GetEmployeesByDepartmentAsync(department);

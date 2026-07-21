@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Data;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -41,6 +42,7 @@ public class ContractProvisioningController : ControllerBase
     /// <param name="contractId">ID del contrato. Debe existir y tener PersonID válido.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPost("{contractId:int}/provision")]
+    [RequirePermission("CONTRACTS.APPROVE")]
     public async Task<IActionResult> TriggerProvisioning(int contractId, CancellationToken ct)
     {
         // Cargar contrato

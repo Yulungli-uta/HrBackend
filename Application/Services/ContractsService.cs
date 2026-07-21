@@ -35,9 +35,23 @@ public class ContractsService : Service<Contracts, int>, IContractsService
     private const string StatusAnulado = "ANULADO";
 
     // HR.ref_Types (Category=DOCUMENT_TYPE) — documentos cargados en TBL_StoredFile cuyo
-    // número/fecha alimentan placeholders de plantillas de contrato.
-    private const int DocumentTypeIdResolucionCau = 2061;
-    private const int DocumentTypeIdMemorandoRectorado = 2062;
+    // número/fecha alimentan placeholders de plantillas de contrato. Se resuelven por NOMBRE,
+    // nunca por TypeId fijo: el TypeId es IDENTITY y puede variar entre ambientes; el Name es
+    // el dato estable de la semilla.
+    private const string DocumentTypeNameResolucionCau = "RESOLUCION_CAU";
+    private const string DocumentTypeNameMemorandoRectorado = "MEMORANDO_RECTORADO";
+    private const string DocumentTypeNameResolucionDelegacion = "RESOLUCION_DELEGACION";
+
+    // HR.ref_Types (Category=ACCESS_MODULE_TYPE) — módulo de este servicio para el checklist
+    // de requisitos documentales (HR.tbl_TramiteRequirements), resuelto por Name.
+    private const string ModuleTypeNameContracts = "CONTRACTS";
+
+    // HR.tbl_StoredFile.EntityType usado para documentos de contrato. DEBE coincidir con
+    // CONTRACT_ENTITY_TYPE del frontend (client/src/features/constants.ts) — verificado
+    // contra datos reales: HR.tbl_StoredFile solo contiene filas con "HRCONTRACT", nunca
+    // "CONTRACT" (bug encontrado 2026-07-20: 4 lookups usaban el string equivocado y por
+    // eso ValidateRequiredDocumentsAsync nunca encontraba documentos ya subidos).
+    private const string ContractEntityType = "HRCONTRACT";
 
     // HR.ref_Types (Category=DEPARTMENT_TYPE) — usado para resolver la Facultad real de una
     // autoridad delegada, subiendo por ParentId si el registro quedó a nivel de Carrera/Dirección.
@@ -60,6 +74,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
     private readonly IEmployeeProvisioningOrchestrator _provisioningOrchestrator;
     private readonly IEmployeeLaborRegimeService _laborRegimeService;
     private readonly IPersonnelMovementsService _movementsService;
+    private readonly ITramiteRequirementsService _tramiteRequirements;
 
     public ContractsService(
         IContractsRepository repo,
@@ -76,7 +91,8 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         IParametersRepository parametersRepository,
         IEmployeeProvisioningOrchestrator provisioningOrchestrator,
         IEmployeeLaborRegimeService laborRegimeService,
-        IPersonnelMovementsService movementsService
+        IPersonnelMovementsService movementsService,
+        ITramiteRequirementsService tramiteRequirements
     ) : base(repo)
     {
         _repository                = repo                       ?? throw new ArgumentNullException(nameof(repo));
@@ -94,6 +110,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         _provisioningOrchestrator  = provisioningOrchestrator  ?? throw new ArgumentNullException(nameof(provisioningOrchestrator));
         _laborRegimeService        = laborRegimeService         ?? throw new ArgumentNullException(nameof(laborRegimeService));
         _movementsService          = movementsService           ?? throw new ArgumentNullException(nameof(movementsService));
+        _tramiteRequirements       = tramiteRequirements        ?? throw new ArgumentNullException(nameof(tramiteRequirements));
     }
 
     // -------------------------------------------------------
@@ -129,6 +146,21 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             ApplyDto(dto, current);
 
             ValidateDates(current);
+
+            // Checklist de documentos obligatorios (HR.tbl_TramiteRequirements) — se valida aquí
+            // (al guardar), no solo al generar el documento, para que el usuario se entere de
+            // inmediato si falta algo en vez de descubrirlo recién al intentar generar el PDF.
+            var contractsModuleTypeId = await _db.RefTypes
+                .AsNoTracking()
+                .Where(r => r.Category == "ACCESS_MODULE_TYPE" && r.Name == ModuleTypeNameContracts && r.IsActive)
+                .Select(r => (int?)r.TypeId)
+                .FirstOrDefaultAsync(ct);
+
+            if (contractsModuleTypeId.HasValue)
+            {
+                await _tramiteRequirements.ValidateRequiredDocumentsAsync(
+                    contractsModuleTypeId.Value, current.ContractTypeID, ContractEntityType, current.ContractID.ToString(), ct);
+            }
 
             // Si manejas RowVersion en tu arquitectura, aquí va el OriginalValue:
             // _db.Entry(current).Property(x => x.RowVersion).OriginalValue = dto.RowVersion;
@@ -921,14 +953,27 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             }
         }
 
-        // Número/fecha de Resolución CAU y Memorando de Rectorado: se toman del documento más
-        // reciente cargado para este contrato con el DocumentTypeId correspondiente
-        // (HR.ref_Types: RESOLUCION_CAU=2061, MEMORANDO_RECTORADO=2062), en vez de pedírselos
-        // de nuevo al usuario si ya los adjuntó en la sección de documentos del contrato.
-        var cauResolution = await _db.StoredFiles
+        // Números/fechas de referencia de documentos institucionales (Resolución CAU, Memorando
+        // de Rectorado, Resolución de Delegación): se toman del documento más reciente cargado
+        // para este contrato con el DocumentTypeId correspondiente, resuelto por NOMBRE contra
+        // HR.ref_Types (nunca un TypeId fijo, ver comentario en la declaración de las constantes),
+        // en vez de pedírselos de nuevo al usuario si ya los adjuntó en documentos del contrato.
+        var documentTypeIdsByName = await _db.RefTypes
             .AsNoTracking()
-            .Where(f => f.EntityType == "CONTRACT" && f.EntityId == contract.ContractID.ToString()
-                     && f.DocumentTypeId == DocumentTypeIdResolucionCau && f.Status == 1)
+            .Where(r => r.Category == "DOCUMENT_TYPE" && r.IsActive &&
+                        (r.Name == DocumentTypeNameResolucionCau ||
+                         r.Name == DocumentTypeNameMemorandoRectorado ||
+                         r.Name == DocumentTypeNameResolucionDelegacion))
+            .ToDictionaryAsync(r => r.Name, r => r.TypeId, ct);
+
+        documentTypeIdsByName.TryGetValue(DocumentTypeNameResolucionCau, out var docTypeIdCau);
+        documentTypeIdsByName.TryGetValue(DocumentTypeNameMemorandoRectorado, out var docTypeIdMemo);
+        documentTypeIdsByName.TryGetValue(DocumentTypeNameResolucionDelegacion, out var docTypeIdDelegacion);
+
+        var cauResolution = docTypeIdCau == 0 ? null : await _db.StoredFiles
+            .AsNoTracking()
+            .Where(f => f.EntityType == ContractEntityType && f.EntityId == contract.ContractID.ToString()
+                     && f.DocumentTypeId == docTypeIdCau && f.Status == 1)
             .OrderByDescending(f => f.CreatedAt)
             .FirstOrDefaultAsync(ct);
 
@@ -941,10 +986,10 @@ public class ContractsService : Service<Contracts, int>, IContractsService
                     : null);
         }
 
-        var rectorMemo = await _db.StoredFiles
+        var rectorMemo = docTypeIdMemo == 0 ? null : await _db.StoredFiles
             .AsNoTracking()
-            .Where(f => f.EntityType == "CONTRACT" && f.EntityId == contract.ContractID.ToString()
-                     && f.DocumentTypeId == DocumentTypeIdMemorandoRectorado && f.Status == 1)
+            .Where(f => f.EntityType == ContractEntityType && f.EntityId == contract.ContractID.ToString()
+                     && f.DocumentTypeId == docTypeIdMemo && f.Status == 1)
             .OrderByDescending(f => f.CreatedAt)
             .FirstOrDefaultAsync(ct);
 
@@ -1006,12 +1051,48 @@ public class ContractsService : Service<Contracts, int>, IContractsService
                 SetOv(mergedOverrides, "DELEGATION_RESOLUTION", delegateAuthority.ResolutionCode);
                 SetOv(mergedOverrides, "DELEGATION_DATE",       SpanishTextHelper.ShortDate(delegateAuthority.StartDate.ToDateTime(TimeOnly.MinValue)));
             }
+
+            // Si además se adjuntó la resolución/acta de delegación específica para este contrato
+            // (HR.tbl_StoredFile con DocumentTypeId=RESOLUCION_DELEGACION), su número/fecha de
+            // referencia prevalece sobre el dato genérico de HR.tbl_DepartmentAuthorities, porque
+            // es el documento concreto que respalda esta delegación puntual.
+            var delegationResolutionDoc = docTypeIdDelegacion == 0 ? null : await _db.StoredFiles
+                .AsNoTracking()
+                .Where(f => f.EntityType == ContractEntityType && f.EntityId == contract.ContractID.ToString()
+                         && f.DocumentTypeId == docTypeIdDelegacion && f.Status == 1)
+                .OrderByDescending(f => f.CreatedAt)
+                .FirstOrDefaultAsync(ct);
+
+            if (delegationResolutionDoc is not null)
+            {
+                SetOv(mergedOverrides, "DELEGATION_RESOLUTION", delegationResolutionDoc.DocumentReferenceNumber);
+                SetOv(mergedOverrides, "DELEGATION_DATE",
+                    delegationResolutionDoc.DocumentReferenceDate.HasValue
+                        ? SpanishTextHelper.ShortDate(delegationResolutionDoc.DocumentReferenceDate.Value.ToDateTime(TimeOnly.MinValue))
+                        : null);
+            }
         }
 
         // Los overrides manuales del request tienen máxima prioridad
         if (request.Overrides is not null)
             foreach (var kvp in request.Overrides)
                 mergedOverrides[kvp.Key] = kvp.Value;
+
+        // Checklist de documentos obligatorios (HR.tbl_TramiteRequirements) para el módulo
+        // CONTRACTS + este tipo de contrato específico. No bloquea si no hay nada configurado
+        // (comportamiento actual sin cambios); lanza InvalidOperationException con el detalle
+        // de lo faltante si algún requisito obligatorio no tiene documento cargado.
+        var contractsModuleTypeId = await _db.RefTypes
+            .AsNoTracking()
+            .Where(r => r.Category == "ACCESS_MODULE_TYPE" && r.Name == ModuleTypeNameContracts && r.IsActive)
+            .Select(r => (int?)r.TypeId)
+            .FirstOrDefaultAsync(ct);
+
+        if (contractsModuleTypeId.HasValue)
+        {
+            await _tramiteRequirements.ValidateRequiredDocumentsAsync(
+                contractsModuleTypeId.Value, contract.ContractTypeID, ContractEntityType, contract.ContractID.ToString(), ct);
+        }
 
         var generateRequest = new GenerateDocumentRequest(
             TemplateId:      templateId,

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR
 {
@@ -23,6 +24,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Lista todos los empleados.</summary>
         [HttpGet]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetAll(CancellationToken ct = default)
         {
             var employees = await _employeeDetailsService.GetAllEmployeeDetailsAsync(ct);
@@ -31,6 +33,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Retorna un resultado paginado de empleados.</summary>
         [HttpGet("paged")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetPaged(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20,
@@ -51,6 +54,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Obtiene un empleado por ID.</summary>
         [HttpGet("{id}")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetById(int id, CancellationToken ct = default)
         {
             var employee = await _employeeDetailsService.GetEmployeeDetailsAsync(id, ct);
@@ -59,6 +63,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Obtiene un empleado por email.</summary>
         [HttpGet("email/{email}")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetByEmail(string email, CancellationToken ct = default)
         {
             var sw = Stopwatch.StartNew();
@@ -83,6 +88,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Obtiene empleados por departamento.</summary>
         [HttpGet("department/{departmentName}")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetByDepartment(string departmentName, CancellationToken ct = default)
         {
             var employees = await _employeeDetailsService.GetEmployeesByDepartmentAsync(departmentName, ct);
@@ -91,6 +97,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Obtiene empleados por DepartmentID exacto (sin ambigüedad de nombres/tildes).</summary>
         [HttpGet("department-id/{departmentId:int}")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetByDepartmentId(int departmentId, CancellationToken ct = default)
         {
             var employees = await _employeeDetailsService.GetByFiltersAsync(departmentId, null, ct);
@@ -98,6 +105,7 @@ namespace WsUtaSystem.Controllers.HR
         }
 
         [HttpGet("boss/{bossId:int}/subordinates/details")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetSubordinatesDetailsByBossId(
         int bossId,
         CancellationToken ct)
@@ -108,6 +116,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Obtiene empleados por facultad.</summary>
         [HttpGet("faculty/{facultyName}")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetByFaculty(string facultyName, CancellationToken ct = default)
         {
             var employees = await _employeeDetailsService.GetEmployeesByFacultyAsync(facultyName, ct);
@@ -116,6 +125,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Obtiene empleados por tipo.</summary>
         [HttpGet("type/{employeeType}")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetByType(int employeeType, CancellationToken ct = default)
         {
             var employees = await _employeeDetailsService.GetEmployeesByTypeAsync(employeeType, ct);
@@ -124,6 +134,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Obtiene los tipos de empleado disponibles.</summary>
         [HttpGet("available/types")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetAvailableTypes(CancellationToken ct = default)
         {
             var types = await _employeeDetailsService.GetAvailableEmployeeTypesAsync(ct);
@@ -132,6 +143,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Obtiene los departamentos disponibles.</summary>
         [HttpGet("available/departments")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetAvailableDepartments(CancellationToken ct = default)
         {
             var departments = await _employeeDetailsService.GetAvailableDepartmentsAsync(ct);
@@ -140,6 +152,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Obtiene las facultades disponibles.</summary>
         [HttpGet("available/faculties")]
+        [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetAvailableFaculties(CancellationToken ct = default)
         {
             var faculties = await _employeeDetailsService.GetAvailableFacultiesAsync(ct);

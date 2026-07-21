@@ -2218,12 +2218,6 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Employees_JobID')
             REFERENCES [HR].[tbl_jobs] ([JobID]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Employees_LaborRegime')
-    ALTER TABLE [HR].[tbl_Employees]
-        ADD CONSTRAINT [FK_Employees_LaborRegime]
-            FOREIGN KEY ([LaborRegimeID])
-            REFERENCES [HR].[ref_Types] ([TypeID]);
-GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Employees_Person')
     ALTER TABLE [HR].[tbl_Employees]

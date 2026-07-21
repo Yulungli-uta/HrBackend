@@ -4,6 +4,7 @@ using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.FinancialCertification;
 using WsUtaSystem.Application.DTOs.ContractRequestPerson;
 using WsUtaSystem.Application.Common.Interfaces;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -31,11 +32,13 @@ public class FinancialCertificationController : ControllerBase
 
     /// <summary>Lista todos los registros de FinancialCertification.</summary>
     [HttpGet]
+    [RequirePermission("FINANCIAL_CERTIFICATION.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<FinancialCertificationDto>>(await _svc.GetAllAsync(ct)));
 
     /// <summary>Retorna certificaciones paginadas con filtros opcionales.</summary>
     [HttpGet("paged")]
+    [RequirePermission("FINANCIAL_CERTIFICATION.READ")]
     public async Task<IActionResult> GetPaged(
         [FromQuery] string? statusName,
         [FromQuery] int? requestId,
@@ -52,6 +55,7 @@ public class FinancialCertificationController : ControllerBase
 
     /// <summary>Retorna certificaciones en estado PENDIENTE_REVISION (buzón de Financiero).</summary>
     [HttpGet("pending")]
+    [RequirePermission("FINANCIAL_CERTIFICATION.READ")]
     public async Task<IActionResult> GetPending(CancellationToken ct)
     {
         var items = await _svc.GetPendingAsync(ct);
@@ -60,6 +64,7 @@ public class FinancialCertificationController : ControllerBase
 
     /// <summary>Obtiene un registro por ID con datos enriquecidos (statusName, requestSummary).</summary>
     [HttpGet("{id:int}")]
+    [RequirePermission("FINANCIAL_CERTIFICATION.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var detail = await _svc.GetDetailAsync(id, ct);
@@ -68,6 +73,7 @@ public class FinancialCertificationController : ControllerBase
 
     /// <summary>Crea un nuevo registro. El estado inicial se asigna automáticamente.</summary>
     [HttpPost]
+    [RequirePermission("FINANCIAL_CERTIFICATION.CREATE")]
     public async Task<IActionResult> Create([FromBody] FinancialCertificationCreateDto dto, CancellationToken ct)
     {
         _logger.LogInformation("Creando certificación financiera por empleado {EmployeeId}", _user.EmployeeId);
@@ -82,6 +88,7 @@ public class FinancialCertificationController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("FINANCIAL_CERTIFICATION.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] FinancialCertificationUpdateDto dto, CancellationToken ct)
     {
         var entityObj      = _mapper.Map<FinancialCertification>(dto);
@@ -94,6 +101,7 @@ public class FinancialCertificationController : ControllerBase
 
     /// <summary>Aprueba una certificación y marca la solicitud como PENDIENTE_CONTRATACION.</summary>
     [HttpPost("{id:int}/approve")]
+    [RequirePermission("FINANCIAL_CERTIFICATION.APPROVE")]
     public async Task<IActionResult> Approve([FromRoute] int id, CancellationToken ct)
     {
         var userId = _user.EmployeeId ?? 0;
@@ -103,6 +111,7 @@ public class FinancialCertificationController : ControllerBase
 
     /// <summary>Rechaza una certificación y marca la solicitud como CERT_RECHAZADA.</summary>
     [HttpPost("{id:int}/reject")]
+    [RequirePermission("FINANCIAL_CERTIFICATION.REJECT")]
     public async Task<IActionResult> Reject([FromRoute] int id, [FromBody] FinancialCertificationRejectDto dto, CancellationToken ct)
     {
         var userId = _user.EmployeeId ?? 0;
@@ -112,6 +121,7 @@ public class FinancialCertificationController : ControllerBase
 
     /// <summary>Rechaza temporalmente. El solicitante puede corregir y reenviar.</summary>
     [HttpPost("{id:int}/reject-temporary")]
+    [RequirePermission("FINANCIAL_CERTIFICATION.REJECT")]
     public async Task<IActionResult> RejectTemporary(
         [FromRoute] int id,
         [FromBody] RejectTemporaryDto dto,
@@ -124,6 +134,7 @@ public class FinancialCertificationController : ControllerBase
 
     /// <summary>El solicitante reenvía la certificación corregida; vuelve a PENDIENTE_REVISION.</summary>
     [HttpPost("{id:int}/resend")]
+    [RequirePermission("FINANCIAL_CERTIFICATION.UPDATE")]
     public async Task<IActionResult> Resend([FromRoute] int id, CancellationToken ct)
     {
         var userId = _user.EmployeeId ?? 0;
@@ -133,6 +144,7 @@ public class FinancialCertificationController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("FINANCIAL_CERTIFICATION.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

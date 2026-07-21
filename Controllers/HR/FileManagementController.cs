@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Net.Mime;
 using WsUtaSystem.Application.DTOs.FileManagement;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -30,6 +31,7 @@ public class FileManagementController : ControllerBase
     /// </remarks>
     /// <returns>Información del archivo subido incluyendo la ruta completa</returns>
     [HttpPost("upload")]
+    [RequirePermission("DOCUMENTS.UPLOAD")]
     [Consumes("multipart/form-data")]
     [Produces(MediaTypeNames.Application.Json)]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
@@ -69,6 +71,7 @@ public class FileManagementController : ControllerBase
     /// <param name="filePath">Ruta relativa completa del archivo (ej: /contracts/2025/contrato_001.pdf)</param>
     /// <returns>Archivo como stream para descarga</returns>
     [HttpGet("download/{directoryCode}")]
+    [RequirePermission("DOCUMENTS.DOWNLOAD")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(object), StatusCodes.Status404NotFound)]
@@ -99,6 +102,7 @@ public class FileManagementController : ControllerBase
     /// <param name="filePath">Ruta relativa del archivo</param>
     /// <returns>True si el archivo existe, False en caso contrario</returns>
     [HttpGet("exists/{directoryCode}")]
+    [RequirePermission("DOCUMENTS.READ")]
     [Produces(MediaTypeNames.Application.Json)]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
@@ -130,6 +134,7 @@ public class FileManagementController : ControllerBase
     /// </remarks>
     /// <returns>Lista de resultados de cada archivo subido</returns>
     [HttpPost("upload-multiple")]
+    [RequirePermission("DOCUMENTS.UPLOAD")]
     [Consumes("multipart/form-data")]
     [Produces(MediaTypeNames.Application.Json)]
     [ProducesResponseType(typeof(List<FileUploadResponseDto>), StatusCodes.Status200OK)]
@@ -155,6 +160,7 @@ public class FileManagementController : ControllerBase
     /// <param name="filePath">Ruta relativa completa del archivo (ej: /contracts/2025/contrato_001.pdf)</param>
     /// <returns>Resultado de la operación de eliminación</returns>
     [HttpDelete("delete/{directoryCode}")]
+    [RequirePermission("DOCUMENTS.DELETE")]
     [Produces(MediaTypeNames.Application.Json)]
     [ProducesResponseType(typeof(FileDeleteResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]

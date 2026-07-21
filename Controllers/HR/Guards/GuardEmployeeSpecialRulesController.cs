@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR.Guards;
 
@@ -12,10 +13,12 @@ public class GuardEmployeeSpecialRulesController : ControllerBase
     public GuardEmployeeSpecialRulesController(IGuardEmployeeSpecialRuleService svc) => _svc = svc;
 
     [HttpGet("by-employee/{employeeId:int}")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetByEmployee(int employeeId, CancellationToken ct) =>
         Ok(await _svc.GetByEmployeeAsync(employeeId, ct));
 
     [HttpGet("paged")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -28,6 +31,7 @@ public class GuardEmployeeSpecialRulesController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetById(int id, CancellationToken ct)
     {
         var result = await _svc.GetByIdAsync(id, ct);
@@ -35,6 +39,7 @@ public class GuardEmployeeSpecialRulesController : ControllerBase
     }
 
     [HttpPost]
+    [RequirePermission("GUARDS.CREATE")]
     public async Task<IActionResult> Create([FromBody] CreateGuardEmployeeSpecialRuleDto dto, CancellationToken ct)
     {
         var created = await _svc.CreateAsync(dto, ct);
@@ -42,6 +47,7 @@ public class GuardEmployeeSpecialRulesController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [RequirePermission("GUARDS.UPDATE")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateGuardEmployeeSpecialRuleDto dto, CancellationToken ct)
     {
         await _svc.UpdateAsync(id, dto, ct);

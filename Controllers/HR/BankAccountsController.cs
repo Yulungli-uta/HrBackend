@@ -6,6 +6,7 @@ using WsUtaSystem.Application.DTOs.BankAccounts;
 using WsUtaSystem.Application.DTOs.RefTypes;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -20,12 +21,14 @@ public class BankAccountsController : ControllerBase
 
     /// <summary>Lista todos los registros de BankAccounts.</summary>
     [HttpGet]
+    [RequirePermission("BANK_ACCOUNTS.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<BankAccountsDto>>(await _svc.GetAllAsync(ct)));
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]
+    [RequirePermission("BANK_ACCOUNTS.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
@@ -35,15 +38,17 @@ public class BankAccountsController : ControllerBase
     /// <summary>Obtiene todos los cuentas bancarias de una persona.</summary>
     /// <param name="personId">ID de la persona</param>
     [HttpGet("person/{personId:int}")]
+    [RequirePermission("BANK_ACCOUNTS.READ")]
     public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
     {
         var accounts = await _svc.GetByPersonIdAsync(personId);
-               
+
         return Ok(_mapper.Map<List<BankAccountsDto>>(accounts));
     }
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("BANK_ACCOUNTS.CREATE")]
     public async Task<IActionResult> Create([FromBody] BankAccountsCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<BankAccounts>(dto);
@@ -54,6 +59,7 @@ public class BankAccountsController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("BANK_ACCOUNTS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] BankAccountsUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<BankAccounts>(dto);
@@ -63,6 +69,7 @@ public class BankAccountsController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("BANK_ACCOUNTS.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

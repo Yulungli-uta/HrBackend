@@ -6,6 +6,7 @@ using WsUtaSystem.Application.DTOs.Employees;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -20,18 +21,20 @@ public class EmployeesController : ControllerBase
 
     /// <summary>Lista todos los registros de Employees.</summary>
     [HttpGet]
+    [RequirePermission("EMPLOYEES.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<EmployeesDto>>(await _svc.GetAllAsync(ct)));
 
     /// <summary>
     /// Retorna un resultado paginado de registros de Employees.
     /// </summary>
-    /// <param name="page">Número de página (base 1).</param>
-    /// <param name="pageSize">Cantidad de registros por página. Máximo 200.</param>
-    /// <param name="search">Texto de búsqueda por nombre, apellido, cédula o email.</param>
+    /// <param name="page">Nï¿½mero de pï¿½gina (base 1).</param>
+    /// <param name="pageSize">Cantidad de registros por pï¿½gina. Mï¿½ximo 200.</param>
+    /// <param name="search">Texto de bï¿½squeda por nombre, apellido, cï¿½dula o email.</param>
     /// <param name="sortBy">Campo de ordenamiento (opcional).</param>
-    /// <param name="sortDirection">Dirección del orden: asc | desc (opcional).</param>
+    /// <param name="sortDirection">Direcciï¿½n del orden: asc | desc (opcional).</param>
     [HttpGet("paged")]
+    [RequirePermission("EMPLOYEES.READ")]
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -75,6 +78,7 @@ public class EmployeesController : ControllerBase
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]
+    [RequirePermission("EMPLOYEES.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
@@ -82,6 +86,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpGet("boss/{bossId:int}/subordinates")]
+    [RequirePermission("EMPLOYEES.READ")]
     public async Task<IActionResult> GetSubordinatesByBossId(
         int bossId,
         CancellationToken ct)
@@ -91,6 +96,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpGet("person/{personId:int}")]
+    [RequirePermission("EMPLOYEES.READ")]
     public async Task<IActionResult> GetByPersonId(
         int personId,
         CancellationToken ct)
@@ -101,6 +107,7 @@ public class EmployeesController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("EMPLOYEES.CREATE")]
     public async Task<IActionResult> Create([FromBody] EmployeesCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Employees>(dto);
@@ -111,6 +118,7 @@ public class EmployeesController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("EMPLOYEES.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] EmployeesUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Employees>(dto);
@@ -120,6 +128,7 @@ public class EmployeesController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("EMPLOYEES.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

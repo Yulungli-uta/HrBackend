@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.People;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -22,6 +23,7 @@ public class PeopleController : ControllerBase
 
     /// <summary>Lista todos los registros de People.</summary>
     [HttpGet]
+    [RequirePermission("PEOPLE.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
         var entities = await _svc.GetAllAsync(ct);
@@ -36,6 +38,7 @@ public class PeopleController : ControllerBase
     /// <param name="sortBy">Campo de ordenamiento (opcional).</param>
     /// <param name="sortDirection">Dirección del orden: asc | desc (opcional).</param>
     [HttpGet("paged")]
+    [RequirePermission("PEOPLE.READ")]
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -80,6 +83,7 @@ public class PeopleController : ControllerBase
 
     /// <summary>Obtiene un registro por ID.</summary>
     [HttpGet("{id:int}")]
+    [RequirePermission("PEOPLE.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var entity = await _svc.GetByIdAsync(id, ct);
@@ -95,6 +99,7 @@ public class PeopleController : ControllerBase
     /// </summary>
     /// <param name="dto">Lista de identificaciones a verificar.</param>
     [HttpPost("verify-bulk")]
+    [RequirePermission("PEOPLE.READ")]
     public async Task<IActionResult> VerifyBulk(
         [FromBody] BulkVerifyPeopleRequestDto dto,
         CancellationToken ct)
@@ -134,6 +139,7 @@ public class PeopleController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("PEOPLE.CREATE")]
     public async Task<IActionResult> Create([FromBody] PeopleCreateDto dto, CancellationToken ct)
     {
         var entity = _mapper.Map<People>(dto);
@@ -155,6 +161,7 @@ public class PeopleController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("PEOPLE.UPDATE")]
     public async Task<IActionResult> Update(
         [FromRoute] int id,
         [FromBody] PeopleUpdateDto dto,
@@ -167,6 +174,7 @@ public class PeopleController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("PEOPLE.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR.Guards;
 
@@ -14,10 +15,12 @@ public class GuardLocationRotationController : ControllerBase
     // ─── Periodos ─────────────────────────────────────────────────────────────
 
     [HttpGet("periods")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetPeriods(CancellationToken ct) =>
         Ok(await _svc.GetPeriodsAsync(ct));
 
     [HttpGet("periods/paged")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetPeriodsPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -29,6 +32,7 @@ public class GuardLocationRotationController : ControllerBase
     }
 
     [HttpGet("periods/{id:int}")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetPeriodById(int id, CancellationToken ct)
     {
         var result = await _svc.GetPeriodByIdAsync(id, ct);
@@ -36,6 +40,7 @@ public class GuardLocationRotationController : ControllerBase
     }
 
     [HttpPost("periods")]
+    [RequirePermission("GUARDS.CREATE")]
     public async Task<IActionResult> CreatePeriod([FromBody] CreateGuardLocationRotationPeriodDto dto, CancellationToken ct)
     {
         var created = await _svc.CreatePeriodAsync(dto, ct);
@@ -43,6 +48,7 @@ public class GuardLocationRotationController : ControllerBase
     }
 
     [HttpPut("periods/{id:int}")]
+    [RequirePermission("GUARDS.UPDATE")]
     public async Task<IActionResult> UpdatePeriod(int id, [FromBody] UpdateGuardLocationRotationPeriodDto dto, CancellationToken ct)
     {
         await _svc.UpdatePeriodAsync(id, dto, ct);
@@ -52,18 +58,22 @@ public class GuardLocationRotationController : ControllerBase
     // ─── Asignaciones ─────────────────────────────────────────────────────────
 
     [HttpGet("periods/{periodId:int}/assignments")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetAssignmentsByPeriod(int periodId, CancellationToken ct) =>
         Ok(await _svc.GetAssignmentsByPeriodAsync(periodId, ct));
 
     [HttpGet("assignments/by-employee/{employeeId:int}")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetAssignmentsByEmployee(int employeeId, CancellationToken ct) =>
         Ok(await _svc.GetAssignmentsByEmployeeAsync(employeeId, ct));
 
     [HttpPost("assignments")]
+    [RequirePermission("GUARDS.CREATE")]
     public async Task<IActionResult> CreateAssignment([FromBody] CreateGuardLocationRotationAssignmentDto dto, CancellationToken ct) =>
         Ok(await _svc.CreateAssignmentAsync(dto, ct));
 
     [HttpPut("assignments/{id:int}")]
+    [RequirePermission("GUARDS.UPDATE")]
     public async Task<IActionResult> UpdateAssignment(int id, [FromBody] UpdateGuardLocationRotationAssignmentDto dto, CancellationToken ct)
     {
         await _svc.UpdateAssignmentAsync(id, dto, ct);
@@ -71,6 +81,7 @@ public class GuardLocationRotationController : ControllerBase
     }
 
     [HttpDelete("assignments/{id:int}")]
+    [RequirePermission("GUARDS.DELETE")]
     public async Task<IActionResult> DeleteAssignment(int id, CancellationToken ct)
     {
         await _svc.DeleteAssignmentAsync(id, ct);

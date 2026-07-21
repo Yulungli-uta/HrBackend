@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Interfaces.Guards;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR.Guards;
 
@@ -11,10 +12,12 @@ public class GuardAssignmentValidationsController : ControllerBase
     public GuardAssignmentValidationsController(IGuardAssignmentValidationService svc) => _svc = svc;
 
     [HttpGet("by-planning/{planningId:int}")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetByPlanning(int planningId, CancellationToken ct) =>
         Ok(await _svc.GetByPlanningAsync(planningId, ct));
 
     [HttpGet("by-planning/{planningId:int}/paged")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetByPlanningPaged(
         int planningId,
         [FromQuery] int page = 1,
@@ -27,6 +30,7 @@ public class GuardAssignmentValidationsController : ControllerBase
     }
 
     [HttpGet("by-employee/{employeeId:int}")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetByEmployee(int employeeId, [FromQuery] int limit = 50, CancellationToken ct = default) =>
         Ok(await _svc.GetByEmployeeAsync(employeeId, limit, ct));
 }

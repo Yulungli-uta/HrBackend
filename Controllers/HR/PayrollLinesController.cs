@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using WsUtaSystem.Application.DTOs.PayrollLines;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -18,12 +19,14 @@ public class PayrollLinesController : ControllerBase
 
     /// <summary>Lista todos los registros de PayrollLines.</summary>
     [HttpGet]
+    [RequirePermission("PAYROLL.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<PayrollLinesDto>>(await _svc.GetAllAsync(ct)));
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]
+    [RequirePermission("PAYROLL.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
@@ -32,6 +35,7 @@ public class PayrollLinesController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("PAYROLL.CREATE")]
     public async Task<IActionResult> Create([FromBody] PayrollLinesCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<PayrollLines>(dto);
@@ -42,6 +46,7 @@ public class PayrollLinesController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("PAYROLL.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] PayrollLinesUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<PayrollLines>(dto);
@@ -51,6 +56,7 @@ public class PayrollLinesController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("PAYROLL.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

@@ -1,8 +1,8 @@
 ﻿// File: Controllers/Docflow/DocflowProcessDynamicFieldsController.cs
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Docflow;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.Docflow;
 
@@ -13,14 +13,15 @@ public sealed class DocflowProcessDynamicFieldsController : ControllerBase
     private readonly IDocflowService _svc;
     public DocflowProcessDynamicFieldsController(IDocflowService svc) => _svc = svc;
 
-    // Lectura (cualquier usuario autenticado)
+    // Lectura
     [HttpGet("{processId:int}/dynamic-fields")]
+    [RequirePermission("DOCFLOW.READ")]
     public async Task<IActionResult> Get([FromRoute] int processId, CancellationToken ct)
         => Ok(await _svc.GetProcessDynamicFieldsAsync(processId, ct));
 
-    // Escritura (ajusta roles/policy según tu sistema)
-    [Authorize] // ideal: [Authorize(Roles="ADMIN,DOCFLOW_ADMIN")]
+    // Escritura
     [HttpPut("{processId:int}/dynamic-fields")]
+    [RequirePermission("DOCFLOW.MANAGE")]
     public async Task<IActionResult> Update([FromRoute] int processId, [FromBody] UpdateProcessDynamicFieldsRequest req, CancellationToken ct)
     {
         await _svc.UpdateProcessDynamicFieldsAsync(processId, req, ct);

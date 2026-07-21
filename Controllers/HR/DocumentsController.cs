@@ -6,6 +6,7 @@ using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Documents;
 using WsUtaSystem.Application.DTOs.StoredFile;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR
 {
@@ -32,6 +33,7 @@ namespace WsUtaSystem.Controllers.HR
 
         // (1) MISMO TIPO PARA VARIOS ARCHIVOS (BATCH)
         [HttpPost("upload")]
+        [RequirePermission("DOCUMENTS.UPLOAD")]
         [Consumes("multipart/form-data")]
         [Produces(MediaTypeNames.Application.Json)]
         public async Task<IActionResult> Upload([FromForm] DocumentUploadRequestDto request, CancellationToken ct)
@@ -42,6 +44,7 @@ namespace WsUtaSystem.Controllers.HR
 
         // (2) TIPOS DIFERENTES PARA CADA ARCHIVO (MAPPED BATCH)
         [HttpPost("upload-mapped")]
+        [RequirePermission("DOCUMENTS.UPLOAD")]
         [Consumes("multipart/form-data")]
         [Produces(MediaTypeNames.Application.Json)]
         public async Task<IActionResult> UploadMapped([FromForm] DocumentUploadMappedRequestDto request, CancellationToken ct)
@@ -52,6 +55,7 @@ namespace WsUtaSystem.Controllers.HR
 
         // (3) 1 ARCHIVO (SINGLE)
         [HttpPost("upload-single")]
+        [RequirePermission("DOCUMENTS.UPLOAD")]
         [Consumes("multipart/form-data")]
         [Produces(MediaTypeNames.Application.Json)]
         public async Task<IActionResult> UploadSingle([FromForm] DocumentUploadSingleRequestDto request, CancellationToken ct)
@@ -66,6 +70,7 @@ namespace WsUtaSystem.Controllers.HR
         /// para visualizarlo en el frontend.
         /// </summary>
         [HttpGet("entity")]
+        [RequirePermission("DOCUMENTS.READ")]
         [Produces(MediaTypeNames.Application.Json)]
         public async Task<IActionResult> ListByEntity([FromQuery] DocumentListQueryDto q, CancellationToken ct)
         {
@@ -93,6 +98,7 @@ namespace WsUtaSystem.Controllers.HR
         /// Descarga por GUID (recomendado para exponer hacia el cliente).
         /// </summary>
         [HttpGet("download/{fileGuid:guid}")]
+        [RequirePermission("DOCUMENTS.DOWNLOAD")]
         public async Task<IActionResult> Download([FromRoute] Guid fileGuid, CancellationToken ct)
         {
             var file = await _orchestrator.DownloadByGuidAsync(fileGuid, ct);
@@ -105,6 +111,7 @@ namespace WsUtaSystem.Controllers.HR
         /// Elimina: soft delete en DB y opcional borrar físico.
         /// </summary>
         [HttpDelete("{fileGuid:guid}")]
+        [RequirePermission("DOCUMENTS.DELETE")]
         public async Task<IActionResult> Delete(
             [FromRoute] Guid fileGuid,
             [FromQuery] bool deletePhysical = false,

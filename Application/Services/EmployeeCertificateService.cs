@@ -1,7 +1,9 @@
+using WsUtaSystem.Application.Common.Email;
 using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Application.DTOs.Documents.GeneratedDocuments;
 using WsUtaSystem.Application.DTOs.EmployeeCertificate;
 using WsUtaSystem.Application.Interfaces.Repositories;
+using WsUtaSystem.Application.Interfaces.Repositories.Documents;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Interfaces.Services.Documents;
 using WsUtaSystem.Models;
@@ -11,9 +13,9 @@ namespace WsUtaSystem.Application.Services;
 /// <summary>
 /// Certificados laborales del empleado autenticado. Reutiliza el motor documental existente
 /// (plantilla CERTIFICADO_LABORAL + <see cref="IDocumentGenerationService"/>) — no genera PDFs
-/// por su cuenta. La emisión es automática al solicitar: un certificado laboral es un documento
-/// administrativo de bajo riesgo (confirma hechos ya registrados en el sistema), no requiere
-/// aprobación manual de RRHH para este alcance.
+/// por su cuenta al aprobar. La solicitud se crea en PENDIENTE con un documento pre-llenado
+/// (sin firma) descargable de inmediato; RRHH debe revisar, firmar físicamente ese mismo
+/// documento y subir el escaneo antes de que quede EMITIDO.
 /// </summary>
 public sealed class EmployeeCertificateService : IEmployeeCertificateService
 {
@@ -22,13 +24,22 @@ public sealed class EmployeeCertificateService : IEmployeeCertificateService
 
     private readonly IEmployeeCertificateRepository _repository;
     private readonly IDocumentGenerationService _documentGenerationService;
+    private readonly IGeneratedDocumentRepository _generatedDocumentRepository;
+    private readonly IvwEmployeeDetailsService _employeeDetails;
+    private readonly IEmailBuilder _emailBuilder;
 
     public EmployeeCertificateService(
         IEmployeeCertificateRepository repository,
-        IDocumentGenerationService documentGenerationService)
+        IDocumentGenerationService documentGenerationService,
+        IGeneratedDocumentRepository generatedDocumentRepository,
+        IvwEmployeeDetailsService employeeDetails,
+        IEmailBuilder emailBuilder)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _documentGenerationService = documentGenerationService ?? throw new ArgumentNullException(nameof(documentGenerationService));
+        _generatedDocumentRepository = generatedDocumentRepository ?? throw new ArgumentNullException(nameof(generatedDocumentRepository));
+        _employeeDetails = employeeDetails ?? throw new ArgumentNullException(nameof(employeeDetails));
+        _emailBuilder = emailBuilder ?? throw new ArgumentNullException(nameof(emailBuilder));
     }
 
     /// <inheritdoc/>
@@ -98,9 +109,6 @@ public sealed class EmployeeCertificateService : IEmployeeCertificateService
             ct);
 
         entity.GeneratedDocumentId = generated.DocumentId;
-        entity.Status = EmployeeCertificateStatus.Emitido;
-        entity.IssuedAt = DateTime.Now;
-        entity.IssuedBy = employeeId;
 
         await _repository.SaveChangesAsync(ct);
 
@@ -108,9 +116,9 @@ public sealed class EmployeeCertificateService : IEmployeeCertificateService
         {
             RequestId = entity.RequestId,
             PreviousStatus = EmployeeCertificateStatus.Pendiente,
-            NewStatus = EmployeeCertificateStatus.Emitido,
-            Action = "ISSUED",
-            Observation = "Emitido automáticamente al solicitar.",
+            NewStatus = EmployeeCertificateStatus.Pendiente,
+            Action = "DOCUMENT_GENERATED",
+            Observation = "Documento pre-llenado generado, pendiente de revisión y firma de RRHH.",
             CreatedAt = DateTime.Now,
             CreatedBy = employeeId
         }, ct);
@@ -118,6 +126,102 @@ public sealed class EmployeeCertificateService : IEmployeeCertificateService
 
         return await _repository.GetDetailByIdAsync(entity.RequestId, ct)
             ?? throw new InvalidOperationException("No se pudo recuperar el certificado recién creado.");
+    }
+
+    /// <inheritdoc/>
+    public async Task<EmployeeCertificateDetailDto> ApproveAsync(int requestId, int approvedBy, ApproveEmployeeCertificateRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var entity = await _repository.GetTrackedByIdAsync(requestId, ct)
+            ?? throw new KeyNotFoundException($"No existe el certificado {requestId}.");
+
+        if (entity.Status != EmployeeCertificateStatus.Pendiente)
+            throw new InvalidOperationException($"El certificado {requestId} está en estado '{entity.Status}', no se puede aprobar.");
+
+        if (entity.GeneratedDocumentId is null)
+            throw new InvalidOperationException($"El certificado {requestId} no tiene un documento generado al cual adjuntar el archivo firmado.");
+
+        await _generatedDocumentRepository.UpdateStoredFileAsync(
+            entity.GeneratedDocumentId.Value, request.StoredFileId, $"certificado_{requestId}_firmado.pdf", ct);
+
+        entity.Status = EmployeeCertificateStatus.Emitido;
+        entity.IssuedAt = DateTime.Now;
+        entity.IssuedBy = approvedBy;
+
+        await _repository.SaveChangesAsync(ct);
+
+        await _repository.AddHistoryAsync(new EmployeeCertificateStatusHistory
+        {
+            RequestId = requestId,
+            PreviousStatus = EmployeeCertificateStatus.Pendiente,
+            NewStatus = EmployeeCertificateStatus.Emitido,
+            Action = "SIGNED_UPLOADED",
+            Observation = request.Observation,
+            CreatedAt = DateTime.Now,
+            CreatedBy = approvedBy
+        }, ct);
+        await _repository.SaveChangesAsync(ct);
+
+        await NotifyEmployeeAsync(
+            entity.EmployeeId,
+            $"Certificado laboral #{requestId} emitido",
+            $"<p>Su certificado laboral ha sido emitido y firmado por Recursos Humanos.</p><p>Ya puede descargarlo desde el sistema.</p>",
+            ct);
+
+        return await _repository.GetDetailByIdAsync(requestId, ct)
+            ?? throw new InvalidOperationException("No se pudo recuperar el certificado recién aprobado.");
+    }
+
+    /// <inheritdoc/>
+    public async Task<EmployeeCertificateDetailDto> RejectAsync(int requestId, int rejectedBy, RejectEmployeeCertificateRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            throw new InvalidOperationException("El motivo de rechazo es obligatorio.");
+
+        var entity = await _repository.GetTrackedByIdAsync(requestId, ct)
+            ?? throw new KeyNotFoundException($"No existe el certificado {requestId}.");
+
+        if (entity.Status != EmployeeCertificateStatus.Pendiente)
+            throw new InvalidOperationException($"El certificado {requestId} está en estado '{entity.Status}', no se puede rechazar.");
+
+        entity.Status = EmployeeCertificateStatus.Rechazado;
+        entity.RejectedAt = DateTime.Now;
+        entity.RejectedBy = rejectedBy;
+
+        await _repository.SaveChangesAsync(ct);
+
+        await _repository.AddHistoryAsync(new EmployeeCertificateStatusHistory
+        {
+            RequestId = requestId,
+            PreviousStatus = EmployeeCertificateStatus.Pendiente,
+            NewStatus = EmployeeCertificateStatus.Rechazado,
+            Action = "REJECTED",
+            Observation = request.Reason,
+            CreatedAt = DateTime.Now,
+            CreatedBy = rejectedBy
+        }, ct);
+        await _repository.SaveChangesAsync(ct);
+
+        await NotifyEmployeeAsync(
+            entity.EmployeeId,
+            $"Certificado laboral #{requestId} rechazado",
+            $"<p>Su solicitud de certificado laboral fue rechazada por Recursos Humanos.</p><p>Motivo: {System.Net.WebUtility.HtmlEncode(request.Reason)}</p>",
+            ct);
+
+        return await _repository.GetDetailByIdAsync(requestId, ct)
+            ?? throw new InvalidOperationException("No se pudo recuperar el certificado recién rechazado.");
+    }
+
+    private async Task NotifyEmployeeAsync(int employeeId, string subject, string htmlBody, CancellationToken ct)
+    {
+        var details = await _employeeDetails.GetEmployeeDetailsAsync(employeeId, ct);
+        var toEmail = details?.Email?.Trim();
+        if (string.IsNullOrWhiteSpace(toEmail))
+            return;
+
+        await _emailBuilder.TryNotifyAsync(EmailTemplateKey.AttendancePunch, subject, htmlBody, to: toEmail, ct: ct);
     }
 
     /// <inheritdoc/>

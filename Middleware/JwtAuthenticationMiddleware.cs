@@ -1,7 +1,10 @@
+using Microsoft.Extensions.Caching.Memory;
 using System.Diagnostics;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Infrastructure.Services;
 
 namespace WsUtaSystem.Middleware;
@@ -10,6 +13,7 @@ public class JwtAuthenticationMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<JwtAuthenticationMiddleware> _logger;
+    private readonly IMemoryCache _cache;
     private readonly bool _enableLogging;
     private readonly HashSet<string> _publicPaths;
 
@@ -21,13 +25,25 @@ public class JwtAuthenticationMiddleware
 
     private const string SkipLookupFlagKey = "__skip_employee_lookup";
 
+    // Claim emitido por RepositoryUta (JwtTokenService) con el EmployeeID de RH
+    private const string EmployeeIdClaimType = "employeeId";
+
+    // TTL del caché email → EmployeeID usado solo como fallback para tokens sin claim
+    private static readonly TimeSpan EmailLookupCacheDuration = TimeSpan.FromMinutes(5);
+
+    // TTL del caché compartido de detalles (misma vigencia que usa CurrentUserService)
+    private readonly TimeSpan _employeeDetailsCacheDuration;
+
     public JwtAuthenticationMiddleware(
         RequestDelegate next,
         ILogger<JwtAuthenticationMiddleware> logger,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IMemoryCache cache)
     {
         _next = next;
         _logger = logger;
+        _cache = cache;
+        _employeeDetailsCacheDuration = EmployeeDetailsCache.GetDuration(configuration);
 
         _enableLogging = bool.TryParse(configuration["AuthService:EnableLogging"], out var logging) ? logging : true;
 
@@ -78,7 +94,6 @@ public class JwtAuthenticationMiddleware
 
             // 4. Resolución de Servicios
             var tokenValidationService = context.RequestServices.GetRequiredService<ITokenValidationService>();
-            var employeeDetailsService = context.RequestServices.GetRequiredService<IvwEmployeeDetailsService>();
 
             // 5. Validación de Token
             var validationResult = await tokenValidationService.ValidateTokenAsync(token);
@@ -95,25 +110,17 @@ public class JwtAuthenticationMiddleware
             context.Items["UserEmail"] = validationResult.Email;
             context.Items["UserRoles"] = validationResult.Roles;
 
-            // 7. Búsqueda de EmployeeId
-            int? employeeId = null;
+            // 7. Resolución de EmployeeId: primero desde el claim firmado del token
+            //    (sin tocar BD); fallback a la vista por email solo para tokens
+            //    emitidos antes de que RepositoryUta incluyera el claim.
+            int? employeeId = TryGetEmployeeIdFromToken(token);
+
             var skipLookup = ShouldSkipEmployeeLookup(path) || (context.Items.TryGetValue(SkipLookupFlagKey, out var f) && f is true);
 
-            if (!skipLookup && !string.IsNullOrWhiteSpace(validationResult.Email))
+            if (employeeId is null && !skipLookup && !string.IsNullOrWhiteSpace(validationResult.Email))
             {
                 context.Items[SkipLookupFlagKey] = true;
-                try
-                {
-                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
-                    cts.CancelAfter(TimeSpan.FromSeconds(5));
-
-                    var emp = await employeeDetailsService.GetByEmailAsync(validationResult.Email, cts.Token);
-                    employeeId = emp?.EmployeeID;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "[AUTH-MW] Error buscando empleado para {Email}", validationResult.Email);
-                }
+                employeeId = await ResolveEmployeeIdByEmailAsync(context, validationResult.Email);
             }
 
             context.Items["EmployeeId"] = employeeId;
@@ -168,6 +175,68 @@ public class JwtAuthenticationMiddleware
                 _logger.LogInformation("[AUTH-MW] Fin de procesamiento. Path: {Path} Status: {Status} Time: {Elapsed}ms",
                     path, context.Response.StatusCode, swTotal.ElapsedMilliseconds);
         }
+    }
+
+    /// <summary>
+    /// Extrae el claim "employeeId" del payload del JWT ya validado por el servicio de auth.
+    /// No re-valida la firma: la validez del token quedó garantizada en el paso anterior.
+    /// Retorna null si el claim no existe (tokens antiguos o usuarios sin empleado de RH).
+    /// </summary>
+    private int? TryGetEmployeeIdFromToken(string token)
+    {
+        try
+        {
+            var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
+            var claimValue = jwt.Claims.FirstOrDefault(c => c.Type == EmployeeIdClaimType)?.Value;
+            return int.TryParse(claimValue, out var id) ? id : null;
+        }
+        catch (ArgumentException ex)
+        {
+            // Token válido para el servicio de auth pero no parseable localmente como JWT:
+            // se continúa con el fallback por email sin interrumpir el request
+            _logger.LogWarning(ex, "[AUTH-MW] No se pudo leer el payload del token; se usará fallback por email");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Fallback: resuelve el EmployeeID consultando vw_EmployeeDetails por email,
+    /// con caché en memoria de <see cref="EmailLookupCacheDuration"/> para no repetir
+    /// la consulta en cada request del mismo usuario.
+    /// </summary>
+    private async Task<int?> ResolveEmployeeIdByEmailAsync(HttpContext context, string email)
+    {
+        var cacheKey = $"auth:employee-id:{email.ToLowerInvariant()}";
+        if (_cache.TryGetValue(cacheKey, out int cachedId))
+            return cachedId;
+
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+            cts.CancelAfter(TimeSpan.FromSeconds(5));
+
+            var employeeDetailsService = context.RequestServices.GetRequiredService<IvwEmployeeDetailsService>();
+            var emp = await employeeDetailsService.GetByEmailAsync(email, cts.Token);
+
+            if (emp is not null)
+            {
+                var employeeId = emp.EmployeeID;
+                _cache.Set(cacheKey, employeeId, EmailLookupCacheDuration);
+
+                // Unificación: la consulta por email ya trajo la fila COMPLETA de la vista.
+                // Se siembra el caché compartido de detalles (misma clave y TTL que usa
+                // CurrentUserService) para que LoadMeAsync no repita la misma consulta.
+                _cache.Set(EmployeeDetailsCache.KeyFor(employeeId), emp, _employeeDetailsCacheDuration);
+
+                return employeeId;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[AUTH-MW] Error buscando empleado para {Email}", email);
+        }
+
+        return null;
     }
 
     private bool ShouldSkipEmployeeLookup(string path)

@@ -6,6 +6,7 @@ using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.AttendancePunches;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -29,22 +30,25 @@ public class AttendancePunchesController : ControllerBase
 
     /// <summary>Lista todos los registros de AttendancePunches.</summary>
     [HttpGet]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<AttendancePunchesDto>>(await _svc.GetAllAsync(ct)));
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
         return e is null ? NotFound() : Ok(_mapper.Map<AttendancePunchesDto>(e));
     }
 
-    /// <summary>Obtiene la última marcación de un empleado.</summary>
+    /// <summary>Obtiene la ï¿½ltima marcaciï¿½n de un empleado.</summary>
     /// <param name="employeeId">ID del empleado</param>
     [HttpGet("last-punch/{employeeId:int}")]
     //[Authorize]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetLastPunch([FromRoute] int employeeId, CancellationToken ct)
     {
         try
@@ -55,7 +59,7 @@ public class AttendancePunchesController : ControllerBase
                 return NotFound("No se encontraron marcaciones para este usuario");
 
             Console.WriteLine($"Last punches data: {_mapper.Map<AttendancePunchesDto>(lastPunches.First())}");
-            // Tomamos el primero de la lista (el último por orden de tiempo)
+            // Tomamos el primero de la lista (el ï¿½ltimo por orden de tiempo)
             return Ok(_mapper.Map<AttendancePunchesDto>(lastPunches.First()));
         }
         catch (Exception ex)
@@ -64,10 +68,11 @@ public class AttendancePunchesController : ControllerBase
         }
     }
 
-    /// <summary>Obtiene las marcaciones del día actual para un empleado.</summary>
+    /// <summary>Obtiene las marcaciones del dï¿½a actual para un empleado.</summary>
     /// <param name="employeeId">ID del empleado</param>
     [HttpGet("today/{employeeId:int}")]
     //[Authorize]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetTodayPunches([FromRoute] int employeeId, CancellationToken ct)
     {
         try
@@ -91,6 +96,7 @@ public class AttendancePunchesController : ControllerBase
     /// <param name="endDate">Fecha de fin</param>
     [HttpGet("employee/{employeeId:int}/range")]
     //[Authorize]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetPunchesByEmployeeAndDateRange(
         [FromRoute] int employeeId,
         [FromQuery] DateTime startDate,
@@ -117,6 +123,7 @@ public class AttendancePunchesController : ControllerBase
     /// <param name="endDate">Fecha de fin</param>
     [HttpGet("range")]
     //[Authorize]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetPunchesByDateRange(
         [FromQuery] DateTime startDate,
         [FromQuery] DateTime endDate,
@@ -141,6 +148,7 @@ public class AttendancePunchesController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("ATTENDANCE.CREATE")]
     public async Task<IActionResult> Create([FromBody] AttendancePunchesCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<AttendancePunches>(dto);
@@ -155,6 +163,7 @@ public class AttendancePunchesController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("ATTENDANCE.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] AttendancePunchesUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<AttendancePunches>(dto);
@@ -164,6 +173,7 @@ public class AttendancePunchesController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("ATTENDANCE.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

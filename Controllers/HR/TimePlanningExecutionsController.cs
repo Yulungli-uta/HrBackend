@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.TimePlanningExecution;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR
@@ -21,11 +22,13 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Lista todas las ejecuciones de un empleado en planificación.</summary>
         [HttpGet]
+        [RequirePermission("TIME_PLANNING.READ")]
         public async Task<IActionResult> GetByPlanEmployee([FromRoute] int planEmployeeId, CancellationToken ct) =>
             Ok(_mapper.Map<List<TimePlanningExecutionResponseDTO>>(await _svc.GetByPlanEmployeeIdAsync(planEmployeeId, ct)));
 
         /// <summary>Obtiene una ejecución por ID.</summary>
         [HttpGet("{id:int}")]
+        [RequirePermission("TIME_PLANNING.READ")]
         public async Task<IActionResult> GetById([FromRoute] int planEmployeeId, [FromRoute] int id, CancellationToken ct)
         {
             var execution = await _svc.GetByIdAsync(id, ct);
@@ -34,6 +37,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Registra tiempo de trabajo.</summary>
         [HttpPost]
+        [RequirePermission("TIME_PLANNING.CREATE")]
         public async Task<IActionResult> RegisterWorkTime([FromRoute] int planEmployeeId, [FromBody] TimePlanningExecutionCreateDTO dto, CancellationToken ct)
         {
             dto.PlanEmployeeID = planEmployeeId; // Asegurar coincidencia con la ruta
@@ -44,6 +48,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Actualiza una ejecución.</summary>
         [HttpPut("{id:int}")]
+        [RequirePermission("TIME_PLANNING.UPDATE")]
         public async Task<IActionResult> Update([FromRoute] int planEmployeeId, [FromRoute] int id, [FromBody] TimePlanningExecutionUpdateDTO dto, CancellationToken ct)
         {
             var execution = _mapper.Map<TimePlanningExecution>(dto);
@@ -53,6 +58,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Elimina una ejecución.</summary>
         [HttpDelete("{id:int}")]
+        [RequirePermission("TIME_PLANNING.DELETE")]
         public async Task<IActionResult> Delete([FromRoute] int planEmployeeId, [FromRoute] int id, CancellationToken ct)
         {
             await _svc.DeleteAsync(id, ct);

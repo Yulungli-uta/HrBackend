@@ -44,6 +44,7 @@ public class AppDbContext : DbContext
     public DbSet<OccupationalGroup> OccupationalGroup => Set<OccupationalGroup>();
     public DbSet<Degree> Degree => Set<Degree>();
     public DbSet<DepartmentAuthority> DepartmentAuthorities => Set<DepartmentAuthority>();
+    public DbSet<TramiteRequirement> TramiteRequirements => Set<TramiteRequirement>();
     public DbSet<ReportAudit> ReportAudits => Set<ReportAudit>();
     public DbSet<EmployeeLaborRegime> EmployeeLaborRegimes => Set<EmployeeLaborRegime>();
 
@@ -235,5 +236,24 @@ public class AppDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+
+        // Soft-delete: cualquier entidad que implemente ISoftDeletable queda excluida
+        // automáticamente de toda consulta EF Core normal (SELECT/paginación/Find) mientras
+        // IsDeleted=true — sin tener que agregar el filtro manualmente en cada consulta.
+        // ServiceAwareEfRepository<TEntity,TKey>.DeleteAsync ya marca IsDeleted=true en vez de
+        // borrar la fila cuando la entidad implementa esta interfaz.
+        // No aplica a SQL/Dapper crudo (reportes, consultas especializadas) — eso debe filtrar
+        // IsDeleted manualmente si lo usa.
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            if (!typeof(WsUtaSystem.Application.Common.Interfaces.ISoftDeletable).IsAssignableFrom(entityType.ClrType)) continue;
+
+            var parameter = System.Linq.Expressions.Expression.Parameter(entityType.ClrType, "e");
+            var property = System.Linq.Expressions.Expression.Property(parameter, nameof(WsUtaSystem.Application.Common.Interfaces.ISoftDeletable.IsDeleted));
+            var notDeleted = System.Linq.Expressions.Expression.Not(property);
+            var lambda = System.Linq.Expressions.Expression.Lambda(notDeleted, parameter);
+
+            modelBuilder.Entity(entityType.ClrType).HasQueryFilter(lambda);
+        }
     }
 }

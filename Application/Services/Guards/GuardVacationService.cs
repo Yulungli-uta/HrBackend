@@ -167,6 +167,9 @@ public class GuardVacationService : IGuardVacationService
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede aprobar planes de vacaciones.");
 
+        if (entity.EmployeeId == userId)
+            throw new InvalidOperationException("No puede aprobar su propia solicitud de vacaciones.");
+
         if (entity.StatusType?.Name != "PENDING_DIRECTION_APPROVAL")
             throw new InvalidOperationException($"Solo se pueden aprobar planes en estado PENDING_DIRECTION_APPROVAL. Estado actual: {entity.StatusType?.Name}");
 
@@ -197,6 +200,9 @@ public class GuardVacationService : IGuardVacationService
 
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede rechazar planes de vacaciones.");
+
+        if (entity.EmployeeId == userId)
+            throw new InvalidOperationException("No puede rechazar su propia solicitud de vacaciones.");
 
         var rejectedStatusId = await GetRefTypeIdAsync("GUARD_VACATION_PLAN_STATUS", "REJECTED", ct);
 

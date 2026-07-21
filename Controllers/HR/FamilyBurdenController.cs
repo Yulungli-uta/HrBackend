@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using WsUtaSystem.Application.DTOs.FamilyBurden;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -18,12 +19,14 @@ public class FamilyBurdenController : ControllerBase
 
     /// <summary>Lista todos los registros de FamilyBurden.</summary>
     [HttpGet]
+    [RequirePermission("EMPLOYEE_PROFILE.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<FamilyBurdenDto>>(await _svc.GetAllAsync(ct)));
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]
+    [RequirePermission("EMPLOYEE_PROFILE.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
@@ -33,6 +36,7 @@ public class FamilyBurdenController : ControllerBase
     /// <summary>Obtiene toda la carga familiar de una persona.</summary>
     /// <param name="personId">ID de la persona</param>
     [HttpGet("person/{personId:int}")]
+    [RequirePermission("EMPLOYEE_PROFILE.READ")]
     public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
     {
         var familyMembers = await _svc.GetByPersonIdAsync(personId);
@@ -41,6 +45,7 @@ public class FamilyBurdenController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("EMPLOYEE_PROFILE.CREATE")]
     public async Task<IActionResult> Create([FromBody] FamilyBurdenCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<FamilyBurden>(dto);
@@ -51,6 +56,7 @@ public class FamilyBurdenController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("EMPLOYEE_PROFILE.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] FamilyBurdenUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<FamilyBurden>(dto);
@@ -60,6 +66,7 @@ public class FamilyBurdenController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("EMPLOYEE_PROFILE.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

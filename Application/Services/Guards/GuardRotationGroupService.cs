@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Guards;
@@ -12,10 +13,51 @@ public class GuardRotationGroupService : IGuardRotationGroupService
     private readonly IGuardRotationGroupRepository _repo;
     private readonly AppDbContext _db;
 
+    // Cargos (HR.tbl_jobs.Description) que califican como "guardia" para el buscador de
+    // "Agregar guardias". Constante en código (no tabla de catálogo), mismo patrón ya usado
+    // en el proyecto (ver comentario en tbl_EmployeeCertificateRequests / CertificateType).
+    // Si se crea un cargo nuevo de guardia (ej. "Vigilante"), agregarlo aquí.
+    private static readonly string[] GuardJobNames =
+    {
+        "Guardia", "Guardián", "Guardián/Guardián Administrativo", "Guardias de Seguridad"
+    };
+
     public GuardRotationGroupService(IGuardRotationGroupRepository repo, AppDbContext db)
     {
         _repo = repo;
         _db = db;
+    }
+
+    public async Task<List<EligibleEmployeeDto>> GetEligibleEmployeesAsync(string? search, CancellationToken ct)
+    {
+        var query = _db.Set<WsUtaSystem.Models.Employees>()
+            .AsNoTracking()
+            .Include(e => e.People)
+            .Where(e => e.IsActive && e.JobId != null);
+
+        var jobIds = _db.Set<WsUtaSystem.Models.Job>()
+            .AsNoTracking()
+            .Where(j => j.Description != null && GuardJobNames.Contains(j.Description));
+
+        query = query.Where(e => jobIds.Any(j => j.JobID == e.JobId));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(e =>
+                (e.People!.FirstName + " " + e.People.LastName).ToLower().Contains(term) ||
+                (e.People.IdCard != null && e.People.IdCard.ToLower().Contains(term)));
+        }
+
+        return await query
+            .OrderBy(e => e.People!.FirstName).ThenBy(e => e.People!.LastName)
+            .Take(20)
+            .Select(e => new EligibleEmployeeDto(
+                e.EmployeeId,
+                $"{e.People!.FirstName} {e.People.LastName}",
+                e.People.IdCard,
+                e.Email ?? e.People.Email))
+            .ToListAsync(ct);
     }
 
     public async Task<List<GuardRotationGroupDto>> GetAllAsync(CancellationToken ct) =>
@@ -93,8 +135,18 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             ColorCode = dto.ColorCode,
             IsActive = true
         };
-        await _repo.AddAsync(entity, ct);
-        await _db.SaveChangesAsync(ct);
+
+        try
+        {
+            await _repo.AddAsync(entity, ct);
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            throw new InvalidOperationException(
+                $"Ya existe un grupo activo con el código \"{dto.GroupCode}\". Inactiva el grupo anterior o elige otro código.");
+        }
+
         return await GetByIdAsync(entity.GroupId, ct)
             ?? throw new InvalidOperationException("Error al recuperar el grupo creado.");
     }
@@ -110,7 +162,17 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         entity.ParentGroupId = dto.ParentGroupId;
         entity.GroupLevelTypeId = dto.GroupLevelTypeId;
         entity.ColorCode = dto.ColorCode;
-        await _db.SaveChangesAsync(ct);
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            throw new InvalidOperationException(
+                $"Ya existe un grupo activo con el código \"{dto.GroupCode}\". Inactiva el otro grupo o elige otro código.");
+        }
+
         return await GetByIdAsync(groupId, ct)
             ?? throw new InvalidOperationException("Error al recuperar el grupo actualizado.");
     }
@@ -330,13 +392,15 @@ public class GuardRotationGroupService : IGuardRotationGroupService
 
     public async Task<List<GuardRotationGroupWithSubgroupsDto>> GetGeneralGroupsWithSubgroupsAsync(CancellationToken ct)
     {
+        // Nota: los subgrupos se incluyen sin filtrar por IsActive (a diferencia de antes) para
+        // que el frontend pueda mostrar/filtrar inactivos en vez de que queden ocultos sin aviso.
         var generals = await _db.GuardRotationGroups
             .Where(g => g.ParentGroupId == null)
             .Include(g => g.GroupLevelType)
             .Include(g => g.Employees.Where(e => e.IsActive))
-            .Include(g => g.Subgroups.Where(s => s.IsActive))
+            .Include(g => g.Subgroups)
                 .ThenInclude(s => s.GroupLevelType)
-            .Include(g => g.Subgroups.Where(s => s.IsActive))
+            .Include(g => g.Subgroups)
                 .ThenInclude(s => s.Employees.Where(e => e.IsActive))
             .OrderBy(g => g.Name)
             .ToListAsync(ct);

@@ -16,6 +16,7 @@ public record EmployeeReportDto
     public string DepartmentCode { get; init; } = string.Empty;
     public string FacultyName { get; init; } = string.Empty;
     public string EmployeeType { get; init; } = string.Empty;
+    public string? JobTitle { get; init; }
     public bool IsActive { get; init; }
     public decimal BaseSalary { get; init; }
     public decimal NetSalary { get; init; }

@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.PersonnelActionType;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -62,6 +63,7 @@ public sealed class PersonnelActionTypeController : ControllerBase
 
     /// <summary>Crea un nuevo tipo de acción de personal.</summary>
     [HttpPost]
+    [RequirePermission("CATALOGS.CREATE")]
     [ProducesResponseType(typeof(PersonnelActionTypeDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> Create(
         [FromBody] PersonnelActionTypeCreateDto dto, CancellationToken ct)
@@ -77,6 +79,7 @@ public sealed class PersonnelActionTypeController : ControllerBase
 
     /// <summary>Actualiza un tipo de acción existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("CATALOGS.UPDATE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Update(
@@ -89,6 +92,7 @@ public sealed class PersonnelActionTypeController : ControllerBase
 
     /// <summary>Elimina un tipo de acción por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("CATALOGS.DELETE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
@@ -98,6 +102,7 @@ public sealed class PersonnelActionTypeController : ControllerBase
 
     /// <summary>Actualiza únicamente la plantilla predeterminada, sin afectar el resto del tipo de acción.</summary>
     [HttpPatch("{id:int}/default-template")]
+    [RequirePermission("CATALOGS.UPDATE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetDefaultTemplate(

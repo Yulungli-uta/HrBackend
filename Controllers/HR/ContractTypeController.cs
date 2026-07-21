@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.ContractType;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -31,6 +32,7 @@ public class ContractTypeController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("CATALOGS.CREATE")]
     public async Task<IActionResult> Create([FromBody] ContractTypeCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<ContractType>(dto);
@@ -41,6 +43,7 @@ public class ContractTypeController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("CATALOGS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] ContractTypeUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<ContractType>(dto);
@@ -50,6 +53,7 @@ public class ContractTypeController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("CATALOGS.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);
@@ -73,6 +77,7 @@ public class ContractTypeController : ControllerBase
     /// Enviar <c>templateId: null</c> para desvincular la plantilla.
     /// </summary>
     [HttpPatch("{id:int}/default-template")]
+    [RequirePermission("CATALOGS.UPDATE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetDefaultTemplate(
@@ -89,6 +94,7 @@ public class ContractTypeController : ControllerBase
     /// Contracts.IsDelegation = true). Enviar <c>templateId: null</c> para desvincular.
     /// </summary>
     [HttpPatch("{id:int}/delegation-template")]
+    [RequirePermission("CATALOGS.UPDATE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> SetDelegationTemplate(

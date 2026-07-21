@@ -6,6 +6,7 @@ using WsUtaSystem.Application.DTOs.KnowledgeArea;
 
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -36,10 +37,10 @@ public class KnowledgeAreaController : ControllerBase
     public async Task<IActionResult> GetByParentId([FromRoute] int parentId, CancellationToken ct)
     { 
         Console.WriteLine("*************************ParentId: " + parentId);
-        // Validación básica
+        // Validaciï¿½n bï¿½sica
         //if (parentId<=0)
         //{
-        //    return BadRequest("La parentId no puede estar vacía");
+        //    return BadRequest("La parentId no puede estar vacï¿½a");
         //}
 
         var entities = await _svc.GetByParentAsync(parentId, ct);
@@ -47,7 +48,7 @@ public class KnowledgeAreaController : ControllerBase
         // Si no se encuentran resultados, devolver un 404
         if (!entities.Any())
         {
-            return NotFound($"No se encontraron registros para la categoría '{parentId}'");
+            return NotFound($"No se encontraron registros para la categorï¿½a '{parentId}'");
         }
 
         return Ok(_mapper.Map<List<KnowledgeAreaDto>>(entities));
@@ -55,6 +56,7 @@ public class KnowledgeAreaController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("CATALOGS.CREATE")]
     public async Task<IActionResult> Create([FromBody] KnowledgeAreaCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<KnowledgeArea>(dto);
@@ -65,6 +67,7 @@ public class KnowledgeAreaController : ControllerBase
       
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("CATALOGS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] KnowledgeAreaUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<KnowledgeArea>(dto);
@@ -74,6 +77,7 @@ public class KnowledgeAreaController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("CATALOGS.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Interfaces.Services.Academic;
 using WsUtaSystem.Data;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models.Academic;
 
 namespace WsUtaSystem.Controllers.HR.Academic;
@@ -34,6 +35,7 @@ public class StudentProvisioningController : ControllerBase
 
     /// <summary>Lista registros de aprovisionamiento con paginación y filtro por estado.</summary>
     [HttpGet]
+    [RequirePermission("STUDENT_PROVISIONING.READ")]
     public async Task<IActionResult> List(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -78,6 +80,7 @@ public class StudentProvisioningController : ControllerBase
 
     /// <summary>Retorna un registro de aprovisionamiento por Id.</summary>
     [HttpGet("{id:guid}")]
+    [RequirePermission("STUDENT_PROVISIONING.READ")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
         var record = await _db.StudentProvisionings
@@ -103,6 +106,7 @@ public class StudentProvisioningController : ControllerBase
     /// Busca el AdObjectId en tbl_StudentProvisioning y delega la operación a RepositoryUta.
     /// </summary>
     [HttpPost("{studentId:int}/disable")]
+    [RequirePermission("STUDENT_PROVISIONING.MANAGE")]
     public async Task<IActionResult> Disable(int studentId, CancellationToken ct)
     {
         _logger.LogInformation(

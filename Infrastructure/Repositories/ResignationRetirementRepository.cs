@@ -19,6 +19,9 @@ public sealed class ResignationRetirementRepository : IResignationRetirementRepo
     private const string DocumentTypeContract = "CONTRACT";
     private const string DocumentTypePersonnelAction = "PERSONNEL_ACTION";
 
+    // StoredFile.Status: 1=Active, 2=Deleted, 3=Archived (ver Models/StoredFile.cs)
+    private const byte StoredFileActiveStatus = 1;
+
     private readonly AppDbContext _db;
 
     public ResignationRetirementRepository(AppDbContext db)
@@ -247,6 +250,16 @@ public sealed class ResignationRetirementRepository : IResignationRetirementRepo
                 .FirstOrDefaultAsync(ct);
         }
 
+        var requestIdText = requestId.ToString();
+        var supportingDocuments = await _db.StoredFiles.AsNoTracking()
+            .Where(f => f.DirectoryCode == ResignationRetirementDocument.DirectoryCode
+                        && f.EntityType == ResignationRetirementDocument.EntityType
+                        && f.EntityId == requestIdText
+                        && f.Status == StoredFileActiveStatus)
+            .OrderByDescending(f => f.CreatedAt)
+            .Select(f => new SignedDocumentSummaryDto(f.FileId, f.FileGuid, f.OriginalFileName, f.CreatedAt))
+            .ToListAsync(ct);
+
         return new ResignationRetirementDetailDto(
             RequestId: request.RequestId,
             RequestType: request.RequestType,
@@ -274,7 +287,8 @@ public sealed class ResignationRetirementRepository : IResignationRetirementRepo
             CancelledBy: request.CancelledBy,
             CancelledByName: request.CancelledBy.HasValue ? actorNames.GetValueOrDefault(request.CancelledBy.Value) : null,
             History: history,
-            RowVersion: request.RowVersion ?? []
+            RowVersion: request.RowVersion ?? [],
+            SupportingDocuments: supportingDocuments
         );
     }
 
@@ -345,6 +359,18 @@ public sealed class ResignationRetirementRepository : IResignationRetirementRepo
             .Select(h => new ResignationRetirementStatusHistoryDto(
                 h.HistoryId, h.RequestId, h.PreviousStatus, h.NewStatus, h.Action, h.Observation, h.CreatedAt, h.CreatedBy))
             .ToListAsync(ct);
+
+    /// <inheritdoc/>
+    public async Task<bool> StoredFileBelongsToRequestAsync(int requestId, int storedFileId, CancellationToken ct = default)
+    {
+        var requestIdText = requestId.ToString();
+        return await _db.StoredFiles.AsNoTracking()
+            .AnyAsync(f => f.FileId == storedFileId
+                           && f.DirectoryCode == ResignationRetirementDocument.DirectoryCode
+                           && f.EntityType == ResignationRetirementDocument.EntityType
+                           && f.EntityId == requestIdText
+                           && f.Status == StoredFileActiveStatus, ct);
+    }
 
     /// <inheritdoc/>
     public async Task AddAsync(ResignationRetirementRequest entity, CancellationToken ct = default)

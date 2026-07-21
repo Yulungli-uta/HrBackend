@@ -257,8 +257,11 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_GuardRotationGroups_Pare
     CREATE NONCLUSTERED INDEX [IX_GuardRotationGroups_Parent] ON [HR].[tbl_GuardRotationGroups] ([ParentGroupId]);
 GO
 
+-- Filtrado a solo grupos activos: un grupo inactivo libera su GroupCode para reutilizarlo
+-- en un grupo nuevo, en vez de bloquearlo indefinidamente.
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='UX_GuardRotationGroups_GroupCode')
-    CREATE UNIQUE NONCLUSTERED INDEX [UX_GuardRotationGroups_GroupCode] ON [HR].[tbl_GuardRotationGroups] ([GroupCode]);
+    CREATE UNIQUE NONCLUSTERED INDEX [UX_GuardRotationGroups_GroupCode] ON [HR].[tbl_GuardRotationGroups] ([GroupCode])
+    WHERE [GroupCode] IS NOT NULL AND [IsActive] = (1);
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_GuardServiceLocations_Assignable')

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.AcademicLadder;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -35,6 +36,7 @@ public class AcademicLadderController : ControllerBase
 
     /// <summary>Crea un nuevo escalafón.</summary>
     [HttpPost]
+    [RequirePermission("CATALOGS.CREATE")]
     public async Task<IActionResult> Create([FromBody] AcademicLadderCreateDto dto, CancellationToken ct)
     {
         var created = await _svc.CreateAsync(dto, ct);
@@ -43,6 +45,7 @@ public class AcademicLadderController : ControllerBase
 
     /// <summary>Actualiza un escalafón existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("CATALOGS.UPDATE")]
     public async Task<IActionResult> Update(int id, [FromBody] AcademicLadderUpdateDto dto, CancellationToken ct)
     {
         var updated = await _svc.UpdateAsync(id, dto, ct);

@@ -1,7 +1,7 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Docflow;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.Docflow
 {
@@ -40,7 +40,7 @@ namespace WsUtaSystem.Controllers.Docflow
         /// <response code="200">Procesos obtenidos exitosamente</response>
         /// <response code="401">Usuario no autenticado</response>
         [HttpGet]
-        [AllowAnonymous]
+        [RequirePermission("DOCFLOW.READ")]
         [ProducesResponseType(typeof(IEnumerable<ProcessDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetAll(CancellationToken ct)
@@ -66,7 +66,7 @@ namespace WsUtaSystem.Controllers.Docflow
         /// <response code="404">Proceso no encontrado</response>
         /// <response code="401">Usuario no autenticado</response>
         [HttpGet("{processId:int}")]
-        [AllowAnonymous]
+        [RequirePermission("DOCFLOW.READ")]
         [ProducesResponseType(typeof(ProcessDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -134,6 +134,7 @@ namespace WsUtaSystem.Controllers.Docflow
         /// <response code="400">Datos inválidos</response>
         /// <response code="401">Usuario no autenticado</response>
         [HttpPost]
+        [RequirePermission("DOCFLOW.CREATE")]
         [ProducesResponseType(typeof(ProcessDto), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -173,6 +174,7 @@ namespace WsUtaSystem.Controllers.Docflow
         /// <response code="400">Datos inválidos</response>
         /// <response code="401">Usuario no autenticado</response>
         [HttpPut("{processId:int}")]
+        [RequirePermission("DOCFLOW.UPDATE")]
         [ProducesResponseType(typeof(ProcessDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -218,6 +220,7 @@ namespace WsUtaSystem.Controllers.Docflow
         /// <response code="400">No se puede eliminar el proceso (validación de negocio)</response>
         /// <response code="401">Usuario no autenticado</response>
         [HttpDelete("{processId:int}")]
+        [RequirePermission("DOCFLOW.DELETE")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -256,7 +259,7 @@ namespace WsUtaSystem.Controllers.Docflow
         /// <response code="404">Proceso no encontrado</response>
         /// <response code="401">Usuario no autenticado</response>
         [HttpGet("{processId:int}/dynamic-fields")]
-        [AllowAnonymous]
+        [RequirePermission("DOCFLOW.READ")]
         [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -295,6 +298,7 @@ namespace WsUtaSystem.Controllers.Docflow
         /// <response code="403">Usuario sin permisos suficientes</response>
         //[Authorize(Roles = "ADMIN,DOCFLOW_ADMIN")]
         [HttpPut("{processId:int}/dynamic-fields")]
+        [RequirePermission("DOCFLOW.MANAGE")]
         [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]

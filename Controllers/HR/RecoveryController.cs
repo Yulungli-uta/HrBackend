@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.StoredProcedures;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -20,6 +21,7 @@ public class RecoveryController : ControllerBase
     /// </summary>
     /// <param name="request">Rango de fechas y empleado opcional</param>
     [HttpPost("apply")]
+    [RequirePermission("TIME_RECOVERY.MANAGE")]
     public async Task<IActionResult> ApplyRecovery([FromBody] AttendanceCalculationRequestDto request, CancellationToken ct)
     {
         await _svc.ApplyRecoveryAsync(request.FromDate, request.ToDate, request.EmployeeId, ct);

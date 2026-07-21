@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using WsUtaSystem.Application.DTOs.RefTypes;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -33,10 +34,10 @@ public class RefTypesController : ControllerBase
     [HttpGet("category/{category}")]
     public async Task<IActionResult> GetByCategory([FromRoute] string category, CancellationToken ct)
     {
-        // Validación básica
+        // Validaciï¿½n bï¿½sica
         if (string.IsNullOrWhiteSpace(category))
         {
-            return BadRequest("La categoría no puede estar vacía");
+            return BadRequest("La categorï¿½a no puede estar vacï¿½a");
         }
 
         var entities = await _svc.GetByCategoryAsync(category, ct);
@@ -44,7 +45,7 @@ public class RefTypesController : ControllerBase
         // Si no se encuentran resultados, devolver un 404
         if (!entities.Any())
         {
-            return NotFound($"No se encontraron registros para la categoría '{category}'");
+            return NotFound($"No se encontraron registros para la categorï¿½a '{category}'");
         }
 
         return Ok(_mapper.Map<List<RefTypesDto>>(entities));
@@ -52,6 +53,7 @@ public class RefTypesController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("CATALOGS.CREATE")]
     public async Task<IActionResult> Create([FromBody] RefTypesCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<RefTypes>(dto);
@@ -60,18 +62,20 @@ public class RefTypesController : ControllerBase
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<RefTypesDto>(created));
     }
-      
+
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("CATALOGS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] RefTypesUpdateDto dto, CancellationToken ct)
     {
-        var entityObj = _mapper.Map<RefTypes>(dto);        
+        var entityObj = _mapper.Map<RefTypes>(dto);
         await _svc.UpdateAsync(id, entityObj, ct);
         return NoContent();
     }
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("CATALOGS.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

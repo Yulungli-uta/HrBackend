@@ -208,7 +208,17 @@ public class ServiceAwareEfRepository<TEntity, TKey> : IRepository<TEntity, TKey
     public async Task DeleteAsync(TEntity entity, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(entity);
-        _set.Remove(entity);
+
+        if (entity is ISoftDeletable softDeletable)
+        {
+            softDeletable.IsDeleted = true;
+            _set.Update(entity);
+        }
+        else
+        {
+            _set.Remove(entity);
+        }
+
         await _db.SaveChangesAsync(ct);
     }
 

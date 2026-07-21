@@ -7,6 +7,7 @@ using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Documents.Templates;
 using WsUtaSystem.Application.Interfaces.Services.Documents;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.Documents;
 
@@ -48,6 +49,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// <param name="status">Estado de la plantilla (Draft, Published, Archived).</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpGet]
+    [RequirePermission("DOCUMENTS.READ")]
     [ProducesResponseType(typeof(IReadOnlyList<DocumentTemplateSummaryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAll(
         [FromQuery] string? templateType,
@@ -64,6 +66,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// <param name="id">Identificador de la plantilla.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpGet("{id:int}")]
+    [RequirePermission("DOCUMENTS.READ")]
     [ProducesResponseType(typeof(DocumentTemplateDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
@@ -78,6 +81,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// <param name="request">Datos de la nueva plantilla.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPost]
+    [RequirePermission("DOCUMENTS.CREATE")]
     [ProducesResponseType(typeof(object), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create(
@@ -98,6 +102,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// <param name="request">Datos actualizados.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPut("{id:int}")]
+    [RequirePermission("DOCUMENTS.UPDATE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Update(
@@ -118,6 +123,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// <param name="request">Nuevo estado y motivo del cambio.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPatch("{id:int}/status")]
+    [RequirePermission("DOCUMENTS.UPDATE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> ChangeStatus(
@@ -139,6 +145,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// <param name="request">Contexto de previsualización (entityId, overrides).</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPost("preview")]
+    [RequirePermission("DOCUMENTS.READ")]
     [ProducesResponseType(typeof(PreviewTemplateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Preview(
@@ -159,6 +166,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// <param name="id">Identificador de la plantilla.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpGet("{id:int}/fields")]
+    [RequirePermission("DOCUMENTS.READ")]
     [ProducesResponseType(typeof(IReadOnlyList<DocumentTemplateFieldDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetFields([FromRoute] int id, CancellationToken ct)
     {
@@ -173,6 +181,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// <param name="request">Datos del nuevo campo.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPost("{id:int}/fields")]
+    [RequirePermission("DOCUMENTS.CREATE")]
     [ProducesResponseType(typeof(object), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> AddField(
@@ -193,6 +202,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// <param name="request">Datos actualizados del campo.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPut("{id:int}/fields/{fieldId:int}")]
+    [RequirePermission("DOCUMENTS.UPDATE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpdateField(
@@ -214,6 +224,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// <param name="fieldId">Identificador del campo a eliminar.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpDelete("{id:int}/fields/{fieldId:int}")]
+    [RequirePermission("DOCUMENTS.DELETE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> DeleteField(
@@ -234,6 +245,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// La nueva versión copia el contenido y campos del origen y queda en estado Draft.
     /// </summary>
     [HttpPost("{id:int}/version")]
+    [RequirePermission("DOCUMENTS.CREATE")]
     [ProducesResponseType(typeof(CreateVersionResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -251,6 +263,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// Obtiene el historial de versiones de todas las plantillas con el mismo código.
     /// </summary>
     [HttpGet("code/{code}/versions")]
+    [RequirePermission("DOCUMENTS.READ")]
     [ProducesResponseType(typeof(IReadOnlyList<TemplateVersionSummaryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetVersionsByCode([FromRoute] string code, CancellationToken ct)
     {
@@ -270,6 +283,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// <param name="id">Identificador de la plantilla.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpGet("{id:int}/contract-types")]
+    [RequirePermission("DOCUMENTS.READ")]
     [ProducesResponseType(typeof(IReadOnlyList<TemplateContractTypeOptionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetContractTypesForTemplate([FromRoute] int id, CancellationToken ct)
     {
@@ -282,6 +296,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// el diálogo "Usar esta versión" en el editor.
     /// </summary>
     [HttpGet("{id:int}/action-types")]
+    [RequirePermission("DOCUMENTS.READ")]
     [ProducesResponseType(typeof(IReadOnlyList<TemplateActionTypeOptionDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetActionTypesForTemplate([FromRoute] int id, CancellationToken ct)
     {
@@ -294,6 +309,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// junto con los placeholders legados {N} detectados para facilitar la migración.
     /// </summary>
     [HttpGet("contract-types/{contractTypeId:int}/import-text")]
+    [RequirePermission("DOCUMENTS.READ")]
     [ProducesResponseType(typeof(ImportContractTextResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ImportContractText([FromRoute] int contractTypeId, CancellationToken ct)
@@ -307,6 +323,7 @@ public sealed class DocumentTemplatesController : ControllerBase
     /// Útil para detectar los campos que necesita una plantilla antes de guardarla.
     /// </summary>
     [HttpPost("extract-tokens")]
+    [RequirePermission("DOCUMENTS.READ")]
     [ProducesResponseType(typeof(ExtractTokensResponse), StatusCodes.Status200OK)]
     public IActionResult ExtractTokens([FromBody] ExtractTokensRequest request)
     {

@@ -5,6 +5,7 @@ using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.AdditionalActivity;
 using WsUtaSystem.Models;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -40,6 +41,7 @@ public class AdditionalActivityController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("CATALOGS.CREATE")]
     public async Task<IActionResult> Create([FromBody] AdditionalActivityCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<AdditionalActivity>(dto);
@@ -50,6 +52,7 @@ public class AdditionalActivityController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("CATALOGS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] AdditionalActivityUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<AdditionalActivity>(dto);
@@ -59,6 +62,7 @@ public class AdditionalActivityController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("CATALOGS.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Holiday;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR
@@ -50,6 +51,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Crea un nuevo feriado.</summary>
         [HttpPost]
+        [RequirePermission("CATALOGS.CREATE")]
         public async Task<IActionResult> Create([FromBody] HolidayResponseDTO dto, CancellationToken ct)
         {
             var holiday = _mapper.Map<Holiday>(dto);
@@ -59,6 +61,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Actualiza un feriado existente.</summary>
         [HttpPut("{id:int}")]
+        [RequirePermission("CATALOGS.UPDATE")]
         public async Task<IActionResult> Update([FromRoute] int id, [FromBody] HolidayCreateDTO dto, CancellationToken ct)
         {
             var holiday = _mapper.Map<Holiday>(dto);
@@ -68,6 +71,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Elimina un feriado por ID.</summary>
         [HttpDelete("{id:int}")]
+        [RequirePermission("CATALOGS.DELETE")]
         public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
         {
             await _svc.DeleteAsync(id, ct);

@@ -1,7 +1,7 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Docflow;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.Docflow
 {
@@ -38,7 +38,7 @@ namespace WsUtaSystem.Controllers.Docflow
         /// <response code="404">Proceso no encontrado</response>
         /// <response code="401">Usuario no autenticado</response>
         [HttpGet]
-        [AllowAnonymous]
+        [RequirePermission("DOCFLOW.READ")]
         [ProducesResponseType(typeof(IEnumerable<DocumentRuleDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -74,6 +74,7 @@ namespace WsUtaSystem.Controllers.Docflow
         /// <response code="404">Proceso no encontrado</response>
         /// <response code="401">Usuario no autenticado</response>
         [HttpPost]
+        [RequirePermission("DOCFLOW.CREATE")]
         [ProducesResponseType(typeof(DocumentRuleDto), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -121,6 +122,7 @@ namespace WsUtaSystem.Controllers.Docflow
         /// <response code="400">Datos inválidos</response>
         /// <response code="401">Usuario no autenticado</response>
         [HttpPut("{ruleId:int}")]
+        [RequirePermission("DOCFLOW.UPDATE")]
         [ProducesResponseType(typeof(DocumentRuleDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -171,6 +173,7 @@ namespace WsUtaSystem.Controllers.Docflow
         /// <response code="400">No se puede eliminar la regla (validación de negocio)</response>
         /// <response code="401">Usuario no autenticado</response>
         [HttpDelete("{ruleId:int}")]
+        [RequirePermission("DOCFLOW.DELETE")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]

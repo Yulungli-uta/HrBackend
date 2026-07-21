@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR
 {
@@ -12,6 +13,7 @@ namespace WsUtaSystem.Controllers.HR
         public HrBalancesController(IHrBalanceService svc) => _svc = svc;
 
         [HttpGet("{employeeId:int}")]
+        [RequirePermission("ATTENDANCE.READ")]
         public async Task<IActionResult> Get(int employeeId)
         {
             var (bal, movs) = await _svc.GetBalancesAsync(employeeId);
@@ -19,6 +21,7 @@ namespace WsUtaSystem.Controllers.HR
         }
 
         [HttpPost("{employeeId:int}/accrual/daily")]
+        [RequirePermission("ATTENDANCE.MANAGE")]
         public async Task<IActionResult> DailyAccrual(int employeeId)
         {
             var res = await _svc.RunDailyAccrualAsync(employeeId, null, null);

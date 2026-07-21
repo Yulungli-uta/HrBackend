@@ -137,6 +137,18 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
             }
         }
 
+        // Modalidad de trabajo (TC/MT/Horas) del contrato, resuelta a texto vía catálogo
+        // (mismo patrón que ContractsService.cs usa para WorkModalityName en reportes).
+        string? workModalityName = null;
+        if (contract?.WorkModalityID is not null)
+        {
+            workModalityName = await _db.RefTypes
+                .AsNoTracking()
+                .Where(r => r.TypeId == contract.WorkModalityID.Value && r.Category == "WORK_MODALITY")
+                .Select(r => r.Name)
+                .FirstOrDefaultAsync(ct);
+        }
+
         // ── Cargar movimiento de personal (si aplica) ────────────────────────────
         // FieldSourceType es enum real → comparar directamente (no usar ToString())
         PersonnelMovements? movement = null;
@@ -170,7 +182,7 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
             if (field.SourceType == FieldSourceType.System)
                 resolved = ResolveSystemField(field.FieldName, authorities);
             else if (employee is not null)
-                resolved = ResolveField(field, employee, contract, contractType, department, job, movement);
+                resolved = ResolveField(field, employee, contract, contractType, department, job, movement, workModalityName);
 
             // 3. Fallback al valor por defecto de la plantilla
             result[field.FieldName] = resolved ?? field.DefaultValue ?? string.Empty;
@@ -192,12 +204,13 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
         ContractType? contractType,
         Departments? department,
         Job? job,
-        PersonnelMovements? movement)
+        PersonnelMovements? movement,
+        string? workModalityName)
     {
         return field.SourceType switch
         {
             FieldSourceType.Employee => ResolveEmployeeField(field.FieldName, employee),
-            FieldSourceType.Contract => ResolveContractField(field.FieldName, contract, contractType, department, job),
+            FieldSourceType.Contract => ResolveContractField(field.FieldName, contract, contractType, department, job, workModalityName),
             FieldSourceType.Movement => ResolveMovementField(field.FieldName, movement),
             FieldSourceType.Manual   => null,
             _                        => null
@@ -239,7 +252,8 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
         Contracts? contract,
         ContractType? contractType,
         Departments? department,
-        Job? job)
+        Job? job,
+        string? workModalityName)
     {
         if (contract is null) return null;
 
@@ -247,6 +261,11 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
         {
             "CONTRACT_CODE"        => contract.ContractCode,
             "CONTRACT_TYPE"        => contractType?.Name,
+            // Horas contratadas y modalidad (TC/MT/Horas): auto-pobladas en el contrato desde
+            // la solicitud (ver Contracts.ContractedHours/WorkModalityID) — nunca manuales,
+            // para que la carta de Profesor Ocasional refleje la carga real del contrato.
+            "WEEKLY_HOURS"         => contract.ContractedHours?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
+            "DEDICATION_TYPE"      => workModalityName,
             // Alias: CONTRATO_PROFESOR_OCASIONAL usa CONTRACT_START_DATE/CONTRACT_END_DATE
             // (con guión bajo extra) en vez de la convención CONTRACT_STARTDATE/ENDDATE
             // usada por las plantillas CONTRATO_TECNICO_*.

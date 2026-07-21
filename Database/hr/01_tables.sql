@@ -536,7 +536,8 @@ CREATE TABLE [HR].[tbl_Contracts] (
     [IsDelegation] BIT DEFAULT ((0)) NOT NULL,
     [LaborRegimeID] INT NULL,
     [WorkModalityID] INT NULL,
-    [ContractedHours] DECIMAL(5,2) NULL
+    [ContractedHours] DECIMAL(5,2) NULL,
+    [IsDeleted] BIT DEFAULT ((0)) NOT NULL
 );
 GO
 
@@ -816,7 +817,7 @@ CREATE TABLE [HR].[tbl_Employees] (
     [UpdatedAt] DATETIME2 NULL,
     [RowVersion] TIMESTAMP NOT NULL,
     [JobID] INT NULL,
-    [LaborRegimeID] INT NULL
+    [IsDeleted] BIT DEFAULT ((0)) NOT NULL
 );
 GO
 
@@ -1616,7 +1617,8 @@ CREATE TABLE [HR].[tbl_PersonnelActions] (
     [RegistrarID] INT NULL,
     [InstitutionalProcess] INT NULL,
     [ManagementLevel] INT NULL,
-    [SwornDeclaration] BIT DEFAULT ((0)) NOT NULL
+    [SwornDeclaration] BIT DEFAULT ((0)) NOT NULL,
+    [IsDeleted] BIT DEFAULT ((0)) NOT NULL
 );
 GO
 
@@ -2134,7 +2136,8 @@ CREATE TABLE [HR].[tbl_Vacations] (
     [ApprovedBy] INT NULL,
     [ApprovedAt] DATETIME2 NULL,
     [CreatedBy] INT NULL,
-    [UpdatedBy] INT NULL
+    [UpdatedBy] INT NULL,
+    [IsDeleted] BIT DEFAULT ((0)) NOT NULL
 );
 GO
 

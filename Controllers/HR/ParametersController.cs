@@ -5,6 +5,7 @@ using WsUtaSystem.Application.DTOs.Parameters;
 using WsUtaSystem.Application.DTOs.RefTypes;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -49,6 +50,7 @@ public class ParametersController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("CATALOGS.CREATE")]
     public async Task<IActionResult> Create([FromBody] ParametersCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Parameters>(dto);
@@ -60,6 +62,7 @@ public class ParametersController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("CATALOGS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] ParametersUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Parameters>(dto);
@@ -70,6 +73,7 @@ public class ParametersController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("CATALOGS.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

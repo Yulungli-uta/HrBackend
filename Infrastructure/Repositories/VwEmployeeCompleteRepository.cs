@@ -108,6 +108,63 @@ namespace WsUtaSystem.Infrastructure.Repositories
                 TotalCount = totalCount
             };
         }
+        public async Task<PagedResult<VwEmployeeComplete>> GetPagedAsync(
+            string? search,
+            int? employeeType,
+            string? department,
+            bool? isActive,
+            int page,
+            int pageSize,
+            CancellationToken ct = default)
+        {
+            var query = Query();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim().ToLower();
+
+                query = query.Where(e =>
+                    (e.FirstName != null && e.FirstName.ToLower().Contains(term)) ||
+                    (e.LastName != null && e.LastName.ToLower().Contains(term)) ||
+                    (e.FullName != null && e.FullName.ToLower().Contains(term)) ||
+                    (e.IDCard != null && e.IDCard.ToLower().Contains(term)) ||
+                    (e.Email != null && e.Email.ToLower().Contains(term)) ||
+                    (e.Department != null && e.Department.ToLower().Contains(term)));
+            }
+
+            if (employeeType.HasValue)
+            {
+                query = query.Where(e => e.EmployeeType == employeeType.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(department))
+            {
+                query = query.Where(e => e.Department == department);
+            }
+
+            if (isActive.HasValue)
+            {
+                query = query.Where(e => e.EmployeeIsActive == isActive.Value);
+            }
+
+            var totalCount = await query.LongCountAsync(ct);
+
+            var items = await query
+                .OrderBy(e => e.FirstName)
+                .ThenBy(e => e.LastName)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(ct);
+
+            return new PagedResult<VwEmployeeComplete>
+            {
+                Items = items,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount
+            };
+        }
+
         public async Task<List<ContractTypeCountDto>> GetByContractTypeAsync(CancellationToken ct = default)
         {
             return await Query()

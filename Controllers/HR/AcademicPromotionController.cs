@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -26,6 +27,7 @@ public sealed class AcademicPromotionController : ControllerBase
     /// <summary>Perfil académico del docente, buscado por su identificación (cédula).</summary>
     /// <param name="identification">Cédula del docente.</param>
     [HttpGet("{identification}")]
+    [RequirePermission("EMPLOYEES.READ")]
     public async Task<IActionResult> GetProfile([FromRoute] string identification, CancellationToken ct)
     {
         if (!await _service.IsCurrentUserAuthorizedAsync(ct))

@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Docflow;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.Docflow;
 
@@ -27,6 +28,7 @@ public sealed class DocflowDirectoryController : ControllerBase
     /// <param name="ct">Token de cancelación</param>
     /// <returns>Lista de parámetros del catálogo solicitado</returns>
     [HttpGet("{type}")]
+    [RequirePermission("DOCFLOW.READ")]
     [ProducesResponseType(typeof(IEnumerable<DirectoryParameterDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]

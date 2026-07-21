@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.ResignationRetirement;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -75,6 +76,7 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
     /// No existe forma de indicar otro EmployeeId — se resuelve siempre del token.
     /// </summary>
     [HttpPost("my")]
+    [RequirePermission("RESIGNATION_RETIREMENT.CREATE")]
     [ProducesResponseType(typeof(ResignationRetirementDetailDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateMy([FromBody] CreateResignationRetirementRequest request, CancellationToken ct)
@@ -91,6 +93,7 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
 
     /// <summary>Lista las solicitudes del usuario autenticado. Filtra siempre por su propio EmployeeId.</summary>
     [HttpGet("my")]
+    [RequirePermission("RESIGNATION_RETIREMENT.READ")]
     [ProducesResponseType(typeof(PagedResignationRetirementResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMy([FromQuery] ResignationRetirementQueryFilter filter, CancellationToken ct)
     {
@@ -101,6 +104,7 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
 
     /// <summary>Detalle de una solicitud propia.</summary>
     [HttpGet("my/{id:int}")]
+    [RequirePermission("RESIGNATION_RETIREMENT.READ")]
     [ProducesResponseType(typeof(ResignationRetirementDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetMyById([FromRoute] int id, CancellationToken ct)
@@ -112,6 +116,7 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
 
     /// <summary>Actualiza una solicitud propia editable (PENDIENTE o DEVUELTO).</summary>
     [HttpPut("my/{id:int}")]
+    [RequirePermission("RESIGNATION_RETIREMENT.UPDATE")]
     [ProducesResponseType(typeof(ResignationRetirementDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpdateMy([FromRoute] int id, [FromBody] UpdateResignationRetirementRequest request, CancellationToken ct)
@@ -123,6 +128,7 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
 
     /// <summary>Cancela (desiste) una solicitud propia mientras no haya sido resuelta por RRHH.</summary>
     [HttpPost("my/{id:int}/cancel")]
+    [RequirePermission("RESIGNATION_RETIREMENT.CANCEL")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CancelMy([FromRoute] int id, [FromBody] CancelResignationRetirementRequest request, CancellationToken ct)
@@ -140,6 +146,7 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
     /// Solo mientras la solicitud sigue editable (PENDIENTE o DEVUELTO).
     /// </summary>
     [HttpPost("my/{id:int}/generate-document")]
+    [RequirePermission("RESIGNATION_RETIREMENT.GENERATE_DOCUMENT")]
     [ProducesResponseType(typeof(ResignationRetirementDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GenerateMyDocument([FromRoute] int id, CancellationToken ct)
@@ -151,6 +158,7 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
 
     /// <summary>Descarga la carta generada (sin firmar) — solo el dueño de la solicitud.</summary>
     [HttpGet("my/{id:int}/download-document")]
+    [RequirePermission("RESIGNATION_RETIREMENT.DOWNLOAD")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> DownloadMyDocument([FromRoute] int id, CancellationToken ct)
     {
@@ -165,6 +173,7 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
 
     /// <summary>Lista todas las solicitudes con filtros, restringidas al scope de departamento del revisor.</summary>
     [HttpGet]
+    [RequirePermission("RESIGNATION_RETIREMENT.READ")]
     [ProducesResponseType(typeof(PagedResignationRetirementResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPaged([FromQuery] ResignationRetirementQueryFilter filter, CancellationToken ct)
     {
@@ -179,6 +188,7 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
 
     /// <summary>Detalle completo de una solicitud para revisión de Recursos Humanos.</summary>
     [HttpGet("{id:int}")]
+    [RequirePermission("RESIGNATION_RETIREMENT.READ")]
     [ProducesResponseType(typeof(ResignationRetirementDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
@@ -188,23 +198,31 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Aprueba la solicitud. Requiere contrato/nombramiento/acción vigente del empleado.</summary>
+    /// <summary>
+    /// Aprueba la solicitud. Requiere contrato/nombramiento/acción vigente del empleado y el
+    /// documento de renuncia/jubilación ya firmado (StoredFileId, subido antes vía
+    /// <c>POST api/v1/rh/documents/upload-single</c>). Al aprobar: crea y finaliza la acción de
+    /// personal de desvinculación vinculada, lo que bloquea la cuenta institucional del
+    /// empleado y, si tenía un contrato vigente, lo cierra a RENUNCIA.
+    /// </summary>
     [HttpPost("{id:int}/approve")]
+    [RequirePermission("RESIGNATION_RETIREMENT.APPROVE")]
     [ProducesResponseType(typeof(ResignationRetirementDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Approve([FromRoute] int id, [FromBody] ReviewResignationRetirementRequest request, CancellationToken ct)
+    public async Task<IActionResult> Approve([FromRoute] int id, [FromBody] ApproveResignationRetirementRequest request, CancellationToken ct)
     {
         await EnsureReviewerCanAccessAsync(await _service.GetDetailByIdAsync(id, ct), ct);
         var reviewedBy = RequireEmployeeId();
-        var result = await _service.ApproveAsync(id, reviewedBy, request, ct);
+        var result = await _service.UploadSignedDocumentAsync(id, reviewedBy, request, ct);
 
-        _logger.LogInformation("Solicitud Id={RequestId} APROBADA por EmployeeId={EmployeeId}", id, reviewedBy);
+        _logger.LogInformation("Solicitud Id={RequestId} APROBADA (documento firmado cargado) por EmployeeId={EmployeeId}", id, reviewedBy);
 
         return Ok(result);
     }
 
     /// <summary>Rechaza la solicitud. Observación obligatoria.</summary>
     [HttpPost("{id:int}/reject")]
+    [RequirePermission("RESIGNATION_RETIREMENT.REJECT")]
     [ProducesResponseType(typeof(ResignationRetirementDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Reject([FromRoute] int id, [FromBody] ReviewResignationRetirementRequest request, CancellationToken ct)
@@ -220,6 +238,7 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
 
     /// <summary>Devuelve la solicitud para corrección del solicitante. Observación obligatoria.</summary>
     [HttpPost("{id:int}/return")]
+    [RequirePermission("RESIGNATION_RETIREMENT.RETURN")]
     [ProducesResponseType(typeof(ResignationRetirementDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Return([FromRoute] int id, [FromBody] ReviewResignationRetirementRequest request, CancellationToken ct)
@@ -235,6 +254,7 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
 
     /// <summary>Cancela la solicitud por decisión administrativa de Recursos Humanos.</summary>
     [HttpPost("{id:int}/cancel")]
+    [RequirePermission("RESIGNATION_RETIREMENT.CANCEL")]
     [ProducesResponseType(typeof(ResignationRetirementDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Cancel([FromRoute] int id, [FromBody] CancelResignationRetirementRequest request, CancellationToken ct)
@@ -250,6 +270,7 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
 
     /// <summary>Descarga la carta generada (sin firmar) — vista de Recursos Humanos.</summary>
     [HttpGet("{id:int}/download-document")]
+    [RequirePermission("RESIGNATION_RETIREMENT.DOWNLOAD")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> DownloadDocument([FromRoute] int id, CancellationToken ct)
     {
@@ -261,6 +282,7 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
 
     /// <summary>Historial completo de cambios de estado de una solicitud.</summary>
     [HttpGet("{id:int}/history")]
+    [RequirePermission("RESIGNATION_RETIREMENT.READ")]
     [ProducesResponseType(typeof(IReadOnlyList<ResignationRetirementStatusHistoryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetHistory([FromRoute] int id, CancellationToken ct)
     {

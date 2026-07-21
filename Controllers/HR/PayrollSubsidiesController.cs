@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.StoredProcedures;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -20,6 +21,7 @@ public class PayrollSubsidiesController : ControllerBase
     /// </summary>
     /// <param name="request">Período en formato YYYY-MM</param>
     [HttpPost("subsidies")]
+    [RequirePermission("PAYROLL.MANAGE")]
     public async Task<IActionResult> CalculateSubsidies([FromBody] PayrollPeriodRequestDto request, CancellationToken ct)
     {
         await _svc.CalculateSubsidiesAsync(request.Period, ct);

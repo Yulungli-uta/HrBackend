@@ -1,9 +1,11 @@
 
 using WsUtaSystem.Application.Interfaces.Auditable;
+using WsUtaSystem.Application.Common.Interfaces;
 
 namespace WsUtaSystem.Models;
-public class Vacations : IAuditable{
+public class Vacations : IAuditable, ISoftDeletable{
   public int VacationId { get; set; }
+  public bool IsDeleted { get; set; } = false;
   public int EmployeeId { get; set; }
   public DateOnly StartDate { get; set; }
   public DateOnly EndDate { get; set; }

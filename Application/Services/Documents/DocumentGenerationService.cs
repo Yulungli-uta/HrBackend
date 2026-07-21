@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Application.DTOs.Documents.GeneratedDocuments;
 using WsUtaSystem.Application.Interfaces.Repositories.Documents;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Interfaces.Services.Documents;
 using WsUtaSystem.Models;
 using WsUtaSystem.Reports.Abstractions;
@@ -21,6 +22,8 @@ public sealed class DocumentGenerationService : IDocumentGenerationService
     private readonly IDocumentFieldResolver _fieldResolver;
     private readonly IDocumentTemplateEngine _templateEngine;
     private readonly IDocumentRendererFactory _rendererFactory;
+    private readonly IStoredFileService _storedFileService;
+    private readonly IFileManagementService _fileManagementService;
     private readonly ILogger<DocumentGenerationService> _logger;
 
     public DocumentGenerationService(
@@ -30,6 +33,8 @@ public sealed class DocumentGenerationService : IDocumentGenerationService
         IDocumentFieldResolver fieldResolver,
         IDocumentTemplateEngine templateEngine,
         IDocumentRendererFactory rendererFactory,
+        IStoredFileService storedFileService,
+        IFileManagementService fileManagementService,
         ILogger<DocumentGenerationService> logger)
     {
         _templateRepository = templateRepository;
@@ -38,6 +43,8 @@ public sealed class DocumentGenerationService : IDocumentGenerationService
         _fieldResolver = fieldResolver;
         _templateEngine = templateEngine;
         _rendererFactory = rendererFactory;
+        _storedFileService = storedFileService;
+        _fileManagementService = fileManagementService;
         _logger = logger;
     }
 
@@ -194,6 +201,21 @@ public sealed class DocumentGenerationService : IDocumentGenerationService
     {
         var document = await _documentRepository.GetByIdAsync(documentId, ct)
             ?? throw new KeyNotFoundException($"Documento generado {documentId} no encontrado.");
+
+        // Si RRHH ya adjuntó un archivo físico (ej. certificado/carta firmada, escaneada
+        // y subida durante la aprobación), ese es el documento real a entregar — no se
+        // vuelve a renderizar el HTML sin firma.
+        if (document.StoredFileId.HasValue)
+        {
+            var storedFile = await _storedFileService.GetByIdAsync(document.StoredFileId.Value, ct)
+                ?? throw new KeyNotFoundException($"Archivo almacenado {document.StoredFileId.Value} no encontrado.");
+
+            var relativeFilePath = Path.Combine(storedFile.RelativeFolder, storedFile.StoredFileName);
+            var downloaded = await _fileManagementService.DownloadFileAsync(storedFile.DirectoryCode, relativeFilePath, ct)
+                ?? throw new KeyNotFoundException($"No se pudo leer el archivo físico del documento {documentId}.");
+
+            return (downloaded.fileBytes, document.FileName, downloaded.contentType);
+        }
 
         string renderedHtml;
         string? cssStyles;

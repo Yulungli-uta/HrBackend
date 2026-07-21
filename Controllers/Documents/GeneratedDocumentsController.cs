@@ -7,6 +7,7 @@ using System.Net.Mime;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Documents.GeneratedDocuments;
 using WsUtaSystem.Application.Interfaces.Services.Documents;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.Documents;
 
@@ -45,6 +46,7 @@ public sealed class GeneratedDocumentsController : ControllerBase
     /// <param name="filter">Parámetros de búsqueda y paginación.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpGet]
+    [RequirePermission("DOCUMENTS.READ")]
     [ProducesResponseType(typeof(PagedDocumentResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPaged(
         [FromQuery] DocumentQueryFilter filter,
@@ -61,6 +63,7 @@ public sealed class GeneratedDocumentsController : ControllerBase
     /// <param name="id">Identificador del documento generado.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpGet("{id:int}")]
+    [RequirePermission("DOCUMENTS.READ")]
     [ProducesResponseType(typeof(GeneratedDocumentDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
@@ -81,6 +84,7 @@ public sealed class GeneratedDocumentsController : ControllerBase
     /// <param name="request">Datos de generación: plantilla, entidad y overrides.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPost]
+    [RequirePermission("DOCUMENTS.CREATE")]
     [ProducesResponseType(typeof(GenerateDocumentResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Generate(
@@ -108,6 +112,7 @@ public sealed class GeneratedDocumentsController : ControllerBase
     /// <param name="id">Identificador del documento generado.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpGet("{id:int}/download")]
+    [RequirePermission("DOCUMENTS.DOWNLOAD")]
     [Produces(MediaTypeNames.Application.Pdf)]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -134,6 +139,7 @@ public sealed class GeneratedDocumentsController : ControllerBase
     /// <param name="request">Datos de aprobación (observaciones, firma digital).</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPost("{id:int}/approve")]
+    [RequirePermission("DOCUMENTS.APPROVE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Approve(
@@ -158,6 +164,7 @@ public sealed class GeneratedDocumentsController : ControllerBase
     /// <param name="request">Nuevo estado y motivo del cambio.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPatch("{id:int}/status")]
+    [RequirePermission("DOCUMENTS.UPDATE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpdateStatus(

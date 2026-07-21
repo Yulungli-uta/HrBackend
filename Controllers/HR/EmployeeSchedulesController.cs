@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.EmployeeSchedules;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -22,11 +23,13 @@ public class EmployeeSchedulesController : ControllerBase
 
     /// <summary>Lista todos los registros de EmployeeSchedules.</summary>
     [HttpGet]
+    [RequirePermission("SCHEDULES.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<EmployeeSchedulesDto>>(await _svc.GetAllAsync(ct)));
 
     /// <summary>Retorna un resultado paginado de horarios de empleados.</summary>
     [HttpGet("paged")]
+    [RequirePermission("SCHEDULES.READ")]
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -50,6 +53,7 @@ public class EmployeeSchedulesController : ControllerBase
 
     /// <summary>Obtiene un registro por ID.</summary>
     [HttpGet("{id:int}")]
+    [RequirePermission("SCHEDULES.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
@@ -58,6 +62,7 @@ public class EmployeeSchedulesController : ControllerBase
 
     /// <summary>Crea un nuevo registro con control de temporalidad.</summary>
     [HttpPost]
+    [RequirePermission("SCHEDULES.CREATE")]
     public async Task<IActionResult> Create([FromBody] EmployeeSchedulesCreateDto dto, CancellationToken ct)
     {
         try
@@ -93,6 +98,7 @@ public class EmployeeSchedulesController : ControllerBase
 
     /// <summary>Actualiza un registro existente con control de temporalidad.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("SCHEDULES.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] EmployeeSchedulesUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<EmployeeSchedules>(dto);
@@ -102,6 +108,7 @@ public class EmployeeSchedulesController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("SCHEDULES.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

@@ -8,6 +8,7 @@ using WsUtaSystem.Application.DTOs.PunchJustifications;
 using WsUtaSystem.Application.DTOs.RefTypes;
 using WsUtaSystem.Application.DTOs.StoredProcedures;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -22,10 +23,12 @@ public class JustificationsController : ControllerBase
     public JustificationsController(IJustificationsService svc, IMapper mapper) { _svc = svc; _mapper = mapper; }
 
     [HttpGet]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<PunchJustificationsDto>>(await _svc.GetAllAsync(ct)));
 
     [HttpGet("{id:int}")]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
@@ -33,9 +36,10 @@ public class JustificationsController : ControllerBase
     }
 
     [HttpGet("employeeid/{employeeID}")]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetByEmployeeId([FromRoute] int employeeID, CancellationToken ct)
     {
-        // Validación básica
+        // Validaciï¿½n bï¿½sica
         if (employeeID <1) { 
             return BadRequest("el EmployeeID no puede estar en 0");
         }
@@ -52,6 +56,7 @@ public class JustificationsController : ControllerBase
     }
 
     [HttpGet("bossId/{BossEmployeeId:int}")]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetByBossEmployeeId([FromRoute] int BossEmployeeId, CancellationToken ct)
     {
         var e = await _svc.GetByBossEmployeeId(BossEmployeeId, ct);
@@ -63,6 +68,7 @@ public class JustificationsController : ControllerBase
     /// </summary>
     /// <param name="request">Rango de fechas y empleado opcional</param>
     [HttpPost("apply")]
+    [RequirePermission("ATTENDANCE.MANAGE")]
     public async Task<IActionResult> ApplyJustifications([FromBody] AttendanceCalculationRequestDto request, CancellationToken ct)
     {
         await _svc.ApplyJustificationsAsync(request.FromDate, request.ToDate, request.EmployeeId, ct);
@@ -70,6 +76,7 @@ public class JustificationsController : ControllerBase
     }
 
     [HttpPost]
+    [RequirePermission("ATTENDANCE.CREATE")]
     public async Task<IActionResult> Create([FromBody] PunchJustificationsCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<PunchJustifications>(dto);
@@ -80,6 +87,7 @@ public class JustificationsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [RequirePermission("ATTENDANCE.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] PunchJustificationsUpdateDto dto, CancellationToken ct)
     {
         //Console.WriteLine($"updating justification: {id}");
@@ -111,7 +119,7 @@ public class JustificationsController : ControllerBase
         catch (DbUpdateConcurrencyException ex)
         {
             //Console.WriteLine($"Concurrency exception: {ex.Message}");
-            // Verificar si el registro aún existe
+            // Verificar si el registro aï¿½n existe
             var stillExists = await _svc.GetByIdAsync(id, ct);
             return stillExists != null ?
                 Conflict("Los datos fueron modificados por otro usuario. Por favor, refresque e intente nuevamente.") :
@@ -121,6 +129,7 @@ public class JustificationsController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("ATTENDANCE.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.EmployeeInternalRequest;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -46,6 +47,7 @@ public sealed class EmployeeInternalRequestsController : ControllerBase
     // ── Mis solicitudes ───────────────────────────────────────────────────────
 
     [HttpPost("my")]
+    [RequirePermission("EMPLOYEE_INTERNAL_REQUESTS.CREATE")]
     [ProducesResponseType(typeof(EmployeeInternalRequestDetailDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateMy([FromBody] CreateEmployeeInternalRequest request, CancellationToken ct)
     {
@@ -57,6 +59,7 @@ public sealed class EmployeeInternalRequestsController : ControllerBase
     }
 
     [HttpGet("my")]
+    [RequirePermission("EMPLOYEE_INTERNAL_REQUESTS.READ")]
     [ProducesResponseType(typeof(PagedEmployeeInternalRequestResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMy([FromQuery] EmployeeInternalRequestQueryFilter filter, CancellationToken ct)
     {
@@ -65,6 +68,7 @@ public sealed class EmployeeInternalRequestsController : ControllerBase
     }
 
     [HttpGet("my/{id:int}")]
+    [RequirePermission("EMPLOYEE_INTERNAL_REQUESTS.READ")]
     [ProducesResponseType(typeof(EmployeeInternalRequestDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMyById([FromRoute] int id, CancellationToken ct)
     {
@@ -73,6 +77,7 @@ public sealed class EmployeeInternalRequestsController : ControllerBase
     }
 
     [HttpPut("my/{id:int}")]
+    [RequirePermission("EMPLOYEE_INTERNAL_REQUESTS.UPDATE")]
     [ProducesResponseType(typeof(EmployeeInternalRequestDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> UpdateMy([FromRoute] int id, [FromBody] UpdateEmployeeInternalRequest request, CancellationToken ct)
     {
@@ -81,6 +86,7 @@ public sealed class EmployeeInternalRequestsController : ControllerBase
     }
 
     [HttpPost("my/{id:int}/cancel")]
+    [RequirePermission("EMPLOYEE_INTERNAL_REQUESTS.CANCEL")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> CancelMy([FromRoute] int id, [FromBody] CancelEmployeeInternalRequest request, CancellationToken ct)
     {
@@ -92,6 +98,7 @@ public sealed class EmployeeInternalRequestsController : ControllerBase
     // ── Recursos Humanos ──────────────────────────────────────────────────────
 
     [HttpGet]
+    [RequirePermission("EMPLOYEE_INTERNAL_REQUESTS.READ")]
     [ProducesResponseType(typeof(PagedEmployeeInternalRequestResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPaged([FromQuery] EmployeeInternalRequestQueryFilter filter, CancellationToken ct)
     {
@@ -103,6 +110,7 @@ public sealed class EmployeeInternalRequestsController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [RequirePermission("EMPLOYEE_INTERNAL_REQUESTS.READ")]
     [ProducesResponseType(typeof(EmployeeInternalRequestDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
@@ -112,6 +120,7 @@ public sealed class EmployeeInternalRequestsController : ControllerBase
     }
 
     [HttpPost("{id:int}/approve")]
+    [RequirePermission("EMPLOYEE_INTERNAL_REQUESTS.APPROVE")]
     [ProducesResponseType(typeof(EmployeeInternalRequestDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Approve([FromRoute] int id, [FromBody] ReviewEmployeeInternalRequest request, CancellationToken ct)
     {
@@ -121,6 +130,7 @@ public sealed class EmployeeInternalRequestsController : ControllerBase
     }
 
     [HttpPost("{id:int}/reject")]
+    [RequirePermission("EMPLOYEE_INTERNAL_REQUESTS.REJECT")]
     [ProducesResponseType(typeof(EmployeeInternalRequestDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Reject([FromRoute] int id, [FromBody] ReviewEmployeeInternalRequest request, CancellationToken ct)
     {
@@ -130,6 +140,7 @@ public sealed class EmployeeInternalRequestsController : ControllerBase
     }
 
     [HttpPost("{id:int}/return")]
+    [RequirePermission("EMPLOYEE_INTERNAL_REQUESTS.RETURN")]
     [ProducesResponseType(typeof(EmployeeInternalRequestDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Return([FromRoute] int id, [FromBody] ReviewEmployeeInternalRequest request, CancellationToken ct)
     {
@@ -139,6 +150,7 @@ public sealed class EmployeeInternalRequestsController : ControllerBase
     }
 
     [HttpPost("{id:int}/complete")]
+    [RequirePermission("EMPLOYEE_INTERNAL_REQUESTS.COMPLETE")]
     [ProducesResponseType(typeof(EmployeeInternalRequestDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Complete([FromRoute] int id, [FromBody] ReviewEmployeeInternalRequest request, CancellationToken ct)
     {
@@ -148,6 +160,7 @@ public sealed class EmployeeInternalRequestsController : ControllerBase
     }
 
     [HttpPost("{id:int}/cancel")]
+    [RequirePermission("EMPLOYEE_INTERNAL_REQUESTS.CANCEL")]
     [ProducesResponseType(typeof(EmployeeInternalRequestDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> Cancel([FromRoute] int id, [FromBody] CancelEmployeeInternalRequest request, CancellationToken ct)
     {

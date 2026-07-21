@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using WsUtaSystem.Application.DTOs.Departments;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -32,9 +33,9 @@ public class DepartmentsController : ControllerBase
     }
 
     /// <summary>Retorna un resultado paginado de registros de Departments.</summary>
-    /// <param name="page">Número de página (base 1).</param>
-    /// <param name="pageSize">Cantidad de registros por página. Máximo 200.</param>
-    /// <param name="search">Texto de búsqueda.</param>
+    /// <param name="page">Nï¿½mero de pï¿½gina (base 1).</param>
+    /// <param name="pageSize">Cantidad de registros por pï¿½gina. Mï¿½ximo 200.</param>
+    /// <param name="search">Texto de bï¿½squeda.</param>
     [HttpGet("paged")]
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
@@ -76,6 +77,7 @@ public class DepartmentsController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("CATALOGS.CREATE")]
     public async Task<IActionResult> Create([FromBody] DepartmentsCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Departments>(dto);
@@ -86,6 +88,7 @@ public class DepartmentsController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("CATALOGS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] DepartmentsUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Departments>(dto);
@@ -95,6 +98,7 @@ public class DepartmentsController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("CATALOGS.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

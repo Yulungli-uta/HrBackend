@@ -82,10 +82,11 @@ public class FileManagementService : IFileManagementService
                     originalFileName);
             }
 
-            // 4. Preparar rutas
+            // 4. Preparar rutas (ResolveSafePath evita path traversal vía RelativePath)
             int currentYear = DateTime.Now.Year;
             var relativePath = request.RelativePath.TrimStart('/').TrimEnd('/');
-            var folderPath = Path.Combine(directory.PhysicalPath, relativePath, currentYear.ToString());
+            var safeRelativeBase = ResolveSafePath(directory.PhysicalPath, relativePath);
+            var folderPath = Path.Combine(safeRelativeBase, currentYear.ToString());
 
             var storedFileName = FileNameGenerator.Generate(originalFileName, request.DirectoryCode);
             var fullPath = Path.Combine(folderPath, storedFileName);
@@ -215,9 +216,8 @@ public class FileManagementService : IFileManagementService
             var directory = await _directoryService.GetByCodeAsync(directoryCode, ct);
             if (directory == null) return null;
 
-            // 2. Sanitizar y construir ruta
-            var sanitizedPath = filePath.TrimStart('/');
-            var fullPath = Path.Combine(directory.PhysicalPath, sanitizedPath);
+            // 2. Sanitizar y construir ruta (evita path traversal vía filePath)
+            var fullPath = ResolveSafePath(directory.PhysicalPath, filePath);
 
             byte[] fileBytes;
 
@@ -276,9 +276,8 @@ public class FileManagementService : IFileManagementService
                 };
             }
 
-            // 2. Sanitizar y construir ruta
-            var sanitizedPath = filePath.TrimStart('/');
-            var fullPath = Path.Combine(directory.PhysicalPath, sanitizedPath);
+            // 2. Sanitizar y construir ruta (evita path traversal vía filePath)
+            var fullPath = ResolveSafePath(directory.PhysicalPath, filePath);
 
             bool deleted;
 
@@ -347,6 +346,25 @@ public class FileManagementService : IFileManagementService
     }
 
     #region Private Helper Methods
+
+    /// <summary>
+    /// Combina basePath con relativePath y garantiza que la ruta resultante no escape
+    /// del directorio base (protección contra path traversal vía "..", rutas absolutas, etc.).
+    /// </summary>
+    private static string ResolveSafePath(string basePath, string relativePath)
+    {
+        var sanitized = (relativePath ?? string.Empty).TrimStart('/', '\\');
+        var normalizedBase = Path.GetFullPath(basePath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var resolved = Path.GetFullPath(Path.Combine(normalizedBase, sanitized));
+
+        if (!resolved.StartsWith(normalizedBase, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new UnauthorizedAccessException("Ruta fuera del directorio permitido.");
+        }
+
+        return resolved;
+    }
 
     /// <summary>
     /// Guarda un archivo en el sistema de archivos.

@@ -62,6 +62,9 @@ builder.Services.AddProvisioningServices(builder.Configuration);
 // ── 14. Autenticación JWT + usuario actual ────────────────────────────────────
 builder.Services.AddAuthServices();
 
+// ── 15. Rate limiting (sección "RateLimiting" de appsettings.json) ────────────
+builder.Services.AddRateLimitingConfiguration(builder.Configuration);
+
 // ── 13. Base de datos + interceptores EF Core ────────────────────────────────
 // Debe ir después de AddAuthServices porque el interceptor de auditoría
 // depende de ICurrentUserService
@@ -103,6 +106,11 @@ app.UseRouting();
 // ── Pipeline: CORS ───────────────────────────────────────────────────────────
 // DEBE ir entre UseRouting y UseEndpoints
 app.UseCors(corsPolicy);
+
+// ── Pipeline: Rate limiting ──────────────────────────────────────────────────
+// Después de CORS (los preflights están exentos) y ANTES de la autenticación JWT:
+// una ráfaga se rechaza sin pagar la validación de token ni consultas a BD
+app.UseRateLimiter();
 
 // ── Pipeline: Autenticación JWT personalizada ────────────────────────────────
 // Se ejecuta después de CORS para que las preflight requests no requieran token

@@ -1,5 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage; // GetDbTransaction()
+using System.Security.Claims;
 using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Email;
 using WsUtaSystem.Application.Common.Enums;
@@ -23,6 +25,9 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
     private readonly IEmailBuilder _emailBuilder;
     private readonly ICurrentUserService _currentUser;
     private readonly IvwEmployeeDetailsService _employeeDetails;
+    private readonly IUserActionPermissionService _actionPermissions;
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<PermissionsService> _logger;
 
     public PermissionsService(
@@ -32,6 +37,9 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
         IEmailBuilder emailBuilder,
         ICurrentUserService currentUser,
         IvwEmployeeDetailsService employeeDetails,
+        IUserActionPermissionService actionPermissions,
+        IHttpContextAccessor httpContextAccessor,
+        IConfiguration configuration,
         ILogger<PermissionsService> logger
     ) : base(repo)
     {
@@ -44,7 +52,63 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
 
         _currentUser = currentUser ?? throw new ArgumentNullException(nameof(currentUser));
         _employeeDetails = employeeDetails ?? throw new ArgumentNullException(nameof(employeeDetails));
+        _actionPermissions = actionPermissions ?? throw new ArgumentNullException(nameof(actionPermissions));
+        _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    /// <summary>
+    /// El endpoint PUT /permissions/{id} mezcla edición general y aprobar/rechazar
+    /// (normal o médico) en una sola acción HTTP — un solo [RequirePermission] estático
+    /// no alcanza. Resuelve dinámicamente el código requerido según la transición de
+    /// estado solicitada y si el tipo de permiso es médico (HR.tbl_PermissionTypes.IsMedical),
+    /// y respeta Authorization:ShadowMode igual que el atributo (solo advierte, no bloquea,
+    /// hasta que la matriz esté validada).
+    /// </summary>
+    private async Task EnsureUpdatePermissionAsync(Permissions current, string newStatus, CancellationToken ct)
+    {
+        string requiredCode;
+
+        if (newStatus is "APPROVED" or "REJECTED")
+        {
+            var isMedical = await _db.Set<PermissionTypes>()
+                .Where(pt => pt.TypeId == current.PermissionTypeId)
+                .Select(pt => pt.IsMedical)
+                .FirstOrDefaultAsync(ct);
+
+            requiredCode = (isMedical, newStatus) switch
+            {
+                (true, "APPROVED") => "PERMISSIONS_LICENSES.APPROVE_MEDICAL",
+                (true, "REJECTED") => "PERMISSIONS_LICENSES.REJECT_MEDICAL",
+                (false, "APPROVED") => "PERMISSIONS_LICENSES.APPROVE",
+                _ => "PERMISSIONS_LICENSES.REJECT",
+            };
+        }
+        else
+        {
+            requiredCode = "PERMISSIONS_LICENSES.UPDATE";
+        }
+
+        var roles = _httpContextAccessor.HttpContext?.User.FindAll(ClaimTypes.Role).Select(c => c.Value) ?? [];
+        var hasPermission = await _actionPermissions.HasPermissionAsync(roles, requiredCode, ct);
+
+        if (!hasPermission)
+        {
+            var shadowMode = _configuration["Authorization:ShadowMode"] is null
+                || (bool.TryParse(_configuration["Authorization:ShadowMode"], out var sm) && sm);
+
+            if (shadowMode)
+            {
+                _logger.LogWarning(
+                    "[RequirePermission:SHADOW] Actualización de permiso {PermissionId} habría sido bloqueada por falta de {Code}",
+                    current.PermissionId, requiredCode);
+            }
+            else
+            {
+                throw new BusinessRuleException($"No tiene permiso '{requiredCode}' para realizar esta acción.");
+            }
+        }
     }
 
     private static string ReserveSourceIdForPermission(int permissionId)
@@ -148,6 +212,19 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
             oldStatus = NormalizeStatus(current.Status);
             newStatus = NormalizeStatus(entity.Status);
 
+            // El aprobador siempre se resuelve del usuario autenticado, nunca del payload del cliente,
+            // y no puede aprobar/rechazar su propia solicitud.
+            if (newStatus is "APPROVED" or "REJECTED")
+            {
+                if (_currentUser.EmployeeId is null)
+                    throw new BusinessRuleException("No se pudo determinar el empleado autenticado para aprobar/rechazar.");
+
+                if (_currentUser.EmployeeId == current.EmployeeId)
+                    throw new BusinessRuleException("No puede aprobar o rechazar su propia solicitud de permiso.");
+            }
+
+            await EnsureUpdatePermissionAsync(current, newStatus, ct);
+
             _logger.LogInformation(
                 "UPDATE permission START TraceId={TraceId} PermissionId={PermissionId} OldStatus={OldStatus} NewStatus={NewStatus} OldChargedToVacation={ChargedOld}",
                 traceId, id, oldStatus, newStatus, current.ChargedToVacation
@@ -159,7 +236,7 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
             //current.EndDate = entity.EndDate;
             //current.ChargedToVacation = entity.ChargedToVacation;
             //current.HourTaken = entity.HourTaken ?? 0;
-            current.ApprovedBy = entity.ApprovedBy;
+            current.ApprovedBy = newStatus is "APPROVED" or "REJECTED" ? _currentUser.EmployeeId : entity.ApprovedBy;
             //current.ApprovedAt = entity.ApprovedAt;
             current.ApprovedAt = DateTime.Now;
             current.Justification = entity.Justification ?? "";

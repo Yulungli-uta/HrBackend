@@ -5,6 +5,7 @@ using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.Books;
 using WsUtaSystem.Models;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -19,12 +20,14 @@ public class BooksController : ControllerBase
 
     /// <summary>Lista todos los registros de Books.</summary>
     [HttpGet]
+    [RequirePermission("EMPLOYEE_PROFILE.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<BooksDto>>(await _svc.GetAllAsync(ct)));
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]
+    [RequirePermission("EMPLOYEE_PROFILE.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
@@ -34,6 +37,7 @@ public class BooksController : ControllerBase
     /// <summary>Obtiene todos los libros de una persona.</summary>
     /// <param name="personId">ID de la persona</param>
     [HttpGet("person/{personId:int}")]
+    [RequirePermission("EMPLOYEE_PROFILE.READ")]
     public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
     {
         var books = await _svc.GetByPersonIdAsync(personId);
@@ -42,6 +46,7 @@ public class BooksController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("EMPLOYEE_PROFILE.CREATE")]
     public async Task<IActionResult> Create([FromBody] BooksCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Books>(dto);
@@ -52,6 +57,7 @@ public class BooksController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("EMPLOYEE_PROFILE.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] BooksUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Books>(dto);
@@ -61,6 +67,7 @@ public class BooksController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("EMPLOYEE_PROFILE.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

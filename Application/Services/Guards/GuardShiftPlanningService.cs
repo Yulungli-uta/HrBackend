@@ -280,6 +280,7 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
             .Include(p => p.Location).ThenInclude(l => l!.Parent)
             .Include(p => p.Schedule)
             .Include(p => p.StatusType)
+            .Include(p => p.Group)
             .Include(p => p.Changes.Where(c => c.IsActiveForAttendance))
             .Where(p => p.WorkDate >= filter.StartDate
                      && p.WorkDate <= filter.EndDate
@@ -840,5 +841,72 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
             return schedule.ScheduleCode.StartsWith("N", StringComparison.OrdinalIgnoreCase);
         var hour = schedule.EntryTime.Hour;
         return hour >= 20 || hour < 6;
+    }
+
+    // ── Cancelación de planificación ────────────────────────────────────────
+    // No borra filas: marca IsActiveForAssignment=false (mismo flag que ya usa
+    // GenerateAsync al sobrescribir con OverwriteExisting — ver línea ~139),
+    // por lo que HasActiveShiftOnDateAsync libera la fecha automáticamente
+    // sin tocar esa lógica ni el chequeo de "ya planificado".
+
+    private async Task<int> GetCancelledStatusTypeIdAsync(CancellationToken ct) =>
+        await _db.Set<RefTypes>()
+            .Where(r => r.Category == "GUARD_PLANNING_STATUS" && r.Name == "CANCELLED")
+            .Select(r => r.TypeId)
+            .FirstOrDefaultAsync(ct);
+
+    public async Task<GuardShiftPlanningDto> CancelPlanningAsync(int planningId, CancelGuardShiftPlanningDto dto, CancellationToken ct)
+    {
+        var planning = await _repo.GetWithChangesAsync(planningId, ct)
+            ?? throw new KeyNotFoundException($"Planificación {planningId} no encontrada.");
+
+        if (!planning.IsActiveForAssignment)
+            throw new InvalidOperationException("La planificación ya está cancelada.");
+
+        var cancelledStatusId = await GetCancelledStatusTypeIdAsync(ct);
+        if (cancelledStatusId == 0)
+            throw new InvalidOperationException("No se encontró el estado CANCELLED en HR.ref_Types (Category=GUARD_PLANNING_STATUS).");
+
+        planning.StatusTypeId = cancelledStatusId;
+        planning.IsActiveForAssignment = false;
+        if (!string.IsNullOrWhiteSpace(dto.Notes))
+            planning.Notes = string.IsNullOrWhiteSpace(planning.Notes) ? dto.Notes : $"{planning.Notes} | {dto.Notes}";
+
+        await _db.SaveChangesAsync(ct);
+
+        var updated = await _repo.GetWithChangesAsync(planningId, ct);
+        return MapToDto(updated!);
+    }
+
+    public async Task<CancelGuardShiftPlanningResultDto> CancelPlanningRangeAsync(CancelGuardShiftPlanningRangeDto dto, CancellationToken ct)
+    {
+        if (dto.EndDate < dto.StartDate)
+            throw new InvalidOperationException("La fecha final no puede ser anterior a la fecha de inicio.");
+
+        var cancelledStatusId = await GetCancelledStatusTypeIdAsync(ct);
+        if (cancelledStatusId == 0)
+            throw new InvalidOperationException("No se encontró el estado CANCELLED en HR.ref_Types (Category=GUARD_PLANNING_STATUS).");
+
+        var affected = await _db.GuardShiftPlannings
+            .Where(p => (dto.GroupId == null || p.GroupId == dto.GroupId)
+                     && p.WorkDate >= dto.StartDate && p.WorkDate <= dto.EndDate
+                     && p.IsActiveForAssignment)
+            .ToListAsync(ct);
+
+        foreach (var p in affected)
+        {
+            p.StatusTypeId = cancelledStatusId;
+            p.IsActiveForAssignment = false;
+            if (!string.IsNullOrWhiteSpace(dto.Notes))
+                p.Notes = string.IsNullOrWhiteSpace(p.Notes) ? dto.Notes : $"{p.Notes} | {dto.Notes}";
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        var summary = dto.GroupId == null
+            ? $"Cancelación completada: {affected.Count} planificaciones canceladas en {affected.Select(p => p.GroupId).Distinct().Count()} grupo(s)."
+            : $"Cancelación completada: {affected.Count} planificaciones canceladas.";
+        var messages = new List<string> { summary };
+        return new CancelGuardShiftPlanningResultDto(affected.Count, messages);
     }
 }

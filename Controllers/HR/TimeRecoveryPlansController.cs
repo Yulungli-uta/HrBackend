@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using WsUtaSystem.Application.DTOs.TimeRecoveryPlans;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -18,12 +19,14 @@ public class TimeRecoveryPlansController : ControllerBase
 
     /// <summary>Lista todos los registros de TimeRecoveryPlans.</summary>
     [HttpGet]
+    [RequirePermission("TIME_RECOVERY.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<TimeRecoveryPlansDto>>(await _svc.GetAllAsync(ct)));
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]
+    [RequirePermission("TIME_RECOVERY.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
@@ -32,6 +35,7 @@ public class TimeRecoveryPlansController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("TIME_RECOVERY.CREATE")]
     public async Task<IActionResult> Create([FromBody] TimeRecoveryPlansCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<TimeRecoveryPlans>(dto);
@@ -42,6 +46,7 @@ public class TimeRecoveryPlansController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("TIME_RECOVERY.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] TimeRecoveryPlansUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<TimeRecoveryPlans>(dto);
@@ -51,6 +56,7 @@ public class TimeRecoveryPlansController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("TIME_RECOVERY.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

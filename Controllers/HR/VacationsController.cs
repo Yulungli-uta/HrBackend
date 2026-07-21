@@ -1,8 +1,10 @@
-﻿using AutoMapper;
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Vacations;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -11,22 +13,33 @@ namespace WsUtaSystem.Controllers.HR;
 [Route("vacations")]
 public class VacationsController : ControllerBase
 {
+    private static readonly string[] ElevatedRoles = { "Administrador", "R_RH", "R_RH_ANALISTA", "R_RH_ESPECIALISTA", "Supervisor" };
+
     private readonly IVacationsService _svc;
     private readonly IMapper _mapper;
+    private readonly ICurrentUserService _currentUser;
 
-    public VacationsController(IVacationsService svc, IMapper mapper)
+    public VacationsController(IVacationsService svc, IMapper mapper, ICurrentUserService currentUser)
     {
         _svc = svc;
         _mapper = mapper;
+        _currentUser = currentUser;
     }
 
-    /// <summary>Lista todas las vacaciones.</summary>
+    /// <summary>Lista todas las vacaciones. Requiere rol de RRHH/administración.</summary>
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct) =>
-        Ok(_mapper.Map<List<VacationsDto>>(await _svc.GetAllAsync(ct)));
+    [RequirePermission("VACATIONS.READ")]
+    public async Task<IActionResult> GetAll(CancellationToken ct)
+    {
+        if (!ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No tiene permisos para ver todas las vacaciones del sistema.");
+
+        return Ok(_mapper.Map<List<VacationsDto>>(await _svc.GetAllAsync(ct)));
+    }
 
     /// <summary>Retorna un resultado paginado de vacaciones.</summary>
     [HttpGet("paged")]
+    [RequirePermission("VACATIONS.READ")]
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -63,27 +76,42 @@ public class VacationsController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [RequirePermission("VACATIONS.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
-        return e is null ? NotFound() : Ok(_mapper.Map<VacationsDto>(e));
+        if (e is null) return NotFound();
+
+        if (_currentUser.EmployeeId != e.EmployeeId && !ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No puede consultar vacaciones de otro empleado.");
+
+        return Ok(_mapper.Map<VacationsDto>(e));
     }
 
     [HttpGet("employee/{employeeId:int}")]
+    [RequirePermission("VACATIONS.READ")]
     public async Task<IActionResult> GetByEmployeeId([FromRoute] int employeeId, CancellationToken ct)
     {
+        if (_currentUser.EmployeeId != employeeId && !ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No puede consultar vacaciones de otro empleado.");
+
         var e = await _svc.GetByEmployeeId(employeeId, ct);
         return e is null ? NotFound() : Ok(_mapper.Map<List<VacationsDto>>(e));
     }
 
     [HttpGet("bossId/{employeeId:int}")]
+    [RequirePermission("VACATIONS.READ")]
     public async Task<IActionResult> GetByImmediateBossId([FromRoute] int employeeId, CancellationToken ct)
     {
+        if (_currentUser.EmployeeId != employeeId && !ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No puede consultar el equipo de otro jefe.");
+
         var e = await _svc.GetByImmediateBossId(employeeId, ct);
         return e is null ? NotFound() : Ok(_mapper.Map<List<VacationsDto>>(e));
     }
 
     [HttpPost]
+    [RequirePermission("VACATIONS.CREATE")]
     public async Task<IActionResult> Create([FromBody] VacationsCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Vacations>(dto);
@@ -97,8 +125,15 @@ public class VacationsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [RequirePermission("VACATIONS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] VacationsUpdateDto dto, CancellationToken ct)
     {
+        var current = await _svc.GetByIdAsync(id, ct);
+        if (current is null) return NotFound();
+
+        if (_currentUser.EmployeeId != current.EmployeeId && !ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No puede editar vacaciones de otro empleado.");
+
         var entityObj = _mapper.Map<Vacations>(dto);
 
         // ✅ Antes: UpdateAsync (no afectaba saldo)
@@ -109,9 +144,22 @@ public class VacationsController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [RequirePermission("VACATIONS.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
+        var current = await _svc.GetByIdAsync(id, ct);
+        if (current is null) return NotFound();
+
+        if (_currentUser.EmployeeId != current.EmployeeId && !ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No puede eliminar vacaciones de otro empleado.");
+
         await _svc.DeleteAsync(id, ct);
         return NoContent();
     }
+
+    private ObjectResult Forbid403(string message) => StatusCode(403, new
+    {
+        status = "error",
+        error = new { code = "FORBIDDEN", message, traceId = HttpContext.TraceIdentifier }
+    });
 }

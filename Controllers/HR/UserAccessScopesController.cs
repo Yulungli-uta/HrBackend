@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.UserAccessScope;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -19,10 +20,12 @@ public class UserAccessScopesController : ControllerBase
     }
 
     [HttpGet]
+    [RequirePermission("ACCESS_SCOPES.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct)
         => Ok(await _svc.ListAsync(ct));
 
     [HttpPost]
+    [RequirePermission("ACCESS_SCOPES.CREATE")]
     public async Task<IActionResult> Create([FromBody] UserAccessScopeCreateDto dto, CancellationToken ct)
     {
         try
@@ -38,6 +41,7 @@ public class UserAccessScopesController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [RequirePermission("ACCESS_SCOPES.UPDATE")]
     public async Task<IActionResult> Update(int id, [FromBody] UserAccessScopeUpdateDto dto, CancellationToken ct)
     {
         var changedBy = _currentUser.Email ?? _currentUser.UserName ?? "system";
@@ -46,6 +50,7 @@ public class UserAccessScopesController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [RequirePermission("ACCESS_SCOPES.DELETE")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var changedBy = _currentUser.Email ?? _currentUser.UserName ?? "system";
@@ -54,6 +59,7 @@ public class UserAccessScopesController : ControllerBase
     }
 
     [HttpGet("history/{employeeId:int}")]
+    [RequirePermission("ACCESS_SCOPES.READ")]
     public async Task<IActionResult> GetHistory(int employeeId, CancellationToken ct)
         => Ok(await _svc.GetHistoryAsync(employeeId, ct));
 }

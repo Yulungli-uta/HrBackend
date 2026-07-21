@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.DepartmentAuthority;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -215,6 +216,7 @@ public sealed class DepartmentAuthoritiesController : ControllerBase
     /// </summary>
     /// <param name="dto">Datos del nuevo nombramiento.</param>
     [HttpPost]
+    [RequirePermission("CATALOGS.CREATE")]
     [ProducesResponseType(typeof(DepartmentAuthorityDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
@@ -249,6 +251,7 @@ public sealed class DepartmentAuthoritiesController : ControllerBase
     /// <param name="id">ID del registro a actualizar.</param>
     /// <param name="dto">Datos actualizados del nombramiento.</param>
     [HttpPut("{id:int}")]
+    [RequirePermission("CATALOGS.UPDATE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -288,6 +291,7 @@ public sealed class DepartmentAuthoritiesController : ControllerBase
     /// <param name="id">ID del registro.</param>
     /// <param name="isActive">Estado deseado: true = activo, false = inactivo.</param>
     [HttpPatch("{id:int}/status")]
+    [RequirePermission("CATALOGS.UPDATE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
@@ -322,6 +326,7 @@ public sealed class DepartmentAuthoritiesController : ControllerBase
     /// </summary>
     /// <param name="id">ID del registro a eliminar.</param>
     [HttpDelete("{id:int}")]
+    [RequirePermission("CATALOGS.DELETE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]

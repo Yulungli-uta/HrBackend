@@ -1,20 +1,21 @@
 
 using WsUtaSystem.Application.Interfaces.Auditable;
+using WsUtaSystem.Application.Common.Interfaces;
 
 namespace WsUtaSystem.Models;
 
-public class Employees : IAuditable
+public class Employees : IAuditable, ISoftDeletable
 {
     public int EmployeeId { get; set; }
     public int PersonID { get; set; }
     public int EmployeeType { get; set; }
-    public int? LaborRegimeId { get; set; }
     public int? DepartmentId { get; set; }
     public int? ImmediateBossId { get; set; }
     public int? JobId { get; set; }
     public DateOnly HireDate { get; set; }
     public string? Email { get; set; }
     public bool IsActive { get; set; } = true;
+    public bool IsDeleted { get; set; } = false;
     public int? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public int? UpdatedBy { get; set; }

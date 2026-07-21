@@ -301,3 +301,235 @@ IF NOT EXISTS (SELECT 1 FROM [HR].[tbl_Parameters] WHERE [name] = 'RETIREMENT_MI
 INSERT INTO [HR].[tbl_Parameters] ([name], [Pvalues], [Description], [DataType], [IsActive])
 VALUES ('RETIREMENT_MIN_SERVICE_YEARS', '30', 'ANIOS DE SERVICIO MINIMOS PARA JUBILACION', 'NUMERO', 1);
 GO
+
+-- ============================================================
+-- SPLIT (2026-07-16): plantillas separadas de carta de Renuncia y de
+-- Jubilacion. Antes se usaba una sola plantilla generica
+-- 'CARTA_RENUNCIA_JUBILACION' (arriba) que cambiaba su texto via
+-- REQUEST_TYPE_LABEL/REQUEST_TYPE_LABEL_LOWER. Por pedido explicito de
+-- negocio, ahora se usan dos plantillas independientes: 'CARTA_RENUNCIA'
+-- y 'CARTA_JUBILACION', cada una con su propio texto fijo.
+-- ResignationRetirementService.GenerateDocumentAsync elige el
+-- TemplateCode segun RequestType.
+--
+-- La plantilla vieja 'CARTA_RENUNCIA_JUBILACION' NO se borra ni se
+-- desactiva -- queda en la tabla por si algun documento ya generado la
+-- referencia (auditoria), simplemente deja de usarse para nuevas
+-- generaciones. Solo datos (catalogo), sin cambios de esquema.
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- CARTA_RENUNCIA
+-- ------------------------------------------------------------
+IF NOT EXISTS (SELECT 1 FROM HR.tbl_DocumentTemplates WHERE TemplateCode = 'CARTA_RENUNCIA' AND Status = 'PUBLISHED')
+BEGIN
+    DECLARE @ResignTemplateID INT;
+
+    INSERT INTO HR.tbl_DocumentTemplates (
+        TemplateType, TemplateCode, Name, Version, LayoutType, Status, HtmlContent, CreatedAt
+    )
+    VALUES (
+        'CARTA_RENUNCIA',
+        'CARTA_RENUNCIA',
+        'Carta de Renuncia',
+        '1.0',
+        'FLOW_TEXT',
+        'PUBLISHED',
+        N'<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color:#000; width:210mm; margin:0 auto; padding:25mm; }
+.header { display:flex; align-items:center; gap:10mm; border-bottom:2px solid #8B1A1A; padding-bottom:6mm; margin-bottom:10mm; }
+.header img { height:20mm; }
+.header .titles { text-align:center; flex:1; font-weight:bold; font-size:11pt; }
+.doc-title { text-align:center; font-size:14pt; font-weight:bold; margin:8mm 0; text-decoration:underline; }
+.body-text { line-height:1.9; text-align:justify; margin-bottom:8mm; }
+.signature { margin-top:30mm; text-align:center; }
+.signature .line { border-top:1px solid #000; width:70mm; margin:0 auto 2mm auto; }
+.footer-date { margin-top:10mm; font-size:10pt; }
+</style>
+</head>
+<body>
+<div class="header">
+<img src="{{LOGO_URL}}" alt="UTA"/>
+<div class="titles">UNIVERSIDAD TÉCNICA DE AMBATO<br/>DIRECCIÓN DE TALENTO HUMANO</div>
+</div>
+<div class="doc-title">SOLICITUD DE RENUNCIA</div>
+<div class="body-text">Ambato, {{SYSTEM_DATE}}</div>
+<div class="body-text">
+Señores<br/>
+DIRECCIÓN DE TALENTO HUMANO<br/>
+Universidad Técnica de Ambato<br/>
+Presente.-
+</div>
+<div class="body-text">
+Yo, <b>{{EMPLOYEE_FULLNAME}}</b>, portador/a de la cédula de ciudadanía No. {{EMPLOYEE_IDCARD}},
+quien desempeña el cargo de <b>{{JOB_DESCRIPTION}}</b> en la dependencia <b>{{DEPARTMENT_NAME}}</b>,
+por medio de la presente presento mi renuncia irrevocable a la institución, a partir del
+<b>{{PROPOSED_EXIT_DATE}}</b>, por el siguiente motivo:
+</div>
+<div class="body-text">{{REASON}}</div>
+<div class="body-text">
+Sin otro particular, agradezco la atención brindada.
+</div>
+<div class="signature">
+<div class="line"></div>
+<div>{{EMPLOYEE_FULLNAME}}</div>
+<div>C.C. {{EMPLOYEE_IDCARD}}</div>
+</div>
+</body>
+</html>',
+        GETDATE()
+    );
+
+    SET @ResignTemplateID = SCOPE_IDENTITY();
+
+    INSERT INTO HR.tbl_DocumentTemplateFields
+        (TemplateID, FieldName, Label, SourceType, IsRequired, SortOrder)
+    VALUES
+        (@ResignTemplateID, 'LOGO_URL', 'Logo institucional', 'SYSTEM', 0, 1),
+        (@ResignTemplateID, 'SYSTEM_DATE', 'Fecha', 'SYSTEM', 0, 2),
+        (@ResignTemplateID, 'EMPLOYEE_FULLNAME', 'Nombre completo', 'EMPLOYEE', 1, 3),
+        (@ResignTemplateID, 'EMPLOYEE_IDCARD', 'Cédula', 'EMPLOYEE', 1, 4),
+        (@ResignTemplateID, 'JOB_DESCRIPTION', 'Cargo', 'MANUAL', 0, 5),
+        (@ResignTemplateID, 'DEPARTMENT_NAME', 'Dependencia', 'MANUAL', 0, 6),
+        (@ResignTemplateID, 'PROPOSED_EXIT_DATE', 'Fecha propuesta de salida', 'MANUAL', 1, 7),
+        (@ResignTemplateID, 'REASON', 'Motivo', 'MANUAL', 0, 8);
+END
+GO
+
+-- ------------------------------------------------------------
+-- CARTA_JUBILACION
+-- ------------------------------------------------------------
+IF NOT EXISTS (SELECT 1 FROM HR.tbl_DocumentTemplates WHERE TemplateCode = 'CARTA_JUBILACION' AND Status = 'PUBLISHED')
+BEGIN
+    DECLARE @RetireTemplateID INT;
+
+    INSERT INTO HR.tbl_DocumentTemplates (
+        TemplateType, TemplateCode, Name, Version, LayoutType, Status, HtmlContent, CreatedAt
+    )
+    VALUES (
+        'CARTA_JUBILACION',
+        'CARTA_JUBILACION',
+        'Carta de Jubilación',
+        '1.0',
+        'FLOW_TEXT',
+        'PUBLISHED',
+        N'<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color:#000; width:210mm; margin:0 auto; padding:25mm; }
+.header { display:flex; align-items:center; gap:10mm; border-bottom:2px solid #8B1A1A; padding-bottom:6mm; margin-bottom:10mm; }
+.header img { height:20mm; }
+.header .titles { text-align:center; flex:1; font-weight:bold; font-size:11pt; }
+.doc-title { text-align:center; font-size:14pt; font-weight:bold; margin:8mm 0; text-decoration:underline; }
+.body-text { line-height:1.9; text-align:justify; margin-bottom:8mm; }
+.signature { margin-top:30mm; text-align:center; }
+.signature .line { border-top:1px solid #000; width:70mm; margin:0 auto 2mm auto; }
+.footer-date { margin-top:10mm; font-size:10pt; }
+</style>
+</head>
+<body>
+<div class="header">
+<img src="{{LOGO_URL}}" alt="UTA"/>
+<div class="titles">UNIVERSIDAD TÉCNICA DE AMBATO<br/>DIRECCIÓN DE TALENTO HUMANO</div>
+</div>
+<div class="doc-title">SOLICITUD DE JUBILACIÓN</div>
+<div class="body-text">Ambato, {{SYSTEM_DATE}}</div>
+<div class="body-text">
+Señores<br/>
+DIRECCIÓN DE TALENTO HUMANO<br/>
+Universidad Técnica de Ambato<br/>
+Presente.-
+</div>
+<div class="body-text">
+Yo, <b>{{EMPLOYEE_FULLNAME}}</b>, portador/a de la cédula de ciudadanía No. {{EMPLOYEE_IDCARD}},
+quien desempeña el cargo de <b>{{JOB_DESCRIPTION}}</b> en la dependencia <b>{{DEPARTMENT_NAME}}</b>,
+por medio de la presente comunico mi decisión de acogerme a mi jubilación, solicitando se dé
+por terminada mi relación laboral con la institución a partir del <b>{{PROPOSED_EXIT_DATE}}</b>,
+por el siguiente motivo:
+</div>
+<div class="body-text">{{REASON}}</div>
+<div class="body-text">
+Sin otro particular, agradezco la atención brindada.
+</div>
+<div class="signature">
+<div class="line"></div>
+<div>{{EMPLOYEE_FULLNAME}}</div>
+<div>C.C. {{EMPLOYEE_IDCARD}}</div>
+</div>
+</body>
+</html>',
+        GETDATE()
+    );
+
+    SET @RetireTemplateID = SCOPE_IDENTITY();
+
+    INSERT INTO HR.tbl_DocumentTemplateFields
+        (TemplateID, FieldName, Label, SourceType, IsRequired, SortOrder)
+    VALUES
+        (@RetireTemplateID, 'LOGO_URL', 'Logo institucional', 'SYSTEM', 0, 1),
+        (@RetireTemplateID, 'SYSTEM_DATE', 'Fecha', 'SYSTEM', 0, 2),
+        (@RetireTemplateID, 'EMPLOYEE_FULLNAME', 'Nombre completo', 'EMPLOYEE', 1, 3),
+        (@RetireTemplateID, 'EMPLOYEE_IDCARD', 'Cédula', 'EMPLOYEE', 1, 4),
+        (@RetireTemplateID, 'JOB_DESCRIPTION', 'Cargo', 'MANUAL', 0, 5),
+        (@RetireTemplateID, 'DEPARTMENT_NAME', 'Dependencia', 'MANUAL', 0, 6),
+        (@RetireTemplateID, 'PROPOSED_EXIT_DATE', 'Fecha propuesta de salida', 'MANUAL', 1, 7),
+        (@RetireTemplateID, 'REASON', 'Motivo', 'MANUAL', 0, 8);
+END
+GO
+
+-- ============================================================
+-- SEED: tipo de acción de personal "Renuncia o Jubilación"
+-- (RENUNCIA_JUBILACION) y transición de contrato VIGENTE→RENUNCIA.
+-- Cierra el flujo de aprobación de Renuncia/Jubilación: al subir el
+-- documento firmado, PersonnelActionService.UploadSignedDocumentAsync
+-- ya dispara RequiresAdUserDisable=1 (bloquea la cuenta institucional
+-- vía RepositoryUta) y, con este seed, también el nuevo efecto
+-- colateral que cierra el contrato vigente a RENUNCIA (solo si la
+-- acción tiene ContractId).
+--
+-- Reutiliza el mismo DefaultTemplateId=1 (formulario institucional
+-- "Acción de Personal") que ya usan los otros 10 tipos existentes —
+-- no se crea una plantilla nueva, evita el riesgo de placeholders
+-- incompatibles de una plantilla ajena.
+--
+-- Solo datos (catálogo), sin cambios de esquema. Idempotente.
+-- ============================================================
+
+IF NOT EXISTS (SELECT 1 FROM HR.tbl_personnel_action_type WHERE Code = 'RENUNCIA_JUBILACION')
+INSERT INTO HR.tbl_personnel_action_type
+    (Name, Code, Description, NumberingPrefix, NumberingYear, NumberingLastSequence,
+     DefaultTemplateId, IsActive, ActionCategory, ReachesVigente,
+     RequiresAdUserCreation, RequiresAdUserDisable, RequiresAdGroupAssignment)
+SELECT
+    N'Renuncia o Jubilación', N'RENUNCIA_JUBILACION',
+    N'Desvinculación del empleado por renuncia o jubilación. Al cargar el documento firmado, deshabilita la cuenta institucional y, si la acción tiene un contrato asociado, lo transiciona a RENUNCIA.',
+    N'REN', DATEPART(YEAR, GETDATE()), 0,
+    dt.TemplateID, 1, N'EXIT', 0,
+    0, 1, 0
+FROM HR.tbl_DocumentTemplates dt
+WHERE dt.TemplateID = 1;
+GO
+
+-- ------------------------------------------------------------
+-- Transición de contrato: VIGENTE → RENUNCIA (resuelto por nombre
+-- contra ref_Types, no por ID fijo — los TypeID varían entre entornos).
+-- ------------------------------------------------------------
+INSERT INTO HR.tbl_contract_status_transitions (FromStatusTypeID, ToStatusTypeID, IsActive)
+SELECT vig.TypeID, ren.TypeID, 1
+FROM HR.ref_Types vig
+CROSS JOIN HR.ref_Types ren
+WHERE vig.Category = 'CONTRACT_STATUS' AND vig.Name = 'VIGENTE'
+  AND ren.Category = 'CONTRACT_STATUS' AND ren.Name = 'RENUNCIA'
+  AND NOT EXISTS (
+    SELECT 1 FROM HR.tbl_contract_status_transitions t
+    WHERE t.FromStatusTypeID = vig.TypeID AND t.ToStatusTypeID = ren.TypeID
+  );
+GO

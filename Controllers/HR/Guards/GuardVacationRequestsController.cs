@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR.Guards;
 
@@ -12,10 +13,12 @@ public class GuardVacationRequestsController : ControllerBase
     public GuardVacationRequestsController(IGuardVacationService svc) => _svc = svc;
 
     [HttpGet("by-employee/{employeeId:int}")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetByEmployee(int employeeId, CancellationToken ct) =>
         Ok(await _svc.GetRequestsByEmployeeAsync(employeeId, ct));
 
     [HttpGet("paged")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -31,6 +34,7 @@ public class GuardVacationRequestsController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetById(int id, CancellationToken ct)
     {
         var result = await _svc.GetRequestByIdAsync(id, ct);
@@ -38,6 +42,7 @@ public class GuardVacationRequestsController : ControllerBase
     }
 
     [HttpPost("change-dates")]
+    [RequirePermission("GUARDS.CREATE")]
     public async Task<IActionResult> CreateChangeDates([FromBody] CreateChangeDatesRequestDto dto, CancellationToken ct)
     {
         var created = await _svc.CreateChangeDatesRequestAsync(dto, ct);
@@ -45,6 +50,7 @@ public class GuardVacationRequestsController : ControllerBase
     }
 
     [HttpPost("accumulate")]
+    [RequirePermission("GUARDS.CREATE")]
     public async Task<IActionResult> CreateAccumulate([FromBody] CreateAccumulateRequestDto dto, CancellationToken ct)
     {
         var created = await _svc.CreateAccumulateRequestAsync(dto, ct);
@@ -52,14 +58,17 @@ public class GuardVacationRequestsController : ControllerBase
     }
 
     [HttpPost("{id:int}/submit-to-direction")]
+    [RequirePermission("GUARDS.UPDATE")]
     public async Task<IActionResult> SubmitToDirection(int id, [FromBody] SubmitToDirectionDto dto, CancellationToken ct) =>
         Ok(await _svc.SubmitRequestToDirectionAsync(id, dto, ct));
 
     [HttpPost("{id:int}/approve")]
+    [RequirePermission("GUARDS.APPROVE")]
     public async Task<IActionResult> Approve(int id, [FromBody] ApproveGuardVacationRequestDto dto, CancellationToken ct) =>
         Ok(await _svc.ApproveRequestAsync(id, dto, ct));
 
     [HttpPost("{id:int}/reject")]
+    [RequirePermission("GUARDS.APPROVE")]
     public async Task<IActionResult> Reject(int id, [FromBody] RejectGuardVacationRequestDto dto, CancellationToken ct) =>
         Ok(await _svc.RejectRequestAsync(id, dto, ct));
 }

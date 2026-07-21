@@ -28,12 +28,14 @@ public class RotationPatternService : IRotationPatternService
         return patterns.Select(MapToDto).ToList();
     }
 
-    public async Task<PagedResult<RotationPatternDto>> GetPagedAsync(int page, int pageSize, string? search, CancellationToken ct)
+    public async Task<PagedResult<RotationPatternDto>> GetPagedAsync(int page, int pageSize, string? search, bool? isActive, CancellationToken ct)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var baseQ = _db.RotationPatterns.Where(p => p.IsActive);
+        var baseQ = _db.RotationPatterns.AsQueryable();
+        if (isActive.HasValue)
+            baseQ = baseQ.Where(p => p.IsActive == isActive.Value);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToLower();

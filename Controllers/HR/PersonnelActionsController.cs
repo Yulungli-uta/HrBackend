@@ -7,6 +7,7 @@ using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.PersonnelActions;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Interfaces.Services.Documents;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -27,19 +28,37 @@ public sealed class PersonnelActionsController : ControllerBase
     private readonly IPersonnelActionService _personnelActionService;
     private readonly ICurrentUserService _currentUser;
     private readonly IUserAccessScopeService _accessScopeService;
+    private readonly IRecordAccessGuard _accessGuard;
     private readonly ILogger<PersonnelActionsController> _logger;
 
     public PersonnelActionsController(
         IPersonnelActionService personnelActionService,
         ICurrentUserService currentUser,
         IUserAccessScopeService accessScopeService,
+        IRecordAccessGuard accessGuard,
         ILogger<PersonnelActionsController> logger)
     {
         _personnelActionService = personnelActionService;
         _currentUser            = currentUser;
         _accessScopeService     = accessScopeService;
+        _accessGuard            = accessGuard;
         _logger                 = logger;
     }
+
+    /// <summary>Carga el detalle de una acción y valida que su empleado esté dentro del alcance del usuario. Retorna null si no existe.</summary>
+    private async Task<PersonnelActionDetailDto?> LoadWithAccessCheckAsync(int id, CancellationToken ct)
+    {
+        var action = await _personnelActionService.GetDetailByIdAsync(id, ct);
+        if (action is null) return null;
+        await _accessGuard.EnsureEmployeeRecordAsync(action.EmployeeId, "PERSONNEL_ACTIONS", ct);
+        return action;
+    }
+
+    private ObjectResult Forbid403(string message) => StatusCode(403, new
+    {
+        status = "error",
+        error = new { code = "FORBIDDEN", message, traceId = HttpContext.TraceIdentifier }
+    });
 
     // ──────────────────────────────────────────────────────────────────────────
     // CONSULTAS
@@ -52,6 +71,7 @@ public sealed class PersonnelActionsController : ControllerBase
     /// <param name="filter">Parámetros de búsqueda y paginación.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpGet]
+    [RequirePermission("PERSONNEL_ACTIONS.READ")]
     [ProducesResponseType(typeof(PagedPersonnelActionResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPaged(
         [FromQuery] PersonnelActionQueryFilter filter,
@@ -75,11 +95,15 @@ public sealed class PersonnelActionsController : ControllerBase
     /// <param name="id">Identificador de la acción de personal.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpGet("{id:int}")]
+    [RequirePermission("PERSONNEL_ACTIONS.READ")]
     [ProducesResponseType(typeof(PersonnelActionDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
-        var action = await _personnelActionService.GetDetailByIdAsync(id, ct);
+        PersonnelActionDetailDto? action;
+        try { action = await LoadWithAccessCheckAsync(id, ct); }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         return action is null ? NotFound() : Ok(action);
     }
 
@@ -90,9 +114,16 @@ public sealed class PersonnelActionsController : ControllerBase
     /// <param name="employeeId">Identificador del empleado.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpGet("by-employee/{employeeId:int}")]
+    [RequirePermission("PERSONNEL_ACTIONS.READ")]
     [ProducesResponseType(typeof(IReadOnlyList<PersonnelActionSummaryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetByEmployee([FromRoute] int employeeId, CancellationToken ct)
     {
+        if (_currentUser.EmployeeId != employeeId)
+        {
+            try { await _accessGuard.EnsureEmployeeRecordAsync(employeeId, "PERSONNEL_ACTIONS", ct); }
+            catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+        }
+
         var actions = await _personnelActionService.GetByEmployeeIdAsync(employeeId, ct);
         return Ok(actions);
     }
@@ -109,6 +140,7 @@ public sealed class PersonnelActionsController : ControllerBase
     /// <param name="request">Datos de la acción de personal.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPost]
+    [RequirePermission("PERSONNEL_ACTIONS.CREATE")]
     [ProducesResponseType(typeof(CreatePersonnelActionResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create(
@@ -151,6 +183,7 @@ public sealed class PersonnelActionsController : ControllerBase
     /// <param name="request">Datos actualizados.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPut("{id:int}")]
+    [RequirePermission("PERSONNEL_ACTIONS.UPDATE")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Update(
@@ -158,6 +191,12 @@ public sealed class PersonnelActionsController : ControllerBase
         [FromBody] UpdatePersonnelActionRequest request,
         CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var updatedBy = _currentUser.EmployeeId ?? 0;
         await _personnelActionService.UpdateAsync(id, request, updatedBy, ct);
         return NoContent();
@@ -176,6 +215,7 @@ public sealed class PersonnelActionsController : ControllerBase
     /// <param name="request">Datos de aprobación (observaciones, fecha efectiva).</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPost("{id:int}/approve")]
+    [RequirePermission("PERSONNEL_ACTIONS.APPROVE")]
     [ProducesResponseType(typeof(CreatePersonnelActionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Approve(
@@ -183,6 +223,12 @@ public sealed class PersonnelActionsController : ControllerBase
         [FromBody] ApprovePersonnelActionRequest request,
         CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var approvedBy = _currentUser.EmployeeId ?? 0;
         var result = await _personnelActionService.ApproveAsync(id, request, approvedBy, ct);
 
@@ -206,6 +252,7 @@ public sealed class PersonnelActionsController : ControllerBase
     /// <param name="request">Overrides opcionales de campos del documento.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPost("{id:int}/generate-document")]
+    [RequirePermission("PERSONNEL_ACTIONS.GENERATE_DOCUMENT")]
     [ProducesResponseType(typeof(CreatePersonnelActionResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GenerateDocument(
@@ -213,6 +260,12 @@ public sealed class PersonnelActionsController : ControllerBase
         [FromBody] GenerateDocumentOverridesRequest? request,
         CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var generatedBy = _currentUser.EmployeeId ?? 0;
         var result = await _personnelActionService.GenerateDocumentAsync(
             id, request?.Overrides, generatedBy, ct);
@@ -231,12 +284,19 @@ public sealed class PersonnelActionsController : ControllerBase
     /// <param name="request">EmployeeId y overrides del formulario.</param>
     /// <param name="ct">Token de cancelación.</param>
     [HttpPost("preview-document")]
+    [RequirePermission("PERSONNEL_ACTIONS.GENERATE_DOCUMENT")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PreviewDocument(
         [FromBody] PreviewPersonnelActionRequest request,
         CancellationToken ct)
     {
+        try
+        {
+            await _accessGuard.EnsureEmployeeRecordAsync(request.EmployeeId, "PERSONNEL_ACTIONS", ct);
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         _logger.LogInformation(
             "Preview Acción Personal request. EmployeeId={EmployeeId}, Overrides={Overrides}",
             request.EmployeeId,
@@ -264,6 +324,7 @@ public sealed class PersonnelActionsController : ControllerBase
     /// Indica que el documento fue impreso y está esperando firma física.
     /// </summary>
     [HttpPost("{id:int}/mark-pending-signatures")]
+    [RequirePermission("PERSONNEL_ACTIONS.GENERATE_DOCUMENT")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -272,6 +333,12 @@ public sealed class PersonnelActionsController : ControllerBase
         [FromBody] CommentRequest? request,
         CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var updatedBy = _currentUser.EmployeeId ?? 0;
         await _personnelActionService.MarkPendingSignaturesAsync(id, request?.Comment, updatedBy, ct);
 
@@ -286,6 +353,7 @@ public sealed class PersonnelActionsController : ControllerBase
     /// Adjunta el archivo del documento firmado escaneado.
     /// </summary>
     [HttpPost("{id:int}/upload-signed-document")]
+    [RequirePermission("PERSONNEL_ACTIONS.GENERATE_DOCUMENT")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -294,6 +362,12 @@ public sealed class PersonnelActionsController : ControllerBase
         [FromBody] UploadSignedDocumentRequest request,
         CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var updatedBy = _currentUser.EmployeeId ?? 0;
         await _personnelActionService.UploadSignedDocumentAsync(id, request, updatedBy, ct);
 
@@ -309,6 +383,7 @@ public sealed class PersonnelActionsController : ControllerBase
     /// Cierra el ciclo de vida de la acción de personal.
     /// </summary>
     [HttpPost("{id:int}/finalize")]
+    [RequirePermission("PERSONNEL_ACTIONS.GENERATE_DOCUMENT")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -317,6 +392,12 @@ public sealed class PersonnelActionsController : ControllerBase
         [FromBody] CommentRequest? request,
         CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var updatedBy = _currentUser.EmployeeId ?? 0;
         await _personnelActionService.FinalizeAsync(id, request?.Comment, updatedBy, ct);
 
@@ -331,6 +412,7 @@ public sealed class PersonnelActionsController : ControllerBase
     /// No aplicable si ya está FINALIZADA.
     /// </summary>
     [HttpPost("{id:int}/cancel")]
+    [RequirePermission("PERSONNEL_ACTIONS.CANCEL")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -339,6 +421,12 @@ public sealed class PersonnelActionsController : ControllerBase
         [FromBody] CancelPersonnelActionRequest request,
         CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var updatedBy = _currentUser.EmployeeId ?? 0;
         await _personnelActionService.CancelAsync(id, request, updatedBy, ct);
 
@@ -353,10 +441,17 @@ public sealed class PersonnelActionsController : ControllerBase
     /// Obtiene el historial completo de cambios de estado de una acción de personal.
     /// </summary>
     [HttpGet("{id:int}/history")]
+    [RequirePermission("PERSONNEL_ACTIONS.READ")]
     [ProducesResponseType(typeof(IReadOnlyList<PersonnelActionStatusHistoryDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetHistory([FromRoute] int id, CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var history = await _personnelActionService.GetStatusHistoryAsync(id, ct);
         return Ok(history);
     }

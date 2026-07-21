@@ -1,8 +1,10 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Permissions;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -11,17 +13,22 @@ namespace WsUtaSystem.Controllers.HR;
 [Route("permissions")]
 public class PermissionsController : ControllerBase
 {
+    private static readonly string[] ElevatedRoles = { "Administrador", "R_RH", "R_RH_ANALISTA", "R_RH_ESPECIALISTA", "Supervisor" };
+
     private readonly IPermissionsService _svc;
     private readonly IMapper _mapper;
+    private readonly ICurrentUserService _currentUser;
 
-    public PermissionsController(IPermissionsService svc, IMapper mapper)
+    public PermissionsController(IPermissionsService svc, IMapper mapper, ICurrentUserService currentUser)
     {
         _svc = svc;
         _mapper = mapper;
+        _currentUser = currentUser;
     }
 
     /// <summary>Lista todos los permisos.</summary>
     [HttpGet]
+    [RequirePermission("PERMISSIONS_LICENSES.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<PermissionsDto>>(await _svc.GetAllAsync(ct)));
 
@@ -31,6 +38,7 @@ public class PermissionsController : ControllerBase
     /// <param name="sortBy">Campo de ordenamiento (opcional).</param>
     /// <param name="sortDirection">Dirección del orden: asc | desc (opcional).</param>
     [HttpGet("paged")]
+    [RequirePermission("PERMISSIONS_LICENSES.READ")]
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -67,24 +75,38 @@ public class PermissionsController : ControllerBase
 
     /// <summary>Obtiene un permiso por ID.</summary>
     [HttpGet("{id:int}")]
+    [RequirePermission("PERMISSIONS_LICENSES.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
-        return e is null ? NotFound() : Ok(_mapper.Map<PermissionsDto>(e));
+        if (e is null) return NotFound();
+
+        if (_currentUser.EmployeeId != e.EmployeeId && !ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No puede consultar permisos de otro empleado.");
+
+        return Ok(_mapper.Map<PermissionsDto>(e));
     }
 
     /// <summary>Obtiene permisos por ID de empleado.</summary>
     [HttpGet("employee/{employeeId:int}")]
+    [RequirePermission("PERMISSIONS_LICENSES.READ")]
     public async Task<IActionResult> GetByEmplopyeeId([FromRoute] int employeeId, CancellationToken ct)
     {
+        if (_currentUser.EmployeeId != employeeId && !ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No puede consultar permisos de otro empleado.");
+
         var e = await _svc.GetByEmployeeId(employeeId, ct);
         return e is null ? NotFound() : Ok(_mapper.Map<List<PermissionsDto>>(e));
     }
 
     /// <summary>Obtiene permisos por ID del jefe inmediato.</summary>
     [HttpGet("bossId/{employeeId:int}")]
+    [RequirePermission("PERMISSIONS_LICENSES.READ")]
     public async Task<IActionResult> GetByImmediateBossId([FromRoute] int employeeId, CancellationToken ct)
     {
+        if (_currentUser.EmployeeId != employeeId && !ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No puede consultar el equipo de otro jefe.");
+
         //var e = await _svc.GetByImmediateBossId(employeeId, ct);
         var e = await _svc.GetByImmediateBossIdNonMedical(employeeId, ct);
         return e is null ? NotFound() : Ok(_mapper.Map<List<PermissionsDto>>(e));
@@ -92,14 +114,19 @@ public class PermissionsController : ControllerBase
 
     /// <summary>Obtiene permisos NO médicos por ID del jefe inmediato.</summary>
     [HttpGet("bossId/{employeeId:int}/non-medical")]
+    [RequirePermission("PERMISSIONS_LICENSES.READ")]
     public async Task<IActionResult> GetByImmediateBossIdNonMedical([FromRoute] int employeeId, CancellationToken ct)
     {
+        if (_currentUser.EmployeeId != employeeId && !ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No puede consultar el equipo de otro jefe.");
+
         var e = await _svc.GetByImmediateBossIdNonMedical(employeeId, ct);
         return e is null ? NotFound() : Ok(_mapper.Map<List<PermissionsDto>>(e));
     }
 
     /// <summary>Obtiene todos los permisos médicos pendientes.</summary>
     [HttpGet("medical/pending")]
+    [RequirePermission("PERMISSIONS_LICENSES.READ")]
     public async Task<IActionResult> GetPendingMedicalPermissions(CancellationToken ct)
     {
         var e = await _svc.GetPendingMedicalPermissions(ct);
@@ -108,6 +135,7 @@ public class PermissionsController : ControllerBase
 
     /// <summary>Crea un nuevo permiso con verificación de saldo.</summary>
     [HttpPost]
+    [RequirePermission("PERMISSIONS_LICENSES.CREATE")]
     public async Task<IActionResult> Create([FromBody] PermissionsCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Permissions>(dto);
@@ -119,10 +147,23 @@ public class PermissionsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<PermissionsDto>(created));
     }
 
-    /// <summary>Actualiza un permiso existente afectando el saldo.</summary>
+    /// <summary>
+    /// Actualiza un permiso existente afectando el saldo. NOTA: el catálogo de permisos de
+    /// acción no tiene un código PERMISSIONS_LICENSES.UPDATE dedicado (solo READ/CREATE/
+    /// APPROVE/REJECT) — este endpoint mezcla edición general y aprobación/rechazo (ver
+    /// PermissionsService.UpdateBalanceAffectAsync). Falta decidir si se separa en endpoints
+    /// distintos o se agrega el código al catálogo; mientras tanto solo queda protegido por
+    /// el chequeo de propiedad/rol de abajo, no por [RequirePermission].
+    /// </summary>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] PermissionsUpdateDto dto, CancellationToken ct)
     {
+        var current = await _svc.GetByIdAsync(id, ct);
+        if (current is null) return NotFound();
+
+        if (_currentUser.EmployeeId != current.EmployeeId && !ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No puede editar permisos de otro empleado.");
+
         var entityObj = _mapper.Map<Permissions>(dto);
         await _svc.UpdateBalanceAffectAsync(id, entityObj, ct);
         return NoContent();
@@ -130,9 +171,22 @@ public class PermissionsController : ControllerBase
 
     /// <summary>Elimina un permiso por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("PERMISSIONS_LICENSES.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
+        var current = await _svc.GetByIdAsync(id, ct);
+        if (current is null) return NotFound();
+
+        if (_currentUser.EmployeeId != current.EmployeeId && !ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No puede eliminar permisos de otro empleado.");
+
         await _svc.DeleteAsync(id, ct);
         return NoContent();
     }
+
+    private ObjectResult Forbid403(string message) => StatusCode(403, new
+    {
+        status = "error",
+        error = new { code = "FORBIDDEN", message, traceId = HttpContext.TraceIdentifier }
+    });
 }

@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Caching.Memory;
 using System.Security.Claims;
 using System.Text.Json;
 using WsUtaSystem.Application.Common.Interfaces;
@@ -12,17 +13,21 @@ public sealed class CurrentUserService : ICurrentUserService
     private readonly IHttpContextAccessor _http;
     private readonly IvwEmployeeDetailsService _employeeDetails;
     private readonly ILogger<CurrentUserService> _logger;
-    
+    private readonly IMemoryCache _memoryCache;
+    private readonly TimeSpan _employeeCacheDuration;
+
     private const string BossCacheKey = "__CurrentUser_BossInfo";
     private const string MeCacheKey = "__CurrentUser_EmployeeDetails";
 
 
     public CurrentUserService(IHttpContextAccessor http, IvwEmployeeDetailsService employeeDetails,
-        ILogger<CurrentUserService> logger)
+        ILogger<CurrentUserService> logger, IMemoryCache memoryCache, IConfiguration configuration)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _employeeDetails = employeeDetails ?? throw new ArgumentNullException(nameof(employeeDetails));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
+        _employeeCacheDuration = EmployeeDetailsCache.GetDuration(configuration);
     }
 
     private HttpContext? Ctx => _http.HttpContext;
@@ -158,8 +163,15 @@ public sealed class CurrentUserService : ICurrentUserService
             return c.EmployeeType;
 
         var byEmail = await _employeeDetails.GetByEmailAsync(email, ct);
-        if (byEmail is not null && ctx is not null)
-            ctx.Items[emailMeCacheKey] = byEmail;
+        if (byEmail is not null)
+        {
+            if (ctx is not null)
+                ctx.Items[emailMeCacheKey] = byEmail;
+
+            // Sembrar el caché compartido: la fila ya se pagó en esta consulta,
+            // reutilizarla evita que GetMeDetailsAsync vuelva a la vista por el mismo empleado
+            _memoryCache.Set(EmployeeDetailsCache.KeyFor(byEmail.EmployeeID), byEmail, _employeeCacheDuration);
+        }
 
         return byEmail?.EmployeeType;
     }
@@ -176,12 +188,27 @@ public sealed class CurrentUserService : ICurrentUserService
         var ctx = Ctx;
         if (ctx is null) return null;
 
+        // Nivel 1: caché por request (evita consultas repetidas dentro del mismo request)
         if (ctx.Items.TryGetValue(MeCacheKey, out var cached) && cached is VwEmployeeDetails c)
             return c;
 
+        // Nivel 2: caché en memoria entre requests (evita golpear vw_EmployeeDetails
+        // en cada request del mismo usuario; TTL configurable vía AuthService:EmployeeCacheMinutes).
+        // La clave es compartida con JwtAuthenticationMiddleware: una fila sembrada allí
+        // (fallback por email) se reutiliza aquí sin nueva consulta.
+        var memoryCacheKey = EmployeeDetailsCache.KeyFor(employeeId);
+        if (_memoryCache.TryGetValue(memoryCacheKey, out VwEmployeeDetails? memCached) && memCached is not null)
+        {
+            ctx.Items[MeCacheKey] = memCached;
+            return memCached;
+        }
+
         var me = await _employeeDetails.GetEmployeeDetailsAsync(employeeId, ct);
         if (me is not null)
+        {
             ctx.Items[MeCacheKey] = me;
+            _memoryCache.Set(memoryCacheKey, me, _employeeCacheDuration);
+        }
 
         return me;
     }

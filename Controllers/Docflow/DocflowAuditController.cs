@@ -1,6 +1,7 @@
 ﻿// File: Controllers/Docflow/DocflowAuditController.cs
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.Docflow;
 
@@ -12,6 +13,7 @@ public sealed class DocflowAuditController : ControllerBase
     public DocflowAuditController(IDocflowService svc) => _svc = svc;
 
     [HttpGet("returns")]
+    [RequirePermission("DOCFLOW.READ")]
     public async Task<IActionResult> Returns(
         [FromQuery] DateTime? from,
         [FromQuery] DateTime? to,

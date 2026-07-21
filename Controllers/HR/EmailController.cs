@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Email;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR
 {
@@ -21,6 +22,7 @@ namespace WsUtaSystem.Controllers.HR
         /// - Adjuntos nuevos: Attachments[i].File + metadata (DirectoryCode, EntityType, EntityId, DocumentTypeId, RelativePath)
         /// </summary>
         [HttpPost("send")]
+        [RequirePermission("EMAIL.CREATE")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> Send([FromForm] EmailSendRequestDto request, CancellationToken ct)
         {
@@ -37,6 +39,7 @@ namespace WsUtaSystem.Controllers.HR
         /// NO acepta archivos nuevos; solo StoredFileGuid.
         /// </summary>
         [HttpPost("send-by-guid")]
+        [RequirePermission("EMAIL.CREATE")]
         [Consumes("application/json")]
         public async Task<IActionResult> SendByGuid([FromBody] EmailSendRequestDto request, CancellationToken ct)
         {

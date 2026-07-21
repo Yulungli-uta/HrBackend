@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR.Guards;
 
@@ -12,10 +13,12 @@ public class EmployeeAvailabilityBlocksController : ControllerBase
     public EmployeeAvailabilityBlocksController(IEmployeeAvailabilityService svc) => _svc = svc;
 
     [HttpGet]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetBlocks([FromQuery] EmployeeAvailabilityFilterDto filter, CancellationToken ct) =>
         Ok(await _svc.GetBlocksAsync(filter, ct));
 
     [HttpGet("paged")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetBlocksPaged(
         [FromQuery] EmployeeAvailabilityFilterDto filter,
         [FromQuery] int page = 1,
@@ -28,14 +31,17 @@ public class EmployeeAvailabilityBlocksController : ControllerBase
     }
 
     [HttpPost("manual")]
+    [RequirePermission("GUARDS.CREATE")]
     public async Task<IActionResult> CreateManual([FromBody] CreateManualAvailabilityBlockDto dto, CancellationToken ct) =>
         Ok(await _svc.CreateManualBlockAsync(dto, ct));
 
     [HttpPost("sync-permissions")]
+    [RequirePermission("GUARDS.UPDATE")]
     public async Task<IActionResult> SyncPermissions([FromQuery] DateOnly startDate, [FromQuery] DateOnly endDate, CancellationToken ct) =>
         Ok(await _svc.SyncPermissionsAsync(startDate, endDate, ct));
 
     [HttpPost("sync-vacations")]
+    [RequirePermission("GUARDS.UPDATE")]
     public async Task<IActionResult> SyncVacations([FromQuery] DateOnly startDate, [FromQuery] DateOnly endDate, CancellationToken ct) =>
         Ok(await _svc.SyncVacationsAsync(startDate, endDate, ct));
 }

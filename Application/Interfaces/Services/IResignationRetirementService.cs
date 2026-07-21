@@ -30,6 +30,15 @@ public interface IResignationRetirementService
 
     Task<ResignationRetirementDetailDto> ApproveAsync(int requestId, int reviewedBy, ReviewResignationRetirementRequest request, CancellationToken ct = default);
 
+    /// <summary>
+    /// Aprueba la solicitud exigiendo el documento firmado (StoredFileId): crea y finaliza la
+    /// acción de personal de desvinculación vinculada (RENUNCIA_JUBILACION), lo que dispara
+    /// automáticamente el bloqueo de la cuenta institucional y, si el empleado tenía un
+    /// contrato vigente, su cierre a RENUNCIA. Reemplaza a <see cref="ApproveAsync"/> como el
+    /// flujo real de aprobación — ese método queda solo por compatibilidad.
+    /// </summary>
+    Task<ResignationRetirementDetailDto> UploadSignedDocumentAsync(int requestId, int reviewedBy, ApproveResignationRetirementRequest request, CancellationToken ct = default);
+
     Task<ResignationRetirementDetailDto> RejectAsync(int requestId, int reviewedBy, ReviewResignationRetirementRequest request, CancellationToken ct = default);
 
     Task<ResignationRetirementDetailDto> ReturnAsync(int requestId, int reviewedBy, ReviewResignationRetirementRequest request, CancellationToken ct = default);

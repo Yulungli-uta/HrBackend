@@ -5,6 +5,7 @@ using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.Audit;
 using WsUtaSystem.Models;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -18,20 +19,28 @@ public class AuditController : ControllerBase
 
     /// <summary>Lista todos los registros de Audit.</summary>
     [HttpGet]
+    [RequirePermission("AUDIT.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<AuditDto>>(await _svc.GetAllAsync(ct)));
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]
+    [RequirePermission("AUDIT.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
         return e is null ? NotFound() : Ok(_mapper.Map<AuditDto>(e));
     }
 
-    /// <summary>Crea un nuevo registro.</summary>
+    /// <summary>
+    /// Crea un nuevo registro. En la práctica, los registros de auditoría los genera
+    /// <c>AuditSaveChangesInterceptor</c> automáticamente — este endpoint queda restringido
+    /// a ADMIN.ACCESS (sin rol de negocio con grant directo) para no ser una vía de inserción
+    /// manual de auditoría por usuarios comunes.
+    /// </summary>
     [HttpPost]
+    [RequirePermission("AUDIT.CREATE")]
     public async Task<IActionResult> Create([FromBody] AuditCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Audit>(dto);
@@ -40,20 +49,5 @@ public class AuditController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<AuditDto>(created));
     }
 
-    /// <summary>Actualiza un registro existente.</summary>
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update([FromRoute] int id, [FromBody] AuditUpdateDto dto, CancellationToken ct)
-    {
-        var entityObj = _mapper.Map<Audit>(dto);
-        await _svc.UpdateAsync(id, entityObj, ct);
-        return NoContent();
-    }
-
-    /// <summary>Elimina un registro por ID.</summary>
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
-    {
-        await _svc.DeleteAsync(id, ct);
-        return NoContent();
-    }
+    // Sin PUT/DELETE: el log de auditoría es append-only por diseño (no se edita ni se borra).
 }

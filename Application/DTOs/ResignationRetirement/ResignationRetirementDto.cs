@@ -18,6 +18,16 @@ public static class ResignationRetirementStatus
     public const string Anulado = "ANULADO";
 }
 
+/// <summary>
+/// DirectoryCode/EntityType del documento firmado de renuncia/jubilación, compartidos entre
+/// el servicio y el repositorio para no duplicar los literales de string.
+/// </summary>
+public static class ResignationRetirementDocument
+{
+    public const string DirectoryCode = "HR_RESIGNATION_RETIREMENT";
+    public const string EntityType = "RESIGNATION_RETIREMENT_REQUEST";
+}
+
 // ── Información consolidada del empleado ──────────────────────────────────────────
 
 /// <summary>
@@ -110,7 +120,22 @@ public sealed record ResignationRetirementDetailDto(
     string? CancelledByName,
 
     IReadOnlyList<ResignationRetirementStatusHistoryDto> History,
-    byte[] RowVersion
+    byte[] RowVersion,
+
+    /// <summary>
+    /// Documento(s) firmado(s) subidos por el empleado (HR.TBL_StoredFile, DirectoryCode
+    /// HR_RESIGNATION_RETIREMENT / EntityType RESIGNATION_RETIREMENT_REQUEST). La UI limita
+    /// la carga a un solo archivo; se expone como lista por si históricamente quedó más de uno.
+    /// </summary>
+    IReadOnlyList<SignedDocumentSummaryDto> SupportingDocuments
+);
+
+/// <summary>Resumen de un documento firmado adjunto a la solicitud, para revisión de RRHH.</summary>
+public sealed record SignedDocumentSummaryDto(
+    int FileId,
+    Guid FileGuid,
+    string? OriginalFileName,
+    DateTime? UploadedAt
 );
 
 public sealed record ResignationRetirementStatusHistoryDto(
@@ -158,6 +183,18 @@ public sealed record UpdateResignationRetirementRequest(
 
 /// <summary>Acción de revisión de Recursos Humanos: aprobar, rechazar, devolver o cancelar.</summary>
 public sealed record ReviewResignationRetirementRequest(
+    string? Observation,
+    byte[] RowVersion
+);
+
+/// <summary>
+/// Aprobación con documento firmado obligatorio: RRHH sube la carta de renuncia/jubilación
+/// ya firmada (StoredFileId, obtenido subiendo el archivo antes vía el endpoint genérico de
+/// documentos). Dispara la creación de la acción de personal de desvinculación, que a su vez
+/// bloquea la cuenta institucional del empleado y, si corresponde, cierra el contrato vigente.
+/// </summary>
+public sealed record ApproveResignationRetirementRequest(
+    int StoredFileId,
     string? Observation,
     byte[] RowVersion
 );

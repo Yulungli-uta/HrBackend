@@ -5,6 +5,7 @@ using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.Cantons;
 using WsUtaSystem.Models;
 using WsUtaSystem.Infrastructure.Controller;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -41,6 +42,7 @@ public class CantonsController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("CATALOGS.CREATE")]
     public async Task<IActionResult> Create([FromBody] CantonsCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Cantons>(dto);
@@ -51,6 +53,7 @@ public class CantonsController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("CATALOGS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] string id, [FromBody] CantonsUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Cantons>(dto);
@@ -60,6 +63,7 @@ public class CantonsController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("CATALOGS.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] string id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);

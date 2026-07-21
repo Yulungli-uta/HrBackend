@@ -5,6 +5,7 @@ using WsUtaSystem.Application.DTOs.ContractRequest;
 using WsUtaSystem.Application.DTOs.Contracts;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Common.Interfaces;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 using ContractDocumentStatusDto = WsUtaSystem.Application.DTOs.Contracts.ContractDocumentStatusDto;
@@ -19,21 +20,40 @@ public class ContractsController : ControllerBase
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUser;
     private readonly IUserAccessScopeService _accessScopeService;
+    private readonly IRecordAccessGuard _accessGuard;
 
     public ContractsController(
         IContractsService service,
         IMapper mapper,
         ICurrentUserService currentUser,
-        IUserAccessScopeService accessScopeService)
+        IUserAccessScopeService accessScopeService,
+        IRecordAccessGuard accessGuard)
     {
         _service = service;
         _mapper = mapper;
         _currentUser = currentUser;
         _accessScopeService = accessScopeService;
+        _accessGuard = accessGuard;
     }
+
+    /// <summary>Carga un contrato y valida que su departamento esté dentro del alcance del usuario. Retorna null si no existe.</summary>
+    private async Task<Contracts?> LoadWithAccessCheckAsync(int id, CancellationToken ct)
+    {
+        var entity = await _service.GetByIdAsync(id, ct);
+        if (entity is null) return null;
+        await _accessGuard.EnsureDepartmentAsync(entity.DepartmentID, "CONTRACTS", ct);
+        return entity;
+    }
+
+    private ObjectResult Forbid403(string message) => StatusCode(403, new
+    {
+        status = "error",
+        error = new { code = "FORBIDDEN", message, traceId = HttpContext.TraceIdentifier }
+    });
 
     /// <summary>Lista todos los contratos.</summary>
     [HttpGet]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<ContractsDto>>(await _service.GetAllAsync(ct)));
 
@@ -46,6 +66,7 @@ public class ContractsController : ControllerBase
     /// <param name="year">Filtro por año de creación (0 = todos).</param>
     /// <param name="sortDirection">Dirección del orden sobre CreatedAt: asc | desc (por defecto desc).</param>
     [HttpGet("paged")]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -107,6 +128,7 @@ public class ContractsController : ControllerBase
     /// nunca envía el employeeId en la URL.
     /// </summary>
     [HttpGet("my/paged")]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> GetMyPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -154,9 +176,13 @@ public class ContractsController : ControllerBase
 
     /// <summary>Obtiene un contrato por ID.</summary>
     [HttpGet("{id:int}")]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> GetById(int id, CancellationToken ct)
     {
-        var entity = await _service.GetByIdAsync(id, ct);
+        Contracts? entity;
+        try { entity = await LoadWithAccessCheckAsync(id, ct); }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         if (entity is null) return NotFound();
         return Ok(_mapper.Map<ContractsDto>(entity));
     }
@@ -176,6 +202,7 @@ public class ContractsController : ControllerBase
 
     /// <summary>Crea un nuevo contrato. Para contratos raíz valida certificación aprobada y cupo disponible.</summary>
     [HttpPost]
+    [RequirePermission("CONTRACTS.CREATE")]
     [ProducesResponseType(typeof(CreateContractResponse), StatusCodes.Status201Created)]
     public async Task<IActionResult> Create(ContractsCreateDto dto, CancellationToken ct)
     {
@@ -231,19 +258,40 @@ public class ContractsController : ControllerBase
 
     /// <summary>Actualiza un contrato existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("CONTRACTS.UPDATE")]
     public async Task<IActionResult> Update(int id, ContractsUpdateDto dto, CancellationToken ct)
     {
         if (dto.ContractID != 0 && dto.ContractID != id)
             return BadRequest("ContractID no coincide con la ruta.");
 
-        await _service.UpdateAsync(id, dto, ct);
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
+        try
+        {
+            await _service.UpdateAsync(id, dto, ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         return NoContent();
     }
 
     /// <summary>Elimina un contrato por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("CONTRACTS.DELETE")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         await _service.DeleteAsync(id, ct);
         return NoContent();
     }
@@ -258,24 +306,45 @@ public class ContractsController : ControllerBase
 
     /// <summary>Cambia el estado de un contrato.</summary>
     [HttpPost("{id:int}/status")]
+    [RequirePermission("CONTRACTS.UPDATE")]
     public async Task<IActionResult> ChangeStatus(int id, [FromBody] ContractChangeStatusDto dto, CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         await _service.ChangeStatusAsync(id, dto.ToStatusTypeID, dto.Comment, ct);
         return NoContent();
     }
 
     /// <summary>Obtiene el historial de estados de un contrato.</summary>
     [HttpGet("{id:int}/history")]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> History(int id, CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var items = await _service.GetStatusHistoryAsync(id, ct);
         return Ok(items);
     }
 
     /// <summary>Obtiene los addendums de un contrato.</summary>
     [HttpGet("{id:int}/addendums")]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> Addendums(int id, CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var items = await _service.GetAddendumsAsync(id, ct);
         return Ok(items);
     }
@@ -287,10 +356,17 @@ public class ContractsController : ControllerBase
     /// Devuelve null si el contrato no tiene documento generado aún.
     /// </summary>
     [HttpGet("{id:int}/document-status")]
+    [RequirePermission("CONTRACTS.READ")]
     [ProducesResponseType(typeof(ContractDocumentStatusDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DocumentStatus([FromRoute] int id, CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var result = await _service.GetDocumentStatusAsync(id, ct);
         return result is null ? NotFound() : Ok(result);
     }
@@ -300,6 +376,7 @@ public class ContractsController : ControllerBase
     /// Un documento congelado no se regenera automáticamente aunque cambien los datos del contrato.
     /// </summary>
     [HttpPatch("{id:int}/freeze-document")]
+    [RequirePermission("CONTRACTS.GENERATE_DOCUMENT")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> FreezeDocument(
@@ -307,6 +384,12 @@ public class ContractsController : ControllerBase
         [FromBody] FreezeDocumentRequest request,
         CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         await _service.FreezeDocumentAsync(id, request.DocumentId, request.TemplateVersion, ct);
         return NoContent();
     }
@@ -315,20 +398,34 @@ public class ContractsController : ControllerBase
     /// Descongela el documento de un contrato para permitir regenerar el PDF.
     /// </summary>
     [HttpPatch("{id:int}/unfreeze-document")]
+    [RequirePermission("CONTRACTS.GENERATE_DOCUMENT")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UnfreezeDocument([FromRoute] int id, CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         await _service.UnfreezeDocumentAsync(id, ct);
         return NoContent();
     }
     [HttpPost("{id:int}/generate-document")]
+    [RequirePermission("CONTRACTS.GENERATE_DOCUMENT")]
     [ProducesResponseType(typeof(GenerateContractDocumentResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> GenerateDocument(
     [FromRoute] int id,
     [FromBody] GenerateContractDocumentRequest? request,
     CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var generatedBy = _currentUser.EmployeeId ?? 0;
 
         var result = await _service.GenerateDocumentAsync(
@@ -341,11 +438,18 @@ public class ContractsController : ControllerBase
     }
 
     [HttpPost("{id:int}/document/pending-signatures")]
+    [RequirePermission("CONTRACTS.GENERATE_DOCUMENT")]
     public async Task<IActionResult> MarkDocumentPendingSignatures(
         [FromRoute] int id,
         [FromBody] ContractDocumentCommentRequest? request,
         CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var updatedBy = _currentUser.EmployeeId ?? 0;
 
         await _service.MarkDocumentPendingSignaturesAsync(
@@ -358,11 +462,18 @@ public class ContractsController : ControllerBase
     }
 
     [HttpPost("{id:int}/document/upload-signed")]
+    [RequirePermission("CONTRACTS.GENERATE_DOCUMENT")]
     public async Task<IActionResult> UploadSignedDocument(
         [FromRoute] int id,
         [FromBody] UploadSignedContractDocumentRequest request,
         CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var updatedBy = _currentUser.EmployeeId ?? 0;
 
         await _service.UploadSignedDocumentAsync(
@@ -375,11 +486,18 @@ public class ContractsController : ControllerBase
     }
 
     [HttpPost("{id:int}/document/finalize")]
+    [RequirePermission("CONTRACTS.GENERATE_DOCUMENT")]
     public async Task<IActionResult> FinalizeDocument(
         [FromRoute] int id,
         [FromBody] ContractDocumentCommentRequest? request,
         CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var updatedBy = _currentUser.EmployeeId ?? 0;
 
         await _service.FinalizeDocumentAsync(
@@ -392,11 +510,18 @@ public class ContractsController : ControllerBase
     }
 
     [HttpPost("{id:int}/document/cancel")]
+    [RequirePermission("CONTRACTS.GENERATE_DOCUMENT")]
     public async Task<IActionResult> CancelDocument(
         [FromRoute] int id,
         [FromBody] CancelContractDocumentRequest request,
         CancellationToken ct)
     {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
         var updatedBy = _currentUser.EmployeeId ?? 0;
 
         await _service.CancelDocumentAsync(

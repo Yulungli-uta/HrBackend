@@ -59,6 +59,14 @@ public sealed class PersonnelActionService : IPersonnelActionService
     private readonly IEmployeeProvisioningClient _provisioningClient;
     private readonly IEmployeeLaborRegimeService _laborRegimeService;
     private readonly IPersonnelMovementsService _movementsService;
+    private readonly IContractsService _contractsService;
+
+    /// <summary>
+    /// Código de PersonnelActionType cuyo efecto colateral, al cargar el documento firmado,
+    /// además de RequiresAdUserDisable, cierra el contrato vigente asociado (si lo hay) a
+    /// RENUNCIA. Ver <see cref="TriggerContractSeparationAsync"/>.
+    /// </summary>
+    private const string ResignationRetirementActionTypeCode = "RENUNCIA_JUBILACION";
 
     public PersonnelActionService(
         IPersonnelActionRepository actionRepository,
@@ -72,7 +80,8 @@ public sealed class PersonnelActionService : IPersonnelActionService
         IEmployeeProvisioningOrchestrator provisioningOrchestrator,
         IEmployeeProvisioningClient provisioningClient,
         IEmployeeLaborRegimeService laborRegimeService,
-        IPersonnelMovementsService movementsService)
+        IPersonnelMovementsService movementsService,
+        IContractsService contractsService)
     {
         _actionRepository          = actionRepository;
         _personnelActionType       = personnelActionType;
@@ -86,6 +95,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         _provisioningClient        = provisioningClient;
         _movementsService          = movementsService;
         _laborRegimeService        = laborRegimeService;
+        _contractsService          = contractsService;
     }
 
     /// <inheritdoc />
@@ -251,6 +261,9 @@ public sealed class PersonnelActionService : IPersonnelActionService
         var action = await _actionRepository.GetByIdAsync(actionId, ct)
             ?? throw new KeyNotFoundException($"Acción de personal {actionId} no encontrada.");
 
+        if (action.EmployeeId == approvedBy)
+            throw new InvalidOperationException("No puede aprobar una acción de personal de la cual usted es el empleado afectado.");
+
         GenerateDocumentResponse? docResponse = null;
 
         if (request.GenerateDocumentIfMissing && !action.GeneratedDocumentId.HasValue)
@@ -355,6 +368,13 @@ public sealed class PersonnelActionService : IPersonnelActionService
 
         if (actionType?.RequiresAdUserDisable == true)
             await TriggerActionDisableAsync(actionId, updatedBy, ct);
+
+        // Renuncia/Jubilación: si la acción tiene un contrato asociado, cerrarlo a RENUNCIA.
+        // Comparación por Code (no un flag de catálogo nuevo) a propósito — evita un cambio
+        // de esquema no solicitado; ver PersonnelActionType.RequiresAdUserDisable para el
+        // efecto de bloqueo de cuenta, que es universal para este tipo y no depende de esto.
+        if (actionType?.Code == ResignationRetirementActionTypeCode && action.ContractId.HasValue)
+            await TriggerContractSeparationAsync(actionId, action.ContractId.Value, updatedBy, ct);
 
         // 2026-07-06: tipos con ReachesVigente=1 (Nombramiento, Traslado, Encargo,
         // Cambio de Sueldo, Asistencia/Horario) pasan automáticamente a VIGENTE al
@@ -990,6 +1010,48 @@ public sealed class PersonnelActionService : IPersonnelActionService
         {
             _logger.LogError(ex,
                 "[ACTION][DISABLE] ERROR al deshabilitar cuenta. ActionId={ActionId}", actionId);
+        }
+    }
+
+    /// <summary>
+    /// Cierra el contrato asociado a una acción de renuncia/jubilación, transicionándolo a
+    /// RENUNCIA (catálogo HR.ref_Types, categoría CONTRACT_STATUS) vía
+    /// <see cref="IContractsService.ChangeStatusAsync"/> — respeta la máquina de estados real
+    /// (HR.tbl_contract_status_transitions), no escribe el campo directamente. Defensivo: un
+    /// fallo aquí no debe impedir que el documento firmado quede cargado ni que la cuenta se
+    /// haya deshabilitado (mismo criterio que <see cref="TriggerActionDisableAsync"/>).
+    /// </summary>
+    private async Task TriggerContractSeparationAsync(int actionId, int contractId, int updatedBy, CancellationToken ct)
+    {
+        try
+        {
+            var renunciaTypeId = await _db.RefTypes
+                .AsNoTracking()
+                .Where(r => r.Category == "CONTRACT_STATUS" && r.Name == "RENUNCIA")
+                .Select(r => (int?)r.TypeId)
+                .FirstOrDefaultAsync(ct);
+
+            if (!renunciaTypeId.HasValue)
+            {
+                _logger.LogWarning(
+                    "[ACTION][SEPARATION] No existe HR.ref_Types CONTRACT_STATUS='RENUNCIA'. ActionId={ActionId} ContractId={ContractId}",
+                    actionId, contractId);
+                return;
+            }
+
+            await _contractsService.ChangeStatusAsync(
+                contractId, renunciaTypeId.Value,
+                $"Cerrado automáticamente por renuncia/jubilación (acción de personal {actionId}).", ct);
+
+            _logger.LogInformation(
+                "[ACTION][SEPARATION] ✓ Contrato {ContractId} transicionado a RENUNCIA por acción {ActionId}.",
+                contractId, actionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[ACTION][SEPARATION] ERROR al cerrar contrato {ContractId} para ActionId={ActionId}.",
+                contractId, actionId);
         }
     }
 

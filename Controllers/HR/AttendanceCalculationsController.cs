@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.AttendanceCalculations;
 using WsUtaSystem.Application.DTOs.StoredProcedures;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
@@ -30,6 +31,7 @@ public class AttendanceCalculationsController : ControllerBase
 
     /// <summary>Lista todos los registros de AttendanceCalculations.</summary>
     [HttpGet]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
         var data = await _attendanceQueryService.GetAllAsync(ct);
@@ -38,6 +40,7 @@ public class AttendanceCalculationsController : ControllerBase
 
     /// <summary>Obtiene un registro por ID.</summary>
     [HttpGet("{id:int}")]
+    [RequirePermission("ATTENDANCE.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var entity = await _attendanceQueryService.GetByIdAsync(id, ct);
@@ -46,6 +49,7 @@ public class AttendanceCalculationsController : ControllerBase
 
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
+    [RequirePermission("ATTENDANCE.CREATE")]
     public async Task<IActionResult> Create([FromBody] AttendanceCalculationsCreateDto dto, CancellationToken ct)
     {
         var entity = _mapper.Map<AttendanceCalculations>(dto);
@@ -61,6 +65,7 @@ public class AttendanceCalculationsController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("ATTENDANCE.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] AttendanceCalculationsUpdateDto dto, CancellationToken ct)
     {
         var entity = _mapper.Map<AttendanceCalculations>(dto);
@@ -70,6 +75,7 @@ public class AttendanceCalculationsController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("ATTENDANCE.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _attendanceQueryService.DeleteAsync(id, ct);
@@ -80,6 +86,7 @@ public class AttendanceCalculationsController : ControllerBase
     /// Endpoint oficial del nuevo pipeline de asistencia por rango.
     /// </summary>
     [HttpPost("process-range")]
+    [RequirePermission("ATTENDANCE.MANAGE")]
     public async Task<IActionResult> ProcessAttendanceRange(
         [FromBody] AttendanceCalculationRequestDto request,
         CancellationToken ct)
@@ -129,6 +136,7 @@ public class AttendanceCalculationsController : ControllerBase
     /// Endpoint oficial del nuevo pipeline de asistencia por fecha.
     /// </summary>
     [HttpPost("process-date")]
+    [RequirePermission("ATTENDANCE.MANAGE")]
     public async Task<IActionResult> ProcessAttendanceDate(
         [FromBody] DateTime workDate,
         CancellationToken ct)
@@ -174,6 +182,7 @@ public class AttendanceCalculationsController : ControllerBase
     /// Obsoleto. Usa process-range.
     /// </summary>
     [HttpPost("calculate-range")]
+    [RequirePermission("ATTENDANCE.MANAGE")]
     public async Task<IActionResult> CalculateRange(
         [FromBody] AttendanceCalculationRequestDto request,
         CancellationToken ct)
@@ -195,6 +204,7 @@ public class AttendanceCalculationsController : ControllerBase
     /// Obsoleto. Los minutos nocturnos ahora forman parte del pipeline principal.
     /// </summary>
     [HttpPost("calc-night-minutes")]
+    [RequirePermission("ATTENDANCE.MANAGE")]
     public async Task<IActionResult> CalculateNightMinutes(
         [FromBody] AttendanceCalculationRequestDto request,
         CancellationToken ct)
@@ -216,6 +226,7 @@ public class AttendanceCalculationsController : ControllerBase
     /// Obsoleto. Las justificaciones ahora forman parte del pipeline principal.
     /// </summary>
     [HttpPost("apply-justifications")]
+    [RequirePermission("ATTENDANCE.MANAGE")]
     public async Task<IActionResult> ProcessApplyJustification(
         [FromBody] AttendanceCalculationRequestDto request,
         CancellationToken ct)
@@ -237,6 +248,7 @@ public class AttendanceCalculationsController : ControllerBase
     /// Obsoleto. Overtime y recovery ahora forman parte del pipeline principal.
     /// </summary>
     [HttpPost("apply-overtime-recovery")]
+    [RequirePermission("ATTENDANCE.MANAGE")]
     public async Task<IActionResult> ProcessApplyOvertimeRecovery(
         [FromBody] AttendanceCalculationRequestDto request,
         CancellationToken ct)

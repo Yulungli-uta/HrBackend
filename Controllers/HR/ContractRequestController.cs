@@ -6,6 +6,7 @@ using WsUtaSystem.Application.DTOs.ContractRequestPerson;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Models;
 using WsUtaSystem.Application.DTOs.Common;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -32,11 +33,13 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Lista todos los registros de ContractRequest.</summary>
     [HttpGet]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<ContractRequestDto>>(await _svc.GetAllAsync(ct)));
 
     /// <summary>Retorna solicitudes paginadas con filtros opcionales.</summary>
     [HttpGet("paged")]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> GetPaged(
         [FromQuery] string? statusName,
         [FromQuery] int? departmentId,
@@ -53,6 +56,7 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Retorna solicitudes filtradas por nombre de estado (e.g. PENDIENTE_CERT_FINANCIERA).</summary>
     [HttpGet("by-status")]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> GetByStatus([FromQuery] string statusName, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(statusName))
@@ -64,6 +68,7 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Obtiene un registro por ID.</summary>
     [HttpGet("{id:int}")]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
@@ -72,6 +77,7 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Retorna la cantidad de personas pendientes de contratar para una solicitud.</summary>
     [HttpGet("{id:int}/pending-count")]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> GetPendingCount([FromRoute] int id, CancellationToken ct)
     {
         var count = await _svc.GetPendingCountAsync(id, ct);
@@ -80,6 +86,7 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Crea un nuevo registro. El estado inicial se asigna automáticamente.</summary>
     [HttpPost]
+    [RequirePermission("CONTRACTS.CREATE")]
     public async Task<IActionResult> Create([FromBody] ContractRequestCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<ContractRequest>(dto);
@@ -89,6 +96,7 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
+    [RequirePermission("CONTRACTS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] ContractRequestUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<ContractRequest>(dto);
@@ -98,6 +106,7 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
+    [RequirePermission("CONTRACTS.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
         await _svc.DeleteAsync(id, ct);
@@ -108,6 +117,7 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Retorna todas las personas registradas en el detalle de una solicitud.</summary>
     [HttpGet("{id:int}/people")]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> GetPeople([FromRoute] int id, CancellationToken ct)
     {
         var items = await _personSvc.GetByRequestAsync(id, ct);
@@ -116,6 +126,7 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Retorna las personas pendientes (PENDIENTE) del detalle de una solicitud.</summary>
     [HttpGet("{id:int}/pending-people")]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> GetPendingPeople([FromRoute] int id, CancellationToken ct)
     {
         var items = await _personSvc.GetPendingByRequestAsync(id, ct);
@@ -124,6 +135,7 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Retorna información de cupos (contratados, libres, pendientes).</summary>
     [HttpGet("{id:int}/slots")]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> GetSlots([FromRoute] int id, CancellationToken ct)
     {
         var slots = await _svc.GetSlotsAsync(id, ct);
@@ -132,6 +144,7 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Busca personas disponibles para vincular a una solicitud.</summary>
     [HttpGet("{id:int}/available-people")]
+    [RequirePermission("CONTRACTS.READ")]
     public async Task<IActionResult> GetAvailablePeople(
         [FromRoute] int id,
         [FromQuery] string? search,
@@ -143,6 +156,7 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Agrega una persona al detalle de una solicitud.</summary>
     [HttpPost("{id:int}/people")]
+    [RequirePermission("CONTRACTS.UPDATE")]
     public async Task<IActionResult> AddPerson(
         [FromRoute] int id,
         [FromBody] CreateContractRequestPersonDto dto,
@@ -155,6 +169,7 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Actualiza los datos de una persona en el detalle.</summary>
     [HttpPut("{id:int}/people/{personId:int}")]
+    [RequirePermission("CONTRACTS.UPDATE")]
     public async Task<IActionResult> UpdatePerson(
         [FromRoute] int id,
         [FromRoute] int personId,
@@ -170,6 +185,7 @@ public class ContractRequestController : ControllerBase
     /// Marca una persona del detalle como contratada (llamado tras crear el contrato).
     /// </summary>
     [HttpPost("{id:int}/people/{personId:int}/generate-contract")]
+    [RequirePermission("CONTRACTS.APPROVE")]
     public async Task<IActionResult> GenerateContractFromPerson(
         [FromRoute] int id,
         [FromRoute] int personId,
@@ -185,6 +201,7 @@ public class ContractRequestController : ControllerBase
     /// Registra la contratación de una persona disponible (no estaba en el detalle).
     /// </summary>
     [HttpPost("{id:int}/available-people/generate-contract")]
+    [RequirePermission("CONTRACTS.APPROVE")]
     public async Task<IActionResult> GenerateContractFromAvailablePerson(
         [FromRoute] int id,
         [FromBody] GenerateContractFromAvailablePersonDto dto,
@@ -197,6 +214,7 @@ public class ContractRequestController : ControllerBase
 
     /// <summary>Envía la solicitud a estado PENDIENTE_CORRECCION.</summary>
     [HttpPost("{id:int}/send-to-correction")]
+    [RequirePermission("CONTRACTS.UPDATE")]
     public async Task<IActionResult> SendToCorrection(
         [FromRoute] int id,
         [FromBody] RejectTemporaryDto dto,

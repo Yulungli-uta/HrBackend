@@ -31,12 +31,16 @@ public interface IGuardRotationGroupService
     Task<List<GuardRotationGroupDto>> GetGeneralGroupsAsync(CancellationToken ct);
     Task<List<GuardRotationGroupWithSubgroupsDto>> GetGeneralGroupsWithSubgroupsAsync(CancellationToken ct);
     Task<List<GuardRotationGroupDto>> GetSubgroupsByParentAsync(int parentGroupId, CancellationToken ct);
+
+    /// <summary>Empleados con cargo de guardia (ver GuardRotationGroupService.GuardJobNames), para el
+    /// buscador de "Agregar guardias" — no usa el buscador genérico de empleados.</summary>
+    Task<List<EligibleEmployeeDto>> GetEligibleEmployeesAsync(string? search, CancellationToken ct);
 }
 
 public interface IRotationPatternService
 {
     Task<List<RotationPatternDto>> GetAllAsync(CancellationToken ct);
-    Task<PagedResult<RotationPatternDto>> GetPagedAsync(int page, int pageSize, string? search, CancellationToken ct);
+    Task<PagedResult<RotationPatternDto>> GetPagedAsync(int page, int pageSize, string? search, bool? isActive, CancellationToken ct);
     Task<RotationPatternDto?> GetByIdAsync(int patternId, CancellationToken ct);
     Task<RotationPatternDto> CreateAsync(CreateRotationPatternDto dto, CancellationToken ct);
     Task<RotationPatternDto> UpdateAsync(int patternId, UpdateRotationPatternDto dto, CancellationToken ct);
@@ -69,6 +73,17 @@ public interface IGuardShiftPlanningService
     Task<ScheduleBoardResponseDto> GetScheduleBoardAsync(ScheduleBoardFilterDto filter, CancellationToken ct);
     Task<ValidateGuardAssignmentResultDto> ValidateAssignmentAsync(ValidateGuardAssignmentRequestDto dto, CancellationToken ct);
     Task<GuardDashboardDto> GetDashboardAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Cancela una planificación individual (no la borra): marca IsActiveForAssignment=false
+    /// y StatusTypeId=CANCELLED, liberando la fecha para volver a planificarse.
+    /// </summary>
+    Task<GuardShiftPlanningDto> CancelPlanningAsync(int planningId, CancelGuardShiftPlanningDto dto, CancellationToken ct);
+
+    /// <summary>
+    /// Cancela en bloque todas las planificaciones activas de un grupo en un rango de fechas.
+    /// </summary>
+    Task<CancelGuardShiftPlanningResultDto> CancelPlanningRangeAsync(CancelGuardShiftPlanningRangeDto dto, CancellationToken ct);
 }
 
 public interface IGuardShiftChangeService

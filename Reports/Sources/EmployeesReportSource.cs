@@ -2,18 +2,19 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
-using WsUtaSystem.Application.Interfaces.Reports;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Reports.Abstractions;
 using WsUtaSystem.Reports.Core;
 
 namespace WsUtaSystem.Reports.Sources;
 
 /// <summary>
-/// Origen de datos para el reporte general de empleados (migración v1→v2).
+/// Origen de datos para el reporte general de empleados.
+/// Datos resueltos vía EF Core (IEmployeesService) — arquitectura v2, sin stored procedures.
 /// </summary>
 public sealed class EmployeesReportSource : IReportSource
 {
-    private readonly IReportRepository _repository;
+    private readonly IEmployeesService _employeesService;
     private readonly ILogger<EmployeesReportSource> _logger;
 
     public ReportType ReportType => ReportType.Employees;
@@ -22,8 +23,8 @@ public sealed class EmployeesReportSource : IReportSource
     private const string ColIdCard     = "id_card";
     private const string ColFullName   = "full_name";
     private const string ColDepartment = "department";
-    private const string ColFaculty    = "faculty";
     private const string ColEmpType    = "employee_type";
+    private const string ColJobTitle   = "job_title";
     private const string ColContract   = "contract_type";
     private const string ColStartDate  = "start_date";
     private const string ColSalary     = "salary";
@@ -35,18 +36,18 @@ public sealed class EmployeesReportSource : IReportSource
         new(ColIdCard,     "Cédula",           Width: 1.4f),
         new(ColFullName,   "Nombre Completo",  Width: 3.0f),
         new(ColDepartment, "Dependencia",      Width: 2.0f),
-        new(ColFaculty,    "Facultad",         Width: 2.0f),
-        new(ColEmpType,    "Tipo Empleado",    Width: 1.6f),
+        new(ColEmpType,    "Régimen",          Width: 1.6f),
+        new(ColJobTitle,   "Cargo",            Width: 2.0f),
         new(ColContract,   "Tipo Contrato",    Width: 1.6f),
         new(ColStartDate,  "Fecha Ingreso",    Width: 1.4f, Alignment: ColumnAlignment.Center),
         new(ColSalary,     "RMU",              Width: 1.2f, Alignment: ColumnAlignment.Right),
         new(ColStatus,     "Estado",           Width: 1.2f, Alignment: ColumnAlignment.Center),
     ];
 
-    public EmployeesReportSource(IReportRepository repository, ILogger<EmployeesReportSource> logger)
+    public EmployeesReportSource(IEmployeesService employeesService, ILogger<EmployeesReportSource> logger)
     {
-        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
-        _logger     = logger     ?? throw new ArgumentNullException(nameof(logger));
+        _employeesService = employeesService ?? throw new ArgumentNullException(nameof(employeesService));
+        _logger           = logger           ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<ReportDefinition> BuildAsync(ReportFilterDto filter, HttpContext context)
@@ -58,7 +59,12 @@ public sealed class EmployeesReportSource : IReportSource
             "Building Employees report. DepartmentId={Dept}, IsActive={Active}",
             filter.DepartmentId, filter.IsActive);
 
-        var data    = await _repository.GetEmployeesReportDataAsync(filter);
+        var data = await _employeesService.GetEmployeesReportDataAsync(
+            filter.DepartmentId,
+            filter.EmployeeTypeId,
+            filter.IsActive,
+            filter.StartDate,
+            filter.EndDate);
         var records = data?.ToList() ?? [];
 
         _logger.LogInformation("Employees report: {Count} records.", records.Count);
@@ -88,8 +94,8 @@ public sealed class EmployeesReportSource : IReportSource
                 [ColIdCard]     = r.IdentificationNumber,
                 [ColFullName]   = r.FullName,
                 [ColDepartment] = string.IsNullOrWhiteSpace(r.DepartmentName) ? "Sin dependencia" : r.DepartmentName,
-                [ColFaculty]    = string.IsNullOrWhiteSpace(r.FacultyName)    ? "-"               : r.FacultyName,
                 [ColEmpType]    = r.EmployeeType,
+                [ColJobTitle]   = string.IsNullOrWhiteSpace(r.JobTitle) ? "Sin cargo" : r.JobTitle,
                 [ColContract]   = r.ContractType ?? "Sin contrato",
                 [ColStartDate]  = r.HireDate.ToString("dd/MM/yyyy"),
                 [ColSalary]     = r.BaseSalary.ToString("N2"),

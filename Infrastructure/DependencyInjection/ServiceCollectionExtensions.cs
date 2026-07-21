@@ -1,5 +1,6 @@
 ﻿using FluentValidation;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Any;
@@ -9,6 +10,7 @@ using Serilog.Events;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Reflection;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 using WsUtaSystem.Application.Common.Email;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Common.Services;
@@ -572,7 +574,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IFacultiesRepository, WsUtaSystem.Infrastructure.Repositories.FacultiesRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFacultiesService, WsUtaSystem.Application.Services.FacultiesService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDepartmentAuthorityRepository, WsUtaSystem.Infrastructure.Repositories.DepartmentAuthorityRepository>();
-        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDepartmentAuthorityService, WsUtaSystem.Application.Services.DepartmentAuthorityService>();    // ── Módulo: Educación ─────────────────────────────────────────────────
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDepartmentAuthorityService, WsUtaSystem.Application.Services.DepartmentAuthorityService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITramiteRequirementsRepository, WsUtaSystem.Infrastructure.Repositories.TramiteRequirementsRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITramiteRequirementsService, WsUtaSystem.Application.Services.TramiteRequirementsService>();
+        // ── Módulo: Educación ─────────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEducationLevelsRepository, WsUtaSystem.Infrastructure.Repositories.EducationLevelsRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEducationLevelsService, WsUtaSystem.Application.Services.EducationLevelsService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IDegreeRepository, WsUtaSystem.Infrastructure.Repositories.DegreeRepository>();
@@ -666,6 +671,7 @@ public static class ServiceCollectionExtensions
         // ── Módulo: Alcance de acceso por departamento (UserAccessScope) ────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IUserAccessScopeRepository, WsUtaSystem.Infrastructure.Repositories.UserAccessScopeRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IUserAccessScopeService, WsUtaSystem.Application.Services.UserAccessScopeService>();
+        services.AddScoped<WsUtaSystem.Application.Common.Interfaces.IRecordAccessGuard, WsUtaSystem.Application.Services.RecordAccessGuard>();
 
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IResignationRetirementRepository, WsUtaSystem.Infrastructure.Repositories.ResignationRetirementRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IResignationRetirementService, WsUtaSystem.Application.Services.ResignationRetirementService>();
@@ -1009,6 +1015,79 @@ public static class ServiceCollectionExtensions
 
         // Servicio que expone el usuario autenticado actual durante el request
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+        // Resuelve permisos de acción (RolePermission) contra RepositoryUta para [RequirePermission]
+        services.AddScoped<WsUtaSystem.Application.Common.Interfaces.IUserActionPermissionService,
+            WsUtaSystem.Infrastructure.Services.UserActionPermissionService>();
+
+        return services;
+    }
+
+    // =========================================================
+    // RATE LIMITING
+    // Limitador de tasa global leído desde la sección "RateLimiting"
+    // de appsettings.json. Protege la API y la BD ante ráfagas de
+    // requests (bugs de frontend en loop, clientes abusivos).
+    // =========================================================
+
+    /// <summary>
+    /// Registra el rate limiter global con ventana fija, particionado por IP de origen.
+    /// Lee "RateLimiting:PermitLimit", "RateLimiting:WindowSeconds" y "RateLimiting:QueueLimit"
+    /// de la configuración, con valores seguros por defecto (200 requests / 60 segundos / sin cola).
+    /// Los preflights OPTIONS, /health y /swagger están exentos para no interferir
+    /// con CORS, monitoreo ni desarrollo.
+    /// </summary>
+    /// <param name="services">Colección de servicios.</param>
+    /// <param name="configuration">Configuración de la aplicación.</param>
+    public static IServiceCollection AddRateLimitingConfiguration(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var section = configuration.GetSection("RateLimiting");
+        var permitLimit = int.TryParse(section["PermitLimit"], out var pl) && pl > 0 ? pl : 200;
+        var windowSeconds = int.TryParse(section["WindowSeconds"], out var ws) && ws > 0 ? ws : 60;
+        var queueLimit = int.TryParse(section["QueueLimit"], out var ql) && ql >= 0 ? ql : 0;
+
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+            {
+                // Exentos: preflights CORS, health checks y Swagger no consumen cuota
+                if (HttpMethods.IsOptions(context.Request.Method) ||
+                    context.Request.Path.StartsWithSegments("/health") ||
+                    context.Request.Path.StartsWithSegments("/swagger"))
+                {
+                    return RateLimitPartition.GetNoLimiter("exempt");
+                }
+
+                // Partición por IP real: UseForwardedHeaders corre al inicio del pipeline,
+                // por lo que RemoteIpAddress ya refleja la IP del cliente detrás del proxy.
+                var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+                return RateLimitPartition.GetFixedWindowLimiter(clientIp, _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = permitLimit,
+                    Window = TimeSpan.FromSeconds(windowSeconds),
+                    QueueLimit = queueLimit,
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    AutoReplenishment = true
+                });
+            });
+
+            options.OnRejected = async (rejectionContext, cancellationToken) =>
+            {
+                // Retry-After indica al cliente cuándo reintentar (en segundos)
+                rejectionContext.HttpContext.Response.Headers.RetryAfter = windowSeconds.ToString();
+
+                await rejectionContext.HttpContext.Response.WriteAsJsonAsync(new
+                {
+                    error = "Demasiadas solicitudes",
+                    message = $"Se superó el límite de {permitLimit} solicitudes por {windowSeconds} segundos. Intente nuevamente más tarde."
+                }, cancellationToken);
+            };
+        });
 
         return services;
     }

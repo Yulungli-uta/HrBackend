@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Numerics;
 using WsUtaSystem.Application.DTOs.TimePlanningEmployee;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR
@@ -24,6 +25,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Lista todos los empleados de una planificación.</summary>
         [HttpGet("by-plan/{planId:int}")]
+        [RequirePermission("TIME_PLANNING.READ")]
         public async Task<IActionResult> GetByPlan([FromRoute] int planId, CancellationToken ct)
         {
             Console.WriteLine($"GetByPlan llamado con planId: {planId}");
@@ -49,6 +51,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Obtiene un empleado de planificación por ID.</summary>
         [HttpGet("{id:int}")]
+        [RequirePermission("TIME_PLANNING.READ")]
         public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
         {
             var planningEmployee = await _svc.GetByIdAsync(id, ct);
@@ -66,6 +69,7 @@ namespace WsUtaSystem.Controllers.HR
         /// No se acepta como parámetro de ruta porque la ruta base es /planning/employees.
         /// </remarks>
         [HttpPost]
+        [RequirePermission("TIME_PLANNING.CREATE")]
         public async Task<IActionResult> AddEmployee([FromBody] TimePlanningEmployeeCreateDTO dto, CancellationToken ct)
         {
             Console.WriteLine($"AddEmployee llamado con PlanID en body: {dto.PlanID} empleado: {dto.EmployeeID}");
@@ -78,6 +82,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Actualiza un empleado en la planificación.</summary>
         [HttpPut("{id:int}")]
+        [RequirePermission("TIME_PLANNING.UPDATE")]
         public async Task<IActionResult> Update([FromRoute] int id, [FromBody] TimePlanningEmployeeUpdateDTO dto, CancellationToken ct)
         {
             var planningEmployee = _mapper.Map<TimePlanningEmployee>(dto);
@@ -87,6 +92,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Elimina un empleado de la planificación.</summary>
         [HttpDelete("{id:int}")]
+        [RequirePermission("TIME_PLANNING.DELETE")]
         public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
         {
             await _svc.DeleteAsync(id, ct);

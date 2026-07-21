@@ -1,5 +1,14 @@
 namespace WsUtaSystem.Application.DTOs.Guards;
 
+/// <summary>Empleado con cargo de guardia (ver GuardRotationGroupService.GuardJobNames), para el
+/// buscador de "Agregar guardias" — filtrado, a diferencia del buscador genérico de empleados.</summary>
+public record EligibleEmployeeDto(
+    int EmployeeID,
+    string FullName,
+    string? IdCard,
+    string? Email
+);
+
 public record GuardRotationGroupDto(
     int GroupId,
     string? GroupCode,

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Reports;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Reports.Abstractions;
 using WsUtaSystem.Reports.Core;
 using WsUtaSystem.Reports.Helpers;
@@ -14,9 +15,18 @@ public static class ReportEndpoints
 {
     public static void MapReportEndpoints(this IEndpointRouteBuilder app)
     {
+        // .RequireAuthorization() sigue sin usarse a propósito: HrBackend no tiene
+        // AddAuthorization()/UseAuthorization() conectado (ver RequirePermissionAttribute),
+        // así que ese método sería un no-op silencioso. El gate real es JwtAuthenticationMiddleware
+        // (ya autentica antes de llegar aquí) + RequirePermission (REPORTS.READ) abajo.
+        //
+        // Deliberadamente SIN acotar por departamento: un reporte puede legítimamente cruzar
+        // varios departamentos (esa es la naturaleza del reporte, no un accidente de alcance).
+        // La autorización de reportes es solo rol + permiso de acción (REPORTS.READ) — mezclar
+        // eso con un filtro de departamento fue un error de diseño, revertido a pedido explícito.
         var group = app.MapGroup("")
-            .WithTags("Reports");
-            //.RequireAuthorization();
+            .WithTags("Reports")
+            .RequirePermission("REPORTS.READ");
 
         // ==================== EMPLEADOS (v1 - OBSOLETO, usar /v2/employees) ====================
 

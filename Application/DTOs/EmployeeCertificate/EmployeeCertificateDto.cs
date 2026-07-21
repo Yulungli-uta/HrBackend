@@ -69,6 +69,19 @@ public sealed record CreateEmployeeCertificateRequest(
     string? Purpose
 );
 
+/// <summary>
+/// RRHH sube el certificado ya firmado (StoredFileId, obtenido subiendo el archivo antes vía
+/// el endpoint genérico de documentos) y con eso emite el certificado.
+/// </summary>
+public sealed record ApproveEmployeeCertificateRequest(
+    int StoredFileId,
+    string? Observation
+);
+
+public sealed record RejectEmployeeCertificateRequest(
+    string Reason
+);
+
 public sealed record PagedEmployeeCertificateResult(
     IReadOnlyList<EmployeeCertificateSummaryDto> Items,
     int TotalCount,

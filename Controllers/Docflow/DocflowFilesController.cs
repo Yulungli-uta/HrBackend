@@ -1,6 +1,7 @@
 ﻿// File: Controllers/Docflow/DocflowFilesController.cs
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.Docflow;
 
@@ -12,6 +13,7 @@ public sealed class DocflowFilesController : ControllerBase
     public DocflowFilesController(IDocflowService svc) => _svc = svc;
 
     [HttpGet("{versionId:guid}/download")]
+    [RequirePermission("DOCFLOW.DOWNLOAD")]
     public async Task<IActionResult> Download([FromRoute] Guid versionId, CancellationToken ct)
     {
         var r = await _svc.DownloadVersionAsync(versionId, ct);

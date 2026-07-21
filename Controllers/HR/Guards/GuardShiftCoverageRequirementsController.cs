@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR.Guards;
 
@@ -12,10 +13,12 @@ public class GuardShiftCoverageRequirementsController : ControllerBase
     public GuardShiftCoverageRequirementsController(IGuardShiftCoverageRequirementService svc) => _svc = svc;
 
     [HttpGet]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(await _svc.GetAllAsync(ct));
 
     [HttpGet("paged")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetPaged(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -27,6 +30,7 @@ public class GuardShiftCoverageRequirementsController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetById(int id, CancellationToken ct)
     {
         var result = await _svc.GetByIdAsync(id, ct);
@@ -34,6 +38,7 @@ public class GuardShiftCoverageRequirementsController : ControllerBase
     }
 
     [HttpPost]
+    [RequirePermission("GUARDS.CREATE")]
     public async Task<IActionResult> Create([FromBody] CreateCoverageRequirementDto dto, CancellationToken ct)
     {
         var created = await _svc.CreateAsync(dto, ct);
@@ -41,6 +46,7 @@ public class GuardShiftCoverageRequirementsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [RequirePermission("GUARDS.UPDATE")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateCoverageRequirementDto dto, CancellationToken ct)
     {
         await _svc.UpdateAsync(id, dto, ct);

@@ -1,9 +1,14 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using WsUtaSystem.Application.Common.Email;
 using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Application.DTOs.Documents.GeneratedDocuments;
+using WsUtaSystem.Application.DTOs.PersonnelActions;
 using WsUtaSystem.Application.DTOs.ResignationRetirement;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Interfaces.Services.Documents;
+using WsUtaSystem.Data;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Application.Services;
@@ -35,7 +40,12 @@ public sealed class ResignationRetirementService : IResignationRetirementService
         ResignationRetirementStatus.Anulado
     ];
 
-    private const string TemplateCode = "CARTA_RENUNCIA_JUBILACION";
+    /// <summary>Plantillas separadas por tipo (ver Database/hr/13_resignation_retirement_templates_split.sql).</summary>
+    private static string ResolveTemplateCode(string requestType) =>
+        requestType == ResignationRetirementRequestType.Resignation ? "CARTA_RENUNCIA" : "CARTA_JUBILACION";
+
+    /// <summary>Code de HR.tbl_personnel_action_type para la acción de desvinculación (ver Database\hr\12_resignation_separation_action.sql).</summary>
+    private const string SeparationActionTypeCode = "RENUNCIA_JUBILACION";
 
     private static readonly string[] DocumentGenerableStatuses =
     [
@@ -46,15 +56,27 @@ public sealed class ResignationRetirementService : IResignationRetirementService
     private readonly IResignationRetirementRepository _repository;
     private readonly IDocumentGenerationService _documentGenerationService;
     private readonly IParametersRepository _parametersRepository;
+    private readonly IPersonnelActionService _personnelActionService;
+    private readonly IEmailBuilder _emailBuilder;
+    private readonly AppDbContext _db;
+    private readonly ILogger<ResignationRetirementService> _logger;
 
     public ResignationRetirementService(
         IResignationRetirementRepository repository,
         IDocumentGenerationService documentGenerationService,
-        IParametersRepository parametersRepository)
+        IParametersRepository parametersRepository,
+        IPersonnelActionService personnelActionService,
+        IEmailBuilder emailBuilder,
+        AppDbContext db,
+        ILogger<ResignationRetirementService> logger)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _documentGenerationService = documentGenerationService ?? throw new ArgumentNullException(nameof(documentGenerationService));
         _parametersRepository = parametersRepository ?? throw new ArgumentNullException(nameof(parametersRepository));
+        _personnelActionService = personnelActionService ?? throw new ArgumentNullException(nameof(personnelActionService));
+        _emailBuilder = emailBuilder ?? throw new ArgumentNullException(nameof(emailBuilder));
+        _db = db ?? throw new ArgumentNullException(nameof(db));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
@@ -319,6 +341,157 @@ public sealed class ResignationRetirementService : IResignationRetirementService
     }
 
     /// <inheritdoc/>
+    public async Task<ResignationRetirementDetailDto> UploadSignedDocumentAsync(int requestId, int reviewedBy, ApproveResignationRetirementRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var entity = await _repository.GetTrackedByIdAsync(requestId, ct)
+            ?? throw new KeyNotFoundException($"No existe la solicitud {requestId}.");
+
+        if (!ReviewableStatuses.Contains(entity.Status))
+            throw new InvalidOperationException($"No se puede aprobar una solicitud en estado '{entity.Status}'.");
+
+        EnsureRowVersionMatches(entity.RowVersion, request.RowVersion);
+
+        // El documento firmado es obligatorio para aprobar: debe existir y pertenecer
+        // exactamente a esta solicitud (no al de otro empleado/módulo).
+        if (!await _repository.StoredFileBelongsToRequestAsync(requestId, request.StoredFileId, ct))
+            throw new InvalidOperationException(
+                "El documento indicado no está adjunto a esta solicitud. Suba el documento firmado antes de aprobar.");
+
+        var employeeInfo = await _repository.GetEmployeeConsolidatedInfoAsync(entity.EmployeeId, ct)
+            ?? throw new InvalidOperationException("No se encontró información del empleado.");
+        if (employeeInfo.VigenteSourceType is null)
+            throw new InvalidOperationException(
+                "No se puede aprobar: el empleado no tiene un contrato, nombramiento o acción de personal vigente.");
+
+        var actionTypeId = await _db.PersonnelActionTypes
+            .AsNoTracking()
+            .Where(t => t.Code == SeparationActionTypeCode)
+            .Select(t => (int?)t.PersonnelActionTypeId)
+            .FirstOrDefaultAsync(ct)
+            ?? throw new InvalidOperationException(
+                $"No existe el tipo de acción de personal '{SeparationActionTypeCode}' — no se puede generar la acción de desvinculación.");
+
+        var personId = employeeInfo.PersonId
+            ?? throw new InvalidOperationException("El empleado no tiene una persona asociada en el sistema.");
+
+        // Contrato a cerrar (si el vigente del empleado es un contrato, no un nombramiento/acción)
+        var contractId = employeeInfo.VigenteSourceType == "CONTRACT" ? employeeInfo.VigenteSourceId : null;
+
+        var createResponse = await _personnelActionService.CreateAsync(
+            new CreatePersonnelActionRequest(
+                personId: personId,
+                EmployeeId: entity.EmployeeId,
+                ActionTypeId: actionTypeId,
+                ActionNumber: null,
+                ActionDate: DateOnly.FromDateTime(DateTime.Today),
+                EffectiveDate: entity.ProposedExitDate,
+                EndDate: null,
+                OriginDepartmentId: employeeInfo.DepartmentId,
+                OriginJobId: null,
+                OriginBudgetCode: null,
+                DestinationDepartmentId: null,
+                DestinationJobId: null,
+                DestinationBudgetCode: null,
+                PreviousRmu: null,
+                NewRmu: null,
+                LegalBasis: null,
+                Reason: entity.Reason,
+                Observations: request.Observation,
+                ContractId: contractId,
+                MovementId: null,
+                EmployeeTypeId: null,
+                SwornDeclaration: false,
+                InstitutionalProcess: null,
+                ManagementLevel: null,
+                DthDirectorId: null,
+                AuthorityNominatorId: null,
+                ElaboratorId: null,
+                ReviewerId: null,
+                RegistrarId: null,
+                GenerateDocument: true,
+                DocumentOverrides: null),
+            reviewedBy, ct);
+
+        if (createResponse.GeneratedDocumentId is null)
+            throw new InvalidOperationException(
+                "No se pudo generar el documento de la acción de personal de desvinculación — revise que el tipo RENUNCIA_JUBILACION tenga una plantilla publicada asignada.");
+
+        var actionId = createResponse.ActionId;
+
+        await _personnelActionService.MarkPendingSignaturesAsync(actionId, null, reviewedBy, ct);
+
+        // Dispara: transición a FIRMADO_CARGADO, deshabilitación de la cuenta institucional
+        // (RequiresAdUserDisable=1) y, si hay ContractId, cierre del contrato a RENUNCIA —
+        // ver PersonnelActionService.UploadSignedDocumentAsync/TriggerContractSeparationAsync.
+        await _personnelActionService.UploadSignedDocumentAsync(
+            actionId, new UploadSignedDocumentRequest(request.StoredFileId, request.Observation), reviewedBy, ct);
+
+        var previousStatus = entity.Status;
+        entity.LinkedPersonnelActionId = actionId;
+        entity.Status = ResignationRetirementStatus.Aprobado;
+        entity.ApprovedAt = DateTime.Now;
+        entity.ApprovedBy = reviewedBy;
+
+        await _repository.SaveChangesAsync(ct);
+
+        await _repository.AddHistoryAsync(new ResignationRetirementStatusHistory
+        {
+            RequestId = entity.RequestId,
+            PreviousStatus = previousStatus,
+            NewStatus = ResignationRetirementStatus.Aprobado,
+            Action = "SIGNED_UPLOADED",
+            Observation = request.Observation,
+            CreatedAt = DateTime.Now,
+            CreatedBy = reviewedBy
+        }, ct);
+        await _repository.SaveChangesAsync(ct);
+
+        // Destinatario: SOLO el correo institucional (Employees.Email). Nunca se usa el correo
+        // personal de People/tbl_Person — ese campo no es el canal oficial para esta notificación.
+        var institutionalEmail = await _db.Employees.AsNoTracking()
+            .Where(e => e.EmployeeId == entity.EmployeeId)
+            .Select(e => e.Email)
+            .FirstOrDefaultAsync(ct);
+        var toEmail = institutionalEmail?.Trim();
+
+        if (!string.IsNullOrWhiteSpace(toEmail))
+        {
+            var isResignation = entity.RequestType == ResignationRetirementRequestType.Resignation;
+            var typeLabelLower = isResignation ? "renuncia" : "jubilación";
+            var approvedDate = (entity.ApprovedAt ?? DateTime.Now).ToString("dd/MM/yyyy");
+
+            var body =
+                $"<p>Estimado/a {employeeInfo.FullName}:</p>" +
+                $"<p>Se informa que su solicitud de {typeLabelLower} ha sido recibida y revisada por la Dirección de Talento Humano.</p>" +
+                $"<p>La solicitud se encuentra aprobada con fecha {approvedDate}.</p>" +
+                $"<p>Referencia: Solicitud N.° {requestId}</p>" +
+                "<p>Este mensaje corresponde a una notificación automática del sistema.</p>" +
+                "<p>Atentamente,<br/>Dirección de Talento Humano</p>";
+
+            await _emailBuilder.TryNotifyAsync(
+                EmailTemplateKey.ResignationRetirementApproved,
+                $"Solicitud de {typeLabelLower} aprobada",
+                body,
+                to: toEmail, ct: ct);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "ResignationRetirementService: solicitud {RequestId} aprobada pero el empleado {EmployeeId} no tiene correo institucional registrado — no se envió notificación.",
+                requestId, entity.EmployeeId);
+        }
+
+        _logger.LogInformation(
+            "ResignationRetirementService: solicitud {RequestId} aprobada con documento firmado, acción de personal {ActionId} vinculada.",
+            requestId, actionId);
+
+        return await _repository.GetDetailByIdAsync(requestId, ct)
+            ?? throw new InvalidOperationException("No se pudo recuperar la solicitud aprobada.");
+    }
+
+    /// <inheritdoc/>
     public async Task<ResignationRetirementDetailDto> RejectAsync(int requestId, int reviewedBy, ReviewResignationRetirementRequest request, CancellationToken ct = default)
         => await ChangeStatusWithMandatoryObservationAsync(
             requestId, reviewedBy, request, ReviewableStatuses,
@@ -386,19 +559,14 @@ public sealed class ResignationRetirementService : IResignationRetirementService
         var employeeInfo = await _repository.GetEmployeeConsolidatedInfoAsync(employeeId, ct)
             ?? throw new InvalidOperationException("No se encontró información del empleado.");
 
-        var templateId = await _repository.GetPublishedTemplateIdAsync(TemplateCode, ct)
-            ?? throw new InvalidOperationException($"No existe una plantilla publicada '{TemplateCode}'.");
-
-        var isResignation = entity.RequestType == ResignationRetirementRequestType.Resignation;
-        var typeLabel = isResignation ? "RENUNCIA" : "JUBILACIÓN";
-        var typeLabelLower = isResignation ? "renuncia" : "jubilación";
+        var templateCode = ResolveTemplateCode(entity.RequestType);
+        var templateId = await _repository.GetPublishedTemplateIdAsync(templateCode, ct)
+            ?? throw new InvalidOperationException($"No existe una plantilla publicada '{templateCode}'.");
 
         var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["JOB_DESCRIPTION"] = employeeInfo.JobTitle ?? string.Empty,
             ["DEPARTMENT_NAME"] = employeeInfo.DepartmentName ?? string.Empty,
-            ["REQUEST_TYPE_LABEL"] = typeLabel,
-            ["REQUEST_TYPE_LABEL_LOWER"] = typeLabelLower,
             ["PROPOSED_EXIT_DATE"] = entity.ProposedExitDate.ToString("dd/MM/yyyy"),
             ["REASON"] = entity.Reason ?? string.Empty
         };

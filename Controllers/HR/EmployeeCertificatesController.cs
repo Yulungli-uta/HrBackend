@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.EmployeeCertificate;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 
 namespace WsUtaSystem.Controllers.HR;
 
@@ -46,6 +47,7 @@ public sealed class EmployeeCertificatesController : ControllerBase
     // ── Mis certificados ──────────────────────────────────────────────────────
 
     [HttpPost("my")]
+    [RequirePermission("EMPLOYEE_CERTIFICATE.CREATE")]
     [ProducesResponseType(typeof(EmployeeCertificateDetailDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> CreateMy([FromBody] CreateEmployeeCertificateRequest request, CancellationToken ct)
     {
@@ -59,6 +61,7 @@ public sealed class EmployeeCertificatesController : ControllerBase
     }
 
     [HttpGet("my")]
+    [RequirePermission("EMPLOYEE_CERTIFICATE.READ")]
     [ProducesResponseType(typeof(PagedEmployeeCertificateResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMy([FromQuery] EmployeeCertificateQueryFilter filter, CancellationToken ct)
     {
@@ -67,6 +70,7 @@ public sealed class EmployeeCertificatesController : ControllerBase
     }
 
     [HttpGet("my/{id:int}")]
+    [RequirePermission("EMPLOYEE_CERTIFICATE.READ")]
     [ProducesResponseType(typeof(EmployeeCertificateDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMyById([FromRoute] int id, CancellationToken ct)
     {
@@ -75,6 +79,7 @@ public sealed class EmployeeCertificatesController : ControllerBase
     }
 
     [HttpGet("my/{id:int}/download")]
+    [RequirePermission("EMPLOYEE_CERTIFICATE.DOWNLOAD")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> DownloadMy([FromRoute] int id, CancellationToken ct)
     {
@@ -86,6 +91,7 @@ public sealed class EmployeeCertificatesController : ControllerBase
     // ── Recursos Humanos ──────────────────────────────────────────────────────
 
     [HttpGet]
+    [RequirePermission("EMPLOYEE_CERTIFICATE.READ")]
     [ProducesResponseType(typeof(PagedEmployeeCertificateResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPaged([FromQuery] EmployeeCertificateQueryFilter filter, CancellationToken ct)
     {
@@ -97,6 +103,7 @@ public sealed class EmployeeCertificatesController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [RequirePermission("EMPLOYEE_CERTIFICATE.READ")]
     [ProducesResponseType(typeof(EmployeeCertificateDetailDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
@@ -106,6 +113,7 @@ public sealed class EmployeeCertificatesController : ControllerBase
     }
 
     [HttpGet("{id:int}/download")]
+    [RequirePermission("EMPLOYEE_CERTIFICATE.DOWNLOAD")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> Download([FromRoute] int id, CancellationToken ct)
     {
@@ -113,5 +121,40 @@ public sealed class EmployeeCertificatesController : ControllerBase
         await EnsureReviewerCanAccessAsync(detail, ct);
         var (bytes, fileName, contentType) = await _service.DownloadAsync(id, ct);
         return File(bytes, contentType, fileName);
+    }
+
+    /// <summary>
+    /// RRHH adjunta el certificado ya firmado (subido previamente vía
+    /// <c>POST api/v1/rh/documents/upload-single</c>, que devuelve el StoredFileId) y emite
+    /// la solicitud. Notifica por correo al empleado.
+    /// </summary>
+    [HttpPost("{id:int}/upload-signed-document")]
+    [RequirePermission("EMPLOYEE_CERTIFICATE.APPROVE")]
+    [ProducesResponseType(typeof(EmployeeCertificateDetailDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> UploadSignedDocument([FromRoute] int id, [FromBody] ApproveEmployeeCertificateRequest request, CancellationToken ct)
+    {
+        var detail = await _service.GetDetailByIdAsync(id, ct);
+        await EnsureReviewerCanAccessAsync(detail, ct);
+        var reviewerId = RequireEmployeeId();
+
+        var result = await _service.ApproveAsync(id, reviewerId, request, ct);
+
+        _logger.LogInformation("Certificado {RequestId} emitido (documento firmado adjuntado) por EmployeeId={ReviewerId}", id, reviewerId);
+        return Ok(result);
+    }
+
+    [HttpPost("{id:int}/reject")]
+    [RequirePermission("EMPLOYEE_CERTIFICATE.REJECT")]
+    [ProducesResponseType(typeof(EmployeeCertificateDetailDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Reject([FromRoute] int id, [FromBody] RejectEmployeeCertificateRequest request, CancellationToken ct)
+    {
+        var detail = await _service.GetDetailByIdAsync(id, ct);
+        await EnsureReviewerCanAccessAsync(detail, ct);
+        var reviewerId = RequireEmployeeId();
+
+        var result = await _service.RejectAsync(id, reviewerId, request, ct);
+
+        _logger.LogInformation("Certificado {RequestId} rechazado por EmployeeId={ReviewerId}", id, reviewerId);
+        return Ok(result);
     }
 }

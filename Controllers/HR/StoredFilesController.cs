@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.StoredFile;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR
@@ -23,11 +24,13 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Lista todos los archivos (ojo: puede ser grande).</summary>
         [HttpGet]
+        [RequirePermission("DOCUMENTS.READ")]
         public async Task<IActionResult> GetAll(CancellationToken ct) =>
             Ok(_mapper.Map<List<StoredFileDto>>(await _svc.GetAllAsync(ct)));
 
         /// <summary>Obtiene un archivo por ID (DB).</summary>
         [HttpGet("{id:int}")]
+        [RequirePermission("DOCUMENTS.READ")]
         public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
         {
             var e = await _svc.GetByIdAsync(id, ct);
@@ -36,6 +39,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Obtiene un archivo por GUID (recomendado para exponer en API).</summary>
         [HttpGet("guid/{fileGuid:guid}")]
+        [RequirePermission("DOCUMENTS.READ")]
         public async Task<IActionResult> GetByGuid([FromRoute] Guid fileGuid, CancellationToken ct)
         {
             var e = await _svc.GetByGuidAsync(fileGuid, ct);
@@ -47,6 +51,7 @@ namespace WsUtaSystem.Controllers.HR
         /// Ej: /files/entity?directoryCode=HRCONTRACT&amp;entityType=CONTRACT&amp;entityId=987&amp;status=1
         /// </summary>
         [HttpGet("entity")]
+        [RequirePermission("DOCUMENTS.READ")]
         public async Task<IActionResult> GetByEntity(
          [FromQuery] string directoryCode,
          [FromQuery] string entityType,
@@ -72,6 +77,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Crea un registro (metadata). Normalmente se usa junto al upload físico.</summary>
         [HttpPost]
+        [RequirePermission("DOCUMENTS.CREATE")]
         public async Task<IActionResult> Create([FromBody] StoredFileCreateDto dto, CancellationToken ct)
         {
             var entityObj = _mapper.Map<StoredFile>(dto);
@@ -87,6 +93,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Actualiza metadata.</summary>
         [HttpPut("{id:int}")]
+        [RequirePermission("DOCUMENTS.UPDATE")]
         public async Task<IActionResult> Update([FromRoute] int id, [FromBody] StoredFileUpdateDto dto, CancellationToken ct)
         {
             var entityObj = _mapper.Map<StoredFile>(dto);
@@ -96,6 +103,7 @@ namespace WsUtaSystem.Controllers.HR
 
         /// <summary>Soft delete (Status=2) recomendado en vez de borrar físico.</summary>
         [HttpDelete("{id:int}")]
+        [RequirePermission("DOCUMENTS.DELETE")]
         public async Task<IActionResult> SoftDelete([FromRoute] int id, CancellationToken ct)
         {
             // Si manejas usuario autenticado, aquí sacas el userId y lo pasas

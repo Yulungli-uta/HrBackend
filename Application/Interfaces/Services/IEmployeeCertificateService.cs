@@ -20,4 +20,10 @@ public interface IEmployeeCertificateService
 
     /// <summary>Descarga administrativa (RRHH), sin verificación de pertenencia por EmployeeId (se valida scope de departamento en el controller).</summary>
     Task<(byte[] Bytes, string FileName, string ContentType)> DownloadAsync(int requestId, CancellationToken ct = default);
+
+    /// <summary>RRHH adjunta el certificado firmado (ya subido, StoredFileId) y emite la solicitud. Notifica por correo al empleado.</summary>
+    Task<EmployeeCertificateDetailDto> ApproveAsync(int requestId, int approvedBy, ApproveEmployeeCertificateRequest request, CancellationToken ct = default);
+
+    /// <summary>RRHH rechaza la solicitud. Notifica por correo al empleado.</summary>
+    Task<EmployeeCertificateDetailDto> RejectAsync(int requestId, int rejectedBy, RejectEmployeeCertificateRequest request, CancellationToken ct = default);
 }

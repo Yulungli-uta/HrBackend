@@ -1,9 +1,11 @@
 
 using WsUtaSystem.Application.Interfaces.Auditable;
+using WsUtaSystem.Application.Common.Interfaces;
 
 namespace WsUtaSystem.Models;
-public class Contracts : IAuditable{
+public class Contracts : IAuditable, ISoftDeletable{
     public int ContractID { get; set; }
+    public bool IsDeleted { get; set; } = false;
 
     public int? CertificationID { get; set; }
     public int? ParentID { get; set; }
