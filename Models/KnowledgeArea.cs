@@ -10,6 +10,10 @@ namespace WsUtaSystem.Models
         public string Name { get; set; }
         public int? ParentId { get; set; }
         public int Levels { get; set; }
+
+        /// <summary>Código exacto exigido por el catálogo SIIES (Anexo Clasificación Internacional Normalizada de la Educación), ej. "3-11A". Pendiente de mapeo manual completo — ver decisión institucional.</summary>
+        public string? SiiesCode { get; set; }
+
         public bool IsActive { get; set; } = true;
         public DateTime? CreatedAt { get; set; }
         public int? CreatedBy { get; set; }

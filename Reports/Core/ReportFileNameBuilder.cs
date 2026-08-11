@@ -22,7 +22,8 @@ public static class ReportFileNameBuilder
         new Dictionary<ReportFormat, string>
         {
             [ReportFormat.Pdf]   = "pdf",
-            [ReportFormat.Excel] = "xlsx"
+            [ReportFormat.Excel] = "xlsx",
+            [ReportFormat.Csv]   = "csv"
         };
 
     /// <summary>
@@ -75,6 +76,7 @@ public static class ReportFileNameBuilder
     {
         ReportFormat.Pdf   => "application/pdf",
         ReportFormat.Excel => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ReportFormat.Csv   => "text/csv",
         _                  => throw new ArgumentException($"Formato no soportado: {format}", nameof(format))
     };
 }

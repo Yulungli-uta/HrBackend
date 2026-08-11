@@ -63,4 +63,7 @@ public class ContractsUpdateDto
     public bool IsDelegation { get; set; }
 
     public byte[] RowVersion { get; set; } = Array.Empty<byte>();
+
+    /// <summary>Sueldo real individual del contrato.</summary>
+    public decimal? BaseSalary { get; set; }
 }

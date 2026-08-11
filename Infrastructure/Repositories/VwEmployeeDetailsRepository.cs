@@ -84,7 +84,8 @@ namespace WsUtaSystem.Infrastructure.Repositories
         public async Task<IEnumerable<int>> GetEmployeeTypesAsync(CancellationToken ct = default)
         {
             return await Query()
-                .Select(e => e.EmployeeType)
+                .Where(e => e.EmployeeType.HasValue)
+                .Select(e => e.EmployeeType!.Value)
                 .Distinct()
                 .OrderBy(t => t)
                 .ToListAsync(ct);
@@ -288,6 +289,20 @@ namespace WsUtaSystem.Infrastructure.Repositories
                 .ThenBy(x => x.Schedule)
                 .ThenBy(x => x.ContractType)
                 .ToListAsync(ct);
+        }
+
+        public async Task<ScheduleCoverageStatsDto> GetScheduleCoverageStatsAsync(CancellationToken ct = default)
+        {
+            var total = await Query().CountAsync(ct);
+            var withSchedule = await Query()
+                .CountAsync(e => e.ScheduleID != null || !string.IsNullOrEmpty(e.Schedule), ct);
+
+            return new ScheduleCoverageStatsDto
+            {
+                Total = total,
+                WithSchedule = withSchedule,
+                WithoutSchedule = total - withSchedule
+            };
         }
     }
 }

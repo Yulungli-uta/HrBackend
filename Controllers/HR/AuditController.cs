@@ -23,6 +23,52 @@ public class AuditController : ControllerBase
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<AuditDto>>(await _svc.GetAllAsync(ct)));
 
+    /// <summary>
+    /// Consulta filtrada y paginada de correcciones manuales (Action=CORRECTION) registradas
+    /// en HR.Audit — usada por la pantalla "Historial de Correcciones". El diff de campos
+    /// (valor anterior/nuevo) y el motivo viajan serializados en <c>Details</c> (JSON).
+    /// </summary>
+    [HttpGet("search")]
+    [RequirePermission("AUDIT.READ")]
+    public async Task<IActionResult> Search(
+        [FromQuery] string? tableName,
+        [FromQuery] string? recordId,
+        [FromQuery] string? userName,
+        [FromQuery] DateTime? dateFrom,
+        [FromQuery] DateTime? dateTo,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 200) pageSize = 20;
+
+        var hasTable = !string.IsNullOrWhiteSpace(tableName);
+        var hasRecord = !string.IsNullOrWhiteSpace(recordId);
+        var hasUser = !string.IsNullOrWhiteSpace(userName);
+
+        System.Linq.Expressions.Expression<Func<Audit, bool>> predicate = a =>
+            a.Action == "CORRECTION" &&
+            (!hasTable || a.TableName == tableName) &&
+            (!hasRecord || a.RecordId == recordId) &&
+            (!hasUser || a.UserName.Contains(userName!)) &&
+            (!dateFrom.HasValue || a.DateTime >= dateFrom.Value) &&
+            (!dateTo.HasValue || a.DateTime <= dateTo.Value);
+
+        var paged = await _svc.GetPagedAsync(
+            predicate, page, pageSize, ct,
+            orderBy: a => (object)a.DateTime, ascending: false);
+
+        return Ok(new
+        {
+            items = _mapper.Map<List<AuditDto>>(paged.Items),
+            page = paged.Page,
+            pageSize = paged.PageSize,
+            totalCount = paged.TotalCount,
+            totalPages = paged.TotalPages
+        });
+    }
+
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]

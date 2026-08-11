@@ -10,6 +10,8 @@ public class GuardShiftChange : IAuditable
     public int? ReplacementEmployeeId { get; set; }
     public int OriginalScheduleId { get; set; }
     public int? NewScheduleId { get; set; }
+    public DateOnly? NewWorkDate { get; set; }
+    public int? NewLocationId { get; set; }
     public int ChangeTypeId { get; set; }
     public int StatusTypeId { get; set; }
     public bool IsActiveForAttendance { get; set; }
@@ -30,6 +32,7 @@ public class GuardShiftChange : IAuditable
     public virtual Employees? ReplacementEmployee { get; set; }
     public virtual Schedules? OriginalSchedule { get; set; }
     public virtual Schedules? NewSchedule { get; set; }
+    public virtual GuardServiceLocation? NewLocation { get; set; }
     public virtual RefTypes? ChangeType { get; set; }
     public virtual RefTypes? StatusType { get; set; }
     public virtual Employees? RequesterEmployee { get; set; }

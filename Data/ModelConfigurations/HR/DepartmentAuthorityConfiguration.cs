@@ -107,7 +107,11 @@ public sealed class DepartmentAuthorityConfiguration : IEntityTypeConfiguration<
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .HasConstraintName("FK_DeptAuth_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            // Employees tiene soft-delete (filtro global IsDeleted) — se marca opcional a nivel
+            // EF (la columna sigue NOT NULL en la BD) para que un registro no desaparezca ni
+            // arriesgue una navegación "requerida" nula si el empleado queda soft-deleted.
+            .IsRequired(false);
 
         e.HasOne(x => x.AuthorityType)
             .WithMany()

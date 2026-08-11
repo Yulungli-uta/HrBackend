@@ -65,7 +65,7 @@ namespace WsUtaSystem.Application.Services
             var uploadMultiple = new FileUploadMultipleRequestDto
             {
                 DirectoryCode = request.DirectoryCode,
-                RelativePath = NormalizeRelativePath(request.RelativePath, request.EntityType, request.EntityId),
+                RelativePath = NormalizeRelativePath(request.RelativePath),
                 Files = request.Files
             };
 
@@ -166,7 +166,7 @@ namespace WsUtaSystem.Application.Services
             var uploadReq = new FileUploadRequestDto
             {
                 DirectoryCode = request.DirectoryCode,
-                RelativePath = NormalizeRelativePath(request.RelativePath, request.EntityType, request.EntityId),
+                RelativePath = NormalizeRelativePath(request.RelativePath),
                 FileName = request.File.FileName,
                 File = request.File
             };
@@ -262,7 +262,7 @@ namespace WsUtaSystem.Application.Services
             }
 
             var result = new DocumentUploadResultDto { Total = request.Items.Count };
-            var baseRelative = NormalizeRelativePath(request.RelativePath, request.EntityType, request.EntityId);
+            var baseRelative = NormalizeRelativePath(request.RelativePath);
 
             for (int i = 0; i < request.Items.Count; i++)
             {
@@ -432,12 +432,14 @@ namespace WsUtaSystem.Application.Services
             }
         }
 
-        private static string NormalizeRelativePath(string? relativePath, string entityType, string entityId)
+        private static string NormalizeRelativePath(string? relativePath)
         {
-            if (!string.IsNullOrWhiteSpace(relativePath))
-                return relativePath.Trim().TrimStart('/').TrimEnd('/');
-
-            return $"{entityType.Trim().ToLowerInvariant()}/{entityId.Trim()}";
+            // Sin agrupación automática por EntityType/EntityId: si el caller no especifica
+            // una subcarpeta, el archivo cae directo en {PhysicalPath}/{año}/archivo, según
+            // el directorio parametrizado en HR.TBL_DirectoryParameters.
+            return string.IsNullOrWhiteSpace(relativePath)
+                ? string.Empty
+                : relativePath.Trim().TrimStart('/').TrimEnd('/');
         }
 
         private static (string relativeFolder, string storedFileName) SplitFolderAndFile(string? relativePath, string? fileName)

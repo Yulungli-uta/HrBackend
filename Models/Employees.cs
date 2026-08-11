@@ -8,10 +8,22 @@ public class Employees : IAuditable, ISoftDeletable
 {
     public int EmployeeId { get; set; }
     public int PersonID { get; set; }
-    public int EmployeeType { get; set; }
+    /// <summary>Nullable porque la columna en base de datos lo es — un empleado sin este dato
+    /// asignado no debe tumbar ninguna consulta.</summary>
+    public int? EmployeeType { get; set; }
     public int? DepartmentId { get; set; }
     public int? ImmediateBossId { get; set; }
     public int? JobId { get; set; }
+
+    /// <summary>FK -> ref_Types (Category='SIIES_TIPO_DOCENTE_LOES'). NULL/"No Aplica" salvo Job.SiiesTipoFuncionarioTypeId = DOCENTE LOES.</summary>
+    public int? TipoDocenteLoesTypeId { get; set; }
+
+    /// <summary>FK -> ref_Types (Category='SIIES_CATEGORIA_DOCENTE_LOES'). NULL/"No Aplica" salvo Job.SiiesTipoFuncionarioTypeId = DOCENTE LOES.</summary>
+    public int? CategoriaDocenteLoesTypeId { get; set; }
+
+    /// <summary>FK -> ref_Types (Category='BUDGET_UNIT'). Partida presupuestaria de la que sale el sueldo del empleado — distinta de Department (unidad organizacional).</summary>
+    public int? BudgetUnitTypeId { get; set; }
+
     public DateOnly HireDate { get; set; }
     public string? Email { get; set; }
     public bool IsActive { get; set; } = true;

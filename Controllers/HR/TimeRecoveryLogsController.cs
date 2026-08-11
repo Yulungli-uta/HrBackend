@@ -9,6 +9,26 @@ using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
 
+/// <summary>
+/// OBSOLETO / SIN USO REAL (verificado 2026-07-22): este CRUD escribe en
+/// HR.tbl_TimeRecoveryLogs, una tabla duplicada y huérfana. Crear un registro aquí
+/// NO afecta el saldo de recuperación del empleado (HR.tbl_TimeBalances.RecoveryPendingMin)
+/// — a pesar de que existen SP completas para hacerlo (HR.sp_hr_DebitRecoveryBalance,
+/// HR.sp_hr_ProcessRecoveryBalance), ningún Service/Controller/Job del backend las
+/// invoca. El mecanismo real de "ejecución" ya está unificado en
+/// HR.tbl_TimePlanningExecution: el pipeline diario de asistencia
+/// (sp_ProcessAttendanceBaseDay/sp_ProcessAttendancePlanningDay) cruza los planes de
+/// HR.tbl_TimePlanning (PlanType='Recovery') contra las picadas reales y ya descuenta
+/// RecoveryPendingMin automáticamente ahí. Ningún componente del frontend usa
+/// <c>RegistrosRecuperacionTiempoAPI</c>. No usar este controller para nada nuevo.
+///
+/// CORRECCIÓN 2026-07-22: solo este CRUD de escritura está muerto. La LECTURA de
+/// HR.tbl_TimeRecoveryLogs SÍ está viva — HR.sp_ProcessAttendanceRecoveryDay (etapa 4 del
+/// pipeline diario) la lee y perdona la marca de ausencia del día, algo que
+/// TimePlanningExecution NO hace (ese solo paga la deuda de RecoveryPendingMin). No borrar
+/// la tabla ni asumir que está completamente huérfana.
+/// </summary>
+[Obsolete("Solo este CRUD de escritura está sin uso real — la EJECUCIÓN de recuperación planificada se registra en HR.tbl_TimePlanningExecution. OJO: la LECTURA de esta tabla (HR.sp_ProcessAttendanceRecoveryDay) sigue viva y perdona ausencias, no la borre. Ver comentario de clase.")]
 [ApiController]
 [Route("time-recovery/logs")]
 public class TimeRecoveryLogsController : ControllerBase

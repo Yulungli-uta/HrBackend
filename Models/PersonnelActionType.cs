@@ -20,6 +20,9 @@ public sealed class PersonnelActionType : IAuditable
     /// <summary>Descripción opcional del tipo de acción.</summary>
     public string? Description { get; set; }
 
+    /// <summary>FK -> ref_Types (Category='SIIES_RELACION_IES'). Homologación para el reporte SIIES Funcionarios (misma categoría que ContractType.SiiesRelacionIesTypeId).</summary>
+    public int? SiiesRelacionIesTypeId { get; set; }
+
     /// <summary>Prefijo para numeración del documento (ej: "DAP", "REG-AP").</summary>
     public string NumberingPrefix { get; set; } = null!;
 

@@ -96,8 +96,65 @@ public class FileManagementService : IFileManagementService
                 folderPath, fullPath);
 
             // 4b. Verificar accesibilidad de la ruta base (timeout 8 s para no bloquear en red inaccesible)
+            // Debe correr impersonada igual que el guardado real (paso 5): un share NAS no es
+            // accesible con la identidad del Application Pool, solo con las credenciales de red.
             _logger.LogDebug("[Upload] Paso 4b — verificando accesibilidad de '{BasePath}'", directory.PhysicalPath);
-            bool pathOk = await IsPathAccessibleAsync(directory.PhysicalPath, ct);
+            bool pathOk;
+            if (_settings.UseImpersonation)
+            {
+                // Diagnóstico: resolver el hostname del share por separado, para distinguir un
+                // problema de DNS/red (nunca llega al servidor) de uno de credenciales/permisos
+                // (llega, pero el NAS rechaza la conexión).
+                var uncHost = (Path.GetPathRoot(directory.PhysicalPath) ?? directory.PhysicalPath)
+                    .Trim('\\').Split('\\').FirstOrDefault();
+                if (!string.IsNullOrEmpty(uncHost))
+                {
+                    try
+                    {
+                        var addresses = await System.Net.Dns.GetHostAddressesAsync(uncHost, ct);
+                        _logger.LogInformation(
+                            "[Upload][DIAG] DNS OK para '{Host}': {Addresses}",
+                            uncHost, string.Join(", ", addresses.Select(a => a.ToString())));
+                    }
+                    catch (Exception dnsEx)
+                    {
+                        _logger.LogError(dnsEx,
+                            "[Upload][DIAG] No se pudo resolver el host '{Host}' — problema de DNS/red, no de credenciales.",
+                            uncHost);
+                    }
+                }
+
+                string checkUsername, checkPassword;
+                string? checkDomain;
+                try
+                {
+                    (checkUsername, checkPassword, checkDomain) = DecryptCredentials();
+                    _logger.LogInformation(
+                        "[Upload][DIAG] Credenciales desencriptadas OK. Username='{User}' Domain='{Domain}' (password no se loguea)",
+                        checkUsername, checkDomain ?? "(vacío)");
+                }
+                catch (Exception cryptoEx)
+                {
+                    _logger.LogError(cryptoEx,
+                        "[Upload][DIAG] Fallo al desencriptar NetworkCredentials — revisar que FileManagement:EncryptionKey " +
+                        "sea EXACTAMENTE la misma que se usó para encriptar Username/Password/Domain.");
+                    return CreateErrorResponse(
+                        "No se pudieron desencriptar las credenciales de red configuradas.", originalFileName);
+                }
+
+                using var checkImpersonation = new WindowsImpersonation();
+                pathOk = await checkImpersonation.RunImpersonatedAsync(checkUsername, checkPassword, checkDomain, () =>
+                {
+                    _logger.LogInformation(
+                        "[Upload][DIAG] Identidad DENTRO del impersonation: '{Identity}'",
+                        System.Security.Principal.WindowsIdentity.GetCurrent().Name);
+                    return IsPathAccessibleAsync(directory.PhysicalPath, ct);
+                });
+            }
+            else
+            {
+                pathOk = await IsPathAccessibleAsync(directory.PhysicalPath, ct);
+            }
             if (!pathOk)
             {
                 var shareRoot = (Path.GetPathRoot(directory.PhysicalPath) ?? directory.PhysicalPath).TrimEnd('\\', '/');
@@ -424,16 +481,36 @@ public class FileManagementService : IFileManagementService
             ? root.TrimEnd('\\', '/')
             : root;
 
-        _logger.LogDebug(
-            "[Upload] Verificando accesibilidad en share raíz '{Check}' (ruta completa: '{Full}')",
-            checkPath, basePath);
+        _logger.LogInformation(
+            "[Upload][DIAG] Verificando accesibilidad en share raíz '{Check}' (ruta completa: '{Full}') como identidad de proceso '{Identity}'",
+            checkPath, basePath, System.Security.Principal.WindowsIdentity.GetCurrent().Name);
 
         try
         {
             return await Task.Run(() =>
             {
-                try { return Directory.Exists(checkPath); }
-                catch { return false; }
+                // Directory.Exists() NUNCA lanza excepción (la traga internamente y devuelve
+                // false ante cualquier error: no encontrado, acceso denegado, red inalcanzable).
+                // Por eso, si da false, se fuerza un segundo intento con una API que sí lanza
+                // (GetFileSystemEntries) solo para capturar y loguear la causa real.
+                var exists = Directory.Exists(checkPath);
+                if (!exists)
+                {
+                    try
+                    {
+                        Directory.GetFileSystemEntries(checkPath);
+                        _logger.LogWarning(
+                            "[Upload][DIAG] Directory.Exists dio false para '{Path}' pero GetFileSystemEntries no lanzó excepción (inconsistente, revisar manualmente).",
+                            checkPath);
+                    }
+                    catch (Exception diagEx)
+                    {
+                        _logger.LogError(diagEx,
+                            "[Upload][DIAG] Causa real de inaccesibilidad en '{Path}': {ExType} - {ExMessage} (HResult=0x{HResult:X8})",
+                            checkPath, diagEx.GetType().Name, diagEx.Message, diagEx.HResult);
+                    }
+                }
+                return exists;
             }).WaitAsync(TimeSpan.FromSeconds(8), ct);
         }
         catch (TimeoutException)

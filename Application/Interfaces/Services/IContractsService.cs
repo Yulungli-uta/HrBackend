@@ -7,9 +7,20 @@ using WsUtaSystem.Models;
 using ContractDocumentStatusDto = WsUtaSystem.Application.DTOs.Contracts.ContractDocumentStatusDto;
 namespace WsUtaSystem.Application.Interfaces.Services;
 public interface IContractsService : IService<Contracts, int> {
-    Task<Contracts> CreateAndNotifyAsync(Contracts entity, CancellationToken ct);
+    Task<Contracts> CreateAndNotifyAsync(Contracts entity, CancellationToken ct, bool isHistoricalEntry = false);
     Task UpdateAndNotifyAsync(int id, Contracts entity, CancellationToken ct);
     Task UpdateAsync(int id, ContractsUpdateDto dto, CancellationToken ct);
+
+    /// <summary>Resuelve el PersonID del titular de un EmployeeId (para filtrar contratos por empleado).</summary>
+    Task<int?> ResolvePersonIdByEmployeeIdAsync(int employeeId, CancellationToken ct);
+
+    /// <summary>
+    /// Corrige los datos de un contrato en CUALQUIER estado (a diferencia de
+    /// <see cref="UpdateAsync(int, ContractsUpdateDto, CancellationToken)"/>, que solo permite
+    /// BORRADOR/GENERADO). Exige motivo obligatorio y queda registrada en HR.Audit
+    /// (Action=CORRECTION) con el detalle de los campos modificados.
+    /// </summary>
+    Task CorrectAsync(int id, ContractsUpdateDto dto, string reason, CancellationToken ct);
 
     Task<IReadOnlyList<int>> GetAllowedNextStatusesAsync(int currentStatusTypeId, CancellationToken ct);
 

@@ -6,6 +6,7 @@ public class EmergencyContacts : IAuditable{
   public int ContactId{get;set;}
   public int PersonId{get;set;}
   public string Identification{get;set;}=null!;
+  public int? IdentificationTypeId{get;set;}
   public string FirstName{get;set;}=null!;
   public string LastName{get;set;}=null!;
   public int RelationshipTypeId{get;set;}

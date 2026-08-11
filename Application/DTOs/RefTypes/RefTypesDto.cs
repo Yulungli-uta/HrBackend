@@ -9,4 +9,5 @@ public class RefTypesDto
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? Metadata { get; set; }
+    public string? SiiesLabel { get; set; }
 }

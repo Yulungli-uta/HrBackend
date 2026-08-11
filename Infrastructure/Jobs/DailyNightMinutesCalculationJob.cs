@@ -4,6 +4,14 @@ using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Jobs;
 
+/// <summary>
+/// OBSOLETO (verificado 2026-07-22): NO está registrado en QuartzConfiguration.cs — nunca se
+/// ejecuta. Llama a <see cref="IAttendanceCalculationService.CalculateNightMinutesAsync"/>
+/// (también obsoleto). El único job de asistencia registrado es
+/// <see cref="DailyAttendanceCalculationJob"/> (pipeline de 6 etapas). No registrar este job
+/// sin antes confirmar si el cálculo nocturno ya vive en ese pipeline o si falta.
+/// </summary>
+[Obsolete("No registrado en Quartz, nunca se ejecuta. Ver DailyAttendanceCalculationJob para el pipeline real vigente.")]
 [DisallowConcurrentExecution]
 public sealed class DailyNightMinutesCalculationJob : BaseJob
 {

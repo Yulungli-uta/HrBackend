@@ -15,6 +15,10 @@ public interface IGuardRotationGroupRepository : IRepository<GuardRotationGroup,
 {
     Task<GuardRotationGroup?> GetWithEmployeesAsync(int groupId, CancellationToken ct);
     Task<List<GuardRotationGroupEmployee>> GetActiveEmployeesAsync(int groupId, DateOnly date, CancellationToken ct);
+
+    /// <summary>Indica si el empleado pertenece, en la fecha dada, a algún grupo de rotación
+    /// marcado como especial (IsSpecial=true) — usado para exceptuar la validación de doble turno.</summary>
+    Task<bool> IsEmployeeInSpecialGroupAsync(int employeeId, DateOnly date, CancellationToken ct);
 }
 
 public interface IRotationPatternRepository : IRepository<RotationPattern, int>

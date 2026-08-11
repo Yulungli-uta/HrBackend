@@ -60,6 +60,7 @@ public sealed class EducationLevelsConfiguration : IEntityTypeConfiguration<Educ
         e.Property(x => x.Specialty).HasMaxLength(100);
         e.Property(x => x.Grade).HasMaxLength(50);
         e.Property(x => x.Location).HasMaxLength(100);
+        e.Property(x => x.SenescytRegistrationNumber).HasMaxLength(50);
     }
 }
 
@@ -72,6 +73,7 @@ public sealed class EmergencyContactsConfiguration : IEntityTypeConfiguration<Em
         e.Property(x => x.ContactId).HasColumnName("ContactID");
         e.Property(x => x.PersonId).HasColumnName("PersonID");
         e.Property(x => x.Identification).HasMaxLength(20);
+        e.Property(x => x.IdentificationTypeId).HasColumnName("IdentificationTypeID");
         e.Property(x => x.FirstName).HasMaxLength(100);
         e.Property(x => x.LastName).HasMaxLength(100);
         e.Property(x => x.RelationshipTypeId).HasColumnName("RelationshipTypeID");

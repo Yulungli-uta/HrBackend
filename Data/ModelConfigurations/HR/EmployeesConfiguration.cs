@@ -76,6 +76,7 @@ public sealed class JobConfiguration : IEntityTypeConfiguration<Job>
         e.ToTable("tbl_Jobs", "HR");
         e.HasKey(x => x.JobID);
         e.Property(x => x.JobID).HasColumnName("JobID");
+        e.Property(x => x.ReferenceSalary).HasColumnName("ReferenceSalary").HasColumnType("DECIMAL(10,2)");
     }
 }
 

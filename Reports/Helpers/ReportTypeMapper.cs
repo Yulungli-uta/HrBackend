@@ -68,6 +68,12 @@ public static class ReportTypeMapper
             ["granted-permissions"]     = ReportType.GrantedPermissions,
             ["contract-requests"]       = ReportType.ContractRequests,
             ["certifications"]          = ReportType.Certifications,
+
+            // ── Reportes SIIES (CACES) ────────────────────────────────────────
+            // Un solo reporte; ReportFilterDto.IdentType (CEDULA/PASAPORTE) segrega la matriz.
+            ["siies-funcionarios"] = ReportType.SiiesFuncionarios,
+            ["siies-profesores"] = ReportType.SiiesProfesores,
+            ["siies-formacion-profesional"] = ReportType.SiiesFormacionProfesional,
         };
 
     /// <summary>

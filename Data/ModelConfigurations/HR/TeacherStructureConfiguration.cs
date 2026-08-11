@@ -28,7 +28,8 @@ public sealed class TeacherStructureConfiguration : IEntityTypeConfiguration<Tea
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .HasConstraintName("FK_TeacherStr_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false); // opcional a nivel EF por el soft-delete de Employees
 
         e.HasOne(x => x.Ladder)
             .WithMany()

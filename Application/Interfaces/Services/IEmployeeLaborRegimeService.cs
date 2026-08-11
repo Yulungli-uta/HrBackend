@@ -17,4 +17,10 @@ public interface IEmployeeLaborRegimeService
     /// Retorna null si el id no existe.
     /// </summary>
     Task<EmployeeLaborRegimeDto?> CloseAsync(int id, EmployeeLaborRegimeCloseDto dto, int? changedBy, CancellationToken ct = default);
+
+    /// <summary>
+    /// Clasifica (o corrige) el campo SIIES INGRESO_POR_CONCURSO de un régimen existente.
+    /// Retorna null si el id no existe.
+    /// </summary>
+    Task<EmployeeLaborRegimeDto?> SetIngresoPorConcursoAsync(int id, EmployeeLaborRegimeIngresoPorConcursoDto dto, int? changedBy, CancellationToken ct = default);
 }

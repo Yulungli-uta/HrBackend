@@ -9,6 +9,32 @@ using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Controllers.HR;
 
+/// <summary>
+/// OBSOLETO / SIN USO REAL (verificado 2026-07-22): este CRUD escribe en
+/// HR.tbl_TimeRecoveryPlans, una tabla duplicada y huérfana. El mecanismo real de
+/// planificación de recuperación de horas fuera de horario es
+/// HR.tbl_TimePlanning (PlanType='Recovery'), expuesto por
+/// <c>Controllers/HR/TimePlanningsController</c> / <c>TimePlanningEmployeesController</c>
+/// (ruta <c>/api/v1/rh/planning/...</c>) y usado por el frontend
+/// (components/planning/CreatePlanningDialog.tsx). Ese es el único camino que el
+/// pipeline diario de asistencia (sp_ProcessAttendanceBaseDay/
+/// sp_ProcessAttendancePlanningDay) cruza contra las picadas reales para descontar
+/// HR.tbl_TimeBalances.RecoveryPendingMin automáticamente.
+/// Confirmado sin llamadores: ningún Service/Controller/Job del backend invoca
+/// <see cref="Application.Interfaces.Repositories.IHrBalanceRepository.ProcessRecoveryAsync"/>
+/// ni <see cref="Application.Interfaces.Repositories.IHrBalanceRepository.DebitRecoveryAsync"/>
+/// (las SP que sí decrementarían el saldo desde esta tabla), y ningún componente del
+/// frontend usa <c>PlanesRecuperacionTiempoAPI</c>. No usar este controller para nada
+/// nuevo — no tiene ningún efecto sobre el saldo real del empleado.
+///
+/// CORRECCIÓN 2026-07-22: solo este CRUD de escritura está muerto. La LECTURA de
+/// HR.tbl_TimeRecoveryPlans/TimeRecoveryLogs SÍ está viva — HR.sp_ProcessAttendanceRecoveryDay
+/// (etapa 4 del pipeline diario) las lee y perdona la marca de ausencia del día, algo que
+/// TimePlanning NO hace (TimePlanning solo paga la deuda de RecoveryPendingMin). No borrar
+/// las tablas ni asumir que están completamente huérfanas — falta construir un flujo de
+/// creación real si "perdonar ausencia" sigue siendo una función deseada.
+/// </summary>
+[Obsolete("Solo este CRUD de escritura está sin uso real — el mecanismo vigente para PLANIFICAR recuperación es HR.tbl_TimePlanning (PlanType='Recovery'). OJO: la LECTURA de esta tabla (HR.sp_ProcessAttendanceRecoveryDay) sigue viva y perdona ausencias, no la borre. Ver comentario de clase.")]
 [ApiController]
 [Route("time-recovery/plans")]
 public class TimeRecoveryPlansController : ControllerBase

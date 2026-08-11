@@ -72,6 +72,8 @@ public class RotationPatternService : IRotationPatternService
         if (dto.Details.Count != dto.CycleDays)
             throw new InvalidOperationException($"Se esperaban {dto.CycleDays} detalles, se recibieron {dto.Details.Count}.");
 
+        await EnsurePatternIsNotDuplicatedAsync(null, dto.PatternCode, dto.Name, dto.CycleDays, dto.Details, ct);
+
         var entity = new RotationPattern
         {
             PatternCode = dto.PatternCode,
@@ -102,11 +104,10 @@ public class RotationPatternService : IRotationPatternService
     {
         var entity = await _db.RotationPatterns.FirstOrDefaultAsync(p => p.PatternId == patternId, ct)
             ?? throw new KeyNotFoundException($"Patrón {patternId} no encontrado.");
+        await EnsurePatternHeaderIsNotDuplicatedAsync(patternId, dto.PatternCode, dto.Name, ct);
         entity.PatternCode = dto.PatternCode;
         entity.Name = dto.Name;
         entity.Description = dto.Description;
-        entity.PatternTypeId = dto.PatternTypeId;
-        entity.CycleDays = dto.CycleDays;
         entity.IsActive = dto.IsActive;
         await _db.SaveChangesAsync(ct);
         return MapToDto(entity);
@@ -116,6 +117,11 @@ public class RotationPatternService : IRotationPatternService
     {
         var entity = await _repo.GetWithDetailsAsync(patternId, ct)
             ?? throw new KeyNotFoundException($"Patrón {patternId} no encontrado.");
+
+        if (dto.Details.Count != entity.CycleDays)
+            throw new InvalidOperationException($"Se esperaban {entity.CycleDays} detalles, se recibieron {dto.Details.Count}.");
+
+        await EnsurePatternIsNotDuplicatedAsync(patternId, entity.PatternCode, entity.Name, entity.CycleDays, dto.Details, ct);
 
         _db.RotationPatternDetails.RemoveRange(entity.Details);
 
@@ -142,4 +148,64 @@ public class RotationPatternService : IRotationPatternService
                 d.PatternDetailId, d.PatternId, d.DayOrder, d.ScheduleId,
                 d.Schedule?.Description, d.Schedule?.ScheduleCode, d.IsRestDay, d.Notes
             )).ToList());
+
+    private async Task EnsurePatternHeaderIsNotDuplicatedAsync(
+        int? currentPatternId,
+        string? patternCode,
+        string name,
+        CancellationToken ct)
+    {
+        var normalizedCode = Normalize(patternCode);
+        var normalizedName = Normalize(name);
+
+        if (!string.IsNullOrEmpty(normalizedCode))
+        {
+            var codeExists = await _db.RotationPatterns.AnyAsync(p =>
+                (!currentPatternId.HasValue || p.PatternId != currentPatternId.Value)
+                && p.PatternCode != null
+                && p.PatternCode.Trim().ToLower() == normalizedCode, ct);
+
+            if (codeExists)
+                throw new InvalidOperationException($"Ya existe un patron de rotacion con el codigo '{patternCode}'.");
+        }
+
+        var nameExists = await _db.RotationPatterns.AnyAsync(p =>
+            (!currentPatternId.HasValue || p.PatternId != currentPatternId.Value)
+            && p.Name.Trim().ToLower() == normalizedName, ct);
+
+        if (nameExists)
+            throw new InvalidOperationException($"Ya existe un patron de rotacion con el nombre '{name}'.");
+    }
+
+    private async Task EnsurePatternIsNotDuplicatedAsync(
+        int? currentPatternId,
+        string? patternCode,
+        string name,
+        int cycleDays,
+        IReadOnlyCollection<CreateRotationPatternDetailDto> details,
+        CancellationToken ct)
+    {
+        await EnsurePatternHeaderIsNotDuplicatedAsync(currentPatternId, patternCode, name, ct);
+
+        var incomingSignature = BuildDetailsSignature(details);
+        var candidates = await _db.RotationPatterns
+            .Include(p => p.Details)
+            .Where(p => p.IsActive
+                        && p.CycleDays == cycleDays
+                        && (!currentPatternId.HasValue || p.PatternId != currentPatternId.Value))
+            .ToListAsync(ct);
+
+        var duplicate = candidates.FirstOrDefault(p => BuildDetailsSignature(p.Details.Select(d =>
+            new CreateRotationPatternDetailDto(d.DayOrder, d.ScheduleId, d.IsRestDay, d.Notes)).ToList()) == incomingSignature);
+
+        if (duplicate is not null)
+            throw new InvalidOperationException($"Ya existe un patron de rotacion activo con la misma secuencia: '{duplicate.Name}'.");
+    }
+
+    private static string Normalize(string? value) => (value ?? string.Empty).Trim().ToLower();
+
+    private static string BuildDetailsSignature(IEnumerable<CreateRotationPatternDetailDto> details) =>
+        string.Join("|", details
+            .OrderBy(d => d.DayOrder)
+            .Select(d => $"{d.DayOrder}:{d.ScheduleId?.ToString() ?? "REST"}:{d.IsRestDay}"));
 }

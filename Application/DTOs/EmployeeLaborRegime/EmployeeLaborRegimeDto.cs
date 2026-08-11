@@ -26,6 +26,9 @@ public class EmployeeLaborRegimeDto
     public DateOnly? EffectiveTo { get; set; }
     public bool IsActive { get; set; }
     public bool IsPrincipal { get; set; }
+
+    /// <summary>SIIES INGRESO_POR_CONCURSO. Null = sin clasificar todavía.</summary>
+    public bool? IngresoPorConcurso { get; set; }
 }
 
 public class EmployeeLaborRegimeCreateDto
@@ -40,10 +43,19 @@ public class EmployeeLaborRegimeCreateDto
     public int? SourceContractId { get; set; }
     public int? SourcePersonnelActionId { get; set; }
     public DateOnly EffectiveFrom { get; set; }
+
+    /// <summary>SIIES INGRESO_POR_CONCURSO. Opcional al crear; puede completarse después con SetIngresoPorConcursoAsync.</summary>
+    public bool? IngresoPorConcurso { get; set; }
 }
 
 /// <summary>Cierra un régimen activo (renuncia, vencimiento, cambio de asignación).</summary>
 public class EmployeeLaborRegimeCloseDto
 {
     public DateOnly EffectiveTo { get; set; }
+}
+
+/// <summary>Clasifica (o corrige) el ingreso por concurso de un régimen ya existente.</summary>
+public class EmployeeLaborRegimeIngresoPorConcursoDto
+{
+    public bool IngresoPorConcurso { get; set; }
 }

@@ -134,12 +134,13 @@ namespace WsUtaSystem.Reports.Sources;
             return string.Join(" | ", parts);
         }
 
-        private static string MapEmployeeType(int employeeType) => employeeType switch
+        private static string MapEmployeeType(int? employeeType) => employeeType switch
         {
+            null => "Sin tipo",
             1 => "Docente",
             2 => "Administrativo",
             3 => "Trabajador",
-            _ => employeeType.ToString()
+            _ => employeeType.Value.ToString()
         };
     }
 

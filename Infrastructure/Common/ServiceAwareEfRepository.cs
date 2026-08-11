@@ -143,7 +143,7 @@ public class ServiceAwareEfRepository<TEntity, TKey> : IRepository<TEntity, TKey
     }
 
     /// <inheritdoc/>
-    public Task<TEntity?> GetByIdAsync(TKey id, CancellationToken ct) =>
+    public virtual Task<TEntity?> GetByIdAsync(TKey id, CancellationToken ct) =>
         _set.FindAsync(new object?[] { id }, ct).AsTask();
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -167,7 +167,7 @@ public class ServiceAwareEfRepository<TEntity, TKey> : IRepository<TEntity, TKey
     /// Esto evita sobreescribir campos de auditoría (CreatedAt, CreatedBy)
     /// y previene conflictos de concurrencia.
     /// </remarks>
-    public async Task UpdateAsync(TKey id, TEntity entity, CancellationToken ct)
+    public virtual async Task UpdateAsync(TKey id, TEntity entity, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(entity);
 

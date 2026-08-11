@@ -70,7 +70,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 g.ParentGroup == null ? null : g.ParentGroup.Name,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
-                g.Subgroups.Count(s => s.IsActive)))
+                g.Subgroups.Count(s => s.IsActive), g.IsSpecial))
             .ToListAsync(ct);
 
     public async Task<PagedResult<GuardRotationGroupDto>> GetPagedAsync(int page, int pageSize, string? search, CancellationToken ct)
@@ -98,7 +98,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 g.ParentGroup == null ? null : g.ParentGroup.Name,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
-                g.Subgroups.Count(s => s.IsActive)))
+                g.Subgroups.Count(s => s.IsActive), g.IsSpecial))
             .ToListAsync(ct);
 
         return new PagedResult<GuardRotationGroupDto>
@@ -120,7 +120,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 g.ParentGroup == null ? null : g.ParentGroup.Name,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
-                g.Subgroups.Count(s => s.IsActive)))
+                g.Subgroups.Count(s => s.IsActive), g.IsSpecial))
             .FirstOrDefaultAsync(ct);
 
     public async Task<GuardRotationGroupDto> CreateAsync(CreateGuardRotationGroupDto dto, CancellationToken ct)
@@ -133,6 +133,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             ParentGroupId = dto.ParentGroupId,
             GroupLevelTypeId = dto.GroupLevelTypeId,
             ColorCode = dto.ColorCode,
+            IsSpecial = dto.IsSpecial,
             IsActive = true
         };
 
@@ -162,6 +163,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         entity.ParentGroupId = dto.ParentGroupId;
         entity.GroupLevelTypeId = dto.GroupLevelTypeId;
         entity.ColorCode = dto.ColorCode;
+        entity.IsSpecial = dto.IsSpecial;
 
         try
         {
@@ -175,6 +177,55 @@ public class GuardRotationGroupService : IGuardRotationGroupService
 
         return await GetByIdAsync(groupId, ct)
             ?? throw new InvalidOperationException("Error al recuperar el grupo actualizado.");
+    }
+
+    public async Task<GuardRotationGroupDto> DuplicateAsync(int baseGroupId, DuplicateGuardRotationGroupDto dto, CancellationToken ct)
+    {
+        var baseGroup = await _db.GuardRotationGroups
+            .Include(g => g.Employees.Where(e => e.IsActive))
+            .FirstOrDefaultAsync(g => g.GroupId == baseGroupId, ct)
+            ?? throw new KeyNotFoundException($"Grupo {baseGroupId} no encontrado.");
+
+        var newGroup = new GuardRotationGroup
+        {
+            GroupCode = dto.NewGroupCode,
+            Name = dto.NewName,
+            Description = baseGroup.Description,
+            ParentGroupId = dto.ParentGroupIdOverride ?? baseGroup.ParentGroupId,
+            GroupLevelTypeId = baseGroup.GroupLevelTypeId,
+            ColorCode = baseGroup.ColorCode,
+            IsSpecial = baseGroup.IsSpecial,
+            IsActive = true
+        };
+
+        try
+        {
+            await _repo.AddAsync(newGroup, ct);
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            throw new InvalidOperationException(
+                $"Ya existe un grupo activo con el código \"{dto.NewGroupCode}\". Elige otro código.");
+        }
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        foreach (var emp in baseGroup.Employees)
+        {
+            await _db.GuardRotationGroupEmployees.AddAsync(new GuardRotationGroupEmployee
+            {
+                GroupId = newGroup.GroupId,
+                EmployeeId = emp.EmployeeId,
+                ValidFrom = today,
+                ValidTo = null,
+                IsActive = true,
+                Notes = $"Duplicado desde grupo \"{baseGroup.Name}\" (#{baseGroup.GroupId})"
+            }, ct);
+        }
+        await _db.SaveChangesAsync(ct);
+
+        return await GetByIdAsync(newGroup.GroupId, ct)
+            ?? throw new InvalidOperationException("Error al recuperar el grupo duplicado.");
     }
 
     public async Task<List<GuardRotationGroupEmployeeDto>> GetEmployeesAsync(int groupId, CancellationToken ct)
@@ -244,7 +295,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 LocationName: grp.Key.Replace("_", " "),
                 TotalGroups: grp.Count(),
                 TotalActiveGroups: grp.Count(g => g.IsActive),
-                TotalEmployees: grp.Sum(g => g.Employees.Count),
+                TotalEmployees: grp.SelectMany(g => g.Employees).Select(e => e.EmployeeId).Distinct().Count(),
                 TotalPatterns: grp.SelectMany(g => g.Patterns).Select(p => p.PatternId).Distinct().Count()
             ))
             .OrderBy(s => s.LocationName)
@@ -276,7 +327,8 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                     PatternName: activePattern?.Pattern?.Name,
                     PatternSequence: sequence,
                     PatternReadable: BuildPatternReadable(sequence),
-                    AssignedEmployees: g.Employees.Count
+                    AssignedEmployees: g.Employees.Count,
+                    IsSpecial: g.IsSpecial
                 );
             })
             .OrderBy(d => d.GroupCode)
@@ -333,6 +385,25 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             .FirstOrDefaultAsync(p => p.PatternId == dto.PatternId && p.IsActive, ct)
             ?? throw new KeyNotFoundException($"Patrón {dto.PatternId} no encontrado o inactivo.");
 
+        var overlappingAssignment = await _db.GuardGroupRotationPatterns
+            .Include(gp => gp.Group)
+            .Where(gp => gp.PatternId == dto.PatternId
+                         && gp.GroupId != groupId
+                         && gp.IsActive
+                         && gp.Group != null
+                         && gp.Group.IsActive
+                         && gp.ValidFrom <= (dto.ValidTo ?? DateOnly.MaxValue)
+                         && (gp.ValidTo ?? DateOnly.MaxValue) >= dto.ValidFrom)
+            .OrderBy(gp => gp.ValidFrom)
+            .FirstOrDefaultAsync(ct);
+
+        if (overlappingAssignment is not null)
+        {
+            var groupName = overlappingAssignment.Group?.Name ?? $"Grupo {overlappingAssignment.GroupId}";
+            throw new InvalidOperationException(
+                $"El patron '{pattern.Name}' ya esta vigente en el grupo '{groupName}' para un rango de fechas que se cruza.");
+        }
+
         var existing = await _db.GuardGroupRotationPatterns
             .Where(gp => gp.GroupId == groupId && gp.IsActive)
             .ToListAsync(ct);
@@ -387,38 +458,34 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 null, null,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
-                g.Subgroups.Count(s => s.IsActive)))
+                g.Subgroups.Count(s => s.IsActive), g.IsSpecial))
             .ToListAsync(ct);
 
-    public async Task<List<GuardRotationGroupWithSubgroupsDto>> GetGeneralGroupsWithSubgroupsAsync(CancellationToken ct)
-    {
-        // Nota: los subgrupos se incluyen sin filtrar por IsActive (a diferencia de antes) para
+    public async Task<List<GuardRotationGroupWithSubgroupsDto>> GetGeneralGroupsWithSubgroupsAsync(CancellationToken ct) =>
+        // Nota: los subgrupos se listan sin filtrar por IsActive (a diferencia de antes) para
         // que el frontend pueda mostrar/filtrar inactivos en vez de que queden ocultos sin aviso.
-        var generals = await _db.GuardRotationGroups
+        // Los conteos se calculan como subconsulta (Count(predicate)) en vez de materializar
+        // colecciones vía Include, para evitar el cartesian product de incluir varias colecciones
+        // hermanas (Employees + Subgroups.Employees) en una sola consulta, que podía producir
+        // conteos inconsistentes frente a GetAllAsync.
+        await _db.GuardRotationGroups
             .Where(g => g.ParentGroupId == null)
-            .Include(g => g.GroupLevelType)
-            .Include(g => g.Employees.Where(e => e.IsActive))
-            .Include(g => g.Subgroups)
-                .ThenInclude(s => s.GroupLevelType)
-            .Include(g => g.Subgroups)
-                .ThenInclude(s => s.Employees.Where(e => e.IsActive))
             .OrderBy(g => g.Name)
+            .Select(g => new GuardRotationGroupWithSubgroupsDto(
+                g.GroupId, g.GroupCode, g.Name, g.Description, g.IsActive,
+                g.ColorCode, g.GroupLevelType == null ? null : g.GroupLevelType.Name,
+                g.Employees.Count(e => e.IsActive),
+                g.Subgroups.Count(),
+                g.Subgroups.Select(s => new GuardRotationGroupDto(
+                    s.GroupId, s.GroupCode, s.Name, s.Description, s.IsActive,
+                    s.Employees.Count(e => e.IsActive),
+                    g.GroupId, g.Name,
+                    s.GroupLevelType == null ? null : s.GroupLevelType.Name, s.ColorCode,
+                    0, s.IsSpecial
+                )).ToList(),
+                g.IsSpecial
+            ))
             .ToListAsync(ct);
-
-        return generals.Select(g => new GuardRotationGroupWithSubgroupsDto(
-            g.GroupId, g.GroupCode, g.Name, g.Description, g.IsActive,
-            g.ColorCode, g.GroupLevelType?.Name,
-            g.Employees.Count,
-            g.Subgroups.Count,
-            g.Subgroups.Select(s => new GuardRotationGroupDto(
-                s.GroupId, s.GroupCode, s.Name, s.Description, s.IsActive,
-                s.Employees.Count,
-                g.GroupId, g.Name,
-                s.GroupLevelType?.Name, s.ColorCode,
-                0
-            )).ToList()
-        )).ToList();
-    }
 
     public async Task<List<GuardRotationGroupDto>> GetSubgroupsByParentAsync(int parentGroupId, CancellationToken ct) =>
         await _db.GuardRotationGroups
@@ -431,6 +498,6 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 g.ParentGroup == null ? null : g.ParentGroup.Name,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
-                g.Subgroups.Count(s => s.IsActive)))
+                g.Subgroups.Count(s => s.IsActive), g.IsSpecial))
             .ToListAsync(ct);
 }

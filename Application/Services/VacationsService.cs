@@ -5,6 +5,7 @@ using WsUtaSystem.Application.Common.Email;
 using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Common.Services;
+using WsUtaSystem.Application.DTOs.TimeBalances;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Data;
@@ -15,9 +16,8 @@ namespace WsUtaSystem.Application.Services;
 public class VacationsService : Service<Vacations, int>, IVacationsService
 {
     private readonly IVacationsRepository _repository;
-    private readonly ITimeBalancesRepository _timeRepo;
     private readonly IParametersRepository _paramRepo;
-    private readonly IHrBalanceRepository _hrRepo;
+    private readonly IVacationBalanceAdjustmentService _balanceAdjustment;
     private readonly AppDbContext _db;
 
     private readonly IEmailBuilder _emailBuilder;
@@ -28,9 +28,8 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
 
     public VacationsService(
         IVacationsRepository repo,
-        ITimeBalancesRepository timeRepo,
         IParametersRepository paramRepo,
-        IHrBalanceRepository hrBalanceRepository,
+        IVacationBalanceAdjustmentService balanceAdjustment,
         AppDbContext db,
         IEmailBuilder emailBuilder,
         ICurrentUserService currentUser,
@@ -39,9 +38,8 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
     ) : base(repo)
     {
         _repository = repo ?? throw new ArgumentNullException(nameof(repo));
-        _timeRepo = timeRepo ?? throw new ArgumentNullException(nameof(timeRepo));
         _paramRepo = paramRepo ?? throw new ArgumentNullException(nameof(paramRepo));
-        _hrRepo = hrBalanceRepository ?? throw new ArgumentNullException(nameof(hrBalanceRepository));
+        _balanceAdjustment = balanceAdjustment ?? throw new ArgumentNullException(nameof(balanceAdjustment));
         _db = db ?? throw new ArgumentNullException(nameof(db));
 
         _emailBuilder = emailBuilder ?? throw new ArgumentNullException(nameof(emailBuilder));
@@ -51,10 +49,42 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    // IMPORTANTE: Debe coincidir con el SP:
-    // HR.sp_hr_ReserveVacationBalance => SourceID = 'VAC_RESERVE|<VacationID>'
-    private static string ReserveSourceIdForVacation(int vacationId)
-        => $"VAC_RESERVE|{vacationId}";
+    /// <summary>
+    /// Cada reserva usa un ID único (no uno fijo por VacationID) porque una misma vacación
+    /// puede pasar por varios ciclos reserva→libera→reserva (cancelar y volver a
+    /// planificar, o cambiar de fechas estando aún Planned/Approved) — con un ID fijo, la
+    /// segunda reserva chocaría contra el movimiento de la primera (ya liberado) y se
+    /// rechazaría como "reserva duplicada". Hueco cerrado 2026-07-22.
+    /// </summary>
+    private static string NewVacationReserveSourceId(int vacationId)
+        => $"VAC_RESERVE|{vacationId}|{Guid.NewGuid():N}";
+
+    /// <summary>
+    /// Encuentra la reserva actualmente activa (ni liberada ni consumida) de esta vacación,
+    /// si existe. Necesario porque el sourceId ya no es fijo/predecible por VacationID.
+    /// </summary>
+    private async Task<string?> FindActiveVacationReserveSourceIdAsync(int vacationId, CancellationToken ct)
+    {
+        var prefix = $"VAC_RESERVE|{vacationId}|";
+        var candidates = await _db.TimeBalanceMovements.AsNoTracking()
+            .Where(m => m.SourceModule == "VACATION_RESERVE" && m.SourceID != null && m.SourceID.StartsWith(prefix))
+            .OrderByDescending(m => m.MovementID)
+            .Select(m => m.SourceID!)
+            .ToListAsync(ct);
+
+        foreach (var candidate in candidates)
+        {
+            var released = await _db.TimeBalanceMovements.AsNoTracking().AnyAsync(m => m.SourceID == candidate + "|REL", ct);
+            if (released) continue;
+
+            var consumed = await _db.TimeBalanceMovements.AsNoTracking().AnyAsync(m => m.SourceID == candidate + "|USE", ct);
+            if (consumed) continue;
+
+            return candidate;
+        }
+
+        return null;
+    }
 
     private async Task<int> GetWorkMinutesPerDayAsync(CancellationToken ct)
     {
@@ -70,11 +100,54 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
         return minutes > 0 ? minutes : 480;
     }
 
+    /// <summary>Minutos a reservar por una vacación — mismo cálculo usado en creación y re-planificación.</summary>
+    private async Task<int> ComputeChargedMinutesAsync(DateOnly startDate, DateOnly endDate, int daysTaken, CancellationToken ct)
+    {
+        var daysFromRange = (endDate.DayNumber - startDate.DayNumber) + 1;
+        var days = daysTaken > 0 ? daysTaken : daysFromRange;
+        var workMinutesPerDay = await GetWorkMinutesPerDayAsync(ct);
+        return days * workMinutesPerDay;
+    }
+
+    private static readonly string[] ActiveVacationStatuses = { "PLANNED", "INPROGRESS", "APPROVED" };
+    private static readonly string[] ActivePermissionStatuses = { "PENDING", "APPROVED" };
+
+    /// <summary>
+    /// Bloquea crear una vacación que se superponga con otra vacación activa, o con un
+    /// permiso activo, del mismo empleado. Antes solo se validaba en el frontend
+    /// (VacationForm.tsx) — el backend no lo rechazaba si se llamaba directo a la API.
+    /// </summary>
+    private async Task EnsureNoOverlapAsync(int employeeId, DateOnly startDate, DateOnly endDate, CancellationToken ct)
+    {
+        var overlapsVacation = await _db.Vacations.AsNoTracking()
+            .Where(v => v.EmployeeId == employeeId
+                     && ActiveVacationStatuses.Contains(v.Status.ToUpper())
+                     && v.StartDate <= endDate && v.EndDate >= startDate)
+            .AnyAsync(ct);
+
+        if (overlapsVacation)
+            throw new BusinessRuleException("Ya existe una solicitud de vacaciones activa que se superpone con estas fechas.");
+
+        var startDateTime = startDate.ToDateTime(TimeOnly.MinValue);
+        var endDateTime = endDate.ToDateTime(TimeOnly.MaxValue);
+
+        var overlapsPermission = await _db.Permissions.AsNoTracking()
+            .Where(p => p.EmployeeId == employeeId
+                     && ActivePermissionStatuses.Contains(p.Status.ToUpper())
+                     && p.StartDate <= endDateTime && p.EndDate >= startDateTime)
+            .AnyAsync(ct);
+
+        if (overlapsPermission)
+            throw new BusinessRuleException("Ya existe un permiso activo que se superpone con estas fechas.");
+    }
+
     public async Task<Vacations> CreateWithBalanceCheckAsync(Vacations entity, CancellationToken ct)
     {
         if (entity is null) throw new ArgumentNullException(nameof(entity));
         if (entity.EndDate < entity.StartDate)
             throw new BusinessRuleException("La fecha 'Hasta' no puede ser anterior a 'Desde'.");
+
+        await EnsureNoOverlapAsync(entity.EmployeeId, entity.StartDate, entity.EndDate, ct);
 
         // Recalcula días por rango si DaysTaken viene mal
         var daysFromRange = (entity.EndDate.DayNumber - entity.StartDate.DayNumber) + 1;
@@ -86,8 +159,13 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
         var workMinutesPerDay = await GetWorkMinutesPerDayAsync(ct);
         var requestedMinutes = days * workMinutesPerDay;
 
-        var balance = await _timeRepo.GetByIdAsync(entity.EmployeeId, ct);
-        var available = balance?.VacationAvailableMin ?? 0;
+        // Hueco cerrado 2026-07-22: este pre-check antes leía el saldo vía
+        // ITimeBalancesRepository (que elige "el régimen con el ID más bajo"), mientras que
+        // la reserva real más abajo usa "el régimen principal" — para un empleado con un
+        // solo régimen no había diferencia, pero para uno con 2+ regímenes simultáneos donde
+        // el principal no es el de ID más bajo, este pre-check podía validar contra un saldo
+        // distinto al que realmente se reserva. Ahora ambos usan la misma resolución.
+        var available = await _balanceAdjustment.GetEmployeePrincipalBalanceAsync(entity.EmployeeId, TimeBalanceField.Vacation, ct);
 
         _logger.LogInformation(
             "VAC CREATE pre-check: EmpId={EmpId} From={Start} To={End} DaysTaken={DaysTaken} WorkMinDay={WorkMinDay} RequestedMin={RequestedMin} AvailableMin={AvailableMin}",
@@ -103,7 +181,6 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
         await strategy.ExecuteAsync(async () =>
         {
             await using var tx = await _db.Database.BeginTransactionAsync(ct);
-            var adoTx = tx.GetDbTransaction();
             var traceId = System.Diagnostics.Activity.Current?.TraceId.ToString();
 
             _logger.LogInformation("VAC CREATE BEGIN TX TraceId={TraceId} EmpId={EmpId}", traceId, entity.EmployeeId);
@@ -113,32 +190,35 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
             // 1) Crear (aún sin commit)
             created = await base.CreateAsync(entity, ct);
 
-            var reserveSourceId = ReserveSourceIdForVacation(created.VacationId);
+            var reserveSourceId = NewVacationReserveSourceId(created.VacationId);
 
             _logger.LogInformation(
                 "VAC CREATE created row TraceId={TraceId} VacationId={VacationId} EmpId={EmpId} Status={Status} SourceId={SourceId}",
                 traceId, created.VacationId, created.EmployeeId, created.Status, reserveSourceId
             );
 
-            // 2) Reservar saldo (SP) dentro de la misma transacción
+            // 2) Reservar saldo (EF, dentro de la misma transacción — participa en ella,
+            // ver VacationBalanceAdjustmentService.ApplyAdjustmentAsync)
             _logger.LogInformation(
-                "VAC CREATE calling ReserveVacationAsync TraceId={TraceId} VacationId={VacationId} EmpId={EmpId}",
+                "VAC CREATE calling ReserveAsync TraceId={TraceId} VacationId={VacationId} EmpId={EmpId}",
                 traceId, created.VacationId, created.EmployeeId
             );
 
-            var sp = await _hrRepo.ReserveVacationAsync(
-                vacationId: created.VacationId,
+            await _balanceAdjustment.ReserveAsync(
+                employeeId: created.EmployeeId,
+                field: TimeBalanceField.Vacation,
+                minutes: requestedMinutes,
+                sourceModule: "VACATION_RESERVE",
+                sourceId: reserveSourceId,
+                note: $"Reserva vacaciones. Rango={created.StartDate:yyyy-MM-dd} a {created.EndDate:yyyy-MM-dd} DiasCobrados={days} MinCobrados={requestedMinutes}",
                 performedByEmpId: created.EmployeeId,
-                tx: adoTx
+                ct: ct
             );
 
             _logger.LogInformation(
-                "VAC CREATE ReserveVacationAsync result TraceId={TraceId} VacationId={VacationId} StatusCode={StatusCode} Ok={Ok} NoOp={NoOp} Message={Message}",
-                traceId, created.VacationId, sp.StatusCode, sp.Ok, sp.NoOp, sp.Message
+                "VAC CREATE ReserveAsync OK TraceId={TraceId} VacationId={VacationId}",
+                traceId, created.VacationId
             );
-
-            if (!(sp.Ok || sp.NoOp))
-                throw new BusinessRuleException(sp.Message);
 
             await tx.CommitAsync(ct);
 
@@ -180,7 +260,6 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
         await strategy.ExecuteAsync(async () =>
         {
             await using var tx = await _db.Database.BeginTransactionAsync(ct);
-            var adoTx = tx.GetDbTransaction();
             var traceId = System.Diagnostics.Activity.Current?.TraceId.ToString();
 
             var current = await _repository.GetByIdAsync(id, ct)
@@ -189,13 +268,33 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
             oldStatus = NormalizeStatus(current.Status);
             newStatus = NormalizeStatus(entity.Status);
 
-            var reserveSourceId = ReserveSourceIdForVacation(id);
+            // Hueco cerrado 2026-07-22: si cambian fechas/días SIN pasar por una transición
+            // de estado que ya recalcula la reserva (A/B abajo), la reserva original queda
+            // desalineada del rango real — se detecta aquí, ANTES de aplicar el payload.
+            var datesChanged = current.StartDate != entity.StartDate
+                             || current.EndDate != entity.EndDate
+                             || current.DaysTaken != entity.DaysTaken;
+
+            // El aprobador siempre se resuelve del usuario autenticado (nunca del payload)
+            // y no puede aprobar su propia solicitud — mismo criterio que PermissionsService.
+            if (newStatus == "APPROVED" && oldStatus != "APPROVED")
+            {
+                if (_currentUser.EmployeeId == current.EmployeeId)
+                    throw new BusinessRuleException("No puede aprobar su propia solicitud de vacaciones.");
+
+                entity.ApprovedBy = _currentUser.EmployeeId;
+                entity.ApprovedAt = DateTime.Now;
+            }
 
             entity.UpdatedAt = DateTime.Now;
 
+            // La reserva activa (si hay) ANTES de aplicar el update — el sourceId ya no es
+            // fijo por VacationID, se busca por el estado real de los movimientos.
+            var activeReserveSourceId = await FindActiveVacationReserveSourceIdAsync(id, ct);
+
             _logger.LogInformation(
-                "VAC UPDATE START TraceId={TraceId} VacationId={VacationId} EmpId={EmpId} OldStatus={OldStatus} NewStatus={NewStatus} SourceId={SourceId}",
-                traceId, id, current.EmployeeId, oldStatus, newStatus, reserveSourceId
+                "VAC UPDATE START TraceId={TraceId} VacationId={VacationId} EmpId={EmpId} OldStatus={OldStatus} NewStatus={NewStatus} DatesChanged={DatesChanged} ActiveReserveSourceId={ActiveReserveSourceId}",
+                traceId, id, current.EmployeeId, oldStatus, newStatus, datesChanged, activeReserveSourceId
             );
 
             await base.UpdateAsync(id, entity, ct);
@@ -216,6 +315,7 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
             bool newCanceled = newStatus == "CANCELED";
             bool newPlanned = newStatus == "PLANNED";
             bool newApproved = newStatus == "APPROVED";
+            bool reservationHandled = false;
 
             _logger.LogInformation(
                 "VAC UPDATE RULES TraceId={TraceId} VacationId={VacationId} oldCanceled={OldCanceled} newCanceled={NewCanceled} newPlanned={NewPlanned} newApproved={NewApproved}",
@@ -227,53 +327,100 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
             {
                 _logger.LogInformation(
                     "VAC CANCEL => calling ReleaseReservationAsync TraceId={TraceId} VacationId={VacationId} EmpId={EmpId} SourceId={SourceId}",
-                    traceId, id, updated.EmployeeId, reserveSourceId
+                    traceId, id, updated.EmployeeId, activeReserveSourceId
                 );
 
-                var sp = await _hrRepo.ReleaseReservationAsync(reserveSourceId, updated.EmployeeId, adoTx);
+                if (activeReserveSourceId is not null)
+                    await _balanceAdjustment.ReleaseReservationAsync(activeReserveSourceId, performedByEmpId: updated.EmployeeId, ct: ct);
+
+                reservationHandled = true;
 
                 _logger.LogInformation(
-                    "VAC CANCEL => ReleaseReservationAsync result TraceId={TraceId} VacationId={VacationId} StatusCode={StatusCode} Ok={Ok} NoOp={NoOp} Message={Message}",
-                    traceId, id, sp.StatusCode, sp.Ok, sp.NoOp, sp.Message
+                    "VAC CANCEL => ReleaseReservationAsync OK TraceId={TraceId} VacationId={VacationId}",
+                    traceId, id
                 );
-
-                if (!(sp.Ok || sp.NoOp)) throw new BusinessRuleException(sp.Message);
             }
 
-            // B) cancelado → vuelve a PLANNED → reservar de nuevo
+            // B) cancelado → vuelve a PLANNED → reservar de nuevo (con las fechas ya actualizadas)
             if (oldCanceled && newPlanned)
             {
                 _logger.LogInformation(
-                    "VAC RE-PLANNED => calling ReserveVacationAsync TraceId={TraceId} VacationId={VacationId} EmpId={EmpId}",
+                    "VAC RE-PLANNED => calling ReserveAsync TraceId={TraceId} VacationId={VacationId} EmpId={EmpId}",
                     traceId, id, updated.EmployeeId
                 );
 
-                var sp = await _hrRepo.ReserveVacationAsync(id, updated.EmployeeId, adoTx);
+                var rePlannedMinutes = await ComputeChargedMinutesAsync(updated.StartDate, updated.EndDate, updated.DaysTaken, ct);
 
-                _logger.LogInformation(
-                    "VAC RE-PLANNED => ReserveVacationAsync result TraceId={TraceId} VacationId={VacationId} StatusCode={StatusCode} Ok={Ok} NoOp={NoOp} Message={Message}",
-                    traceId, id, sp.StatusCode, sp.Ok, sp.NoOp, sp.Message
+                await _balanceAdjustment.ReserveAsync(
+                    employeeId: updated.EmployeeId,
+                    field: TimeBalanceField.Vacation,
+                    minutes: rePlannedMinutes,
+                    sourceModule: "VACATION_RESERVE",
+                    sourceId: NewVacationReserveSourceId(id),
+                    note: $"Reserva vacaciones (re-planificada). Rango={updated.StartDate:yyyy-MM-dd} a {updated.EndDate:yyyy-MM-dd} MinCobrados={rePlannedMinutes}",
+                    performedByEmpId: updated.EmployeeId,
+                    ct: ct
                 );
 
-                if (!(sp.Ok || sp.NoOp)) throw new BusinessRuleException(sp.Message);
+                reservationHandled = true;
+
+                _logger.LogInformation(
+                    "VAC RE-PLANNED => ReserveAsync OK TraceId={TraceId} VacationId={VacationId}",
+                    traceId, id
+                );
             }
 
             // C) pasa a APPROVED → consumir reserva
             if (!oldCanceled && newApproved)
             {
                 _logger.LogInformation(
-                    "VAC APPROVE => calling ConsumeReservationAsync TraceId={TraceId} VacationId={VacationId} EmpId={EmpId} SourceId={SourceId}",
-                    traceId, id, updated.EmployeeId, reserveSourceId
+                    "VAC APPROVE => calling MarkReservationConsumedAsync TraceId={TraceId} VacationId={VacationId} EmpId={EmpId} SourceId={SourceId}",
+                    traceId, id, updated.EmployeeId, activeReserveSourceId
                 );
 
-                var sp = await _hrRepo.ConsumeReservationAsync(reserveSourceId, updated.EmployeeId, adoTx);
+                if (activeReserveSourceId is not null)
+                    await _balanceAdjustment.MarkReservationConsumedAsync(activeReserveSourceId, performedByEmpId: updated.EmployeeId, ct: ct);
+
+                reservationHandled = true;
 
                 _logger.LogInformation(
-                    "VAC APPROVE => ConsumeReservationAsync result TraceId={TraceId} VacationId={VacationId} StatusCode={StatusCode} Ok={Ok} NoOp={NoOp} Message={Message}",
-                    traceId, id, sp.StatusCode, sp.Ok, sp.NoOp, sp.Message
+                    "VAC APPROVE => MarkReservationConsumedAsync OK TraceId={TraceId} VacationId={VacationId}",
+                    traceId, id
+                );
+            }
+
+            // D) Hueco cerrado 2026-07-22: cambiaron fechas/días SIN transición de estado
+            // (ej. sigue Planned, o sigue Approved) — sin esto, la reserva original quedaba
+            // desalineada del rango real de la vacación (se podía aprobar una vacación más
+            // larga de lo que realmente se descontó del saldo). Se libera la reserva vieja
+            // (si había) y se reserva de nuevo con el monto correcto para las fechas nuevas.
+            if (!reservationHandled && datesChanged && newStatus != "CANCELED")
+            {
+                _logger.LogInformation(
+                    "VAC UPDATE => fechas/días cambiaron sin transición de estado, recalculando reserva. TraceId={TraceId} VacationId={VacationId} PrevActiveSourceId={PrevActiveSourceId}",
+                    traceId, id, activeReserveSourceId
                 );
 
-                if (!(sp.Ok || sp.NoOp)) throw new BusinessRuleException(sp.Message);
+                if (activeReserveSourceId is not null)
+                    await _balanceAdjustment.ReleaseReservationAsync(activeReserveSourceId, performedByEmpId: updated.EmployeeId, ct: ct);
+
+                var recalculatedMinutes = await ComputeChargedMinutesAsync(updated.StartDate, updated.EndDate, updated.DaysTaken, ct);
+
+                await _balanceAdjustment.ReserveAsync(
+                    employeeId: updated.EmployeeId,
+                    field: TimeBalanceField.Vacation,
+                    minutes: recalculatedMinutes,
+                    sourceModule: "VACATION_RESERVE",
+                    sourceId: NewVacationReserveSourceId(id),
+                    note: $"Reserva vacaciones (recalculada por cambio de fechas). Rango={updated.StartDate:yyyy-MM-dd} a {updated.EndDate:yyyy-MM-dd} MinCobrados={recalculatedMinutes}",
+                    performedByEmpId: updated.EmployeeId,
+                    ct: ct
+                );
+
+                _logger.LogInformation(
+                    "VAC UPDATE => reserva recalculada OK. TraceId={TraceId} VacationId={VacationId} NuevoMonto={Minutes}",
+                    traceId, id, recalculatedMinutes
+                );
             }
 
             await tx.CommitAsync(ct);
@@ -296,6 +443,38 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
         }
 
         return updated!;
+    }
+
+    /// <summary>
+    /// Hueco cerrado 2026-07-22: eliminar (en vez de cancelar) una vacación con reserva
+    /// activa dejaba el saldo descontado para siempre — el DeleteAsync genérico no libera
+    /// nada. Este método libera la reserva activa (si hay) antes de borrar la fila.
+    /// </summary>
+    public async Task DeleteWithBalanceReleaseAsync(int id, CancellationToken ct)
+    {
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
+            var current = await _repository.GetByIdAsync(id, ct)
+                ?? throw new KeyNotFoundException($"Vacations con id={id} no existe.");
+
+            var activeReserveSourceId = await FindActiveVacationReserveSourceIdAsync(id, ct);
+            if (activeReserveSourceId is not null)
+            {
+                await _balanceAdjustment.ReleaseReservationAsync(activeReserveSourceId, performedByEmpId: current.EmployeeId, ct: ct);
+                _logger.LogInformation(
+                    "VAC DELETE => reserva liberada antes de borrar. VacationId={VacationId} SourceId={SourceId}",
+                    id, activeReserveSourceId
+                );
+            }
+
+            await base.DeleteAsync(id, ct);
+
+            await tx.CommitAsync(ct);
+        });
     }
 
     // -----------------------

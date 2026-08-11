@@ -12,4 +12,5 @@ public sealed class PersonnelActionTypeUpdateDto
     public bool RequiresAdUserDisable { get; set; } = false;
     public bool RequiresAdGroupAssignment { get; set; } = false;
     public string? ActionCategory { get; set; }
+    public int? SiiesRelacionIesTypeId { get; set; }
 }

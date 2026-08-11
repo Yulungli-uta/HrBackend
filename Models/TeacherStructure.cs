@@ -18,6 +18,15 @@ public class TeacherStructure : IAuditable
     public bool EligiblePromotion { get; set; }
     public bool EligibleRecategory { get; set; }
     public bool EligibleDedicChg { get; set; }
+
+    /// <summary>FK -> ref_Types (Category='SIIES_TIPO_ESCALAFON_NOMBRAMIENTO'). Solo aplica si RelacionIes=NOMBRAMIENTO.</summary>
+    public int? SiiesTipoEscalafonNombramientoTypeId { get; set; }
+
+    /// <summary>FK -> ref_Types (Category='SIIES_NIVEL'). Nivel en el que dicta clases el profesor.</summary>
+    public int? SiiesNivelTypeId { get; set; }
+
+    /// <summary>FK -> ref_Types (Category='SIIES_CATEGORIA_DOCENTE'). Fuente directa de CATEGORIA SIIES; si es NULL, el reporte cae de respaldo a Ladder.SiiesLabel.</summary>
+    public int? SiiesCategoriaTypeId { get; set; }
     public DateTime? CreatedAt { get; set; }
     public int? CreatedBy { get; set; }
     public DateTime? UpdatedAt { get; set; }

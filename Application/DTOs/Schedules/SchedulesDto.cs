@@ -13,6 +13,8 @@ public class SchedulesDto
     public TimeOnly? LunchEnd { get; set; }
     public bool? IsRotating { get; set; }
     public string? RotationPattern { get; set; }
+    public string? ScheduleCode { get; set; }
+    public bool CrossesMidnight { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

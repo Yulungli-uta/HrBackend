@@ -5,5 +5,15 @@ using WsUtaSystem.Models;
 namespace WsUtaSystem.Application.Services;
 public class AddressesService : Service<Addresses, int>, IAddressesService
 {
-    public AddressesService(IAddressesRepository repo) : base(repo) { }
+    private readonly IAddressesRepository _repository;
+
+    public AddressesService(IAddressesRepository repo) : base(repo)
+    {
+        _repository = repo;
+    }
+
+    public async Task<IEnumerable<Addresses>> GetByPersonIdAsync(int personId)
+    {
+        return await _repository.GetByPersonIdAsync(personId);
+    }
 }

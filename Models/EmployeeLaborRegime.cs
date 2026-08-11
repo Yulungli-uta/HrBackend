@@ -47,6 +47,9 @@ public class EmployeeLaborRegime : IAuditable
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>SIIES INGRESO_POR_CONCURSO. NULL = sin clasificar (no confundir con NO); se completa hacia adelante.</summary>
+    public bool? IngresoPorConcurso { get; set; }
+
     /// <summary>
     /// Calculado automáticamente por <see cref="Application.Interfaces.Services.IEmployeeLaborRegimeService"/>:
     /// gana el régimen con nombramiento (IsIndefinite); si ninguno es nombramiento, gana LOSEP.

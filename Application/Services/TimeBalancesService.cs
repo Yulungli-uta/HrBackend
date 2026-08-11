@@ -10,20 +10,26 @@ namespace WsUtaSystem.Application.Services;
 
 public class TimeBalancesService : Service<TimeBalances, int>, ITimeBalancesService
 {
+    private const string ContractTypeCategory = "CONTRACT_TYPE";
+    private const string CodigoTrabajoName = "Código Trabajo";
+    private const string LoesName = "LOES";
 
     private readonly WsUtaSystem.Data.AppDbContext _db;
     private readonly ILogger<TimeBalancesService> _logger;
     private readonly IEmployeesService _employees;
+    private readonly IHrBalanceService _hrBalanceService;
     public TimeBalancesService(
         ITimeBalancesRepository repo,
         AppDbContext db,
         ILogger<TimeBalancesService> logger,
-        IEmployeesService employees
-        ) : base(repo) 
+        IEmployeesService employees,
+        IHrBalanceService hrBalanceService
+        ) : base(repo)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _employees = employees ?? throw new ArgumentNullException(nameof(employees));
+        _hrBalanceService = hrBalanceService ?? throw new ArgumentNullException(nameof(hrBalanceService));
     }
 
     public async Task CalculateAccrueVacationBalance(DateTime fromDate, DateTime toDate, int? employeeId = null, CancellationToken ct = default)
@@ -131,6 +137,105 @@ public class TimeBalancesService : Service<TimeBalances, int>, ITimeBalancesServ
                 _logger.LogError(ex, "AccrueVacationBalance failed for employeeId={EmployeeId}", empId);
                 // Si quieres que falle todo el job, descomenta:
                 // throw;
+            }
+        }
+
+        // Régimen Código de Trabajo: rama aparte, no toca la de LOSEP de arriba.
+        // sp_hr_AccrueVacationBalance_CT solo soporta MONTHLY (ver comentario del SP).
+        if (string.Equals(mode, "MONTHLY", StringComparison.OrdinalIgnoreCase))
+        {
+            await AccrueCTBranchAsync(employeeIdsToProcess, asOfDate, performedByEmpId, ct);
+            await AccrueLOESBranchAsync(employeeIdsToProcess, asOfDate, performedByEmpId, ct);
+        }
+    }
+
+    /// <summary>
+    /// Acredita el proporcional mensual a los empleados con régimen "LOES" activo.
+    /// sp_hr_AccrueVacationBalance_LOES ya existía pero ningún job lo llamaba nunca —
+    /// hallazgo de esta sesión, ver Database/MULTI_REGIME_EMPLOYEES.md. Rama aparte, no
+    /// toca la de LOSEP de arriba.
+    /// </summary>
+    private async Task AccrueLOESBranchAsync(List<int> employeeIds, DateTime asOfDate, int? performedByEmpId, CancellationToken ct)
+    {
+        var loesRegimeId = await _db.RefTypes.AsNoTracking()
+            .Where(r => r.Category == ContractTypeCategory && r.Name == LoesName && r.IsActive)
+            .Select(r => (int?)r.TypeId)
+            .FirstOrDefaultAsync(ct);
+
+        if (loesRegimeId is null or 0)
+        {
+            _logger.LogWarning("AccrueVacationBalance LOES: no existe régimen activo '{Name}' en ref_Types, se omite la rama.", LoesName);
+            return;
+        }
+
+        var loesEmployeeIds = await _db.Set<EmployeeLaborRegime>().AsNoTracking()
+            .Where(r => r.LaborRegimeId == loesRegimeId && r.IsActive && employeeIds.Contains(r.EmployeeId))
+            .Select(r => r.EmployeeId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        _logger.LogInformation("AccrueVacationBalance LOES: {Count} empleado(s) con régimen activo.", loesEmployeeIds.Count);
+
+        foreach (var empId in loesEmployeeIds)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            try
+            {
+                var result = await _hrBalanceService.RunMonthlyAccrualLOESAsync(empId, DateOnly.FromDateTime(asOfDate), performedByEmpId);
+
+                _logger.LogDebug(
+                    "AccrueVacationBalance LOES employeeId={EmployeeId} statusCode={StatusCode} message={Message}",
+                    empId, result.StatusCode, result.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "AccrueVacationBalance LOES failed for employeeId={EmployeeId}", empId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Acredita el proporcional mensual a los empleados de employeeIds que tengan
+    /// régimen "Código Trabajo" activo (resuelto por Name, no por Id). Una falla en
+    /// un empleado no detiene a los demás — mismo criterio que la rama LOSEP.
+    /// </summary>
+    private async Task AccrueCTBranchAsync(List<int> employeeIds, DateTime asOfDate, int? performedByEmpId, CancellationToken ct)
+    {
+        var ctRegimeId = await _db.RefTypes.AsNoTracking()
+            .Where(r => r.Category == ContractTypeCategory && r.Name == CodigoTrabajoName && r.IsActive)
+            .Select(r => (int?)r.TypeId)
+            .FirstOrDefaultAsync(ct);
+
+        if (ctRegimeId is null or 0)
+        {
+            _logger.LogWarning("AccrueVacationBalance CT: no existe régimen activo '{Name}' en ref_Types, se omite la rama.", CodigoTrabajoName);
+            return;
+        }
+
+        var ctEmployeeIds = await _db.Set<EmployeeLaborRegime>().AsNoTracking()
+            .Where(r => r.LaborRegimeId == ctRegimeId && r.IsActive && employeeIds.Contains(r.EmployeeId))
+            .Select(r => r.EmployeeId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        _logger.LogInformation("AccrueVacationBalance CT: {Count} empleado(s) con régimen activo.", ctEmployeeIds.Count);
+
+        foreach (var empId in ctEmployeeIds)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            try
+            {
+                var result = await _hrBalanceService.RunMonthlyAccrualCTAsync(empId, DateOnly.FromDateTime(asOfDate), performedByEmpId);
+
+                _logger.LogDebug(
+                    "AccrueVacationBalance CT employeeId={EmployeeId} statusCode={StatusCode} message={Message}",
+                    empId, result.StatusCode, result.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "AccrueVacationBalance CT failed for employeeId={EmployeeId}", empId);
             }
         }
     }

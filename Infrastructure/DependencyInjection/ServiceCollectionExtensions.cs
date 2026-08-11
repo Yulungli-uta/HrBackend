@@ -457,12 +457,28 @@ public static class ServiceCollectionExtensions
             WsUtaSystem.Reports.Sources.Guards.GuardScheduleMatrixReportSource>();
 
         services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.SiiesFuncionariosReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.SiiesProfesoresReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.SiiesFormacionProfesionalReportSource>();
+
+        services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportRenderer,
             WsUtaSystem.Reports.Renderers.PdfReportRenderer>();
 
         services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportRenderer,
             WsUtaSystem.Reports.Renderers.ExcelReportRenderer>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportRenderer,
+            WsUtaSystem.Reports.Renderers.CsvReportRenderer>();
 
         services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportServiceV2,
@@ -617,6 +633,7 @@ public static class ServiceCollectionExtensions
         // ── Módulo: Saldos de Horas ───────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IHrBalanceRepository, WsUtaSystem.Infrastructure.Repositories.HrBalanceRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IHrBalanceService, WsUtaSystem.Application.Services.HrBalanceService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVacationBalanceAdjustmentService, WsUtaSystem.Application.Services.VacationBalanceAdjustmentService>();
 
         // ── Módulo: Instituciones ─────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IInstitutionsRepository, WsUtaSystem.Infrastructure.Repositories.InstitutionsRepository>();
@@ -724,10 +741,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ISubrogationsService, WsUtaSystem.Application.Services.SubrogationsService>();
 
         // ── Módulo: Recuperación de Tiempo ────────────────────────────────────
+        // OBSOLETO/SIN USO REAL (verificado 2026-07-22) — se mantiene registrado solo para
+        // que el DI no rompa mientras el controller siga presente. Ver TimeRecoveryPlansController/
+        // TimeRecoveryLogsController para el detalle de por qué no se elimina todavía.
+#pragma warning disable CS0618
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimeRecoveryLogsRepository, WsUtaSystem.Infrastructure.Repositories.TimeRecoveryLogsRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimeRecoveryLogsService, WsUtaSystem.Application.Services.TimeRecoveryLogsService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimeRecoveryPlansRepository, WsUtaSystem.Infrastructure.Repositories.TimeRecoveryPlansRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimeRecoveryPlansService, WsUtaSystem.Application.Services.TimeRecoveryPlansService>();
+#pragma warning restore CS0618
 
         // ── Módulo: Saldos de Tiempo ──────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimeBalancesRepository, WsUtaSystem.Infrastructure.Repositories.TimeBalancesRepository>();
@@ -783,6 +805,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IStoredFileService, WsUtaSystem.Application.Services.StoredFileService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFileManagementService, WsUtaSystem.Application.Services.FileManagementService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IDocumentOrchestratorService, WsUtaSystem.Application.Services.DocumentOrchestratorService>();
+        services.AddScoped<WsUtaSystem.Infrastructure.Common.TransactionalDocumentRepository>();
 
         // ── Módulo: Procedimientos Almacenados ────────────────────────────────
         services.AddScoped<IAttendanceCalculationService, AttendanceCalculationService>();

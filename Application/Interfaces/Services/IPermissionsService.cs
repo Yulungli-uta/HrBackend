@@ -7,6 +7,10 @@ public interface IPermissionsService : IService<Permissions, int> {
 
     Task<Permissions> CreateWithBalanceCheckAsync(Permissions entity, CancellationToken ct);
     Task<Permissions> UpdateBalanceAffectAsync(int id, Permissions entity, CancellationToken ct);
+
+    /// <summary>Libera la reserva de saldo activa (si hay, y el permiso tiene cargo a
+    /// vacaciones) antes de eliminar la fila — a diferencia del DeleteAsync genérico.</summary>
+    Task DeleteWithBalanceReleaseAsync(int id, CancellationToken ct);
     Task<IEnumerable<Permissions>> GetByEmployeeId(int EmployeeId, CancellationToken ct);
     Task<IEnumerable<Permissions>> GetByImmediateBossId(int immediateBossId, CancellationToken ct);
     Task<IEnumerable<Permissions>> GetByImmediateBossIdNonMedical(int employeeId, CancellationToken ct);

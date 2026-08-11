@@ -12,19 +12,23 @@ public sealed class CurrentUserService : ICurrentUserService
 {
     private readonly IHttpContextAccessor _http;
     private readonly IvwEmployeeDetailsService _employeeDetails;
+    private readonly IEmployeesService _employeesService;
     private readonly ILogger<CurrentUserService> _logger;
     private readonly IMemoryCache _memoryCache;
     private readonly TimeSpan _employeeCacheDuration;
 
     private const string BossCacheKey = "__CurrentUser_BossInfo";
     private const string MeCacheKey = "__CurrentUser_EmployeeDetails";
+    private const string PersonIdCacheKey = "__CurrentUser_PersonId";
 
 
     public CurrentUserService(IHttpContextAccessor http, IvwEmployeeDetailsService employeeDetails,
+        IEmployeesService employeesService,
         ILogger<CurrentUserService> logger, IMemoryCache memoryCache, IConfiguration configuration)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _employeeDetails = employeeDetails ?? throw new ArgumentNullException(nameof(employeeDetails));
+        _employeesService = employeesService ?? throw new ArgumentNullException(nameof(employeesService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
         _employeeCacheDuration = EmployeeDetailsCache.GetDuration(configuration);
@@ -174,6 +178,22 @@ public sealed class CurrentUserService : ICurrentUserService
         }
 
         return byEmail?.EmployeeType;
+    }
+
+    public async Task<int?> GetPersonIdAsync(CancellationToken ct = default)
+    {
+        var ctx = Ctx;
+        if (ctx is not null && ctx.Items.TryGetValue(PersonIdCacheKey, out var cached) && cached is int cachedPersonId)
+            return cachedPersonId;
+
+        var myId = EmployeeId;
+        if (myId is null || myId <= 0) return null;
+
+        var employee = await _employeesService.GetByIdAsync(myId.Value, ct);
+        if (employee is null) return null;
+
+        if (ctx is not null) ctx.Items[PersonIdCacheKey] = employee.PersonID;
+        return employee.PersonID;
     }
 
     private CurrentBossInfo? TryGetBossFromCache()

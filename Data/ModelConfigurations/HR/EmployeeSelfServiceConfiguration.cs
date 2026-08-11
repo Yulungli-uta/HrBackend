@@ -20,7 +20,8 @@ public sealed class EmployeeCertificateRequestConfiguration : IEntityTypeConfigu
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .HasConstraintName("FK_EmployeeCertificateRequests_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false); // opcional a nivel EF por el soft-delete de Employees
 
         e.HasMany(x => x.StatusHistory)
             .WithOne(x => x.Request)
@@ -63,7 +64,8 @@ public sealed class EmployeeInternalRequestConfiguration : IEntityTypeConfigurat
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .HasConstraintName("FK_EmployeeInternalRequests_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false); // opcional a nivel EF por el soft-delete de Employees
 
         e.HasMany(x => x.StatusHistory)
             .WithOne(x => x.Request)

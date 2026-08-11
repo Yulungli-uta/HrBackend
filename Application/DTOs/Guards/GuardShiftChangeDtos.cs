@@ -22,7 +22,10 @@ public record GuardShiftChangeDto(
     int? ApprovedBy,
     string? ApprovedByName,
     DateTime? ApprovedAt,
-    string? RejectionReason
+    string? RejectionReason,
+    DateOnly? NewWorkDate,
+    int? NewLocationId,
+    string? NewLocationName
 );
 
 public record CreateGuardShiftReplacementDto(
@@ -31,6 +34,17 @@ public record CreateGuardShiftReplacementDto(
     int ChangeTypeId,
     string Reason,
     int? NewScheduleId
+);
+
+/// <summary>Reasigna el turno del mismo guardia titular a otra fecha/horario/ubicación.
+/// Se aplica de inmediato (no pasa por aprobación) y queda registrado como GuardShiftChange
+/// tipo REASSIGNMENT para trazabilidad.</summary>
+public record CreateGuardShiftReassignmentDto(
+    int PlanningId,
+    DateOnly NewWorkDate,
+    int NewLocationId,
+    int NewScheduleId,
+    string Reason
 );
 
 public record ApproveGuardShiftChangeDto(

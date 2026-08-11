@@ -136,6 +136,14 @@ public interface IPersonnelActionService
     /// <summary>Actualiza los datos de una acción de personal en estado DRAFT.</summary>
     Task UpdateAsync(int actionId, UpdatePersonnelActionRequest request, int updatedBy, CancellationToken ct = default);
 
+    /// <summary>
+    /// Corrige los datos de una acción de personal en CUALQUIER estado (a diferencia de
+    /// <see cref="UpdateAsync(int, UpdatePersonnelActionRequest, int, CancellationToken)"/>,
+    /// que solo permite BORRADOR/GENERADO). Exige motivo obligatorio y queda registrada en
+    /// HR.Audit (Action=CORRECTION) con el detalle de los campos modificados.
+    /// </summary>
+    Task CorrectAsync(int actionId, UpdatePersonnelActionRequest request, string reason, int correctedBy, CancellationToken ct = default);
+
     /// <summary>Aprueba y ejecuta una acción de personal.</summary>
     Task<CreatePersonnelActionResponse> ApproveAsync(int actionId, ApprovePersonnelActionRequest request, int approvedBy, CancellationToken ct = default);
 

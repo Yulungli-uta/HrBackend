@@ -51,6 +51,7 @@ public class GuardShiftChangeService : IGuardShiftChangeService
             .Include(c => c.ReplacementEmployee).ThenInclude(e => e!.People)
             .Include(c => c.OriginalSchedule)
             .Include(c => c.NewSchedule)
+            .Include(c => c.NewLocation)
             .Include(c => c.ChangeType)
             .Include(c => c.StatusType)
             .Where(c => c.StatusType!.Name == "PENDING")
@@ -79,6 +80,7 @@ public class GuardShiftChangeService : IGuardShiftChangeService
             .Include(c => c.ReplacementEmployee).ThenInclude(e => e!.People)
             .Include(c => c.OriginalSchedule)
             .Include(c => c.NewSchedule)
+            .Include(c => c.NewLocation)
             .Include(c => c.ChangeType)
             .Include(c => c.StatusType)
             .AsQueryable();
@@ -181,6 +183,84 @@ public class GuardShiftChangeService : IGuardShiftChangeService
         return MapToDto(change);
     }
 
+    public async Task<GuardShiftChangeDto> ReassignAsync(CreateGuardShiftReassignmentDto dto, CancellationToken ct)
+    {
+        var planning = await _db.GuardShiftPlannings
+            .Include(p => p.Schedule)
+            .FirstOrDefaultAsync(p => p.PlanningId == dto.PlanningId, ct)
+            ?? throw new KeyNotFoundException($"Planificación {dto.PlanningId} no encontrada.");
+
+        if (!planning.IsActiveForAssignment)
+            throw new InvalidOperationException("No se puede reasignar un turno cancelado.");
+
+        var validateReq = new ValidateGuardAssignmentRequestDto(
+            planning.EmployeeId, dto.NewLocationId, dto.NewWorkDate, dto.NewScheduleId, planning.PlanningId, false);
+        var validation = await _validationService.ValidateAsync(validateReq, ct);
+
+        if (validation.HasBlockingErrors)
+            throw new InvalidOperationException(
+                "No se puede reasignar: " +
+                string.Join("; ", validation.Validations.Where(v => v.Severity == "BLOCKING").Select(v => v.Message)));
+
+        var reassignTypeId = await _db.Set<RefTypes>()
+            .Where(r => r.Category == "GUARD_CHANGE_TYPE" && r.Name == "REASSIGNMENT")
+            .Select(r => r.TypeId).FirstOrDefaultAsync(ct);
+        if (reassignTypeId == 0)
+            throw new InvalidOperationException(
+                "No se encontró el tipo de cambio REASSIGNMENT en HR.ref_Types (Category=GUARD_CHANGE_TYPE). Debe crearse en el catálogo antes de usar esta función.");
+
+        var approvedTypeId = await _db.Set<RefTypes>()
+            .Where(r => r.Category == "GUARD_CHANGE_STATUS" && r.Name == "APPROVED")
+            .Select(r => r.TypeId).FirstOrDefaultAsync(ct);
+
+        var previousActive = await _db.GuardShiftChanges
+            .Where(c => c.PlanningId == planning.PlanningId && c.IsActiveForAttendance)
+            .ToListAsync(ct);
+        foreach (var prev in previousActive)
+            prev.IsActiveForAttendance = false;
+
+        var isSpecialGroup = planning.GroupId.HasValue
+            && await _db.GuardRotationGroups.Where(g => g.GroupId == planning.GroupId).Select(g => g.IsSpecial).FirstOrDefaultAsync(ct);
+
+        var change = new GuardShiftChange
+        {
+            PlanningId = planning.PlanningId,
+            OriginalEmployeeId = planning.EmployeeId,
+            OriginalScheduleId = planning.ScheduleId,
+            NewScheduleId = dto.NewScheduleId,
+            NewWorkDate = dto.NewWorkDate,
+            NewLocationId = dto.NewLocationId,
+            ChangeTypeId = reassignTypeId,
+            StatusTypeId = approvedTypeId,
+            IsActiveForAttendance = true,
+            Reason = dto.Reason,
+            RequestedBy = _currentUser.EmployeeId,
+            RequestedAt = DateTime.UtcNow,
+            ApprovedBy = _currentUser.EmployeeId,
+            ApprovedAt = DateTime.UtcNow
+        };
+
+        planning.WorkDate = dto.NewWorkDate;
+        planning.LocationId = dto.NewLocationId;
+        planning.ScheduleId = dto.NewScheduleId;
+        planning.AllowDoubleShift = isSpecialGroup;
+
+        await _db.GuardShiftChanges.AddAsync(change, ct);
+        await _db.SaveChangesAsync(ct);
+
+        var reloaded = await _db.GuardShiftChanges
+            .Include(c => c.Planning)
+            .Include(c => c.OriginalEmployee).ThenInclude(e => e!.People)
+            .Include(c => c.OriginalSchedule)
+            .Include(c => c.NewSchedule)
+            .Include(c => c.NewLocation)
+            .Include(c => c.ChangeType)
+            .Include(c => c.StatusType)
+            .FirstAsync(c => c.ShiftChangeId == change.ShiftChangeId, ct);
+
+        return MapToDto(reloaded);
+    }
+
     public async Task<GuardShiftChangeDto> RejectAsync(int shiftChangeId, RejectGuardShiftChangeDto dto, CancellationToken ct)
     {
         var change = await _db.GuardShiftChanges
@@ -215,5 +295,6 @@ public class GuardShiftChangeService : IGuardShiftChangeService
             c.NewScheduleId, c.NewSchedule?.Description,
             c.ChangeType?.Name ?? "", c.StatusType?.Name ?? "",
             c.IsActiveForAttendance, c.Reason, c.RequestedAt, c.RequestedBy, null,
-            c.ApprovedBy, null, c.ApprovedAt, c.RejectionReason);
+            c.ApprovedBy, null, c.ApprovedAt, c.RejectionReason,
+            c.NewWorkDate, c.NewLocationId, c.NewLocation?.LocationName);
 }

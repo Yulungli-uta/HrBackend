@@ -237,6 +237,36 @@ public sealed class PdfReportRenderer : IReportRenderer
     //    });
     //}
 
+    /// <summary>
+    /// Renderiza el contenido de una celda de cabecera (fondo, borde, texto), en horizontal
+    /// o rotado 90° según <paramref name="vertical"/>. Extraído para reutilizar tanto en la
+    /// variante que se repite en cada página como en la que aparece solo una vez.
+    /// </summary>
+    private void RenderHeaderCell(IContainer cell, string headerText, bool vertical)
+    {
+        var styled = cell
+            .Background(_config.Colors.Primary)
+            .Border(0.5f)
+            .BorderColor(Colors.Grey.Lighten2)
+            .PaddingVertical(vertical ? 3 : 5)
+            .PaddingHorizontal(vertical ? 2 : 4)
+            .MinHeight(vertical ? 90 : 0)
+            .AlignCenter()
+            .AlignMiddle();
+
+        if (vertical)
+        {
+            styled.RotateLeft()
+                .Text(headerText)
+                .FontSize(8).Bold().FontColor(Colors.White);
+        }
+        else
+        {
+            styled.Text(headerText)
+                .FontSize(9).Bold().FontColor(Colors.White);
+        }
+    }
+
     private void ComposeContent(IContainer container, ReportDefinition definition)
     {
         container.PaddingTop(10).Table(table =>
@@ -255,23 +285,23 @@ public sealed class PdfReportRenderer : IReportRenderer
             });
 
             // ── Fila de cabecera ────────────────────────────────────────────
-            table.Header(header =>
+            // RepeatHeaderOnEveryPage=true (por defecto, comportamiento histórico): usa
+            // table.Header(...), que QuestPDF repite automáticamente en cada página.
+            // RepeatHeaderOnEveryPage=false: se renderiza como una fila normal de contenido,
+            // una sola vez, al inicio del documento.
+            if (definition.RepeatHeaderOnEveryPage)
+            {
+                table.Header(header =>
+                {
+                    foreach (var c in definition.Columns)
+                        header.Cell().Element(cell => RenderHeaderCell(cell, c.Header, definition.VerticalHeaders));
+                });
+            }
+            else
             {
                 foreach (var c in definition.Columns)
-                {
-                    header.Cell()
-                        .Background(_config.Colors.Primary)
-                        .Border(0.5f)
-                        .BorderColor(Colors.Grey.Lighten2)
-                        .PaddingVertical(5)
-                        .PaddingHorizontal(4)
-                        .AlignCenter()
-                        .Text(c.Header)
-                        .FontSize(9)
-                        .Bold()
-                        .FontColor(Colors.White);
-                }
-            });
+                    table.Cell().Element(cell => RenderHeaderCell(cell, c.Header, definition.VerticalHeaders));
+            }
 
             // ── Sin datos ───────────────────────────────────────────────────
             if (definition.Rows is null || definition.Rows.Count == 0)

@@ -60,10 +60,13 @@ public class ContractsController : ControllerBase
     /// <summary>Retorna un resultado paginado de contratos.</summary>
     /// <param name="page">Número de página (base 1).</param>
     /// <param name="pageSize">Cantidad de registros por página. Máximo 200.</param>
-    /// <param name="search">Texto libre sobre código o descripción.</param>
+    /// <param name="search">Texto libre sobre código o descripción (NO busca cédula/nombre — usar <paramref name="personId"/> para filtrar por empleado).</param>
     /// <param name="statusTypeId">Filtro por TypeId del estado (CONTRACT_STATUS).</param>
     /// <param name="certificationId">Filtro por CertificationID vinculado.</param>
     /// <param name="year">Filtro por año de creación (0 = todos).</param>
+    /// <param name="employeeId">Filtro por EmployeeID del titular del contrato (se resuelve a PersonID internamente).</param>
+    /// <param name="startDateFrom">Filtro: StartDate mayor o igual a esta fecha.</param>
+    /// <param name="startDateTo">Filtro: StartDate menor o igual a esta fecha.</param>
     /// <param name="sortDirection">Dirección del orden sobre CreatedAt: asc | desc (por defecto desc).</param>
     [HttpGet("paged")]
     [RequirePermission("CONTRACTS.READ")]
@@ -74,6 +77,9 @@ public class ContractsController : ControllerBase
         [FromQuery] int? statusTypeId = null,
         [FromQuery] int? certificationId = null,
         [FromQuery] int? year = null,
+        [FromQuery] int? employeeId = null,
+        [FromQuery] DateTime? startDateFrom = null,
+        [FromQuery] DateTime? startDateTo = null,
         [FromQuery] string? sortDirection = "desc",
         CancellationToken ct = default)
     {
@@ -85,6 +91,11 @@ public class ContractsController : ControllerBase
         var hasYear = year.HasValue && year.Value > 0;
         var ascending = string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
 
+        // EmployeeCombobox (frontend) solo conoce EmployeeID — Contracts filtra por PersonID.
+        int? personId = employeeId.HasValue
+            ? await _service.ResolvePersonIdByEmployeeIdAsync(employeeId.Value, ct)
+            : null;
+
         // null = sin restricción de departamento (GLOBAL o sin scopes asignados aún).
         List<int>? allowedDeptIds = _currentUser.EmployeeId.HasValue
             ? await _accessScopeService.GetAllowedDepartmentIdsAsync(_currentUser.EmployeeId.Value, "CONTRACTS", ct)
@@ -93,7 +104,8 @@ public class ContractsController : ControllerBase
 
         System.Linq.Expressions.Expression<Func<Contracts, bool>>? predicate = null;
 
-        if (hasSearch || statusTypeId.HasValue || certificationId.HasValue || hasYear || hasDeptScope)
+        if (hasSearch || statusTypeId.HasValue || certificationId.HasValue || hasYear
+            || personId.HasValue || startDateFrom.HasValue || startDateTo.HasValue || hasDeptScope)
         {
             predicate = c =>
                 (!hasSearch || c.ContractCode.ToLower().Contains(term) ||
@@ -101,6 +113,9 @@ public class ContractsController : ControllerBase
                 (!statusTypeId.HasValue    || c.Status == statusTypeId.Value) &&
                 (!certificationId.HasValue || c.CertificationID == certificationId.Value) &&
                 (!hasYear                  || (c.CreatedAt != null && c.CreatedAt.Value.Year == year!.Value)) &&
+                (!personId.HasValue        || c.PersonID == personId.Value) &&
+                (!startDateFrom.HasValue   || c.StartDate >= startDateFrom.Value) &&
+                (!startDateTo.HasValue     || c.StartDate <= startDateTo.Value) &&
                 (!hasDeptScope             || allowedDeptIds!.Contains(c.DepartmentID));
         }
 
@@ -221,7 +236,7 @@ public class ContractsController : ControllerBase
             }
         }
 
-        var created = await _service.CreateAndNotifyAsync(entity, ct);
+        var created = await _service.CreateAndNotifyAsync(entity, ct, dto.IsHistoricalEntry);
 
         GenerateContractDocumentResponse? document = null;
 
@@ -275,6 +290,36 @@ public class ContractsController : ControllerBase
             await _service.UpdateAsync(id, dto, ct);
         }
         catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Corrige los datos de un contrato ya existente, en CUALQUIER estado (incluido VIGENTE).
+    /// A diferencia de <see cref="Update"/> (solo BORRADOR/GENERADO), exige un motivo
+    /// obligatorio y queda registrada en el historial de auditoría (HR.Audit,
+    /// Action=CORRECTION). Requiere el permiso elevado CONTRACTS.MANAGE.
+    /// </summary>
+    [HttpPut("{id:int}/correct")]
+    [RequirePermission("CONTRACTS.MANAGE")]
+    public async Task<IActionResult> Correct(int id, [FromBody] CorrectContractRequest request, CancellationToken ct)
+    {
+        if (request.Data.ContractID != 0 && request.Data.ContractID != id)
+            return BadRequest("ContractID no coincide con la ruta.");
+
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
+        try
+        {
+            await _service.CorrectAsync(id, request.Data, request.Reason, ct);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
         {
             return BadRequest(new { message = ex.Message });
         }

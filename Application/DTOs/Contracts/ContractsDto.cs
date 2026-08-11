@@ -79,4 +79,17 @@ public class ContractsDto
 
     /// <summary>Horas contratadas. Auto-poblado desde la solicitud. Solo lectura.</summary>
     public decimal? ContractedHours { get; set; }
+
+    /// <summary>Sueldo real individual del contrato.</summary>
+    public decimal? BaseSalary { get; set; }
 }
+
+/// <summary>
+/// Solicitud para corregir un contrato ya existente, en cualquier estado (incluido VIGENTE).
+/// A diferencia de <see cref="ContractsUpdateDto"/> vía <c>UpdateAsync</c> (solo BORRADOR/GENERADO),
+/// exige un motivo obligatorio y queda registrada en HR.Audit (Action=CORRECTION).
+/// </summary>
+public sealed record CorrectContractRequest(
+    string Reason,
+    ContractsUpdateDto Data
+);

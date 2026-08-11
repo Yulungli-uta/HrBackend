@@ -180,7 +180,8 @@ public sealed class TimePlanningEmployeeConfiguration : IEntityTypeConfiguration
             .WithMany()
             .HasForeignKey(x => x.EmployeeID)
             .HasConstraintName("FK_TimePlanningEmployees_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false); // opcional a nivel EF por el soft-delete de Employees
 
         e.HasIndex(x => new { x.PlanID, x.EmployeeID })
             .IsUnique()
@@ -204,8 +205,22 @@ public sealed class TimeBalancesConfiguration : IEntityTypeConfiguration<TimeBal
     public void Configure(EntityTypeBuilder<TimeBalances> e)
     {
         e.ToTable("tbl_TimeBalances", "HR");
-        e.HasKey(x => x.EmployeeID);
+        // PK compuesta real desde 2026-07-06 (multi-régimen) — antes era solo EmployeeID.
+        e.HasKey(x => new { x.EmployeeID, x.LaborRegimeId });
         e.Property(x => x.EmployeeID).HasColumnName("EmployeeID");
+        e.Property(x => x.LaborRegimeId).HasColumnName("LaborRegimeId");
+        e.Property(x => x.RowVersion).IsRowVersion();
+    }
+}
+
+public sealed class TimeBalanceMovementsConfiguration : IEntityTypeConfiguration<TimeBalanceMovements>
+{
+    public void Configure(EntityTypeBuilder<TimeBalanceMovements> e)
+    {
+        e.ToTable("tbl_TimeBalanceMovements", "HR");
+        e.HasKey(x => x.MovementID);
+        e.Property(x => x.MovementID).HasColumnName("MovementID");
+        e.Property(x => x.SourceModule).HasMaxLength(50);
     }
 }
 

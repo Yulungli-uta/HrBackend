@@ -17,6 +17,32 @@ public record ReportFilterDto
     public bool? IncludeInactive { get; init; }
     public int? EmployeeTypeId { get; init; }
 
+    /// <summary>
+    /// Filtra por tipo de identificación ("CEDULA" o "PASAPORTE"). Usado por el reporte SIIES
+    /// Funcionarios para segregar en un solo flujo las dos matrices (5.7/5.8) sin mezclarlas
+    /// nunca en un mismo archivo. Null o vacío = CEDULA (matriz por defecto).
+    /// </summary>
+    public string? IdentType { get; init; }
+
+    /// <summary>
+    /// Filtra por número de identificación exacto (cédula o pasaporte), para generar el
+    /// reporte de una sola persona. Null o vacío = todos los registros.
+    /// </summary>
+    public string? Identification { get; init; }
+
+    /// <summary>
+    /// Si es <c>true</c>, el PDF generado rota el texto de las cabeceras 90° (útil para
+    /// reportes con muchas columnas angostas, ej. SIIES). Null o <c>false</c> = horizontal
+    /// (comportamiento por defecto).
+    /// </summary>
+    public bool? VerticalHeaders { get; init; }
+
+    /// <summary>
+    /// Si es <c>false</c>, la cabecera del PDF aparece solo en la primera página en vez de
+    /// repetirse en cada página. Null o <c>true</c> = se repite en cada página (por defecto).
+    /// </summary>
+    public bool? RepeatHeaderOnEveryPage { get; init; }
+
     /// <summary>Filtra por tipo de contrato (ID de tbl_ContractType). Null = todos.</summary>
     public int? ContractTypeId { get; init; }
 

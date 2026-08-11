@@ -19,6 +19,7 @@ public sealed class RefTypesConfiguration : IEntityTypeConfiguration<RefTypes>
         e.Property(x => x.Name).HasMaxLength(100).IsRequired();
         e.Property(x => x.Description).HasMaxLength(255);
         e.Property(x => x.Metadata).HasColumnName("Metadata");
+        e.Property(x => x.SiiesLabel).HasColumnName("SiiesLabel").HasMaxLength(100);
     }
 }
 
@@ -67,6 +68,7 @@ public sealed class AuditConfiguration : IEntityTypeConfiguration<Audit>
         e.Property(x => x.TableName).HasMaxLength(128);
         e.Property(x => x.Action).HasMaxLength(20);
         e.Property(x => x.RecordId).HasColumnName("RecordID");
+        e.Property(x => x.DateTime).HasColumnName("ActionDate");
     }
 }
 

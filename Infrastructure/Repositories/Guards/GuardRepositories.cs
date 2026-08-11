@@ -55,6 +55,12 @@ public class GuardRotationGroupRepository
                 && e.ValidFrom <= date && (e.ValidTo == null || e.ValidTo >= date))
             .Include(e => e.Employee).ThenInclude(e => e!.People)
             .ToListAsync(ct);
+
+    public async Task<bool> IsEmployeeInSpecialGroupAsync(int employeeId, DateOnly date, CancellationToken ct) =>
+        await _db.GuardRotationGroupEmployees
+            .Where(e => e.EmployeeId == employeeId && e.IsActive
+                && e.ValidFrom <= date && (e.ValidTo == null || e.ValidTo >= date))
+            .AnyAsync(e => e.Group!.IsSpecial, ct);
 }
 
 public class RotationPatternRepository
@@ -153,6 +159,7 @@ public class GuardShiftChangeRepository
         await _db.GuardShiftChanges
             .Where(c => c.PlanningId == planningId)
             .Include(c => c.ReplacementEmployee).ThenInclude(e => e!.People)
+            .Include(c => c.NewLocation)
             .Include(c => c.ChangeType)
             .Include(c => c.StatusType)
             .OrderByDescending(c => c.RequestedAt)

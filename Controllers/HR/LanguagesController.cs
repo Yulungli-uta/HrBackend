@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Languages;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Security;
@@ -11,49 +12,123 @@ namespace WsUtaSystem.Controllers.HR;
 [Route("cv/languages")]
 public class LanguagesController : ControllerBase
 {
+    private static readonly string[] ElevatedRoles = { "Administrador", "R_RH", "R_RH_ANALISTA", "R_RH_ESPECIALISTA" };
+
     private readonly ILanguagesService _svc;
     private readonly IMapper _mapper;
-    public LanguagesController(ILanguagesService svc, IMapper mapper) { _svc = svc; _mapper = mapper; }
+    private readonly ICurrentUserService _currentUser;
+    public LanguagesController(ILanguagesService svc, IMapper mapper, ICurrentUserService currentUser)
+    {
+        _svc = svc;
+        _mapper = mapper;
+        _currentUser = currentUser;
+    }
 
-    /// <summary>Lista todos los registros de Languages.</summary>
+    /// <summary>Lista todos los registros de Languages. Requiere rol de RRHH/administración.</summary>
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct) =>
-        Ok(_mapper.Map<List<LanguagesDto>>(await _svc.GetAllAsync(ct)));
+    [RequirePermission("EMPLOYEE_PROFILE.READ")]
+    public async Task<IActionResult> GetAll(CancellationToken ct)
+    {
+        if (!ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No tiene permisos para ver todas las certificaciones de idioma del sistema.");
+
+        return Ok(_mapper.Map<List<LanguagesDto>>(await _svc.GetAllAsync(ct)));
+    }
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]
+    [RequirePermission("EMPLOYEE_PROFILE.READ")]
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
-        return e is null ? NotFound() : Ok(_mapper.Map<LanguagesDto>(e));
+        if (e is null) return NotFound();
+
+        if (!ElevatedRoles.Any(User.IsInRole) && await _currentUser.GetPersonIdAsync(ct) != e.PersonId)
+            return Forbid403("No puede consultar certificaciones de idioma de otra persona.");
+
+        return Ok(_mapper.Map<LanguagesDto>(e));
     }
 
     /// <summary>Obtiene todas las certificaciones de idioma de una persona.</summary>
     /// <param name="personId">ID de la persona</param>
     [HttpGet("person/{personId:int}")]
+    [RequirePermission("EMPLOYEE_PROFILE.READ")]
     public async Task<IActionResult> GetByPersonId([FromRoute] int personId, CancellationToken ct)
     {
+        if (!ElevatedRoles.Any(User.IsInRole) && await _currentUser.GetPersonIdAsync(ct) != personId)
+            return Forbid403("No puede consultar certificaciones de idioma de otra persona.");
+
         var languages = await _svc.GetByPersonIdAsync(personId);
         return Ok(_mapper.Map<List<LanguagesDto>>(languages));
     }
 
-    /// <summary>Crea un nuevo registro.</summary>
+    /// <summary>Crea un nuevo registro. El PersonId del payload se ignora salvo rol elevado —
+    /// nunca se confía en el cliente para "de quién" es el registro.</summary>
     [HttpPost]
-    [RequirePermission("CATALOGS.CREATE")]
+    [RequirePermission("EMPLOYEE_PROFILE.CREATE")]
     public async Task<IActionResult> Create([FromBody] LanguagesCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Languages>(dto);
+        if (!ElevatedRoles.Any(User.IsInRole))
+        {
+            var myPersonId = await _currentUser.GetPersonIdAsync(ct);
+            if (myPersonId is null) return Forbid403("No se pudo determinar la persona asociada al usuario autenticado.");
+            entityObj.PersonId = myPersonId.Value;
+        }
+
         var created = await _svc.CreateAsync(entityObj, ct);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<LanguagesDto>(created));
     }
 
+    /// <summary>Crea una certificación de idioma junto con su certificado de respaldo en una sola llamada transaccional.</summary>
+    [HttpPost("with-document")]
+    [RequirePermission("EMPLOYEE_PROFILE.CREATE")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> CreateWithDocument([FromForm] LanguageWithDocumentCreateDto dto, CancellationToken ct)
+    {
+        var entity = new Languages
+        {
+            PersonId = dto.PersonId,
+            LanguageTypeId = dto.LanguageTypeId,
+            LevelTypeId = dto.LevelTypeId,
+            ReferenceFramework = dto.ReferenceFramework,
+            CertifyingInstitution = dto.CertifyingInstitution,
+            CountryId = dto.CountryId,
+            IssueDate = dto.IssueDate,
+            ExpirationDate = dto.ExpirationDate,
+        };
+
+        if (!ElevatedRoles.Any(User.IsInRole))
+        {
+            var myPersonId = await _currentUser.GetPersonIdAsync(ct);
+            if (myPersonId is null) return Forbid403("No se pudo determinar la persona asociada al usuario autenticado.");
+            entity.PersonId = myPersonId.Value;
+        }
+
+        var (created, storedFile, error) = await _svc.CreateWithDocumentAsync(entity, dto.File, dto.DocumentTypeId, ct);
+        if (error != null) return BadRequest(new { message = error });
+
+        var result = new LanguageWithDocumentResultDto
+        {
+            Language = _mapper.Map<LanguagesDto>(created),
+            StoredFile = storedFile != null ? _mapper.Map<Application.DTOs.StoredFile.StoredFileDto>(storedFile) : null,
+        };
+        return CreatedAtAction(nameof(GetById), new { id = created.LanguageId }, result);
+    }
+
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
-    [RequirePermission("CATALOGS.UPDATE")]
+    [RequirePermission("EMPLOYEE_PROFILE.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] LanguagesUpdateDto dto, CancellationToken ct)
     {
+        var current = await _svc.GetByIdAsync(id, ct);
+        if (current is null) return NotFound();
+
+        if (!ElevatedRoles.Any(User.IsInRole) && await _currentUser.GetPersonIdAsync(ct) != current.PersonId)
+            return Forbid403("No puede editar certificaciones de idioma de otra persona.");
+
         var entityObj = _mapper.Map<Languages>(dto);
         await _svc.UpdateAsync(id, entityObj, ct);
         return NoContent();
@@ -61,10 +136,22 @@ public class LanguagesController : ControllerBase
 
     /// <summary>Elimina un registro por ID.</summary>
     [HttpDelete("{id:int}")]
-    [RequirePermission("CATALOGS.DELETE")]
+    [RequirePermission("EMPLOYEE_PROFILE.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)
     {
+        var current = await _svc.GetByIdAsync(id, ct);
+        if (current is null) return NotFound();
+
+        if (!ElevatedRoles.Any(User.IsInRole) && await _currentUser.GetPersonIdAsync(ct) != current.PersonId)
+            return Forbid403("No puede eliminar certificaciones de idioma de otra persona.");
+
         await _svc.DeleteAsync(id, ct);
         return NoContent();
     }
+
+    private ObjectResult Forbid403(string message) => StatusCode(403, new
+    {
+        status = "error",
+        error = new { code = "FORBIDDEN", message, traceId = HttpContext.TraceIdentifier }
+    });
 }

@@ -10,12 +10,14 @@
         public string? IDCard { get; set; }
         public string? Email { get; set; }
         public string? Phone { get; set; }
-        public DateTime BirthDate { get; set; }
+        /// <summary>Nullable porque HR.tbl_People.BirthDate lo es en la base de datos.</summary>
+        public DateTime? BirthDate { get; set; }
         public int? Sex { get; set; }
         public int? Gender { get; set; }
         public string? Address { get; set; }
         public bool PersonIsActive { get; set; }
-        public int EmployeeType { get; set; }
+        /// <summary>Nullable porque HR.tbl_Employees.EmployeeType lo es en la base de datos.</summary>
+        public int? EmployeeType { get; set; }
         public string? EmployeeTypeName { get; set; }
         public DateTime HireDate { get; set; }
         public bool EmployeeIsActive { get; set; }

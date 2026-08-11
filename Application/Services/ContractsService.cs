@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Common.Services;
@@ -142,6 +143,24 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             if (current is null)
                 throw new KeyNotFoundException($"Contracts con id={id} no existe.");
 
+            // El frontend ya oculta el botón de edición fuera de BORRADOR/GENERADO
+            // (ContractDetail.tsx: isEditable), pero el backend no lo exigía — cualquier
+            // llamada directa al endpoint podía editar un contrato ya VIGENTE. Mismo guard
+            // que ya tenía PersonnelActionService.UpdateAsync. Bug de seguridad encontrado y
+            // corregido 2026-08-05 junto con la feature de corrección (que sí permite editar
+            // en cualquier estado a propósito, porque exige motivo y queda auditada — ver
+            // CorrectAsync).
+            var currentStatusName = await _db.RefTypes
+                .AsNoTracking()
+                .Where(x => x.TypeId == current.Status && x.Category == ContractStatusCategory)
+                .Select(x => x.Name)
+                .FirstOrDefaultAsync(ct);
+
+            var editableStatuses = new[] { StatusBorrador, StatusGenerado };
+            if (currentStatusName is not null && !editableStatuses.Contains(currentStatusName))
+                throw new InvalidOperationException(
+                    $"Solo se puede editar en estado BORRADOR o GENERADO. Estado actual: '{currentStatusName}'.");
+
             // ✅ Update campo por campo (en Service, buena práctica)
             ApplyDto(dto, current);
 
@@ -174,13 +193,68 @@ public class ContractsService : Service<Contracts, int>, IContractsService
 
     }
 
+    /// <inheritdoc />
+    public async Task CorrectAsync(int id, ContractsUpdateDto dto, string reason, CancellationToken ct)
+    {
+        if (dto is null) throw new ArgumentNullException(nameof(dto));
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Debe ingresar el motivo de la corrección.", nameof(reason));
+        if (dto.ContractID != 0 && dto.ContractID != id)
+            throw new ArgumentException("ContractID del body no coincide con el id de la ruta.");
+
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
+            var current = await _repository.GetByIdAsync(id, ct)
+                ?? throw new KeyNotFoundException($"Contracts con id={id} no existe.");
+
+            var before = AuditSnapshotHelper.Snapshot(current);
+
+            // A diferencia de UpdateAsync, la corrección se permite en cualquier estado
+            // (incluido VIGENTE) — exige motivo obligatorio y queda auditada en HR.Audit.
+            ApplyDto(dto, current);
+            ValidateDates(current);
+
+            await base.UpdateAsync(id, current, ct);
+
+            var after = AuditSnapshotHelper.Snapshot(current);
+            await AuditSnapshotHelper.WriteCorrectionAuditAsync(
+                _db, "Contracts", id.ToString(), reason, before, after,
+                _currentUser.UserName ?? _currentUser.Email, ct);
+
+            await tx.CommitAsync(ct);
+        });
+    }
+
+    /// <inheritdoc />
+    public async Task<int?> ResolvePersonIdByEmployeeIdAsync(int employeeId, CancellationToken ct)
+    {
+        return await _db.Employees
+            .AsNoTracking()
+            .Where(e => e.EmployeeId == employeeId)
+            .Select(e => (int?)e.PersonID)
+            .FirstOrDefaultAsync(ct);
+    }
+
     // -------------------------------------------------------
     // Métodos de negocio existentes (entity)
     // -------------------------------------------------------
-    public async Task<Contracts> CreateAndNotifyAsync(Contracts entity, CancellationToken ct)
+    public async Task<Contracts> CreateAndNotifyAsync(Contracts entity, CancellationToken ct, bool isHistoricalEntry = false)
     {
         if (entity is null) throw new ArgumentNullException(nameof(entity));
         ValidateDates(entity);
+
+        if (isHistoricalEntry)
+        {
+            var today = DateTime.Today;
+            if (entity.StartDate >= today)
+                throw new ArgumentException("Un contrato histórico debe tener fecha de inicio anterior a hoy.");
+            if (entity.EndDate.Year < 9999 && entity.EndDate >= today)
+                throw new ArgumentException("Un contrato histórico debe tener fecha de fin anterior a hoy.");
+        }
 
         // El estado inicial siempre es BORRADOR independientemente de lo que envíe el cliente
         entity.Status = await GetContractStatusIdAsync(StatusBorrador, ct);
@@ -1187,15 +1261,25 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             updatedBy,
             ct);
 
+        // 2026-08-06: "Ingresar Histórico" — el paso de subir el documento firmado de un
+        // contrato histórico NO ocurre en la misma sesión que su creación (a diferencia de
+        // Acciones de Personal), así que un flag transitorio pasado solo en el momento de
+        // crear no llegaría de forma confiable hasta aquí. En su lugar, se deriva de la
+        // propia fecha del contrato: si su EndDate ya pasó, por definición ya concluyó — no
+        // debe anular a su padre, aprovisionar AD, ni quedar marcado VIGENTE. Esto también
+        // cubre, de forma correcta, un contrato normal cuyo papeleo se cargó tarde y para
+        // entonces ya venció.
+        var alreadyEnded = contract.EndDate < DateTime.Today;
+
         // 2026-07-06: un adendum firmado y cargado anula automáticamente a su
         // contrato padre — la cadena de vigencia pasa siempre al adendum más
         // reciente. Antes de este control, un contrato y su adendum podían
         // quedar "vigentes" simultáneamente sin ninguna validación.
-        if (contract.ParentID.HasValue)
+        if (contract.ParentID.HasValue && !alreadyEnded)
             await AnnulParentContractAsync(contract.ParentID.Value, contractId, updatedBy, ct);
 
         // Disparar aprovisionamiento AD si el tipo de contrato lo requiere (solo contratos raíz)
-        if (contract.ParentID is null)
+        if (contract.ParentID is null && !alreadyEnded)
         {
             var contractType = await _db.ContractType
                 .AsNoTracking()
@@ -1205,6 +1289,19 @@ public class ContractsService : Service<Contracts, int>, IContractsService
 
             if (contractType?.RequiresAdUserCreation == true)
                 await TriggerProvisioningAsync(contract.PersonID, contract.DepartmentID, contractId, updatedBy, ct);
+        }
+
+        if (alreadyEnded)
+        {
+            _logger.LogInformation(
+                "ContractsService: contrato {ContractId} ya venció (EndDate={EndDate}) al momento de cargar el documento firmado — cerrado directo a FINALIZADO sin pasar por VIGENTE, sin anular padre ni aprovisionar AD.",
+                contractId, contract.EndDate);
+
+            await UpdateContractDocumentStatusAsync(
+                contract, StatusFinalizado,
+                "Contrato ya concluido (fecha de fin anterior a hoy) al cargar el documento firmado.",
+                updatedBy, ct);
+            return;
         }
 
         // 2026-07-06: FIRMADO_CARGADO + documento cargado siempre pasa a VIGENTE,

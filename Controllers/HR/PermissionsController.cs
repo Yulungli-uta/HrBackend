@@ -14,16 +14,38 @@ namespace WsUtaSystem.Controllers.HR;
 public class PermissionsController : ControllerBase
 {
     private static readonly string[] ElevatedRoles = { "Administrador", "R_RH", "R_RH_ANALISTA", "R_RH_ESPECIALISTA", "Supervisor" };
+    private const string ImmediateBossRole = "R_JEFE_INMEDIATO";
 
     private readonly IPermissionsService _svc;
+    private readonly IEmployeesService _employeesSvc;
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUser;
 
-    public PermissionsController(IPermissionsService svc, IMapper mapper, ICurrentUserService currentUser)
+    public PermissionsController(
+        IPermissionsService svc,
+        IEmployeesService employeesSvc,
+        IMapper mapper,
+        ICurrentUserService currentUser)
     {
         _svc = svc;
+        _employeesSvc = employeesSvc;
         _mapper = mapper;
         _currentUser = currentUser;
+    }
+
+    /// <summary>
+    /// true si el usuario autenticado es específicamente el jefe inmediato asignado del
+    /// dueño de este permiso (rol R_JEFE_INMEDIATO + Employees.ImmediateBossId == quien
+    /// llama). No decide médico vs no-médico — eso lo sigue resolviendo
+    /// PermissionsService.EnsureUpdatePermissionAsync con el código de permiso adecuado.
+    /// </summary>
+    private async Task<bool> IsDirectBossOfAsync(int employeeId, CancellationToken ct)
+    {
+        if (!User.IsInRole(ImmediateBossRole) || _currentUser.EmployeeId is null)
+            return false;
+
+        var employee = await _employeesSvc.GetByIdAsync(employeeId, ct);
+        return employee is not null && employee.ImmediateBossId == _currentUser.EmployeeId;
     }
 
     /// <summary>Lista todos los permisos.</summary>
@@ -44,7 +66,7 @@ public class PermissionsController : ControllerBase
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null,
         [FromQuery] string? sortBy = null,
-        [FromQuery] string? sortDirection = "asc",
+        [FromQuery] string? sortDirection = "desc",
         CancellationToken ct = default)
     {
         if (page < 1) page = 1;
@@ -57,9 +79,20 @@ public class PermissionsController : ControllerBase
             predicate = p => (p.Justification != null && p.Justification.ToLower().Contains(term)) || p.Status.ToLower().Contains(term);
         }
 
+        // sortBy/sortDirection antes se recibían pero nunca se aplicaban — el resultado no
+        // tenía ningún orden real. Por defecto: fecha de registro descendente (más reciente primero).
+        System.Linq.Expressions.Expression<Func<Permissions, object>> orderBy = sortBy?.Trim().ToLowerInvariant() switch
+        {
+            "startdate" => p => p.StartDate,
+            "enddate" => p => p.EndDate,
+            "status" => p => p.Status,
+            _ => p => p.CreatedAt!
+        };
+        var ascending = string.Equals(sortDirection, "asc", StringComparison.OrdinalIgnoreCase);
+
         var pagedEntities = predicate is not null
-            ? await _svc.GetPagedAsync(predicate, page, pageSize, ct)
-            : await _svc.GetPagedAsync(page, pageSize, ct);
+            ? await _svc.GetPagedAsync(predicate, page, pageSize, ct, orderBy, ascending)
+            : await _svc.GetPagedAsync(page, pageSize, ct, orderBy, ascending);
 
         return Ok(new
         {
@@ -81,7 +114,11 @@ public class PermissionsController : ControllerBase
         var e = await _svc.GetByIdAsync(id, ct);
         if (e is null) return NotFound();
 
-        if (_currentUser.EmployeeId != e.EmployeeId && !ElevatedRoles.Any(User.IsInRole))
+        var isOwner = _currentUser.EmployeeId == e.EmployeeId;
+        var isElevated = ElevatedRoles.Any(User.IsInRole);
+        var isDirectBoss = !isOwner && !isElevated && await IsDirectBossOfAsync(e.EmployeeId, ct);
+
+        if (!isOwner && !isElevated && !isDirectBoss)
             return Forbid403("No puede consultar permisos de otro empleado.");
 
         return Ok(_mapper.Map<PermissionsDto>(e));
@@ -133,12 +170,24 @@ public class PermissionsController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<List<PermissionsDto>>(e));
     }
 
-    /// <summary>Crea un nuevo permiso con verificación de saldo.</summary>
+    /// <summary>
+    /// Crea un nuevo permiso con verificación de saldo, para el empleado autenticado.
+    /// EmployeeId/Status/ApprovedBy/ApprovedAt del payload se ignoran deliberadamente —
+    /// mismo criterio que VacationsController.
+    /// </summary>
     [HttpPost]
     [RequirePermission("PERMISSIONS_LICENSES.CREATE")]
     public async Task<IActionResult> Create([FromBody] PermissionsCreateDto dto, CancellationToken ct)
     {
+        if (_currentUser.EmployeeId is null)
+            return Forbid403("No se pudo determinar el empleado autenticado.");
+
         var entityObj = _mapper.Map<Permissions>(dto);
+        entityObj.EmployeeId = _currentUser.EmployeeId.Value;
+        entityObj.Status = "Pending";
+        entityObj.ApprovedBy = null;
+        entityObj.ApprovedAt = null;
+
         var created = await _svc.CreateWithBalanceCheckAsync(entityObj, ct);
         var idVal = created?.GetType()?.GetProperties()
             ?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))
@@ -148,12 +197,15 @@ public class PermissionsController : ControllerBase
     }
 
     /// <summary>
-    /// Actualiza un permiso existente afectando el saldo. NOTA: el catálogo de permisos de
-    /// acción no tiene un código PERMISSIONS_LICENSES.UPDATE dedicado (solo READ/CREATE/
-    /// APPROVE/REJECT) — este endpoint mezcla edición general y aprobación/rechazo (ver
-    /// PermissionsService.UpdateBalanceAffectAsync). Falta decidir si se separa en endpoints
-    /// distintos o se agrega el código al catálogo; mientras tanto solo queda protegido por
-    /// el chequeo de propiedad/rol de abajo, no por [RequirePermission].
+    /// Actualiza un permiso existente afectando el saldo. Permitido para: el propio dueño,
+    /// roles de RRHH/administración (ElevatedRoles), o el jefe inmediato REAL de ese
+    /// empleado (rol R_JEFE_INMEDIATO + ImmediateBossId coincide). La distinción médico/
+    /// no-médico y la auto-aprobación las sigue resolviendo
+    /// PermissionsService.EnsureUpdatePermissionAsync/UpdateBalanceAffectAsync, sin cambios.
+    /// NOTA preexistente: el catálogo de permisos de acción no tiene un código
+    /// PERMISSIONS_LICENSES.UPDATE dedicado (solo READ/CREATE/APPROVE/REJECT) — este
+    /// endpoint mezcla edición general y aprobación/rechazo; sigue protegido por el chequeo
+    /// de propiedad/rol de abajo, no por [RequirePermission] estático.
     /// </summary>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] PermissionsUpdateDto dto, CancellationToken ct)
@@ -161,7 +213,11 @@ public class PermissionsController : ControllerBase
         var current = await _svc.GetByIdAsync(id, ct);
         if (current is null) return NotFound();
 
-        if (_currentUser.EmployeeId != current.EmployeeId && !ElevatedRoles.Any(User.IsInRole))
+        var isOwner = _currentUser.EmployeeId == current.EmployeeId;
+        var isElevated = ElevatedRoles.Any(User.IsInRole);
+        var isDirectBoss = !isOwner && !isElevated && await IsDirectBossOfAsync(current.EmployeeId, ct);
+
+        if (!isOwner && !isElevated && !isDirectBoss)
             return Forbid403("No puede editar permisos de otro empleado.");
 
         var entityObj = _mapper.Map<Permissions>(dto);
@@ -180,7 +236,9 @@ public class PermissionsController : ControllerBase
         if (_currentUser.EmployeeId != current.EmployeeId && !ElevatedRoles.Any(User.IsInRole))
             return Forbid403("No puede eliminar permisos de otro empleado.");
 
-        await _svc.DeleteAsync(id, ct);
+        // Libera la reserva de saldo activa (si hay) antes de borrar — el DeleteAsync
+        // genérico no lo hacía, dejando el saldo descontado para siempre.
+        await _svc.DeleteWithBalanceReleaseAsync(id, ct);
         return NoContent();
     }
 

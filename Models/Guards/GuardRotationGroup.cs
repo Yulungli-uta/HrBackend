@@ -13,6 +13,7 @@ public class GuardRotationGroup : IAuditable
     public int? GroupLevelTypeId { get; set; }
     public string? ColorCode { get; set; }
     public bool IsActive { get; set; } = true;
+    public bool IsSpecial { get; set; }
     public int? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public int? UpdatedBy { get; set; }

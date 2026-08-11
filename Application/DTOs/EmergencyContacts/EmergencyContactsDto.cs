@@ -5,6 +5,7 @@ public class EmergencyContactsDto
     public int ContactId { get; set; }
     public int PersonId { get; set; }
     public string Identification { get; set; }
+    public int? IdentificationTypeId { get; set; }
     public string FirstName { get; set; }
     public string LastName { get; set; }
     public int RelationshipTypeId { get; set; }

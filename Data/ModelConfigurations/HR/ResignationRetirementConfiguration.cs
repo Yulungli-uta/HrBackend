@@ -21,7 +21,8 @@ public sealed class ResignationRetirementRequestConfiguration : IEntityTypeConfi
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .HasConstraintName("FK_ResignationRetirementRequests_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false); // opcional a nivel EF por el soft-delete de Employees
 
         e.HasMany(x => x.StatusHistory)
             .WithOne(x => x.Request)

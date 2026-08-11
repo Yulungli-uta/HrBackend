@@ -92,4 +92,18 @@ public sealed class ReportDefinition
     /// Útil para mostrar en el pie del reporte.
     /// </summary>
     public int TotalRecords => Rows.Count;
+
+    /// <summary>
+    /// Si es <c>true</c>, el <see cref="Abstractions.IReportRenderer"/> PDF rota el texto de
+    /// las celdas de cabecera 90°, útil para reportes con muchas columnas angostas (ej. SIIES).
+    /// Por defecto <c>false</c> — no afecta a ningún reporte existente que no lo establezca.
+    /// </summary>
+    public bool VerticalHeaders { get; init; } = false;
+
+    /// <summary>
+    /// Si es <c>true</c> (valor por defecto, comportamiento histórico), la fila de cabecera
+    /// se repite en cada página del PDF. Si es <c>false</c>, aparece una sola vez, al inicio
+    /// del documento.
+    /// </summary>
+    public bool RepeatHeaderOnEveryPage { get; init; } = true;
 }

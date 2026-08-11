@@ -183,6 +183,72 @@ public sealed class ResignationRetirementService : IResignationRetirementService
     }
 
     /// <inheritdoc/>
+    public async Task<ResignationRetirementDetailDto> CreateOnBehalfAsync(
+        int createdByEmployeeId, CreateResignationRetirementOnBehalfRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.EmployeeId <= 0)
+            throw new ArgumentException("Debe indicar el empleado para el que se genera la solicitud.", nameof(request));
+
+        if (request.RequestType != ResignationRetirementRequestType.Resignation
+            && request.RequestType != ResignationRetirementRequestType.Retirement)
+            throw new ArgumentException("RequestType debe ser RESIGNATION o RETIREMENT.", nameof(request));
+
+        var employeeInfo = await _repository.GetEmployeeConsolidatedInfoAsync(request.EmployeeId, ct)
+            ?? throw new InvalidOperationException("El empleado indicado no existe en el sistema.");
+
+        if (await _repository.HasActiveRequestAsync(request.EmployeeId, request.RequestType, null, ct))
+            throw new InvalidOperationException(
+                $"Ya existe una solicitud de {request.RequestType} activa (pendiente, en revisión o devuelta) para este empleado.");
+
+        if (request.RequestType == ResignationRetirementRequestType.Retirement)
+        {
+            var (eligible, note) = await EvaluateRetirementEligibilityAsync(employeeInfo.Age, employeeInfo.ServiceTimeYears, ct);
+            if (!eligible)
+                throw new InvalidOperationException(note);
+        }
+
+        var entity = new ResignationRetirementRequest
+        {
+            EmployeeId = request.EmployeeId,
+            RequestType = request.RequestType,
+            RequestDate = DateOnly.FromDateTime(DateTime.Today),
+            // A diferencia de CreateAsync: aquí SÍ se permite una fecha ya pasada — el
+            // objetivo es registrar cuanto antes una salida real ya ocurrida (empleado no
+            // localizable, abandono de puesto) para que la acreditación mensual de
+            // vacaciones se detenga sin esperar a que se complete el trámite formal con
+            // documento firmado (ver recorte por ResignationExitDate en las SP de acreditación).
+            ProposedExitDate = request.ProposedExitDate,
+            Reason = request.Reason,
+            AdditionalNotes = request.AdditionalNotes,
+            Status = ResignationRetirementStatus.Pendiente
+        };
+
+        await _repository.AddAsync(entity, ct);
+        await _repository.SaveChangesAsync(ct);
+
+        await _repository.AddHistoryAsync(new ResignationRetirementStatusHistory
+        {
+            RequestId = entity.RequestId,
+            PreviousStatus = null,
+            NewStatus = ResignationRetirementStatus.Pendiente,
+            Action = "CREATED_BY_HR",
+            Observation = "Solicitud generada por Recursos Humanos en representación del empleado (no la creó el propio empleado).",
+            CreatedAt = DateTime.Now,
+            CreatedBy = createdByEmployeeId
+        }, ct);
+        await _repository.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "ResignationRetirementService: solicitud {RequestId} generada por RRHH (EmployeeId={CreatedBy}) en nombre de EmployeeId={TargetEmployeeId}.",
+            entity.RequestId, createdByEmployeeId, request.EmployeeId);
+
+        return await _repository.GetDetailByIdAsync(entity.RequestId, ct)
+            ?? throw new InvalidOperationException("No se pudo recuperar la solicitud recién creada.");
+    }
+
+    /// <inheritdoc/>
     public async Task<ResignationRetirementDetailDto> UpdateAsync(int requestId, int employeeId, UpdateResignationRetirementRequest request, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);

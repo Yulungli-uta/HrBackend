@@ -172,7 +172,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
                     e.EmployeeIsActive &&
                     e.EmployeeType != null &&
                     e.EmployeeType != 0)
-                .GroupBy(e => e.EmployeeType)
+                .GroupBy(e => e.EmployeeType!.Value)
                 .Select(g => new ContractTypeCountDto
                 {
                     EmployeeType = g.Key,

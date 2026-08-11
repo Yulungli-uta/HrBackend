@@ -74,4 +74,10 @@ public class ContractsCreateDto
 
     /// <summary>Horas contratadas. Auto-poblado desde la solicitud si no se envía.</summary>
     public decimal? ContractedHours { get; set; }
+
+    /// <summary>Sueldo real individual del contrato.</summary>
+    public decimal? BaseSalary { get; set; }
+
+    /// <summary>true solo desde "Ingresar Histórico": exige que StartDate/EndDate sean anteriores a hoy.</summary>
+    public bool IsHistoricalEntry { get; set; } = false;
 }

@@ -52,6 +52,7 @@ public sealed class GuardRotationGroupConfiguration : IEntityTypeConfiguration<G
         e.Property(x => x.ParentGroupId).HasColumnName("ParentGroupId");
         e.Property(x => x.GroupLevelTypeId).HasColumnName("GroupLevelTypeId");
         e.Property(x => x.ColorCode).HasMaxLength(20);
+        e.Property(x => x.IsSpecial).HasDefaultValue(false);
         e.Property(x => x.RowVersion).IsRowVersion().HasColumnName("RowVersion").IsConcurrencyToken();
         e.Property(x => x.CreatedAt)
             .HasDefaultValueSql("GETDATE()")
@@ -98,7 +99,12 @@ public sealed class GuardRotationGroupEmployeeConfiguration : IEntityTypeConfigu
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .HasConstraintName("FK_GuardRotGroupEmp_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            // Employees tiene soft-delete (filtro global IsDeleted) — esta relación se marca
+            // opcional a nivel de EF (la columna sigue NOT NULL en la BD) para que, si el
+            // empleado queda soft-deleted, el registro siga siendo consultable en vez de que
+            // EF advierta/arriesgue resultados inconsistentes en la navegación "requerida".
+            .IsRequired(false);
     }
 }
 
@@ -232,6 +238,7 @@ public sealed class GuardShiftPlanningConfiguration : IEntityTypeConfiguration<G
         e.Property(x => x.PlanningSourceTypeId).HasColumnName("PlanningSourceTypeID");
         e.Property(x => x.StatusTypeId).HasColumnName("StatusTypeID");
         e.Property(x => x.Notes).HasMaxLength(500);
+        e.Property(x => x.AllowDoubleShift).HasDefaultValue(false);
         e.Property(x => x.RowVersion).IsRowVersion().HasColumnName("RowVersion").IsConcurrencyToken();
         e.Property(x => x.CreatedAt)
             .HasDefaultValueSql("GETDATE()")
@@ -242,7 +249,8 @@ public sealed class GuardShiftPlanningConfiguration : IEntityTypeConfiguration<G
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .HasConstraintName("FK_GuardShiftPlanning_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false); // opcional a nivel EF por el soft-delete de Employees (ver arriba)
 
         e.HasOne(x => x.Group)
             .WithMany()
@@ -276,7 +284,7 @@ public sealed class GuardShiftPlanningConfiguration : IEntityTypeConfiguration<G
 
         e.HasIndex(x => new { x.EmployeeId, x.WorkDate })
             .IsUnique()
-            .HasFilter("IsActiveForAssignment = 1")
+            .HasFilter("IsActiveForAssignment = 1 AND AllowDoubleShift = 0")
             .HasDatabaseName("UX_GuardShiftPlanning_NoDoubleActiveShift");
     }
 }
@@ -293,6 +301,8 @@ public sealed class GuardShiftChangeConfiguration : IEntityTypeConfiguration<Gua
         e.Property(x => x.ReplacementEmployeeId).HasColumnName("ReplacementEmployeeID");
         e.Property(x => x.OriginalScheduleId).HasColumnName("OriginalScheduleID");
         e.Property(x => x.NewScheduleId).HasColumnName("NewScheduleID");
+        e.Property(x => x.NewWorkDate).HasColumnName("NewWorkDate");
+        e.Property(x => x.NewLocationId).HasColumnName("NewLocationID");
         e.Property(x => x.ChangeTypeId).HasColumnName("ChangeTypeID");
         e.Property(x => x.StatusTypeId).HasColumnName("StatusTypeID");
         e.Property(x => x.Reason).HasMaxLength(1000).IsRequired();
@@ -319,7 +329,8 @@ public sealed class GuardShiftChangeConfiguration : IEntityTypeConfiguration<Gua
             .WithMany()
             .HasForeignKey(x => x.OriginalEmployeeId)
             .HasConstraintName("FK_GuardShiftChanges_OrigEmp")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false); // opcional a nivel EF por el soft-delete de Employees (ver arriba)
 
         e.HasOne(x => x.ReplacementEmployee)
             .WithMany()
@@ -337,6 +348,12 @@ public sealed class GuardShiftChangeConfiguration : IEntityTypeConfiguration<Gua
             .WithMany()
             .HasForeignKey(x => x.NewScheduleId)
             .HasConstraintName("FK_GuardShiftChanges_NewSched")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.NewLocation)
+            .WithMany()
+            .HasForeignKey(x => x.NewLocationId)
+            .HasConstraintName("FK_GuardShiftChanges_NewLocation")
             .OnDelete(DeleteBehavior.Restrict);
 
         e.HasOne(x => x.ChangeType)
@@ -393,7 +410,8 @@ public sealed class EmployeeAvailabilityBlockConfiguration : IEntityTypeConfigur
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .HasConstraintName("FK_EmpAvailBlocks_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false); // opcional a nivel EF por el soft-delete de Employees (ver arriba)
 
         e.HasOne(x => x.SourceType)
             .WithMany()
@@ -438,7 +456,8 @@ public sealed class GuardAssignmentValidationConfiguration : IEntityTypeConfigur
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .HasConstraintName("FK_GuardAssignValids_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false); // opcional a nivel EF por el soft-delete de Employees (ver arriba)
 
         e.HasOne(x => x.Planning)
             .WithMany(p => p.Validations)
@@ -576,7 +595,8 @@ public sealed class GuardEmployeeSpecialRuleConfiguration : IEntityTypeConfigura
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .HasConstraintName("FK_SpecialRules_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false); // opcional a nivel EF por el soft-delete de Employees (ver arriba)
 
         e.HasOne(x => x.FixedLocation)
             .WithMany()
@@ -618,7 +638,8 @@ public sealed class GuardVacationPlanConfiguration : IEntityTypeConfiguration<Gu
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .HasConstraintName("FK_VacPlan_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false); // opcional a nivel EF por el soft-delete de Employees (ver arriba)
 
         e.HasOne(x => x.StatusType)
             .WithMany()
@@ -673,7 +694,8 @@ public sealed class GuardVacationRequestConfiguration : IEntityTypeConfiguration
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .HasConstraintName("FK_VacReq_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false); // opcional a nivel EF por el soft-delete de Employees (ver arriba)
 
         e.HasOne(x => x.Plan)
             .WithMany(p => p.Requests)

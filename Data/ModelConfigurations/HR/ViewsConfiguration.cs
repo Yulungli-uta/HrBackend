@@ -19,6 +19,33 @@ public sealed class VwEmployeeCompleteConfiguration : IEntityTypeConfiguration<V
     }
 }
 
+public sealed class VwSiiesFuncionarioConfiguration : IEntityTypeConfiguration<VwSiiesFuncionario>
+{
+    public void Configure(EntityTypeBuilder<VwSiiesFuncionario> e)
+    {
+        e.HasNoKey();
+        e.ToView("vw_SiiesFuncionarios", "HR");
+    }
+}
+
+public sealed class VwSiiesProfesorConfiguration : IEntityTypeConfiguration<VwSiiesProfesor>
+{
+    public void Configure(EntityTypeBuilder<VwSiiesProfesor> e)
+    {
+        e.HasNoKey();
+        e.ToView("vw_SiiesProfesores", "HR");
+    }
+}
+
+public sealed class VwSiiesFormacionProfesionalConfiguration : IEntityTypeConfiguration<VwSiiesFormacionProfesional>
+{
+    public void Configure(EntityTypeBuilder<VwSiiesFormacionProfesional> e)
+    {
+        e.HasNoKey();
+        e.ToView("vw_SiiesFormacionProfesional", "HR");
+    }
+}
+
 public sealed class VwEmployeeDetailsConfiguration : IEntityTypeConfiguration<VwEmployeeDetails>
 {
     public void Configure(EntityTypeBuilder<VwEmployeeDetails> e)

@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Enums;
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Documents.GeneratedDocuments;
 using WsUtaSystem.Application.DTOs.PersonnelActions;
 using WsUtaSystem.Application.DTOs.Provisioning;
@@ -60,6 +62,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
     private readonly IEmployeeLaborRegimeService _laborRegimeService;
     private readonly IPersonnelMovementsService _movementsService;
     private readonly IContractsService _contractsService;
+    private readonly ICurrentUserService _currentUser;
 
     /// <summary>
     /// Código de PersonnelActionType cuyo efecto colateral, al cargar el documento firmado,
@@ -81,7 +84,8 @@ public sealed class PersonnelActionService : IPersonnelActionService
         IEmployeeProvisioningClient provisioningClient,
         IEmployeeLaborRegimeService laborRegimeService,
         IPersonnelMovementsService movementsService,
-        IContractsService contractsService)
+        IContractsService contractsService,
+        ICurrentUserService currentUser)
     {
         _actionRepository          = actionRepository;
         _personnelActionType       = personnelActionType;
@@ -96,6 +100,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         _movementsService          = movementsService;
         _laborRegimeService        = laborRegimeService;
         _contractsService          = contractsService;
+        _currentUser               = currentUser;
     }
 
     /// <inheritdoc />
@@ -124,6 +129,17 @@ public sealed class PersonnelActionService : IPersonnelActionService
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (request.IsHistoricalEntry)
+        {
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            if (request.ActionDate >= today)
+                throw new ArgumentException("Un registro histórico debe tener fecha de acción anterior a hoy.");
+            if (request.EffectiveDate is { } effectiveDate && effectiveDate >= today)
+                throw new ArgumentException("Un registro histórico debe tener fecha de vigencia anterior a hoy.");
+            if (request.EndDate is { } endDate && endDate.Year < 9999 && endDate >= today)
+                throw new ArgumentException("Un registro histórico debe tener fecha de fin anterior a hoy.");
+        }
 
         int personId = request.personId;
         var employee = await _employeesRepository.GetByPersonIdAsync(personId, ct);
@@ -248,6 +264,64 @@ public sealed class PersonnelActionService : IPersonnelActionService
     }
 
     /// <inheritdoc />
+    public async Task CorrectAsync(
+        int actionId,
+        UpdatePersonnelActionRequest request,
+        string reason,
+        int correctedBy,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Debe ingresar el motivo de la corrección.", nameof(reason));
+
+        var action = await _actionRepository.GetByIdAsync(actionId, ct)
+            ?? throw new KeyNotFoundException($"Acción de personal {actionId} no encontrada.");
+
+        var before = AuditSnapshotHelper.Snapshot(action);
+
+        // A diferencia de UpdateAsync, la corrección se permite en cualquier estado (incluido
+        // VIGENTE/FINALIZADO) — exige motivo obligatorio y queda auditada en HR.Audit.
+        action.ActionNumber            = request.ActionNumber?.Trim();
+        action.ActionDate              = request.ActionDate;
+        action.EffectiveDate           = request.EffectiveDate;
+        action.EndDate                 = request.EndDate;
+        action.OriginDepartmentId      = request.OriginDepartmentId;
+        action.OriginJobId             = request.OriginJobId;
+        action.OriginBudgetCode        = request.OriginBudgetCode?.Trim();
+        action.DestinationDepartmentId = request.DestinationDepartmentId;
+        action.DestinationJobId        = request.DestinationJobId;
+        action.DestinationBudgetCode   = request.DestinationBudgetCode?.Trim();
+        action.PreviousRmu             = request.PreviousRmu;
+        action.NewRmu                  = request.NewRmu;
+        action.LegalBasis              = request.LegalBasis?.Trim();
+        action.Reason                  = request.Reason?.Trim();
+        action.Observations            = request.Observations?.Trim();
+        action.SwornDeclaration        = request.SwornDeclaration;
+        action.InstitutionalProcess    = request.InstitutionalProcess;
+        action.ManagementLevel         = request.ManagementLevel;
+        action.EmployeeTypeId          = request.EmployeeTypeId is > 0 ? request.EmployeeTypeId : action.EmployeeTypeId;
+        action.DthDirectorId           = request.DthDirectorId;
+        action.AuthorityNominatorId    = request.AuthorityNominatorId;
+        action.ElaboratorId            = request.ElaboratorId;
+        action.ReviewerId              = request.ReviewerId;
+        action.RegistrarId             = request.RegistrarId;
+        action.UpdatedAt               = DateTime.UtcNow;
+        action.UpdatedBy               = correctedBy;
+
+        await _actionRepository.UpdateAsync(action, ct);
+
+        var after = AuditSnapshotHelper.Snapshot(action);
+        await AuditSnapshotHelper.WriteCorrectionAuditAsync(
+            _db, "PersonnelActions", actionId.ToString(), reason, before, after,
+            _currentUser.UserName ?? _currentUser.Email, ct);
+
+        _logger.LogInformation(
+            "PersonnelActionService: acción {ActionId} CORREGIDA por EmployeeId={UserId}. Motivo: {Reason}",
+            actionId, correctedBy, reason);
+    }
+
+    /// <inheritdoc />
     public async Task<CreatePersonnelActionResponse> ApproveAsync(
         int actionId,
         ApprovePersonnelActionRequest request,
@@ -363,18 +437,43 @@ public sealed class PersonnelActionService : IPersonnelActionService
 
         var actionType = await _personnelActionType.GetByIdAsync(action.ActionTypeId, ct);
 
-        if (actionType?.RequiresAdUserCreation == true)
-            await TriggerActionProvisioningAsync(actionId, updatedBy, ct);
+        // 2026-08-06: "Ingresar Histórico" — estos 4 efectos representan una acción EN VIVO
+        // sobre sistemas externos/otros registros (crear o bloquear cuenta AD, cerrar un
+        // régimen laboral, separar un contrato). Un registro histórico solo documenta algo
+        // que ya pasó; no debe disparar ninguno de estos, aunque el documento y la acción
+        // en sí se guardan igual más abajo.
+        if (!request.IsHistoricalEntry)
+        {
+            if (actionType?.RequiresAdUserCreation == true)
+                await TriggerActionProvisioningAsync(actionId, updatedBy, ct);
 
-        if (actionType?.RequiresAdUserDisable == true)
-            await TriggerActionDisableAsync(actionId, updatedBy, ct);
+            // Renuncia/Jubilación: cierra ÚNICAMENTE el régimen laboral al que corresponde esta
+            // acción (el del contrato si lo hay, o el del nombramiento si no) — nunca todos los
+            // regímenes activos del empleado, porque puede tener más de uno simultáneo (ej.
+            // nombramiento LOSEP + contrato ocasional LOES) y esta separación solo afecta a uno.
+            // Se ejecuta ANTES del chequeo de bloqueo de cuenta de abajo, para que ese chequeo
+            // vea ya el estado actualizado de los regímenes activos restantes.
+            if (actionType?.Code == ResignationRetirementActionTypeCode)
+                await CloseLaborRegimeForSeparationAsync(action, updatedBy, ct);
 
-        // Renuncia/Jubilación: si la acción tiene un contrato asociado, cerrarlo a RENUNCIA.
-        // Comparación por Code (no un flag de catálogo nuevo) a propósito — evita un cambio
-        // de esquema no solicitado; ver PersonnelActionType.RequiresAdUserDisable para el
-        // efecto de bloqueo de cuenta, que es universal para este tipo y no depende de esto.
-        if (actionType?.Code == ResignationRetirementActionTypeCode && action.ContractId.HasValue)
-            await TriggerContractSeparationAsync(actionId, action.ContractId.Value, updatedBy, ct);
+            // Renuncia/Jubilación: si la acción tiene un contrato asociado, cerrarlo a RENUNCIA.
+            // Comparación por Code (no un flag de catálogo nuevo) a propósito — evita un cambio
+            // de esquema no solicitado; ver PersonnelActionType.RequiresAdUserDisable para el
+            // efecto de bloqueo de cuenta, que es universal para este tipo y no depende de esto.
+            if (actionType?.Code == ResignationRetirementActionTypeCode && action.ContractId.HasValue)
+                await TriggerContractSeparationAsync(actionId, action.ContractId.Value, updatedBy, ct);
+
+            // Va después del cierre de régimen de arriba: el chequeo de "otro régimen activo"
+            // dentro de TriggerActionDisableAsync debe ver el estado ya actualizado.
+            if (actionType?.RequiresAdUserDisable == true)
+                await TriggerActionDisableAsync(actionId, updatedBy, ct);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "PersonnelActionService: acción {ActionId} cargada como histórica — se omiten aprovisionamiento/bloqueo AD y cierre de régimen por separación.",
+                actionId);
+        }
 
         // 2026-07-06: tipos con ReachesVigente=1 (Nombramiento, Traslado, Encargo,
         // Cambio de Sueldo, Asistencia/Horario) pasan automáticamente a VIGENTE al
@@ -383,20 +482,75 @@ public sealed class PersonnelActionService : IPersonnelActionService
         // horario actual del empleado (ver HR.fn_ResolveEmployeeRate).
         if (actionType?.ReachesVigente == true)
         {
-            await TransitionStatusAsync(actionId, "FIRMADO_CARGADO", "VIGENTE",
-                "Vigente automáticamente al cargar el documento firmado.", updatedBy, ct);
+            // 2026-08-05: protección para "Ingresar Histórico" — VIGENTE es la fuente de
+            // verdad que otras partes del sistema leen como estado ACTUAL del empleado
+            // (salario/departamento/horario, ver HR.fn_ResolveEmployeeRate). Si esta acción
+            // no es la más reciente por fecha efectiva entre todas las del empleado, no debe
+            // pasar por VIGENTE — eso pisaría el estado vigente real (vía
+            // CloseSupersededVigenteActionAsync, que cierra CUALQUIER otra VIGENTE sin mirar
+            // fechas) y sincronizaría datos viejos a Employee (vía
+            // RegisterMovementAndRegimeFromActionAsync). En su lugar, se cierra directo a
+            // FINALIZADO — transición ya válida en el grafo de estados — como un registro
+            // histórico completo que no reemplaza nada del estado actual.
+            var effectiveFrom = action.EffectiveDate ?? action.ActionDate;
+            var isMostRecentForEmployee = await IsMostRecentActionForEmployeeAsync(
+                actionId, action.EmployeeId ?? 0, effectiveFrom, ct);
 
-            await CloseSupersededVigenteActionAsync(actionId, action.EmployeeId, updatedBy, ct);
+            // 2026-08-06: además de "es la más reciente", una acción con fecha fin ya pasada
+            // tampoco debe representar el estado VIGENTE actual — ya concluyó. Cubre tanto
+            // los históricos con EndDate en el pasado como cualquier acción normal cuyo
+            // documento se cargó tarde y para entonces ya venció.
+            var alreadyEnded = action.EndDate.HasValue
+                && action.EndDate.Value < DateOnly.FromDateTime(DateTime.Today);
 
-            // 2026-07-06: movida aquí desde FinalizeAsync — las acciones con
-            // ReachesVigente=1 ya no pasan por FinalizeAsync (van directo y
-            // automático a VIGENTE), así que el registro de movimiento/régimen
-            // debe dispararse en este punto en vez de esperar a FINALIZADO. El
-            // método ya es defensivo (no hace nada si faltan
-            // DestinationJobId/DestinationDepartmentId), así que es seguro
-            // llamarlo para los 5 tipos ReachesVigente=1, no solo MOVEMENT.
-            await RegisterMovementAndRegimeFromActionAsync(actionId, updatedBy, ct);
+            if (isMostRecentForEmployee && !alreadyEnded)
+            {
+                await TransitionStatusAsync(actionId, "FIRMADO_CARGADO", "VIGENTE",
+                    "Vigente automáticamente al cargar el documento firmado.", updatedBy, ct);
+
+                await CloseSupersededVigenteActionAsync(actionId, action.EmployeeId, updatedBy, ct);
+
+                // 2026-07-06: movida aquí desde FinalizeAsync — las acciones con
+                // ReachesVigente=1 ya no pasan por FinalizeAsync (van directo y
+                // automático a VIGENTE), así que el registro de movimiento/régimen
+                // debe dispararse en este punto en vez de esperar a FINALIZADO. El
+                // método ya es defensivo (no hace nada si faltan
+                // DestinationJobId/DestinationDepartmentId), así que es seguro
+                // llamarlo para los 5 tipos ReachesVigente=1, no solo MOVEMENT.
+                await RegisterMovementAndRegimeFromActionAsync(actionId, updatedBy, ct);
+            }
+            else
+            {
+                var reason = alreadyEnded
+                    ? "Registro histórico: su fecha de fin ya pasó — no representa el estado vigente actual ni se sincroniza a Employee."
+                    : "Registro histórico: no es la acción más reciente del empleado — no reemplaza el estado vigente actual ni se sincroniza a Employee.";
+
+                await TransitionStatusAsync(actionId, "FIRMADO_CARGADO", "FINALIZADO", reason, updatedBy, ct);
+
+                _logger.LogInformation(
+                    "PersonnelActionService: acción {ActionId} es histórica (empleado {EmployeeId}, másReciente={IsMostRecent}, yaConcluyó={AlreadyEnded}) — cerrada directo a FINALIZADO sin pasar por VIGENTE.",
+                    actionId, action.EmployeeId, isMostRecentForEmployee, alreadyEnded);
+            }
         }
+    }
+
+    /// <summary>
+    /// Determina si <paramref name="actionId"/> es, por fecha efectiva (EffectiveDate o
+    /// ActionDate como fallback), el registro más reciente entre todas las acciones de
+    /// <paramref name="employeeId"/> — usado para decidir si una acción puede representar el
+    /// estado VIGENTE actual del empleado o si es un ingreso histórico que no debe pisarlo.
+    /// </summary>
+    private async Task<bool> IsMostRecentActionForEmployeeAsync(
+        int actionId, int employeeId, DateOnly effectiveFrom, CancellationToken ct)
+    {
+        if (employeeId == 0) return true;
+
+        var hasNewerAction = await _db.PersonnelActions
+            .AsNoTracking()
+            .Where(a => a.EmployeeId == employeeId && a.ActionId != actionId)
+            .AnyAsync(a => (a.EffectiveDate ?? a.ActionDate) > effectiveFrom, ct);
+
+        return !hasNewerAction;
     }
 
     /// <summary>
@@ -780,7 +934,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
                     .AsNoTracking()
                     .Where(e => e.EmployeeId == action.EmployeeId)
                     .Select(e => e.EmployeeType)
-                    .FirstOrDefaultAsync(ct);
+                    .FirstOrDefaultAsync(ct) ?? 0;
             }
             else
             {
@@ -884,6 +1038,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
                 a.DestinationDepartmentId,
                 a.OriginDepartmentId,
                 a.DestinationJobId,
+                a.ManagementLevel,
                 a.ActionTypeId,
                 a.ActionNumber,
                 a.EffectiveDate,
@@ -940,6 +1095,30 @@ public sealed class PersonnelActionService : IPersonnelActionService
             _logger.LogError(ex, "[MOVEMENT] ERROR registrando movimiento para ActionId={ActionId}.", actionId);
         }
 
+        // La partida presupuestaria (BudgetUnitTypeId) reutiliza el catálogo de
+        // ManagementLevel (ref_Types Category='AP_NIVEL_GESTION') — no es un campo propio
+        // de la acción. Está ligada a un cambio REAL de departamento, no a cualquier acción
+        // que traiga un valor — una acción de solo cambio de sueldo, por ejemplo, no debe
+        // mover la partida del empleado aunque el formulario la incluya. Por eso se compara
+        // contra el DepartmentID actual del empleado antes de replicar, en vez de aplicar
+        // el valor de forma incondicional.
+        if (action.ManagementLevel.HasValue && action.DestinationDepartmentId.HasValue)
+        {
+            try
+            {
+                var employee = await _employeesRepository.GetByIdAsync(action.EmployeeId!.Value, ct);
+                if (employee is not null && employee.DepartmentId != action.DestinationDepartmentId.Value)
+                {
+                    employee.BudgetUnitTypeId = action.ManagementLevel.Value;
+                    await _employeesRepository.UpdateAsync(employee.EmployeeId, employee, ct);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[BUDGET-UNIT] ERROR replicando partida presupuestaria para ActionId={ActionId}.", actionId);
+            }
+        }
+
         if (!action.EmployeeTypeId.HasValue) return;
 
         try
@@ -986,6 +1165,23 @@ public sealed class PersonnelActionService : IPersonnelActionService
                 return;
             }
 
+            // No bloquear la cuenta si el empleado todavía tiene otro régimen laboral activo
+            // (ej. renunció al contrato ocasional LOES pero conserva el nombramiento LOSEP) —
+            // mismo criterio que ContractExpirationService.ProcessExpiredContractsAsync. Se
+            // evalúa después de que CloseLaborRegimeForSeparationAsync ya cerró, si aplicaba,
+            // el régimen específico de esta acción.
+            var hasActiveRegime = await _db.Set<EmployeeLaborRegime>()
+                .AsNoTracking()
+                .AnyAsync(r => r.EmployeeId == action.EmployeeId!.Value && r.IsActive, ct);
+
+            if (hasActiveRegime)
+            {
+                _logger.LogInformation(
+                    "[ACTION][DISABLE] Deshabilitar omitido: EmployeeId={EmployeeId} aún tiene otro régimen laboral activo (ActionId={ActionId}).",
+                    action.EmployeeId, actionId);
+                return;
+            }
+
             var token = _httpContext.HttpContext?.Request.Headers["Authorization"].FirstOrDefault()
                 ?? string.Empty;
 
@@ -1010,6 +1206,80 @@ public sealed class PersonnelActionService : IPersonnelActionService
         {
             _logger.LogError(ex,
                 "[ACTION][DISABLE] ERROR al deshabilitar cuenta. ActionId={ActionId}", actionId);
+        }
+    }
+
+    /// <summary>
+    /// Cierra únicamente el régimen laboral activo al que corresponde esta acción de
+    /// renuncia/jubilación — nunca los demás regímenes activos que el empleado pudiera tener
+    /// simultáneamente (ej. nombramiento LOSEP + contrato ocasional LOES). Si la acción tiene
+    /// contrato asociado, cierra el régimen originado por ese contrato (SourceContractId); si
+    /// no (nombramiento), cierra el único régimen activo originado por acción de personal
+    /// (DocumentType='PERSONNEL_ACTION'). Defensivo: un fallo o ambigüedad aquí no debe impedir
+    /// que el documento firmado quede cargado — en ese caso queda para cierre manual vía
+    /// employee-labor-regimes/{id}/close.
+    /// </summary>
+    private async Task CloseLaborRegimeForSeparationAsync(PersonnelAction action, int updatedBy, CancellationToken ct)
+    {
+        try
+        {
+            if (!action.EmployeeId.HasValue) return;
+
+            int regimeId;
+
+            if (action.ContractId.HasValue)
+            {
+                regimeId = await _db.Set<EmployeeLaborRegime>()
+                    .AsNoTracking()
+                    .Where(r => r.SourceContractId == action.ContractId.Value && r.IsActive)
+                    .Select(r => r.Id)
+                    .FirstOrDefaultAsync(ct);
+            }
+            else
+            {
+                var candidates = await _db.Set<EmployeeLaborRegime>()
+                    .AsNoTracking()
+                    .Where(r => r.EmployeeId == action.EmployeeId.Value
+                             && r.DocumentType == "PERSONNEL_ACTION"
+                             && r.IsActive)
+                    .Select(r => r.Id)
+                    .ToListAsync(ct);
+
+                if (candidates.Count != 1)
+                {
+                    _logger.LogWarning(
+                        "[ACTION][SEPARATION] No se pudo determinar un único régimen por acción de personal para EmployeeId={EmployeeId} (ActionId={ActionId}, candidatos={Count}). Cierre manual requerido.",
+                        action.EmployeeId, action.ActionId, candidates.Count);
+                    return;
+                }
+
+                regimeId = candidates[0];
+            }
+
+            if (regimeId == 0)
+            {
+                _logger.LogWarning(
+                    "[ACTION][SEPARATION] No se encontró régimen laboral activo para cerrar. ActionId={ActionId} EmployeeId={EmployeeId} ContractId={ContractId}.",
+                    action.ActionId, action.EmployeeId, action.ContractId);
+                return;
+            }
+
+            var effectiveTo = action.EffectiveDate ?? DateOnly.FromDateTime(DateTime.Today);
+
+            await _laborRegimeService.CloseAsync(
+                regimeId,
+                new DTOs.EmployeeLaborRegime.EmployeeLaborRegimeCloseDto { EffectiveTo = effectiveTo },
+                updatedBy,
+                ct);
+
+            _logger.LogInformation(
+                "[ACTION][SEPARATION] ✓ Régimen laboral {RegimeId} cerrado por renuncia/jubilación. ActionId={ActionId} EmployeeId={EmployeeId}.",
+                regimeId, action.ActionId, action.EmployeeId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[ACTION][SEPARATION] ERROR cerrando régimen laboral para ActionId={ActionId}.", action.ActionId);
         }
     }
 

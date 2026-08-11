@@ -21,6 +21,10 @@ namespace WsUtaSystem.Application.Common.Interfaces
         Task<VwEmployeeDetails?> LoadMeAsync(CancellationToken ct = default);
         /// <summary>Retorna el EmployeeType (RefTypes.TypeId, Category=CONTRACT_TYPE) del empleado logueado.</summary>
         Task<int?> GetEmployeeTypeAsync(CancellationToken ct = default);
+        /// <summary>Resuelve HR.tbl_People.PersonId del empleado autenticado (vía Employees.PersonID). Usado
+        /// para validar propiedad de registros de hoja de vida (educación, publicaciones, etc.) antes de
+        /// permitir lectura/edición — nunca confiar en el PersonId que envía el cliente.</summary>
+        Task<int?> GetPersonIdAsync(CancellationToken ct = default);
 
         string? GetIp();
         string? GetUserAgent();

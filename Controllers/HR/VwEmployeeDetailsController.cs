@@ -132,6 +132,15 @@ namespace WsUtaSystem.Controllers.HR
             return Ok(employees);
         }
 
+        /// <summary>Cobertura de horario asignado (total/con horario/sin horario), calculada en SQL.</summary>
+        [HttpGet("stats/schedule-coverage")]
+        [RequirePermission("EMPLOYEES.READ")]
+        public async Task<IActionResult> GetScheduleCoverageStats(CancellationToken ct = default)
+        {
+            var stats = await _employeeDetailsService.GetScheduleCoverageStatsAsync(ct);
+            return Ok(stats);
+        }
+
         /// <summary>Obtiene los tipos de empleado disponibles.</summary>
         [HttpGet("available/types")]
         [RequirePermission("EMPLOYEES.READ")]

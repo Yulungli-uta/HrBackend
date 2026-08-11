@@ -162,7 +162,11 @@ public sealed record CreatePersonnelActionRequest(
 
     // Generación automática del documento PDF
     bool GenerateDocument = false,
-    Dictionary<string, string>? DocumentOverrides = null
+    Dictionary<string, string>? DocumentOverrides = null,
+
+    /// <summary>true solo desde "Ingresar Histórico": exige que ActionDate/EffectiveDate/EndDate
+    /// (si no es el centinela de indefinido) sean anteriores a hoy.</summary>
+    bool IsHistoricalEntry = false
 );
 
 /// <summary>Solicitud para actualizar una acción de personal existente.</summary>
@@ -199,6 +203,16 @@ public sealed record UpdatePersonnelActionRequest(
     int? RegistrarId
 );
 
+/// <summary>
+/// Solicitud para corregir una acción de personal ya existente, en cualquier estado.
+/// A diferencia de <see cref="UpdatePersonnelActionRequest"/> (solo BORRADOR/GENERADO),
+/// exige un motivo obligatorio y queda registrada en HR.Audit (Action=CORRECTION).
+/// </summary>
+public sealed record CorrectPersonnelActionRequest(
+    string Reason,
+    UpdatePersonnelActionRequest Data
+);
+
 /// <summary>Solicitud para aprobar y ejecutar una acción de personal.</summary>
 public sealed record ApprovePersonnelActionRequest(
     string? Notes,
@@ -212,6 +226,8 @@ public sealed record PersonnelActionQueryFilter(
     string? Status,
     DateOnly? StartDate,
     DateOnly? EndDate,
+    /// <summary>Búsqueda libre: cédula del empleado, nombre completo o N° de acción (contiene, sin distinguir mayúsculas).</summary>
+    string? Search = null,
     int Page = 1,
     int PageSize = 20,
     /// <summary>
@@ -245,7 +261,15 @@ public sealed record CreatePersonnelActionResponse(
 public sealed record UploadSignedDocumentRequest(
     /// <summary>ID del archivo físico previamente almacenado en tbl_StoredFiles.</summary>
     int StoredFileId,
-    string? Comment
+    string? Comment,
+    /// <summary>
+    /// True cuando el documento se carga desde la pantalla de "Ingresar Histórico" —
+    /// un registro que ya concluyó, no un evento en curso. En ese caso el servicio
+    /// omite el aprovisionamiento/bloqueo de cuenta AD y el cierre de régimen por
+    /// separación (no aplican a un backfill de papel), aunque el registro y el
+    /// documento se guardan igual. Default false: no cambia el comportamiento normal.
+    /// </summary>
+    bool IsHistoricalEntry = false
 );
 
 /// <summary>Solicitud para anular una acción de personal.</summary>

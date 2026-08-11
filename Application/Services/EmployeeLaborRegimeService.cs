@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.DTOs.EmployeeLaborRegime;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -40,6 +41,24 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
         if (alreadyActive)
             throw new InvalidOperationException("El empleado ya tiene ese régimen activo.");
 
+        // Nunca crear un régimen "huérfano" sin documento de respaldo real — evita el hueco
+        // encontrado en auditoría (SourceContractId/SourcePersonnelActionId ambos nullable
+        // y nunca validados). Cargas históricas/migraciones masivas se hacen aparte, por
+        // script directo, no por este servicio.
+        switch (dto.DocumentType)
+        {
+            case "CONTRACT":
+                if (!dto.SourceContractId.HasValue)
+                    throw new BusinessRuleException("DocumentType='CONTRACT' requiere SourceContractId.");
+                break;
+            case "PERSONNEL_ACTION":
+                if (!dto.SourcePersonnelActionId.HasValue)
+                    throw new BusinessRuleException("DocumentType='PERSONNEL_ACTION' requiere SourcePersonnelActionId.");
+                break;
+            default:
+                throw new BusinessRuleException("DocumentType debe ser 'CONTRACT' o 'PERSONNEL_ACTION', con su Id de origen correspondiente.");
+        }
+
         var entity = new EmployeeLaborRegime
         {
             EmployeeId = dto.EmployeeId,
@@ -53,6 +72,7 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
             SourcePersonnelActionId = dto.SourcePersonnelActionId,
             EffectiveFrom = dto.EffectiveFrom,
             IsActive = true,
+            IngresoPorConcurso = dto.IngresoPorConcurso,
             CreatedBy = changedBy,
             CreatedAt = DateTime.Now,
         };
@@ -79,6 +99,20 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
         await _db.SaveChangesAsync(ct);
 
         await RecalculatePrincipalAsync(entity.EmployeeId, changedBy, ct);
+
+        return (await ToDtosAsync([entity], ct)).Single();
+    }
+
+    public async Task<EmployeeLaborRegimeDto?> SetIngresoPorConcursoAsync(int id, EmployeeLaborRegimeIngresoPorConcursoDto dto, int? changedBy, CancellationToken ct = default)
+    {
+        var entity = await _db.EmployeeLaborRegimes.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (entity is null) return null;
+
+        entity.IngresoPorConcurso = dto.IngresoPorConcurso;
+        entity.UpdatedBy = changedBy;
+        entity.UpdatedAt = DateTime.Now;
+
+        await _db.SaveChangesAsync(ct);
 
         return (await ToDtosAsync([entity], ct)).Single();
     }
@@ -182,6 +216,7 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
                 EffectiveTo = i.EffectiveTo,
                 IsActive = i.IsActive,
                 IsPrincipal = i.IsPrincipal,
+                IngresoPorConcurso = i.IngresoPorConcurso,
             };
         }).ToList();
     }

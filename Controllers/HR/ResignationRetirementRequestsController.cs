@@ -20,6 +20,7 @@ namespace WsUtaSystem.Controllers.HR;
 public sealed class ResignationRetirementRequestsController : ControllerBase
 {
     private const string ModuleCode = "RESIGNATION_RETIREMENT_REQUESTS";
+    private static readonly string[] ElevatedRoles = { "Administrador", "R_RH", "R_RH_ANALISTA", "R_RH_ESPECIALISTA" };
 
     private readonly IResignationRetirementService _service;
     private readonly ICurrentUserService _currentUser;
@@ -171,6 +172,33 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
     // RECURSOS HUMANOS (revisión)
     // ──────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Genera una solicitud EN NOMBRE de un empleado — exclusivo de Recursos Humanos, para el
+    /// caso en que la persona no puede o no logra hacer su propia solicitud (abandono de
+    /// puesto, no localizable, etc.). A diferencia de <see cref="CreateMy"/>, aquí sí se puede
+    /// indicar una fecha de salida ya pasada. El resto del trámite (revisión, aprobación con
+    /// documento firmado, cierre de régimen) sigue exactamente igual, sin cambios.
+    /// </summary>
+    [HttpPost]
+    [RequirePermission("RESIGNATION_RETIREMENT.CREATE")]
+    [ProducesResponseType(typeof(ResignationRetirementDetailDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> CreateOnBehalf([FromBody] CreateResignationRetirementOnBehalfRequest request, CancellationToken ct)
+    {
+        if (!ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("Solo Recursos Humanos puede generar una solicitud en nombre de otro empleado.");
+
+        var createdBy = RequireEmployeeId();
+        var result = await _service.CreateOnBehalfAsync(createdBy, request, ct);
+
+        _logger.LogInformation(
+            "Solicitud de {RequestType} generada por RRHH (RequestId={RequestId}) para EmployeeId={EmployeeId}, creada por EmployeeId={CreatedBy}",
+            request.RequestType, result.RequestId, request.EmployeeId, createdBy);
+
+        return CreatedAtAction(nameof(GetById), new { id = result.RequestId }, result);
+    }
+
     /// <summary>Lista todas las solicitudes con filtros, restringidas al scope de departamento del revisor.</summary>
     [HttpGet]
     [RequirePermission("RESIGNATION_RETIREMENT.READ")]
@@ -290,4 +318,10 @@ public sealed class ResignationRetirementRequestsController : ControllerBase
         await EnsureReviewerCanAccessAsync(detail, ct);
         return Ok(detail.History);
     }
+
+    private ObjectResult Forbid403(string message) => StatusCode(403, new
+    {
+        status = "error",
+        error = new { code = "FORBIDDEN", message, traceId = HttpContext.TraceIdentifier }
+    });
 }

@@ -2465,6 +2465,13 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_GuardShiftChanges
             REFERENCES [HR].[tbl_Schedules] ([ScheduleID]);
 GO
 
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_GuardShiftChanges_NewLocation')
+    ALTER TABLE [HR].[tbl_GuardShiftChanges]
+        ADD CONSTRAINT [FK_GuardShiftChanges_NewLocation]
+            FOREIGN KEY ([NewLocationID])
+            REFERENCES [HR].[tbl_GuardServiceLocations] ([LocationID]);
+GO
+
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_GuardShiftChanges_StatusType')
     ALTER TABLE [HR].[tbl_GuardShiftChanges]
         ADD CONSTRAINT [FK_GuardShiftChanges_StatusType]

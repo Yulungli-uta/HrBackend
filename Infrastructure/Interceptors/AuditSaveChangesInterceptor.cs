@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Interfaces.Auditable;
+using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Infrastructure.Interceptors
 {
@@ -41,6 +42,7 @@ namespace WsUtaSystem.Infrastructure.Interceptors
 
             var timestamp = DateTime.Now;
             int? employeeId = null;
+            string? actorName = null;
 
             try
             {
@@ -48,6 +50,7 @@ namespace WsUtaSystem.Infrastructure.Interceptors
                 using var scope = _serviceProvider.CreateScope();
                 var currentUser = scope.ServiceProvider.GetService<ICurrentUserService>();
                 employeeId = currentUser?.EmployeeId;
+                actorName = currentUser?.UserName ?? currentUser?.Email;
             }
             catch (Exception ex)
             {
@@ -56,6 +59,7 @@ namespace WsUtaSystem.Infrastructure.Interceptors
 
             ProcessCreationAudit(context, timestamp, employeeId);
             ProcessModificationAudit(context, timestamp, employeeId);
+            ProcessDeletionAudit(context, timestamp, employeeId, actorName);
         }
 
         private void ProcessCreationAudit(DbContext context, DateTime timestamp, int? employeeId)
@@ -87,6 +91,43 @@ namespace WsUtaSystem.Infrastructure.Interceptors
                     entry.Property(nameof(ICreationAuditable.CreatedAt)).IsModified = false;
                     entry.Property(nameof(ICreationAuditable.CreatedBy)).IsModified = false;
                 }
+            }
+        }
+
+        // La fila desaparece al borrarse, así que no se puede "estampar" un campo en ella
+        // como en Create/Update — se deja constancia aparte en HR.Audit con una foto de sus
+        // valores justo antes del delete (EF todavía los tiene disponibles en este punto).
+        private void ProcessDeletionAudit(DbContext context, DateTime timestamp, int? employeeId, string? actorName)
+        {
+            var deletionEntries = context.ChangeTracker
+                .Entries<IAuditable>()
+                .Where(e => e.State == EntityState.Deleted)
+                .ToList();
+
+            if (deletionEntries.Count == 0) return;
+
+            var actor = actorName ?? employeeId?.ToString() ?? "unknown";
+
+            foreach (var entry in deletionEntries)
+            {
+                var tableName = entry.Metadata.GetTableName() ?? entry.Entity.GetType().Name;
+                var recordId = entry.Properties
+                    .FirstOrDefault(p => p.Metadata.IsPrimaryKey())
+                    ?.CurrentValue?.ToString() ?? "unknown";
+
+                var snapshot = entry.Properties
+                    .Where(p => !p.Metadata.IsPrimaryKey())
+                    .ToDictionary(p => p.Metadata.Name, p => p.CurrentValue);
+
+                context.Set<Audit>().Add(new Audit
+                {
+                    TableName = tableName,
+                    Action = "DELETE",
+                    RecordId = recordId,
+                    UserName = actor,
+                    DateTime = timestamp,
+                    Details = System.Text.Json.JsonSerializer.Serialize(snapshot),
+                });
             }
         }
     }

@@ -309,7 +309,8 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_GuardShiftPlanning_WorkD
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='UX_GuardShiftPlanning_NoDoubleActiveShift')
-    CREATE UNIQUE NONCLUSTERED INDEX [UX_GuardShiftPlanning_NoDoubleActiveShift] ON [HR].[tbl_GuardShiftPlanning] ([EmployeeID], [WorkDate]);
+    CREATE UNIQUE NONCLUSTERED INDEX [UX_GuardShiftPlanning_NoDoubleActiveShift] ON [HR].[tbl_GuardShiftPlanning] ([EmployeeID], [WorkDate])
+        WHERE [IsActiveForAssignment] = 1 AND [AllowDoubleShift] = 0;
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_VacPlan_EmployeeYear')

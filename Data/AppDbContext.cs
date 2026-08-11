@@ -89,6 +89,7 @@ public class AppDbContext : DbContext
     public DbSet<TimePlanningEmployee> TimePlanningEmployee => Set<TimePlanningEmployee>();
     public DbSet<TimePlanningExecution> TimePlanningExecution => Set<TimePlanningExecution>();
     public DbSet<TimeBalances> TimeBalances => Set<TimeBalances>();
+    public DbSet<TimeBalanceMovements> TimeBalanceMovements => Set<TimeBalanceMovements>();
     public DbSet<Holiday> Holidays => Set<Holiday>();
     public DbSet<Activity> Activity => Set<Activity>();
     public DbSet<AdditionalActivity> AdditionalActivity => Set<AdditionalActivity>();
@@ -211,6 +212,9 @@ public class AppDbContext : DbContext
 
     public DbSet<VwEmployeeComplete> vwEmployeeComplete { get; set; }
     public DbSet<VwEmployeeDetails> vwEmployeeDetails { get; set; }
+    public DbSet<VwSiiesFuncionario> vwSiiesFuncionarios { get; set; } = null!;
+    public DbSet<VwSiiesProfesor> vwSiiesProfesores { get; set; } = null!;
+    public DbSet<VwSiiesFormacionProfesional> vwSiiesFormacionProfesional { get; set; } = null!;
     public DbSet<VwEmployeeScheduleAtDate> VwEmployeeScheduleAtDate { get; set; }
     public DbSet<VwPunchDay> VwPunchDay { get; set; }
     public DbSet<VwLeaveWindows> VwLeaveWindows { get; set; }

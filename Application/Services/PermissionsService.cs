@@ -9,6 +9,7 @@ using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
+using WsUtaSystem.Application.DTOs.TimeBalances;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Data;
@@ -19,7 +20,7 @@ namespace WsUtaSystem.Application.Services;
 public class PermissionsService : Service<Permissions, int>, IPermissionsService
 {
     private readonly IPermissionsRepository _repository;
-    private readonly IHrBalanceRepository _hrRepo;
+    private readonly IVacationBalanceAdjustmentService _balanceAdjustment;
     private readonly AppDbContext _db;
 
     private readonly IEmailBuilder _emailBuilder;
@@ -32,7 +33,7 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
 
     public PermissionsService(
         IPermissionsRepository repo,
-        IHrBalanceRepository hrRepo,
+        IVacationBalanceAdjustmentService balanceAdjustment,
         AppDbContext db,
         IEmailBuilder emailBuilder,
         ICurrentUserService currentUser,
@@ -44,7 +45,7 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
     ) : base(repo)
     {
         _repository = repo ?? throw new ArgumentNullException(nameof(repo));
-        _hrRepo = hrRepo ?? throw new ArgumentNullException(nameof(hrRepo));
+        _balanceAdjustment = balanceAdjustment ?? throw new ArgumentNullException(nameof(balanceAdjustment));
         _db = db ?? throw new ArgumentNullException(nameof(db));
 
         // IMPORTANTE: tu código original tenía esta línea comentada => _emailBuilder quedaba null y causaba NullReference
@@ -111,8 +112,39 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
         }
     }
 
-    private static string ReserveSourceIdForPermission(int permissionId)
-        => $"PERM_RESERVE|{permissionId}";
+    /// <summary>
+    /// Cada reserva usa un ID único (no uno fijo por PermissionID) porque un mismo permiso
+    /// puede pasar por varios ciclos reserva→libera→reserva (rechazar y volver a pendiente)
+    /// — con un ID fijo, la segunda reserva chocaría contra el movimiento de la primera (ya
+    /// liberado) y se rechazaría como "reserva duplicada". Hueco cerrado 2026-07-22 (mismo
+    /// que en VacationsService).
+    /// </summary>
+    private static string NewPermissionReserveSourceId(int permissionId)
+        => $"PERM_RESERVE|{permissionId}|{Guid.NewGuid():N}";
+
+    /// <summary>Encuentra la reserva actualmente activa (ni liberada ni consumida) de este permiso, si existe.</summary>
+    private async Task<string?> FindActivePermissionReserveSourceIdAsync(int permissionId, CancellationToken ct)
+    {
+        var prefix = $"PERM_RESERVE|{permissionId}|";
+        var candidates = await _db.TimeBalanceMovements.AsNoTracking()
+            .Where(m => m.SourceModule == "PERMISSION_RESERVE" && m.SourceID != null && m.SourceID.StartsWith(prefix))
+            .OrderByDescending(m => m.MovementID)
+            .Select(m => m.SourceID!)
+            .ToListAsync(ct);
+
+        foreach (var candidate in candidates)
+        {
+            var released = await _db.TimeBalanceMovements.AsNoTracking().AnyAsync(m => m.SourceID == candidate + "|REL", ct);
+            if (released) continue;
+
+            var consumed = await _db.TimeBalanceMovements.AsNoTracking().AnyAsync(m => m.SourceID == candidate + "|USE", ct);
+            if (consumed) continue;
+
+            return candidate;
+        }
+
+        return null;
+    }
 
     public Task<IEnumerable<Permissions>> GetByEmployeeId(int employeeId, CancellationToken ct)
         => _repository.GetByEmployeeId(employeeId, ct);
@@ -133,11 +165,76 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
         return _repository.GetPendingMedicalPermissions(ct);
     }
 
+    private static readonly string[] ActivePermissionStatuses = { "PENDING", "APPROVED" };
+    private static readonly string[] ActiveVacationStatuses = { "PLANNED", "INPROGRESS", "APPROVED" };
+
+    /// <summary>
+    /// Bloquea crear un permiso que se superponga con otro permiso activo, o con una
+    /// vacación activa, del mismo empleado. Antes solo se validaba en el frontend.
+    /// </summary>
+    private async Task EnsureNoOverlapAsync(int employeeId, DateTime startDate, DateTime endDate, CancellationToken ct)
+    {
+        var overlapsPermission = await _db.Permissions.AsNoTracking()
+            .Where(p => p.EmployeeId == employeeId
+                     && ActivePermissionStatuses.Contains(p.Status.ToUpper())
+                     && p.StartDate <= endDate && p.EndDate >= startDate)
+            .AnyAsync(ct);
+
+        if (overlapsPermission)
+            throw new BusinessRuleException("Ya existe un permiso activo que se superpone con estas fechas.");
+
+        var startDateOnly = DateOnly.FromDateTime(startDate);
+        var endDateOnly = DateOnly.FromDateTime(endDate);
+
+        var overlapsVacation = await _db.Vacations.AsNoTracking()
+            .Where(v => v.EmployeeId == employeeId
+                     && ActiveVacationStatuses.Contains(v.Status.ToUpper())
+                     && v.StartDate <= endDateOnly && v.EndDate >= startDateOnly)
+            .AnyAsync(ct);
+
+        if (overlapsVacation)
+            throw new BusinessRuleException("Ya existe una solicitud de vacaciones activa que se superpone con estas fechas.");
+    }
+
+    /// <summary>
+    /// Minutos a reservar por un permiso con cargo a vacaciones — mismo cálculo que
+    /// HR.sp_hr_ReservePermissionBalance (HourTaken si viene, si no días laborables x
+    /// jornada; factor 7/5 para convertir días laborables en días calendario cobrados).
+    /// </summary>
+    private async Task<int> ComputePermissionChargedMinutesAsync(Permissions p, CancellationToken ct)
+    {
+        var minutesPerDayStr = await _db.Parameters.AsNoTracking()
+            .Where(x => x.Name == "WORK_MINUTES_PER_DAY" && x.IsActive)
+            .Select(x => x.Pvalues)
+            .FirstOrDefaultAsync(ct);
+
+        var minutesPerDay = int.TryParse(minutesPerDayStr, out var parsed) && parsed > 0 ? parsed : 480;
+
+        var baseMinutes = p.HourTaken.HasValue
+            ? (int)p.HourTaken.Value
+            : CountWorkingDays(DateOnly.FromDateTime(p.StartDate), DateOnly.FromDateTime(p.EndDate)) * minutesPerDay;
+
+        return (int)Math.Ceiling(baseMinutes * (7.0 / 5.0));
+    }
+
+    private static int CountWorkingDays(DateOnly start, DateOnly end)
+    {
+        var days = 0;
+        for (var d = start; d <= end; d = d.AddDays(1))
+        {
+            if (d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+                days++;
+        }
+        return days;
+    }
+
     public async Task<Permissions> CreateWithBalanceCheckAsync(Permissions entity, CancellationToken ct)
     {
         //_logger.LogInformation("**************** accede a CreateWithBalanceCheckAsync");
         if (entity is null) throw new ArgumentNullException(nameof(entity));
         ValidateDates(entity);
+
+        await EnsureNoOverlapAsync(entity.EmployeeId, entity.StartDate, entity.EndDate, ct);
 
         var strategy = _db.Database.CreateExecutionStrategy();
         Permissions? created = null;
@@ -145,7 +242,6 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
         await strategy.ExecuteAsync(async () =>
         {
             await using var tx = await _db.Database.BeginTransactionAsync(ct);
-            var adoTx = tx.GetDbTransaction();
 
             entity.HourTaken ??= 0;
 
@@ -158,21 +254,24 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
 
             if (created.ChargedToVacation)
             {
-                var reserveSourceId = ReserveSourceIdForPermission(created.PermissionId);
+                var reserveSourceId = NewPermissionReserveSourceId(created.PermissionId);
+                var chargedMinutes = await ComputePermissionChargedMinutesAsync(created, ct);
 
-                var sp = await _hrRepo.ReservePermissionAsync(
-                    permissionId: created.PermissionId,
+                await _balanceAdjustment.ReserveAsync(
+                    employeeId: created.EmployeeId,
+                    field: TimeBalanceField.Vacation,
+                    minutes: chargedMinutes,
+                    sourceModule: "PERMISSION_RESERVE",
+                    sourceId: reserveSourceId,
+                    note: $"Reserva permiso. HourTaken={created.HourTaken} CobradoMin={chargedMinutes} Rango={created.StartDate:yyyy-MM-dd HH:mm} a {created.EndDate:yyyy-MM-dd HH:mm}",
                     performedByEmpId: created.EmployeeId,
-                    tx: adoTx
+                    ct: ct
                 );
 
                 _logger.LogInformation(
-                    "CREATE permission => ReservePermission SP result. PermissionId={PermissionId} SourceId={SourceId} StatusCode={StatusCode} Message={Message}",
-                    created.PermissionId, reserveSourceId, sp.StatusCode, sp.Message
+                    "CREATE permission => ReserveAsync OK. PermissionId={PermissionId} SourceId={SourceId} ChargedMinutes={ChargedMinutes}",
+                    created.PermissionId, reserveSourceId, chargedMinutes
                 );
-
-                if (!(sp.Ok || sp.NoOp))
-                    throw new BusinessRuleException(sp.Message);
             }
 
             await tx.CommitAsync(ct);
@@ -202,7 +301,6 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
         await strategy.ExecuteAsync(async () =>
         {
             await using var tx = await _db.Database.BeginTransactionAsync(ct);
-            var adoTx = tx.GetDbTransaction();
             var traceId = System.Diagnostics.Activity.Current?.TraceId.ToString();
 
             var current = await _repository.GetByIdAsync(id, ct);
@@ -258,24 +356,34 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
                 bool newPending = newStatus is "PENDING";
                 bool newApproved = newStatus is "APPROVED";
 
-                var reserveSourceId = ReserveSourceIdForPermission(id);
+                var activeReserveSourceId = await FindActivePermissionReserveSourceIdAsync(id, ct);
 
                 if (!oldRejected && newRejected)
                 {
-                    var sp = await _hrRepo.ReleaseReservationAsync(reserveSourceId, updated.EmployeeId, adoTx);
-                    if (!(sp.Ok || sp.NoOp)) throw new BusinessRuleException(sp.Message);
+                    if (activeReserveSourceId is not null)
+                        await _balanceAdjustment.ReleaseReservationAsync(activeReserveSourceId, performedByEmpId: updated.EmployeeId, ct: ct);
                 }
 
                 if (oldRejected && newPending)
                 {
-                    var sp = await _hrRepo.ReservePermissionAsync(id, updated.EmployeeId, adoTx);
-                    if (!(sp.Ok || sp.NoOp)) throw new BusinessRuleException(sp.Message);
+                    var chargedMinutes = await ComputePermissionChargedMinutesAsync(updated, ct);
+
+                    await _balanceAdjustment.ReserveAsync(
+                        employeeId: updated.EmployeeId,
+                        field: TimeBalanceField.Vacation,
+                        minutes: chargedMinutes,
+                        sourceModule: "PERMISSION_RESERVE",
+                        sourceId: NewPermissionReserveSourceId(id),
+                        note: $"Reserva permiso (re-planificado). HourTaken={updated.HourTaken} CobradoMin={chargedMinutes}",
+                        performedByEmpId: updated.EmployeeId,
+                        ct: ct
+                    );
                 }
 
                 if (!oldRejected && newApproved)
                 {
-                    var sp = await _hrRepo.ConsumeReservationAsync(reserveSourceId, updated.EmployeeId, adoTx);
-                    if (!(sp.Ok || sp.NoOp)) throw new BusinessRuleException(sp.Message);
+                    if (activeReserveSourceId is not null)
+                        await _balanceAdjustment.MarkReservationConsumedAsync(activeReserveSourceId, performedByEmpId: updated.EmployeeId, ct: ct);
                 }
             }
 
@@ -549,5 +657,41 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
             };
 
         return await query.ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Hueco cerrado 2026-07-22: eliminar (en vez de rechazar/cancelar) un permiso con
+    /// cargo a vacaciones y reserva activa dejaba el saldo descontado para siempre — el
+    /// DeleteAsync genérico no libera nada. Este método libera la reserva activa (si hay)
+    /// antes de borrar la fila.
+    /// </summary>
+    public async Task DeleteWithBalanceReleaseAsync(int id, CancellationToken ct)
+    {
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
+            var current = await _repository.GetByIdAsync(id, ct)
+                ?? throw new KeyNotFoundException($"Permissions con id={id} no existe.");
+
+            if (current.ChargedToVacation)
+            {
+                var activeReserveSourceId = await FindActivePermissionReserveSourceIdAsync(id, ct);
+                if (activeReserveSourceId is not null)
+                {
+                    await _balanceAdjustment.ReleaseReservationAsync(activeReserveSourceId, performedByEmpId: current.EmployeeId, ct: ct);
+                    _logger.LogInformation(
+                        "PERM DELETE => reserva liberada antes de borrar. PermissionId={PermissionId} SourceId={SourceId}",
+                        id, activeReserveSourceId
+                    );
+                }
+            }
+
+            await base.DeleteAsync(id, ct);
+
+            await tx.CommitAsync(ct);
+        });
     }
 }

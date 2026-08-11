@@ -122,6 +122,43 @@ namespace WsUtaSystem.Infrastructure.Repositories
             return await ExecSpWithStatusAsync(tx.Connection!, "HR.sp_hr_AccrueVacationBalance", p, tx);
         }
 
+        public async Task<SpResult> AccrueVacationCTAsync(int employeeId, DateOnly? asOfDate, string mode, int? performedByEmpId, IDbTransaction? tx = null)
+        {
+            var p = new DynamicParameters();
+            p.Add("@EmployeeID", employeeId);
+            p.Add("@AsOfDate", asOfDate?.ToDateTime(TimeOnly.MinValue));
+            p.Add("@Mode", mode);
+            p.Add("@PerformedByEmpID", performedByEmpId);
+
+            if (tx is null)
+            {
+                using var conn = NewConn();
+                return await ExecSpWithStatusAsync(conn, "HR.sp_hr_AccrueVacationBalance_CT", p, null);
+            }
+
+            return await ExecSpWithStatusAsync(tx.Connection!, "HR.sp_hr_AccrueVacationBalance_CT", p, tx);
+        }
+
+        public async Task<SpResult> AccrueVacationLOESAsync(int employeeId, DateOnly? asOfDate, string mode, int? performedByEmpId, IDbTransaction? tx = null)
+        {
+            var p = new DynamicParameters();
+            p.Add("@EmployeeID", employeeId);
+            p.Add("@AsOfDate", asOfDate?.ToDateTime(TimeOnly.MinValue));
+            p.Add("@Mode", mode);
+            p.Add("@PerformedByEmpID", performedByEmpId);
+
+            if (tx is null)
+            {
+                using var conn = NewConn();
+                return await ExecSpWithStatusAsync(conn, "HR.sp_hr_AccrueVacationBalance_LOES", p, null);
+            }
+
+            return await ExecSpWithStatusAsync(tx.Connection!, "HR.sp_hr_AccrueVacationBalance_LOES", p, tx);
+        }
+
+        /// <summary>Obsoleto (migrado 2026-07-22) — ver comentario en <see cref="Application.Interfaces.Repositories.IHrBalanceRepository"/>.</summary>
+#pragma warning disable CS0618
+        [Obsolete("Migrado a IVacationBalanceAdjustmentService.ReserveAsync (EF Core).")]
         public async Task<SpResult> ReserveVacationAsync(int vacationId, int? performedByEmpId, IDbTransaction? tx = null)
         {
             var p = new DynamicParameters();
@@ -137,6 +174,8 @@ namespace WsUtaSystem.Infrastructure.Repositories
             return await ExecSpWithStatusAsync(tx.Connection!, "HR.sp_hr_ReserveVacationBalance", p, tx);
         }
 
+        /// <summary>Obsoleto (migrado 2026-07-22) — ver comentario en <see cref="Application.Interfaces.Repositories.IHrBalanceRepository"/>.</summary>
+        [Obsolete("Migrado a IVacationBalanceAdjustmentService.ReserveAsync (EF Core).")]
         public async Task<SpResult> ReservePermissionAsync(int permissionId, int? performedByEmpId, IDbTransaction? tx = null)
         {
             var p = new DynamicParameters();
@@ -152,6 +191,8 @@ namespace WsUtaSystem.Infrastructure.Repositories
             return await ExecSpWithStatusAsync(tx.Connection!, "HR.sp_hr_ReservePermissionBalance", p, tx);
         }
 
+        /// <summary>Obsoleto (migrado 2026-07-22) — ver comentario en <see cref="Application.Interfaces.Repositories.IHrBalanceRepository"/>.</summary>
+        [Obsolete("Migrado a IVacationBalanceAdjustmentService.MarkReservationConsumedAsync (EF Core).")]
         public async Task<SpResult> ConsumeReservationAsync(string reserveSourceId, int? performedByEmpId, IDbTransaction? tx = null)
         {
             var p = new DynamicParameters();
@@ -167,6 +208,8 @@ namespace WsUtaSystem.Infrastructure.Repositories
             return await ExecSpWithStatusAsync(tx.Connection!, "HR.sp_hr_ConsumeReservation", p, tx);
         }
 
+        /// <summary>Obsoleto (migrado 2026-07-22) — ver comentario en <see cref="Application.Interfaces.Repositories.IHrBalanceRepository"/>.</summary>
+        [Obsolete("Migrado a IVacationBalanceAdjustmentService.ReleaseReservationAsync (EF Core).")]
         public async Task<SpResult> ReleaseReservationAsync(string reserveSourceId, int? performedByEmpId, IDbTransaction? tx = null)
         {
             var p = new DynamicParameters();
@@ -182,6 +225,9 @@ namespace WsUtaSystem.Infrastructure.Repositories
             return await ExecSpWithStatusAsync(tx.Connection!, "HR.sp_hr_ReleaseReservation", p, tx);
         }
 
+        /// <summary>Obsoleto y sin uso real — ver comentario en <see cref="Application.Interfaces.Repositories.IHrBalanceRepository"/>.</summary>
+#pragma warning disable CS0618
+        [Obsolete("Sin uso real — ver HR.tbl_TimePlanning (PlanType='Recovery') y el pipeline diario de asistencia.")]
         public async Task<SpResult> ProcessRecoveryAsync(int employeeId, DateOnly startDate, DateOnly endDate, int? performedByEmpId, IDbTransaction? tx = null)
         {
             var p = new DynamicParameters();
@@ -199,6 +245,8 @@ namespace WsUtaSystem.Infrastructure.Repositories
             return await ExecSpWithStatusAsync(tx.Connection!, "HR.sp_hr_ProcessRecoveryBalance", p, tx);
         }
 
+        /// <summary>Obsoleto y sin uso real — ver comentario en <see cref="Application.Interfaces.Repositories.IHrBalanceRepository"/>.</summary>
+        [Obsolete("Sin uso real — la ejecución real se registra en HR.tbl_TimePlanningExecution.")]
         public async Task<SpResult> DebitRecoveryAsync(int recoveryLogId, int? performedByEmpId, IDbTransaction? tx = null)
         {
             var p = new DynamicParameters();
@@ -213,6 +261,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
 
             return await ExecSpWithStatusAsync(tx.Connection!, "HR.sp_hr_DebitRecoveryBalance", p, tx);
         }
+#pragma warning restore CS0618
 
         public async Task<(EmployeeBalanceDto balance, IReadOnlyList<MovementDto> movements)> GetBalancesAsync(int employeeId)
         {

@@ -22,7 +22,8 @@ public sealed class EmployeeLaborRegimeConfiguration : IEntityTypeConfiguration<
             .WithMany()
             .HasForeignKey(x => x.EmployeeId)
             .HasConstraintName("FK_EmployeeLaborRegime_Employee")
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false); // opcional a nivel EF por el soft-delete de Employees
 
         e.HasOne(x => x.LaborRegime)
             .WithMany()

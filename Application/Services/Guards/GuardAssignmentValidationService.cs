@@ -13,17 +13,20 @@ public class GuardAssignmentValidationService : IGuardAssignmentValidationServic
     private readonly IGuardAssignmentValidationRepository _repo;
     private readonly IEmployeeAvailabilityBlockRepository _blockRepo;
     private readonly IGuardShiftPlanningRepository _planningRepo;
+    private readonly IGuardRotationGroupRepository _groupRepo;
     private readonly AppDbContext _db;
 
     public GuardAssignmentValidationService(
         IGuardAssignmentValidationRepository repo,
         IEmployeeAvailabilityBlockRepository blockRepo,
         IGuardShiftPlanningRepository planningRepo,
+        IGuardRotationGroupRepository groupRepo,
         AppDbContext db)
     {
         _repo = repo;
         _blockRepo = blockRepo;
         _planningRepo = planningRepo;
+        _groupRepo = groupRepo;
         _db = db;
     }
 
@@ -89,8 +92,11 @@ public class GuardAssignmentValidationService : IGuardAssignmentValidationServic
         var hasDoubleShift = await _planningRepo.HasActiveShiftOnDateAsync(dto.EmployeeId, dto.WorkDate, dto.PlanningId, ct);
         if (hasDoubleShift)
         {
-            if (!dto.AllowDoubleShiftOverride)
+            var isSpecialGroup = await _groupRepo.IsEmployeeInSpecialGroupAsync(dto.EmployeeId, dto.WorkDate, ct);
+            if (!dto.AllowDoubleShiftOverride && !isSpecialGroup)
                 results.Add(("DOUBLE_SHIFT", "FAILED", "BLOCKING", $"El empleado ya tiene un turno asignado el {dto.WorkDate:dd/MM/yyyy}."));
+            else if (isSpecialGroup)
+                results.Add(("DOUBLE_SHIFT", "OVERRIDDEN", "WARNING", $"Doble turno permitido: el empleado pertenece a un grupo especial ({dto.WorkDate:dd/MM/yyyy})."));
             else
                 results.Add(("DOUBLE_SHIFT", "OVERRIDDEN", "WARNING", $"Doble turno exceptuado para el {dto.WorkDate:dd/MM/yyyy}."));
         }

@@ -4,12 +4,12 @@ public class BooksUpdateDto
     //public class Books { get; set; }
     public int BookId { get; set; }
     public int PersonId { get; set; }
-    public string Title { get; set; }
+    public string Title { get; set; } = null!;
     public bool PeerReviewed { get; set; }
-    public string ISBN { get; set; }
-    public string Publisher { get; set; }
-    public string CountryId { get; set; }
-    public string City { get; set; }
+    public string? ISBN { get; set; }
+    public string? Publisher { get; set; }
+    public string CountryId { get; set; } = null!;
+    public string? City { get; set; }
     public int KnowledgeAreaTypeId { get; set; }
     public int SubAreaTypeId { get; set; }
     public int AreaTypeId { get; set; }

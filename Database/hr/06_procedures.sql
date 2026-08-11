@@ -1216,7 +1216,12 @@ BEGIN
 
         -- Control transaccional
         @StartedTran BIT = 0,
-        @SavepointName NVARCHAR(128) = 'sp_AccrueVacation_' + CAST(NEWID() AS NVARCHAR(36));
+        @SavepointName NVARCHAR(128) = 'sp_AccrueVacation_' + CAST(NEWID() AS NVARCHAR(36)),
+
+        -- Tope de acumulación (2026-07-22)
+        @MaxAccumulationPeriods INT,
+        @CapMinutes INT,
+        @CurrentBalanceForCap INT;
 
     -- Inicialización
     SET @AsOfDate = ISNULL(@AsOfDate, CAST(GETDATE() AS DATE));
@@ -1284,6 +1289,17 @@ BEGIN
 
         EXEC HR.sp_hr_EnsureTimeBalanceRow @EmployeeID = @EmployeeID;
 
+        -- Tope de acumulación institucional (2026-07-22, ver hr.TBL_PARAMETERS
+        -- 'VACATION_MAX_ACCUMULATION_PERIODS'): el saldo de vacaciones no debe
+        -- superar N períodos anuales completos del derecho vigente del empleado.
+        -- Se calcula una sola vez aquí y se aplica en los 3 modos (TOTAL/MONTHLY/DAILY).
+        SELECT @MaxAccumulationPeriods = CAST(Pvalues AS INT)
+        FROM hr.TBL_PARAMETERS WHERE name = 'VACATION_MAX_ACCUMULATION_PERIODS' AND IsActive = 1;
+        IF @MaxAccumulationPeriods IS NULL OR @MaxAccumulationPeriods <= 0
+            SET @MaxAccumulationPeriods = 2;
+
+        SET @CapMinutes = CAST(ROUND(@MaxAccumulationPeriods * @VacationPerYear * @MinutesPerDay, 0) AS INT);
+
         -- ============================================================
         -- 3. OBTENER ÚLTIMA ACREDITACIÓN (CUALQUIER MODO)
         -- ============================================================
@@ -1344,6 +1360,15 @@ BEGIN
                 );
                 GOTO SuccessExit;
             END
+
+            -- Tope de acumulación: nunca acredita por encima de @CapMinutes
+            -- (no resta saldo ya existente aunque esté por encima, solo detiene
+            -- la acreditación de este período).
+            SELECT @CurrentBalanceForCap = VacationAvailableMin
+            FROM HR.tbl_TimeBalances WHERE EmployeeID = @EmployeeID AND LaborRegimeId = 57;
+            SET @CurrentBalanceForCap = ISNULL(@CurrentBalanceForCap, 0);
+            IF (@CurrentBalanceForCap + @Delta) > @CapMinutes
+                SET @Delta = CASE WHEN @CapMinutes > @CurrentBalanceForCap THEN @CapMinutes - @CurrentBalanceForCap ELSE 0 END;
 
             -- 2026-07-06: acumulación de vacaciones LOSEP siempre (57) — LOES
             -- se calcula distinto (jornada por dedicación académica), ver
@@ -1475,6 +1500,21 @@ BEGIN
             IF (@HireDate > @PeriodStart) SET @PeriodStart = @HireDate;
             IF (@TerminationDate IS NOT NULL AND @TerminationDate < @PeriodEnd) SET @PeriodEnd = @TerminationDate;
 
+            -- Freno adicional: si existe una solicitud de renuncia/jubilación viva (no
+            -- RECHAZADO ni ANULADO) con fecha de salida propuesta dentro o antes del
+            -- período, se detiene la acreditación desde esa fecha — sin esperar a que
+            -- se suba el documento firmado ni se cierre el régimen (ese trámite puede
+            -- demorar más de lo que tarda en llegar el próximo corte mensual).
+            DECLARE @ResignationExitDate DATE = NULL;
+            SELECT TOP 1 @ResignationExitDate = rr.ProposedExitDate
+            FROM HR.tbl_ResignationRetirementRequests rr
+            WHERE rr.EmployeeID = @EmployeeID
+              AND rr.Status NOT IN ('RECHAZADO', 'ANULADO')
+              AND rr.ProposedExitDate <= @PeriodEnd
+            ORDER BY rr.ProposedExitDate ASC;
+
+            IF (@ResignationExitDate IS NOT NULL AND @ResignationExitDate < @PeriodEnd) SET @PeriodEnd = @ResignationExitDate;
+
             SET @DaysInMonth = DATEDIFF(DAY, @PeriodStart, @PeriodEnd) + 1;
             IF @DaysInMonth < 0 SET @DaysInMonth = 0;
 
@@ -1487,6 +1527,13 @@ BEGIN
                 SET @Message = N'MONTHLY: Delta calculado es 0. Revise parámetros.';
                 GOTO ErrorExit;
             END
+
+            -- Tope de acumulación (ver nota en modo TOTAL).
+            SELECT @CurrentBalanceForCap = VacationAvailableMin
+            FROM HR.tbl_TimeBalances WHERE EmployeeID = @EmployeeID AND LaborRegimeId = 57;
+            SET @CurrentBalanceForCap = ISNULL(@CurrentBalanceForCap, 0);
+            IF (@CurrentBalanceForCap + @Delta) > @CapMinutes
+                SET @Delta = CASE WHEN @CapMinutes > @CurrentBalanceForCap THEN @CapMinutes - @CurrentBalanceForCap ELSE 0 END;
 
             -- 2026-07-06: LOSEP siempre (57) — ver nota en modo TOTAL.
             UPDATE HR.tbl_TimeBalances
@@ -1587,6 +1634,13 @@ BEGIN
                 GOTO ErrorExit;
             END
 
+            -- Tope de acumulación (ver nota en modo TOTAL).
+            SELECT @CurrentBalanceForCap = VacationAvailableMin
+            FROM HR.tbl_TimeBalances WHERE EmployeeID = @EmployeeID AND LaborRegimeId = 57;
+            SET @CurrentBalanceForCap = ISNULL(@CurrentBalanceForCap, 0);
+            IF (@CurrentBalanceForCap + @Delta) > @CapMinutes
+                SET @Delta = CASE WHEN @CapMinutes > @CurrentBalanceForCap THEN @CapMinutes - @CurrentBalanceForCap ELSE 0 END;
+
             -- 2026-07-06: LOSEP siempre (57) — ver nota en modo TOTAL.
             UPDATE HR.tbl_TimeBalances
             SET VacationAvailableMin = VacationAvailableMin + @Delta,
@@ -1686,6 +1740,11 @@ GO
 -- [sp_hr_ConsumeReservation]
 
 /* ============================================================
+   OBSOLETA (migrada 2026-07-22): VacationsService/PermissionsService ya no la llaman —
+   usan IVacationBalanceAdjustmentService.MarkReservationConsumedAsync (EF Core). Se deja
+   sin borrar por si algo externo la invoca directamente, pero no forma parte del flujo
+   normal del sistema. Ver HrBalanceRepository.ConsumeReservationAsync ([Obsolete] en C#).
+
    7) SP: Consumir reserva (APROBAR) - auditoría
    - CORREGIDO: transaction-safe
    ============================================================ */
@@ -2167,6 +2226,12 @@ GO
 -- [sp_hr_ReleaseReservation]
 
 /* ============================================================
+   OBSOLETA (migrada 2026-07-22): VacationsService/PermissionsService ya no la llaman —
+   usan IVacationBalanceAdjustmentService.ReleaseReservationAsync (EF Core). Esta SP
+   además tenía el régimen 57 (LOSEP) hardcodeado — confirmado con prueba real que no
+   liberaba nada para empleados de Código de Trabajo/LOES. Se deja sin borrar por
+   trazabilidad histórica, no forma parte del flujo normal del sistema.
+
    8) SP: Liberar reserva (RECHAZAR / CANCELAR)
    - CORREGIDO: transaction-safe
    - CORREGIDO: no libera si la reserva no existe o no es negativa
@@ -2308,6 +2373,13 @@ GO
 -- [sp_hr_ReservePermissionBalance]
 
 /* ============================================================
+   OBSOLETA (migrada 2026-07-22): PermissionsService ya no la llama — usa
+   IVacationBalanceAdjustmentService.ReserveAsync (EF Core), que resuelve el régimen
+   real del empleado en vez de "LOSEP siempre (57)". Confirmado con prueba real:
+   para permisos con cargo a vacaciones de empleados de Código de Trabajo/LOES, esta
+   SP reportaba éxito pero nunca descontaba el saldo real. Se deja sin borrar por
+   trazabilidad histórica.
+
    5) SP: Reservar PERMISO contra vacaciones
    - CORREGIDO: transaction-safe
    - SourceID estándar: PERM_RESERVE|<PermissionID>
@@ -2457,6 +2529,15 @@ END
 GO
 
 -- [sp_hr_ReserveVacationBalance]
+/* ============================================================
+   OBSOLETA (migrada 2026-07-22): VacationsService ya no la llama — usa
+   IVacationBalanceAdjustmentService.ReserveAsync (EF Core), que resuelve el régimen
+   real del empleado en vez de "LOSEP siempre (57)" (línea de abajo,
+   "WHERE ... AND LaborRegimeId = 57"). Confirmado con prueba real (empleado 5409,
+   Código de Trabajo): esta SP reportaba "Reserva vacaciones OK" pero el saldo real
+   (régimen 59) nunca cambiaba — el UPDATE afectaba 0 filas porque buscaba régimen 57,
+   que no existe para ese empleado. Se deja sin borrar por trazabilidad histórica.
+   ============================================================ */
 CREATE OR ALTER PROCEDURE HR.sp_hr_ReserveVacationBalance
 (
     @VacationID INT,
@@ -2662,7 +2743,12 @@ BEGIN
         @Delta INT,
         @SourceID NVARCHAR(128),
         @StartedTran BIT = 0,
-        @SavepointName NVARCHAR(128) = 'sp_AccrueLOES_' + CAST(NEWID() AS NVARCHAR(36));
+        @SavepointName NVARCHAR(128) = 'sp_AccrueLOES_' + CAST(NEWID() AS NVARCHAR(36)),
+
+        -- Tope de acumulación (2026-07-22)
+        @MaxAccumulationPeriods INT,
+        @CapMinutes INT,
+        @CurrentBalanceForCap INT;
 
     SET @AsOfDate = ISNULL(@AsOfDate, CAST(GETDATE() AS DATE));
     SET @StatusCode = 0;
@@ -2742,6 +2828,16 @@ BEGIN
 
         EXEC HR.sp_hr_EnsureTimeBalanceRow @EmployeeID = @EmployeeID;
 
+        -- Tope de acumulación institucional (2026-07-22, ver hr.TBL_PARAMETERS
+        -- 'VACATION_MAX_ACCUMULATION_PERIODS'): mismo criterio que la versión
+        -- LOSEP, calculado una sola vez para los 2 modos (TOTAL/MONTHLY).
+        SELECT @MaxAccumulationPeriods = CAST(Pvalues AS INT)
+        FROM hr.TBL_PARAMETERS WHERE name = 'VACATION_MAX_ACCUMULATION_PERIODS' AND IsActive = 1;
+        IF @MaxAccumulationPeriods IS NULL OR @MaxAccumulationPeriods <= 0
+            SET @MaxAccumulationPeriods = 2;
+
+        SET @CapMinutes = CAST(ROUND(@MaxAccumulationPeriods * @VacationPerYear * @MinutesPerDayLOES, 0) AS INT);
+
         ------------------------------------------------------------
         -- MODO TOTAL: todo lo acumulado desde HireDate hasta @AsOfDate,
         -- menos lo ya acreditado antes (por TOTAL o MONTHLY), igual criterio
@@ -2791,6 +2887,13 @@ BEGIN
                 );
                 GOTO SuccessExit;
             END
+
+            -- Tope de acumulación: nunca acredita por encima de @CapMinutes.
+            SELECT @CurrentBalanceForCap = VacationAvailableMin
+            FROM HR.tbl_TimeBalances WHERE EmployeeID = @EmployeeID AND LaborRegimeId = 58;
+            SET @CurrentBalanceForCap = ISNULL(@CurrentBalanceForCap, 0);
+            IF (@CurrentBalanceForCap + @Delta) > @CapMinutes
+                SET @Delta = CASE WHEN @CapMinutes > @CurrentBalanceForCap THEN @CapMinutes - @CurrentBalanceForCap ELSE 0 END;
 
             UPDATE HR.tbl_TimeBalances
             SET VacationAvailableMin = VacationAvailableMin + @Delta,
@@ -2860,6 +2963,20 @@ BEGIN
         IF (@HireDate > @PeriodStart) SET @PeriodStart = @HireDate;
         IF (@TerminationDate IS NOT NULL AND @TerminationDate < @PeriodEnd) SET @PeriodEnd = @TerminationDate;
 
+        -- Freno adicional: si existe una solicitud de renuncia/jubilación viva (no
+        -- RECHAZADO ni ANULADO) con fecha de salida propuesta dentro o antes del
+        -- período, se detiene la acreditación desde esa fecha — sin esperar a que
+        -- se suba el documento firmado ni se cierre el régimen.
+        DECLARE @ResignationExitDate DATE = NULL;
+        SELECT TOP 1 @ResignationExitDate = rr.ProposedExitDate
+        FROM HR.tbl_ResignationRetirementRequests rr
+        WHERE rr.EmployeeID = @EmployeeID
+          AND rr.Status NOT IN ('RECHAZADO', 'ANULADO')
+          AND rr.ProposedExitDate <= @PeriodEnd
+        ORDER BY rr.ProposedExitDate ASC;
+
+        IF (@ResignationExitDate IS NOT NULL AND @ResignationExitDate < @PeriodEnd) SET @PeriodEnd = @ResignationExitDate;
+
         SET @DaysInMonth = DATEDIFF(DAY, @PeriodStart, @PeriodEnd) + 1;
         IF @DaysInMonth < 0 SET @DaysInMonth = 0;
 
@@ -2871,6 +2988,13 @@ BEGIN
             SET @Message = N'LOES MONTHLY: Delta calculado es 0. Revise ContractedHours/parámetros.';
             GOTO ErrorExit;
         END
+
+        -- Tope de acumulación (ver nota en modo TOTAL).
+        SELECT @CurrentBalanceForCap = VacationAvailableMin
+        FROM HR.tbl_TimeBalances WHERE EmployeeID = @EmployeeID AND LaborRegimeId = 58;
+        SET @CurrentBalanceForCap = ISNULL(@CurrentBalanceForCap, 0);
+        IF (@CurrentBalanceForCap + @Delta) > @CapMinutes
+            SET @Delta = CASE WHEN @CapMinutes > @CurrentBalanceForCap THEN @CapMinutes - @CurrentBalanceForCap ELSE 0 END;
 
         UPDATE HR.tbl_TimeBalances
         SET VacationAvailableMin = VacationAvailableMin + @Delta,
@@ -2935,9 +3059,330 @@ END
 
 GO
 
+-- [sp_hr_AccrueVacationBalance_CT]
+
+/*
+  HR.sp_hr_AccrueVacationBalance_CT
+  =====================================
+  2026-07-21, corregido 2026-07-22. Acreditación mensual automática para
+  régimen Código de Trabajo. Regla institucional (Contrato Colectivo UTA,
+  Cláusula Vigésima Sexta — más favorable que el Art. 69 genérico del Código
+  del Trabajo y prevalece sobre este para estos trabajadores): 15 días
+  calendario base/año (1,25 días/mes proporcional); al cumplir 5 años de
+  servicio se otorgan 15 días adicionales COMPLETOS de una sola vez (no
+  progresivo por año) — total fijo 30 días/año desde el 5° año en adelante.
+  Usa la misma jornada administrativa fija (WORK_MINUTES_PER_DAY) que LOSEP —
+  a diferencia de LOES, aquí no hay dedicación académica que convertir.
+
+  Deliberadamente NO se construyó modo TOTAL: la carga inicial/histórica de
+  este régimen se hace vía ajuste manual (VacationBalanceAdjustmentService,
+  EF Core, pantalla de RRHH) para no reinterpretar saldos reales ya cargados
+  a mano (algunos negativos, verificados por RRHH) con un recálculo teórico
+  desde HireDate. Este SP solo suma el proporcional del mes hacia adelante.
+
+  El régimen se resuelve por HR.ref_Types.Name ('Código Trabajo'), nunca por
+  TypeID literal — el TypeID es IDENTITY y varía entre ambientes.
+
+  Tope de acumulación (2 períodos anuales, hr.TBL_PARAMETERS
+  'VACATION_MAX_ACCUMULATION_PERIODS'): implementado 2026-07-22, ver bloque
+  antes del UPDATE de saldo más abajo. Liquidación proporcional al término
+  de la relación laboral: fuera de alcance de este SP (ver Liquidaciones /
+  VacationBalanceAdjustmentService).
+*/
+CREATE OR ALTER PROCEDURE HR.sp_hr_AccrueVacationBalance_CT
+(
+    @EmployeeID INT,
+    @AsOfDate DATE = NULL,
+    @Mode VARCHAR(10) = 'MONTHLY',
+    @PerformedByEmpID INT = NULL,
+    @StatusCode INT OUTPUT,
+    @Message NVARCHAR(500) OUTPUT
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE
+        @HireDate DATE,
+        @EmployeeName NVARCHAR(50),
+        @PersonID INT,
+        @LaborRegimeId INT,
+        @VacationPerYearCT DECIMAL(10,2),
+        @MinutesPerDay INT,
+        @SeniorityStartYear INT,
+        @MaxAdditionalDays INT,
+        @YearsCompleted INT,
+        @AdditionalDays INT,
+        @EffectiveVacationPerYear DECIMAL(10,2),
+        @Year INT,
+        @Month INT,
+        @PeriodStart DATE,
+        @PeriodEnd DATE,
+        @TerminationDate DATE,
+        @DaysInMonth INT,
+        @Delta INT,
+        @SourceID NVARCHAR(128),
+        @StartedTran BIT = 0,
+        @SavepointName NVARCHAR(128) = 'sp_AccrueCT_' + CAST(NEWID() AS NVARCHAR(36));
+
+    SET @AsOfDate = ISNULL(@AsOfDate, CAST(GETDATE() AS DATE));
+    SET @StatusCode = 0;
+    SET @Message = N'';
+
+    BEGIN TRY
+        IF @@TRANCOUNT = 0
+        BEGIN
+            SET @StartedTran = 1;
+            BEGIN TRANSACTION;
+        END
+        ELSE
+        BEGIN
+            SAVE TRANSACTION @SavepointName;
+        END
+
+        IF UPPER(@Mode) <> 'MONTHLY'
+        BEGIN
+            SET @StatusCode = 400;
+            SET @Message = N'Modo inválido. sp_hr_AccrueVacationBalance_CT solo soporta MONTHLY (la carga inicial/histórica se hace vía ajuste manual).';
+            GOTO ErrorExit;
+        END
+
+        SELECT @LaborRegimeId = TypeId
+        FROM HR.ref_Types
+        WHERE Category = 'CONTRACT_TYPE' AND Name = N'Código Trabajo' AND IsActive = 1;
+
+        IF @LaborRegimeId IS NULL
+        BEGIN
+            SET @StatusCode = 500;
+            SET @Message = N'No existe régimen activo "Código Trabajo" en ref_Types (Category=CONTRACT_TYPE).';
+            GOTO ErrorExit;
+        END
+
+        SELECT
+            @HireDate = HireDate,
+            @EmployeeName = LEFT(FirstName + ' ' + LastName, 50)
+        FROM HR.vw_EmployeeDetails ved WITH (UPDLOCK)
+        WHERE EmployeeID = @EmployeeID;
+
+        SELECT @PersonID = PersonID FROM HR.tbl_Employees WHERE EmployeeID = @EmployeeID;
+
+        IF @HireDate IS NULL
+        BEGIN
+            SET @StatusCode = 404;
+            SET @Message = LEFT(N'Empleado no existe o inactivo (ID:' + CAST(@EmployeeID AS NVARCHAR(10)) + N')', 500);
+            GOTO ErrorExit;
+        END
+
+        IF @HireDate > @AsOfDate
+        BEGIN
+            SET @StatusCode = 400;
+            SET @Message = N'HireDate posterior a AsOfDate';
+            GOTO ErrorExit;
+        END
+
+        IF NOT EXISTS (
+            SELECT 1 FROM HR.tbl_EmployeeLaborRegime
+            WHERE EmployeeId = @EmployeeID AND LaborRegimeId = @LaborRegimeId AND IsActive = 1
+        )
+        BEGIN
+            SET @StatusCode = 404;
+            SET @Message = N'El empleado no tiene régimen "Código Trabajo" activo.';
+            GOTO ErrorExit;
+        END
+
+        SELECT @VacationPerYearCT = CAST(Pvalues AS DECIMAL(10,2))
+        FROM hr.TBL_PARAMETERS WHERE name = 'VACATION_PER_YEAR_CT' AND IsActive = 1;
+
+        SELECT @MinutesPerDay = CAST(Pvalues AS INT)
+        FROM hr.TBL_PARAMETERS WHERE name = 'WORK_MINUTES_PER_DAY' AND IsActive = 1;
+
+        SELECT @SeniorityStartYear = CAST(Pvalues AS INT)
+        FROM hr.TBL_PARAMETERS WHERE name = 'VACATION_SENIORITY_START_YEAR_CT' AND IsActive = 1;
+
+        SELECT @MaxAdditionalDays = CAST(Pvalues AS INT)
+        FROM hr.TBL_PARAMETERS WHERE name = 'VACATION_MAX_ADDITIONAL_DAYS_CT' AND IsActive = 1;
+
+        IF @VacationPerYearCT IS NULL OR @VacationPerYearCT <= 0
+           OR @MinutesPerDay IS NULL OR @MinutesPerDay <= 0
+           OR @SeniorityStartYear IS NULL OR @MaxAdditionalDays IS NULL
+        BEGIN
+            SET @StatusCode = 500;
+            SET @Message = N'Faltan parámetros VACATION_PER_YEAR_CT / WORK_MINUTES_PER_DAY / VACATION_SENIORITY_START_YEAR_CT / VACATION_MAX_ADDITIONAL_DAYS_CT en hr.TBL_PARAMETERS.';
+            GOTO ErrorExit;
+        END
+
+        EXEC HR.sp_hr_EnsureTimeBalanceRow @EmployeeID = @EmployeeID;
+
+        SET @Year = YEAR(@AsOfDate);
+        SET @Month = MONTH(@AsOfDate);
+        SET @SourceID = 'VAC_CT_MONTHLY|' + CAST(@Year AS VARCHAR(4)) + RIGHT('0' + CAST(@Month AS VARCHAR(2)), 2);
+
+        IF EXISTS (
+            SELECT 1
+            FROM HR.tbl_TimeBalanceMovements WITH (UPDLOCK, HOLDLOCK)
+            WHERE EmployeeID = @EmployeeID
+              AND SourceModule = 'VACATION_ACCRUAL_MONTHLY_CT'
+              AND SourceID = @SourceID
+        )
+        BEGIN
+            SET @StatusCode = 409;
+            SET @Message = LEFT(N'CT MONTHLY ya ejecutado: ' + CAST(@Year AS VARCHAR(4)) + N'-' + CAST(@Month AS VARCHAR(2)), 500);
+            GOTO ErrorExit;
+        END
+
+        SET @PeriodStart = DATEFROMPARTS(@Year, @Month, 1);
+        SET @PeriodEnd = EOMONTH(@AsOfDate);
+
+        -- Fin de vínculo CT dentro del mes (mismo criterio que LOSEP/LOES:
+        -- contrato/adenda CT cuyo EndDate cae en el mes, sin extensión posterior).
+        SELECT TOP 1 @TerminationDate = CAST(c.EndDate AS DATE)
+        FROM HR.tbl_Contracts c
+        WHERE c.PersonID = @PersonID
+          AND c.LaborRegimeID = @LaborRegimeId
+          AND CAST(c.EndDate AS DATE) BETWEEN @PeriodStart AND @PeriodEnd
+          AND NOT EXISTS (
+              SELECT 1 FROM HR.tbl_Contracts a
+              WHERE a.ParentID = c.ContractID AND a.EndDate >= c.EndDate
+          )
+        ORDER BY c.EndDate DESC;
+
+        IF (@HireDate > @PeriodStart) SET @PeriodStart = @HireDate;
+        IF (@TerminationDate IS NOT NULL AND @TerminationDate < @PeriodEnd) SET @PeriodEnd = @TerminationDate;
+
+        -- Freno adicional: si existe una solicitud de renuncia/jubilación viva (no
+        -- RECHAZADO ni ANULADO) con fecha de salida propuesta dentro o antes del
+        -- período, se detiene la acreditación desde esa fecha — sin esperar a que
+        -- se suba el documento firmado ni se cierre el régimen.
+        DECLARE @ResignationExitDate DATE = NULL;
+        SELECT TOP 1 @ResignationExitDate = rr.ProposedExitDate
+        FROM HR.tbl_ResignationRetirementRequests rr
+        WHERE rr.EmployeeID = @EmployeeID
+          AND rr.Status NOT IN ('RECHAZADO', 'ANULADO')
+          AND rr.ProposedExitDate <= @PeriodEnd
+        ORDER BY rr.ProposedExitDate ASC;
+
+        IF (@ResignationExitDate IS NOT NULL AND @ResignationExitDate < @PeriodEnd) SET @PeriodEnd = @ResignationExitDate;
+
+        SET @DaysInMonth = DATEDIFF(DAY, @PeriodStart, @PeriodEnd) + 1;
+        IF @DaysInMonth < 0 SET @DaysInMonth = 0;
+
+        -- Antigüedad completa (años) a la fecha de corte del período.
+        SET @YearsCompleted = DATEDIFF(YEAR, @HireDate, @PeriodEnd)
+            - CASE WHEN DATEADD(YEAR, DATEDIFF(YEAR, @HireDate, @PeriodEnd), @HireDate) > @PeriodEnd THEN 1 ELSE 0 END;
+
+        -- Regla institucional (Contrato Colectivo UTA, Cláusula Vigésima Sexta — NO es la
+        -- progresión genérica del Art. 69 del Código del Trabajo): al cumplir
+        -- VACATION_SENIORITY_START_YEAR_CT años de servicio, se otorgan
+        -- VACATION_MAX_ADDITIONAL_DAYS_CT días adicionales COMPLETOS de una sola vez
+        -- (15 base + 15 al cumplir 5 años = 30 días/año fijo desde ahí), no un día
+        -- adicional progresivo por cada año posterior.
+        SET @AdditionalDays = CASE
+            WHEN @YearsCompleted >= @SeniorityStartYear THEN @MaxAdditionalDays
+            ELSE 0
+        END;
+
+        SET @EffectiveVacationPerYear = @VacationPerYearCT + @AdditionalDays;
+
+        SET @Delta = CAST(ROUND((@DaysInMonth / 365.25) * @EffectiveVacationPerYear * @MinutesPerDay, 0) AS INT);
+
+        IF @Delta <= 0
+        BEGIN
+            SET @StatusCode = 400;
+            SET @Message = N'CT MONTHLY: Delta calculado es 0. Revise HireDate/parámetros.';
+            GOTO ErrorExit;
+        END
+
+        -- Tope de acumulación institucional (2026-07-22, ver hr.TBL_PARAMETERS
+        -- 'VACATION_MAX_ACCUMULATION_PERIODS'): usa @EffectiveVacationPerYear
+        -- (ya incluye el bonus de antigüedad de este empleado), no el genérico.
+        DECLARE @MaxAccumulationPeriods INT;
+        SELECT @MaxAccumulationPeriods = CAST(Pvalues AS INT)
+        FROM hr.TBL_PARAMETERS WHERE name = 'VACATION_MAX_ACCUMULATION_PERIODS' AND IsActive = 1;
+        IF @MaxAccumulationPeriods IS NULL OR @MaxAccumulationPeriods <= 0
+            SET @MaxAccumulationPeriods = 2;
+
+        DECLARE @CapMinutes INT = CAST(ROUND(@MaxAccumulationPeriods * @EffectiveVacationPerYear * @MinutesPerDay, 0) AS INT);
+
+        DECLARE @CurrentBalanceForCap INT;
+        SELECT @CurrentBalanceForCap = VacationAvailableMin
+        FROM HR.tbl_TimeBalances WHERE EmployeeID = @EmployeeID AND LaborRegimeId = @LaborRegimeId;
+        SET @CurrentBalanceForCap = ISNULL(@CurrentBalanceForCap, 0);
+        IF (@CurrentBalanceForCap + @Delta) > @CapMinutes
+            SET @Delta = CASE WHEN @CapMinutes > @CurrentBalanceForCap THEN @CapMinutes - @CurrentBalanceForCap ELSE 0 END;
+
+        UPDATE HR.tbl_TimeBalances
+        SET VacationAvailableMin = VacationAvailableMin + @Delta,
+            LastUpdated = GETDATE()
+        WHERE EmployeeID = @EmployeeID AND LaborRegimeId = @LaborRegimeId;
+
+        INSERT INTO HR.tbl_TimeBalanceMovements
+        (EmployeeID, DeltaVacationMin, DeltaRecoveryMin, MovementAt,
+         SourceModule, SourceTable, SourceID, PerformedByEmpID, Note, LaborRegimeId)
+        VALUES
+        (@EmployeeID, @Delta, 0, GETDATE(),
+         'VACATION_ACCRUAL_MONTHLY_CT', 'CALC', @SourceID, @PerformedByEmpID,
+         LEFT(
+             N'[CT MONTHLY] ' + @EmployeeName +
+             N' | ' + LEFT(DATENAME(MONTH, @AsOfDate), 3) + N'-' + CAST(@Year AS NVARCHAR(4)) +
+             N' | Antigüedad=' + CAST(@YearsCompleted AS NVARCHAR(10)) + N'a' +
+             N' DiasAdicionales=' + CAST(@AdditionalDays AS NVARCHAR(10)) +
+             N' DiasEfectivos/año=' + CAST(@EffectiveVacationPerYear AS NVARCHAR(10)) +
+             N' Días período:' + CAST(@DaysInMonth AS NVARCHAR(10)) +
+             N' Acred:+' + CAST(@Delta AS NVARCHAR(50)),
+             500
+         ),
+         @LaborRegimeId
+        );
+
+        SET @StatusCode = 200;
+        SET @Message = LEFT(N'✓ CT MONTHLY: +' + CAST(@Delta AS NVARCHAR(50)) + N' min', 500);
+        GOTO SuccessExit;
+
+    ErrorExit:
+        IF @StartedTran = 1
+        BEGIN
+            IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        END
+        ELSE
+        BEGIN
+            IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION @SavepointName;
+        END
+        RETURN;
+
+    SuccessExit:
+        IF @StartedTran = 1 AND @@TRANCOUNT > 0 COMMIT TRANSACTION;
+        RETURN;
+
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0
+        BEGIN
+            IF @StartedTran = 1
+            BEGIN
+                IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+            END
+            ELSE
+            BEGIN
+                IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION @SavepointName;
+            END
+        END
+        SET @StatusCode = ERROR_NUMBER();
+        SET @Message = ERROR_MESSAGE();
+        THROW;
+    END CATCH
+END
+
+GO
+
 -- [sp_hr_ReserveVacationBalance_LOES]
 
 /*
+  OBSOLETA / SIN USO REAL (verificado 2026-07-22): HrBalanceRepository.ReserveVacationAsync
+  nunca la llamó — siempre llamaba a sp_hr_ReserveVacationBalance (LOSEP=57) sin importar el
+  régimen real del empleado. Ya huérfana desde antes de esta migración. El mecanismo
+  vigente es IVacationBalanceAdjustmentService.ReserveAsync (EF Core), que sí resuelve el
+  régimen real. Se deja sin borrar por trazabilidad histórica.
+
   HR.sp_hr_ReserveVacationBalance_LOES
   =======================================
   2026-07-06. Espejo de sp_hr_ReserveVacationBalance pero contra el saldo

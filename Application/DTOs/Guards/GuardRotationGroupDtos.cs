@@ -20,7 +20,8 @@ public record GuardRotationGroupDto(
     string? ParentGroupName,
     string? GroupLevelTypeName,
     string? ColorCode,
-    int SubgroupCount
+    int SubgroupCount,
+    bool IsSpecial
 );
 
 public record GuardRotationGroupWithSubgroupsDto(
@@ -33,7 +34,8 @@ public record GuardRotationGroupWithSubgroupsDto(
     string? GroupLevelTypeName,
     int EmployeeCount,
     int SubgroupCount,
-    List<GuardRotationGroupDto> Subgroups
+    List<GuardRotationGroupDto> Subgroups,
+    bool IsSpecial
 );
 
 public record LocationSummaryDto(
@@ -56,7 +58,8 @@ public record LocationGroupDetailDto(
     string? PatternName,
     string? PatternSequence,
     string? PatternReadable,
-    int AssignedEmployees
+    int AssignedEmployees,
+    bool IsSpecial
 );
 
 public record CreateGuardRotationGroupDto(
@@ -65,7 +68,8 @@ public record CreateGuardRotationGroupDto(
     string? Description,
     int? ParentGroupId,
     int? GroupLevelTypeId,
-    string? ColorCode
+    string? ColorCode,
+    bool IsSpecial
 );
 
 public record UpdateGuardRotationGroupDto(
@@ -75,7 +79,15 @@ public record UpdateGuardRotationGroupDto(
     bool IsActive,
     int? ParentGroupId,
     int? GroupLevelTypeId,
-    string? ColorCode
+    string? ColorCode,
+    bool IsSpecial
+);
+
+/// <summary>Crea un grupo nuevo copiando configuración (y empleados activos) de un grupo base.</summary>
+public record DuplicateGuardRotationGroupDto(
+    string NewName,
+    string? NewGroupCode,
+    int? ParentGroupIdOverride
 );
 
 public record GuardRotationGroupEmployeeDto(

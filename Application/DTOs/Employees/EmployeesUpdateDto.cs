@@ -7,6 +7,9 @@ public class EmployeesUpdateDto
     public int? DepartmentId { get; set; }
     public int? ImmediateBossId { get; set; }
     public int? JobId { get; set; }
+    public int? TipoDocenteLoesTypeId { get; set; }
+    public int? CategoriaDocenteLoesTypeId { get; set; }
+    public int? BudgetUnitTypeId { get; set; }
     public DateOnly HireDate { get; set; }
     public string? Email { get; set; }
     public bool IsActive { get; set; } = true;

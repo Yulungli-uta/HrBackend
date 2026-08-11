@@ -129,7 +129,9 @@ public class EmployeesRepository : ServiceAwareEfRepository<Employees, int>, IEm
                 DepartmentName = x.d?.Name ?? string.Empty,
                 DepartmentCode = x.d?.Code ?? string.Empty,
                 FacultyName = string.Empty,
-                EmployeeType = regimeNames.TryGetValue(x.e.EmployeeType, out var rn) ? rn : x.e.EmployeeType.ToString(),
+                EmployeeType = x.e.EmployeeType.HasValue && regimeNames.TryGetValue(x.e.EmployeeType.Value, out var rn)
+                    ? rn
+                    : x.e.EmployeeType?.ToString() ?? "Sin tipo",
                 JobTitle = x.j?.Description,
                 IsActive = x.e.IsActive,
                 BaseSalary = salary,

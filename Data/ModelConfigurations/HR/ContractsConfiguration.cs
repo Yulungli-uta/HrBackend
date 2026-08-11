@@ -34,6 +34,7 @@ public sealed class ContractsConfiguration : IEntityTypeConfiguration<Contracts>
         e.Property(x => x.LaborRegimeID).HasColumnName("LaborRegimeID");
         e.Property(x => x.WorkModalityID).HasColumnName("WorkModalityID");
         e.Property(x => x.ContractedHours).HasColumnName("ContractedHours").HasColumnType("DECIMAL(5,2)");
+        e.Property(x => x.BaseSalary).HasColumnName("BaseSalary").HasColumnType("DECIMAL(10,2)");
 
         e.HasOne(x => x.Parent)
             .WithMany(x => x.Addendums)
@@ -317,6 +318,19 @@ public sealed class PersonnelActionStatusHistoryConfiguration : IEntityTypeConfi
         e.Property(x => x.StatusCode).HasColumnName("ToStatus").HasMaxLength(30).IsRequired();
         e.Property(x => x.Comment).HasColumnName("Notes").HasMaxLength(500);
         e.Property(x => x.ChangedAt).IsRequired();
+
+        // PersonnelAction tiene soft-delete (filtro global IsDeleted) — se configura explícito
+        // y opcional a nivel EF (la columna ActionId sigue NOT NULL en la BD; antes esta
+        // relación era 100% por convención y EF la trataba como requerida pese a que
+        // PersonnelActionStatusHistory.Action ya está declarada nullable) para que el
+        // historial de estados no arriesgue una navegación "requerida" nula si la acción
+        // queda soft-deleted.
+        e.HasOne(x => x.Action)
+            .WithMany(pa => pa.StatusHistory)
+            .HasForeignKey(x => x.ActionId)
+            .HasConstraintName("FK_PersonnelActionStatusHistory_Action")
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
 
         e.HasIndex(x => x.ActionId);
         e.HasIndex(x => x.ChangedAt);

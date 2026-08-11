@@ -24,6 +24,26 @@ public class SchedulesController : ControllerBase
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<SchedulesDto>>(await _svc.GetAllAsync(ct)));
 
+    /// <summary>Lista horarios activos marcados como rotativos para el módulo de guardias.</summary>
+    [HttpGet("rotating")]
+    [RequirePermission("SCHEDULES.READ")]
+    public async Task<IActionResult> GetRotating([FromQuery] string? search = null, CancellationToken ct = default)
+    {
+        var schedules = await _svc.GetBySheduleAcive(ct);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            schedules = schedules.Where(s =>
+                (!string.IsNullOrWhiteSpace(s.Description) && s.Description.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(s.ScheduleCode) && s.ScheduleCode.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(s.WorkingDays) && s.WorkingDays.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(s.RotationPattern) && s.RotationPattern.Contains(term, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        return Ok(_mapper.Map<List<SchedulesDto>>(schedules));
+    }
+
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]
@@ -40,6 +60,7 @@ public class SchedulesController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null,
+        [FromQuery] bool? isRotating = null,
         [FromQuery] string? sortBy = null,
         [FromQuery] string? sortDirection = "asc",
         CancellationToken ct = default)
@@ -47,16 +68,19 @@ public class SchedulesController : ControllerBase
         if (page < 1) page = 1;
         if (pageSize < 1 || pageSize > 200) pageSize = 20;
 
+        var term = search?.Trim().ToLower();
+        var hasSearch = !string.IsNullOrWhiteSpace(term);
+
         Expression<Func<Schedules, bool>>? predicate = null;
-
-        if (!string.IsNullOrWhiteSpace(search))
+        if (hasSearch || isRotating.HasValue)
         {
-            var term = search.Trim().ToLower();
-
             predicate = s =>
-                (s.Description != null && s.Description.ToLower().Contains(term)) ||
-                (s.WorkingDays != null && s.WorkingDays.ToLower().Contains(term)) ||
-                (s.RotationPattern != null && s.RotationPattern.ToLower().Contains(term));
+                (!isRotating.HasValue || s.IsRotating == isRotating.Value) &&
+                (!hasSearch ||
+                 (s.Description != null && s.Description.ToLower().Contains(term!)) ||
+                 (s.WorkingDays != null && s.WorkingDays.ToLower().Contains(term!)) ||
+                 (s.RotationPattern != null && s.RotationPattern.ToLower().Contains(term!)) ||
+                 (s.ScheduleCode != null && s.ScheduleCode.ToLower().Contains(term!)));
         }
 
         var pagedEntities = predicate is not null

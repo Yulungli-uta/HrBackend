@@ -6,6 +6,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <UserSecretsId>3a5c6bf0-775c-4eec-b4c9-f4b2d8a53cbf</UserSecretsId>
+    <UseAppHost>false</UseAppHost>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="ClosedXML" Version="0.105.0" />
@@ -33,5 +34,11 @@
     <Folder Include="Documents\Abstractions\" />
     <Folder Include="Documents\Renderers\" />
     <Folder Include="Reports\Templates\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="bin\**\*.cs" />
+    <Compile Remove="obj\**\*.cs" />
+    <Compile Remove="bin_codex\**\*.cs" />
+    <Compile Remove="obj_codex\**\*.cs" />
   </ItemGroup>
 </Project>

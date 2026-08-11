@@ -13,5 +13,8 @@ public enum ReportFormat
     Pdf = 1,
 
     /// <summary>Formato Excel (.xlsx) generado con ClosedXML u OpenXML.</summary>
-    Excel = 2
+    Excel = 2,
+
+    /// <summary>Formato CSV UTF-8 con separador punto y coma. Usado por el reporte SIIES Funcionarios.</summary>
+    Csv = 3
 }

@@ -202,6 +202,50 @@ public sealed class PersonnelActionsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Corrige los datos de una acción de personal ya existente, en CUALQUIER estado
+    /// (incluido VIGENTE/FINALIZADO). A diferencia de <see cref="Update"/> (solo
+    /// BORRADOR/GENERADO), exige un motivo obligatorio y queda registrada en el historial
+    /// de auditoría (HR.Audit, Action=CORRECTION) con el detalle de los campos modificados.
+    /// Requiere el permiso elevado PERSONNEL_ACTIONS.MANAGE.
+    /// </summary>
+    /// <param name="id">Identificador de la acción de personal.</param>
+    /// <param name="request">Motivo de la corrección y datos actualizados.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    [HttpPut("{id:int}/correct")]
+    [RequirePermission("PERSONNEL_ACTIONS.MANAGE")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Correct(
+        [FromRoute] int id,
+        [FromBody] CorrectPersonnelActionRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
+        var correctedBy = _currentUser.EmployeeId ?? 0;
+
+        try
+        {
+            await _personnelActionService.CorrectAsync(id, request.Data, request.Reason, correctedBy, ct);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        _logger.LogInformation(
+            "Acción de personal Id={ActionId} CORREGIDA por EmployeeId={UserId}. Motivo: {Reason}",
+            id, correctedBy, request.Reason);
+
+        return NoContent();
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // FLUJO DE APROBACIÓN
     // ──────────────────────────────────────────────────────────────────────────

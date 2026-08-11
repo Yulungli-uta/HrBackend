@@ -179,8 +179,10 @@ public class AttendanceCalculationsController : ControllerBase
     }
 
     /// <summary>
-    /// Obsoleto. Usa process-range.
+    /// Obsoleto. Usa process-range. Confirmado sin llamadores reales (2026-07-22): ningún
+    /// componente del frontend invoca esta ruta.
     /// </summary>
+    [Obsolete("Sin uso real — usa process-range. El pipeline diario ya cubre este cálculo.")]
     [HttpPost("calculate-range")]
     [RequirePermission("ATTENDANCE.MANAGE")]
     public async Task<IActionResult> CalculateRange(
@@ -201,8 +203,10 @@ public class AttendanceCalculationsController : ControllerBase
     }
 
     /// <summary>
-    /// Obsoleto. Los minutos nocturnos ahora forman parte del pipeline principal.
+    /// Obsoleto. Los minutos nocturnos ahora forman parte del pipeline principal. Confirmado
+    /// sin llamadores reales (2026-07-22).
     /// </summary>
+    [Obsolete("Sin uso real — los minutos nocturnos ya forman parte del pipeline diario principal.")]
     [HttpPost("calc-night-minutes")]
     [RequirePermission("ATTENDANCE.MANAGE")]
     public async Task<IActionResult> CalculateNightMinutes(
@@ -223,8 +227,10 @@ public class AttendanceCalculationsController : ControllerBase
     }
 
     /// <summary>
-    /// Obsoleto. Las justificaciones ahora forman parte del pipeline principal.
+    /// Obsoleto. Las justificaciones ahora forman parte del pipeline principal. Confirmado
+    /// sin llamadores reales (2026-07-22).
     /// </summary>
+    [Obsolete("Sin uso real — las justificaciones ya forman parte del pipeline diario principal.")]
     [HttpPost("apply-justifications")]
     [RequirePermission("ATTENDANCE.MANAGE")]
     public async Task<IActionResult> ProcessApplyJustification(
@@ -245,8 +251,10 @@ public class AttendanceCalculationsController : ControllerBase
     }
 
     /// <summary>
-    /// Obsoleto. Overtime y recovery ahora forman parte del pipeline principal.
+    /// Obsoleto. Overtime y recovery ahora forman parte del pipeline principal. Confirmado
+    /// sin llamadores reales (2026-07-22).
     /// </summary>
+    [Obsolete("Sin uso real — overtime/recovery ya forman parte del pipeline diario principal (HR.tbl_TimePlanning).")]
     [HttpPost("apply-overtime-recovery")]
     [RequirePermission("ATTENDANCE.MANAGE")]
     public async Task<IActionResult> ProcessApplyOvertimeRecovery(

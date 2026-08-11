@@ -51,6 +51,15 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
         if (filter.EndDate.HasValue)
             query = query.Where(x => x.action.ActionDate <= filter.EndDate.Value);
 
+        if (!string.IsNullOrWhiteSpace(filter.Search))
+        {
+            var term = filter.Search.Trim();
+            query = query.Where(x =>
+                EF.Functions.Like(x.person.IdCard, $"%{term}%") ||
+                EF.Functions.Like(x.person.FirstName + " " + x.person.LastName, $"%{term}%") ||
+                (x.action.ActionNumber != null && EF.Functions.Like(x.action.ActionNumber, $"%{term}%")));
+        }
+
         if (filter.AllowedDepartmentIds is { Count: > 0 } allowedDeptIds)
         {
             // Se valida contra el destino; si no hay destino, se usa el origen como referencia.

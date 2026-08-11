@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.EmployeeLaborRegime;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -37,6 +38,10 @@ public class EmployeeLaborRegimesController : ControllerBase
         {
             return Conflict(new { message = ex.Message });
         }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { status = "error", message = ex.Message });
+        }
     }
 
     [HttpPost("{id:int}/close")]
@@ -45,5 +50,14 @@ public class EmployeeLaborRegimesController : ControllerBase
     {
         var closed = await _svc.CloseAsync(id, dto, _currentUser.EmployeeId, ct);
         return closed is null ? NotFound(new { message = "No existe." }) : Ok(closed);
+    }
+
+    /// <summary>Clasifica o corrige el campo SIIES INGRESO_POR_CONCURSO de un régimen existente.</summary>
+    [HttpPost("{id:int}/ingreso-por-concurso")]
+    [RequirePermission("EMPLOYEES.UPDATE")]
+    public async Task<IActionResult> SetIngresoPorConcurso(int id, [FromBody] EmployeeLaborRegimeIngresoPorConcursoDto dto, CancellationToken ct)
+    {
+        var updated = await _svc.SetIngresoPorConcursoAsync(id, dto, _currentUser.EmployeeId, ct);
+        return updated is null ? NotFound(new { message = "No existe." }) : Ok(updated);
     }
 }

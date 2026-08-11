@@ -8,6 +8,8 @@ public class RefTypes : IAuditable{
   public string Name { get; set; } = null!;
   public string? Description { get; set; }
   public string? Metadata { get; set; }
+  /// <summary>Denominación exacta exigida por el catálogo SIIES (CACES) para este valor, cuando aplica.</summary>
+  public string? SiiesLabel { get; set; }
   public bool IsActive { get; set; } = true;
   public DateTime? CreatedAt { get; set; }
   public int? CreatedBy { get; set; }

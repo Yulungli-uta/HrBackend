@@ -10,6 +10,14 @@ public interface IResignationRetirementService
     /// <summary>Crea una solicitud para el empleado autenticado. EmployeeId nunca viene del frontend.</summary>
     Task<ResignationRetirementDetailDto> CreateAsync(int employeeId, CreateResignationRetirementRequest request, CancellationToken ct = default);
 
+    /// <summary>
+    /// Crea una solicitud en nombre de un empleado que no puede/no logra hacerla él mismo —
+    /// exclusivo de Recursos Humanos. A diferencia de <see cref="CreateAsync"/>, permite una
+    /// ProposedExitDate ya pasada. El resto del trámite (revisión, aprobación con documento
+    /// firmado, cierre de régimen) sigue el mismo flujo sin cambios.
+    /// </summary>
+    Task<ResignationRetirementDetailDto> CreateOnBehalfAsync(int createdByEmployeeId, CreateResignationRetirementOnBehalfRequest request, CancellationToken ct = default);
+
     /// <summary>Actualiza una solicitud propia, solo en estado PENDIENTE o DEVUELTO.</summary>
     Task<ResignationRetirementDetailDto> UpdateAsync(int requestId, int employeeId, UpdateResignationRetirementRequest request, CancellationToken ct = default);
 

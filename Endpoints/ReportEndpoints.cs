@@ -443,5 +443,27 @@ public static class ReportEndpoints
         .WithSummary("[v2] Descarga genérica del reporte en Excel")
         .Produces<FileResult>(StatusCodes.Status200OK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         .Produces(StatusCodes.Status400BadRequest);
+
+        group.MapPost("/v2/{reportType}/csv", async (
+            [FromRoute] string reportType,
+            [FromBody] ReportFilterDto filter,
+            [FromServices] IReportServiceV2 reportServiceV2,
+            HttpContext context) =>
+        {
+            if (!ReportTypeMapper.TryParse(reportType, out var type))
+            {
+                var slugs = string.Join(", ", ReportTypeMapper.GetRegisteredSlugs());
+                return Results.BadRequest(new { error = $"Tipo de reporte no reconocido: '{reportType}'. Valores válidos: {slugs}" });
+            }
+
+            var csvBytes = await reportServiceV2.GenerateAsync(type, ReportFormat.Csv, filter, context);
+            var fileName = ReportFileNameBuilder.Build($"Reporte_{reportType}", ReportFormat.Csv);
+            context.Response.Headers.Append("Content-Disposition", $"attachment; filename=\"{fileName}\"");
+            return Results.File(csvBytes, ReportFileNameBuilder.GetMimeType(ReportFormat.Csv), fileName);
+        })
+        .WithName("V2DownloadReportCsv")
+        .WithSummary("[v2] Descarga genérica del reporte en CSV (UTF-8, separador ';') — usado por los reportes SIIES")
+        .Produces<FileResult>(StatusCodes.Status200OK, "text/csv")
+        .Produces(StatusCodes.Status400BadRequest);
     }
 }

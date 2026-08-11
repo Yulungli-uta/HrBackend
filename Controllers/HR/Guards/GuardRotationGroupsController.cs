@@ -77,6 +77,25 @@ public class GuardRotationGroupsController : ControllerBase
         }
     }
 
+    [HttpPost("{id:int}/duplicate")]
+    [RequirePermission("GUARDS.CREATE")]
+    public async Task<IActionResult> Duplicate(int id, [FromBody] DuplicateGuardRotationGroupDto dto, CancellationToken ct)
+    {
+        try
+        {
+            var created = await _svc.DuplicateAsync(id, dto, ct);
+            return CreatedAtAction(nameof(GetById), new { id = created.GroupId }, created);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
     [HttpGet("{id:int}/employees")]
     [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetEmployees(int id, CancellationToken ct) =>
@@ -132,8 +151,19 @@ public class GuardRotationGroupsController : ControllerBase
     [RequirePermission("GUARDS.UPDATE")]
     public async Task<IActionResult> AssignPattern(int id, [FromBody] AssignPatternToGroupDto dto, CancellationToken ct)
     {
-        var result = await _svc.AssignPatternToGroupAsync(id, dto, ct);
-        return Ok(result);
+        try
+        {
+            var result = await _svc.AssignPatternToGroupAsync(id, dto, ct);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
     }
 
     [HttpDelete("{id:int}/patterns/{groupPatternId:int}")]

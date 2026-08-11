@@ -42,20 +42,51 @@ public class RotationPatternsController : ControllerBase
     [RequirePermission("GUARDS.CREATE")]
     public async Task<IActionResult> Create([FromBody] CreateRotationPatternDto dto, CancellationToken ct)
     {
-        var created = await _svc.CreateAsync(dto, ct);
-        return CreatedAtAction(nameof(GetById), new { id = created.PatternId }, created);
+        try
+        {
+            var created = await _svc.CreateAsync(dto, ct);
+            return CreatedAtAction(nameof(GetById), new { id = created.PatternId }, created);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
     }
 
     [HttpPut("{id:int}")]
     [RequirePermission("GUARDS.UPDATE")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateRotationPatternDto dto, CancellationToken ct)
     {
-        await _svc.UpdateAsync(id, dto, ct);
-        return NoContent();
+        try
+        {
+            await _svc.UpdateAsync(id, dto, ct);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
     }
 
     [HttpPost("{id:int}/details")]
     [RequirePermission("GUARDS.UPDATE")]
-    public async Task<IActionResult> SetDetails(int id, [FromBody] UpsertRotationPatternDetailsDto dto, CancellationToken ct) =>
-        Ok(await _svc.SetDetailsAsync(id, dto, ct));
+    public async Task<IActionResult> SetDetails(int id, [FromBody] UpsertRotationPatternDetailsDto dto, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await _svc.SetDetailsAsync(id, dto, ct));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
 }

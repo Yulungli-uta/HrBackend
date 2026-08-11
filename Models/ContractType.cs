@@ -13,6 +13,9 @@ namespace WsUtaSystem.Models
         public string? ContractText { get; set; }
         public string? ContractCode { get; set; }
 
+        /// <summary>FK -> ref_Types (Category='SIIES_RELACION_IES'). Homologación para el reporte SIIES Funcionarios.</summary>
+        public int? SiiesRelacionIesTypeId { get; set; }
+
         /// <summary>Familia documental asociada a este tipo (ref_Types DOCUMENT_TEMPLATE_TYPE).</summary>
         public int? DocumentTemplateTypeId { get; set; }
 

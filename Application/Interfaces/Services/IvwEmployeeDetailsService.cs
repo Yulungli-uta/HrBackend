@@ -64,5 +64,8 @@ namespace WsUtaSystem.Application.Interfaces.Services
             int? departmentId,
             int? employeeType,
             CancellationToken ct = default);
+
+        /// <summary>Cobertura de horario asignado, calculada en SQL (evita traer la tabla completa al cliente).</summary>
+        Task<ScheduleCoverageStatsDto> GetScheduleCoverageStatsAsync(CancellationToken ct = default);
     }
 }

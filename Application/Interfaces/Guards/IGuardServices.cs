@@ -35,6 +35,9 @@ public interface IGuardRotationGroupService
     /// <summary>Empleados con cargo de guardia (ver GuardRotationGroupService.GuardJobNames), para el
     /// buscador de "Agregar guardias" — no usa el buscador genérico de empleados.</summary>
     Task<List<EligibleEmployeeDto>> GetEligibleEmployeesAsync(string? search, CancellationToken ct);
+
+    /// <summary>Crea un grupo nuevo copiando configuración (y empleados activos) de un grupo base existente.</summary>
+    Task<GuardRotationGroupDto> DuplicateAsync(int baseGroupId, DuplicateGuardRotationGroupDto dto, CancellationToken ct);
 }
 
 public interface IRotationPatternService
@@ -95,6 +98,10 @@ public interface IGuardShiftChangeService
     Task<GuardShiftChangeDto> CreateReplacementAsync(CreateGuardShiftReplacementDto dto, CancellationToken ct);
     Task<GuardShiftChangeDto> ApproveAsync(int shiftChangeId, ApproveGuardShiftChangeDto dto, CancellationToken ct);
     Task<GuardShiftChangeDto> RejectAsync(int shiftChangeId, RejectGuardShiftChangeDto dto, CancellationToken ct);
+
+    /// <summary>Reasigna el turno del mismo guardia titular a otra fecha/horario/ubicación. Aplicación
+    /// inmediata (sin aprobación); queda registrado como GuardShiftChange tipo REASSIGNMENT.</summary>
+    Task<GuardShiftChangeDto> ReassignAsync(CreateGuardShiftReassignmentDto dto, CancellationToken ct);
 }
 
 public interface IEmployeeAvailabilityService

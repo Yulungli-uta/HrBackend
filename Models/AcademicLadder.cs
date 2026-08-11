@@ -24,6 +24,9 @@ public class AcademicLadder : IAuditable
     /// <summary>Sueldo base de referencia para esta combinación Categoría × Dedicación.</summary>
     public decimal? BaseRmu { get; set; }
 
+    /// <summary>Denominación exacta exigida por el catálogo SIIES (Tabla 9) para este escalón, cuando aplica.</summary>
+    public string? SiiesLabel { get; set; }
+
     public virtual RefTypes? CategoryType { get; set; }
     public virtual RefTypes? LevelType { get; set; }
     public virtual RefTypes? DedicationType { get; set; }

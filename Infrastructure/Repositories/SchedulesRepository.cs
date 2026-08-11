@@ -16,8 +16,9 @@ public class SchedulesRepository : ServiceAwareEfRepository<Schedules, int>, ISc
     {
         return await _db.Set<Schedules>()
             .AsNoTracking()
-            .Where(e => e.IsRotating)
-            .OrderBy(e => e.EntryTime)
+            .Where(e => e.IsActive && e.IsRotating)
+            .OrderBy(e => e.ScheduleCode)
+            .ThenBy(e => e.EntryTime)
             .ToListAsync(ct);
     }
 

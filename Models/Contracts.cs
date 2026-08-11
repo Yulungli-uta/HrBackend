@@ -97,6 +97,9 @@ public class Contracts : IAuditable, ISoftDeletable{
     /// <summary>Horas contratadas. Auto-poblado desde la solicitud al crear. No editable.</summary>
     public decimal? ContractedHours { get; set; }
 
+    /// <summary>Sueldo real individual del contrato.</summary>
+    public decimal? BaseSalary { get; set; }
+
     public Contracts? Parent { get; set; }
     public ICollection<Contracts> Addendums { get; set; } = [];
     public FinancialCertification? Certification { get; set; }

@@ -55,6 +55,14 @@ public class GuardShiftChangesController : ControllerBase
         return Ok(created);
     }
 
+    [HttpPost("reassignment")]
+    [RequirePermission("GUARDS.CREATE")]
+    public async Task<IActionResult> Reassign([FromBody] CreateGuardShiftReassignmentDto dto, CancellationToken ct)
+    {
+        var result = await _svc.ReassignAsync(dto, ct);
+        return Ok(result);
+    }
+
     [HttpPost("{id:int}/approve")]
     [RequirePermission("GUARDS.APPROVE")]
     public async Task<IActionResult> Approve(int id, [FromBody] ApproveGuardShiftChangeDto dto, CancellationToken ct) =>

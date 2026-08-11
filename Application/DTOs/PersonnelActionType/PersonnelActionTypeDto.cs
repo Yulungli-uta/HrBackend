@@ -14,5 +14,6 @@ public sealed record PersonnelActionTypeDto(
     bool RequiresAdUserDisable,
     bool RequiresAdGroupAssignment,
     string? ActionCategory,
-    bool ReachesVigente
+    bool ReachesVigente,
+    int? SiiesRelacionIesTypeId = null
 );

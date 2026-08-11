@@ -14,7 +14,9 @@ namespace WsUtaSystem.Models.Views
         public string? Email { get; set; }
         /// <summary>Email personal. Puede ser null si no fue registrado en tbl_People.</summary>
         public string? PersonnelEmail { get; set; }
-        public int EmployeeType { get; set; }
+        /// <summary>Nullable porque HR.tbl_Employees.EmployeeType lo es en la base de datos —
+        /// un empleado sin este dato asignado no debe tumbar ninguna consulta sobre esta vista.</summary>
+        public int? EmployeeType { get; set; }
         [Column("ContractType")]
         public string? ContractType { get; set; }
         [Column("ScheduleID")]

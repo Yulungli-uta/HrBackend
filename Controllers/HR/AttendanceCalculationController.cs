@@ -4,6 +4,13 @@ using WsUtaSystem.Application.DTOs.StoredProcedures;
 
 namespace WsUtaSystem.Controllers.HR;
 
+/// <summary>
+/// OBSOLETO (verificado 2026-07-22): las dos únicas acciones que tuvo están comentadas desde
+/// antes — este controller no expone ninguna ruta activa. Ver
+/// <see cref="AttendanceCalculationsController"/> (plural) para el equivalente real, también
+/// obsoleto en sus rutas legacy.
+/// </summary>
+[Obsolete("Sin rutas activas — ambas acciones están comentadas. No reactivar sin revisar el pipeline diario vigente.")]
 [ApiController]
 [Route("cv/attendance")]
 public class AttendanceCalculationController : ControllerBase

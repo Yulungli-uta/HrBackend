@@ -49,6 +49,17 @@ public sealed class PermissionsConfiguration : IEntityTypeConfiguration<Permissi
         e.Property(x => x.Status).HasMaxLength(20);
         e.Property(x => x.VacationId).HasColumnName("VacationID");
 
+        // Employees tiene soft-delete (filtro global IsDeleted) — se configura explícito y
+        // opcional a nivel EF (la columna sigue NOT NULL en la BD; antes esta relación era
+        // 100% por convención y EF la trataba como requerida) para que un permiso no arriesgue
+        // una navegación "requerida" nula si el empleado queda soft-deleted.
+        e.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .HasConstraintName("FK_Permissions_Employee")
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
         // Índices para reportes: filtra por rango de fechas, estado y empleado
         e.HasIndex(x => new { x.EmployeeId, x.StartDate });
         e.HasIndex(x => new { x.StartDate, x.Status });

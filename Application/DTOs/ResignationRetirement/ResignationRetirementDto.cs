@@ -171,6 +171,23 @@ public sealed record CreateResignationRetirementRequest(
 );
 
 /// <summary>
+/// Creación por Recursos Humanos EN NOMBRE de un empleado que no puede o no logra hacer su
+/// propia solicitud (ej. abandonó el puesto, no es localizable). A diferencia de
+/// <see cref="CreateResignationRetirementRequest"/>, aquí ProposedExitDate SÍ puede ser una
+/// fecha ya pasada — el objetivo es registrar cuanto antes una salida real ya ocurrida, para
+/// que la acreditación mensual de vacaciones se detenga sin esperar al documento firmado.
+/// El resto del trámite (aprobación con documento firmado, cierre de régimen, bloqueo de
+/// cuenta) sigue exactamente el mismo flujo que una solicitud creada por el propio empleado.
+/// </summary>
+public sealed record CreateResignationRetirementOnBehalfRequest(
+    int EmployeeId,
+    string RequestType,
+    DateOnly ProposedExitDate,
+    string? Reason,
+    string? AdditionalNotes
+);
+
+/// <summary>
 /// Actualización permitida solo cuando la solicitud está en PENDIENTE o DEVUELTO
 /// y pertenece al usuario autenticado.
 /// </summary>

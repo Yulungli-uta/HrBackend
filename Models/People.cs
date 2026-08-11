@@ -6,7 +6,7 @@ public class People : IAuditable {
   public int PersonId { get; set; }
   public string FirstName { get; set; } = null!;
   public string LastName { get; set; } = null!;
-  public int IdentType { get; set; }
+  public int? IdentType { get; set; }
   public string IdCard { get; set; } = null!;
   public string Email { get; set; } = null!;
   public string? Phone { get; set; }
@@ -28,6 +28,8 @@ public class People : IAuditable {
   public string? CantonId { get; set; }
   public int? YearsOfResidence { get; set; }
   public int? EthnicityTypeId { get; set; }
+  /// <summary>FK -> ref_Types (Category='SIIES_INDIGENOUS_NATIONALITY'). Solo aplica si EthnicityTypeId = INDIGENA.</summary>
+  public int? IndigenousNationalityTypeId { get; set; }
   public int? BloodTypeTypeId { get; set; }
   public int? SpecialNeedsTypeId { get; set; }
   public decimal? DisabilityPercentage { get; set; }

@@ -298,4 +298,17 @@ public class VwEmployeeDetailsService : IvwEmployeeDetailsService
             throw;
         }
     }
+
+    public async Task<ScheduleCoverageStatsDto> GetScheduleCoverageStatsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            return await _repository.GetScheduleCoverageStatsAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[EMP-SVC] Error getting schedule coverage stats");
+            throw;
+        }
+    }
 }
