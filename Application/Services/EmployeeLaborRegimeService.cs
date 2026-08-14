@@ -171,7 +171,7 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
         var employees = await _db.Set<WsUtaSystem.Models.Views.VwEmployeeDetails>()
             .AsNoTracking()
             .Where(e => employeeIds.Contains(e.EmployeeID))
-            .ToDictionaryAsync(e => e.EmployeeID, e => (Name: e.FirstName + " " + e.LastName, e.Email), ct);
+            .ToDictionaryAsync(e => e.EmployeeID, e => (Name: e.LastName + " " + e.FirstName, e.Email), ct);
 
         var regimeNames = await _db.RefTypes
             .AsNoTracking()

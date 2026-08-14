@@ -14,5 +14,6 @@ public interface IEmployeesService : IService<Employees, int>
         bool? isActive,
         DateTime? hireDateFrom,
         DateTime? hireDateTo,
+        int? laborRegimeId = null,
         CancellationToken ct = default);
 }

@@ -86,7 +86,9 @@ public sealed class ContractsReportSource : IReportSource
                 [ColEnd]        = r.EndDate.ToString("dd/MM/yyyy"),
                 [ColStatus]     = r.StatusName,
             }).ToList(),
-            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape
+            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 

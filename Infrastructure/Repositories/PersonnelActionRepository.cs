@@ -56,7 +56,7 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             var term = filter.Search.Trim();
             query = query.Where(x =>
                 EF.Functions.Like(x.person.IdCard, $"%{term}%") ||
-                EF.Functions.Like(x.person.FirstName + " " + x.person.LastName, $"%{term}%") ||
+                EF.Functions.Like(x.person.LastName + " " + x.person.FirstName, $"%{term}%") ||
                 (x.action.ActionNumber != null && EF.Functions.Like(x.action.ActionNumber, $"%{term}%")));
         }
 
@@ -69,6 +69,15 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                     : x.action.OriginDepartmentId.HasValue && allowedDeptIds.Contains(x.action.OriginDepartmentId.Value)));
         }
 
+        if (filter.DepartmentId.HasValue)
+        {
+            var deptId = filter.DepartmentId.Value;
+            query = query.Where(x =>
+                (x.action.DestinationDepartmentId.HasValue
+                    ? x.action.DestinationDepartmentId.Value == deptId
+                    : x.action.OriginDepartmentId.HasValue && x.action.OriginDepartmentId.Value == deptId));
+        }
+
         var totalCount = await query.CountAsync(ct);
 
         var items = await query
@@ -78,7 +87,7 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             .Select(x => new PersonnelActionSummaryDto(
                 x.action.ActionId,
                 x.action.EmployeeId ?? 0,
-                x.person.FirstName + " " + x.person.LastName,
+                x.person.LastName + " " + x.person.FirstName,
                 x.person.IdCard,
                 x.action.ActionTypeId,
                 x.actionType.Name,
@@ -186,7 +195,7 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
         return new PersonnelActionDetailDto(
             result.action.ActionId,
             result.action.EmployeeId ?? 0,
-            result.person.FirstName + " " + result.person.LastName,
+            result.person.LastName + " " + result.person.FirstName,
             result.person.IdCard,
             result.dept?.Name ?? string.Empty,
             string.Empty, // JobTitle se resuelve desde el contrato activo si se necesita
@@ -270,7 +279,7 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             select new PersonnelActionSummaryDto(
                 action.ActionId,
                 action.EmployeeId ?? 0,
-                person.FirstName + " " + person.LastName,
+                person.LastName + " " + person.FirstName,
                 person.IdCard,
                 action.ActionTypeId,
                 actionType.Name,
@@ -399,7 +408,7 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             where emp.EmployeeId == employeeId.Value
             select new
             {
-                Name     = person.FirstName + " " + person.LastName,
+                Name     = person.LastName + " " + person.FirstName,
                 JobTitle = (string?)job.Description
             }
         ).FirstOrDefaultAsync(ct);

@@ -30,7 +30,7 @@ SELECT
     dep.Name        AS DepartmentName,
     da.EmployeeID,
     p.IDCard        AS EmployeeIDCard,
-    CONCAT(p.FirstName, ' ', p.LastName) AS EmployeeFullName,
+    CONCAT(p.LastName, ' ', p.FirstName) AS EmployeeFullName,
     da.AuthorityTypeID,
     at_ref.Name     AS AuthorityTypeName,
     at_ref.Description AS AuthorityTypeDescription,
@@ -219,11 +219,11 @@ GO
 
 -- [vw_EmployeeComplete]
 CREATE   VIEW HR.vw_EmployeeComplete AS
-SELECT 
+SELECT
     e.EmployeeID,
     p.FirstName,
     p.LastName,
-    p.FirstName + ' ' + p.LastName AS FullName,
+    p.LastName + ' ' + p.FirstName AS FullName,
     p.IDCard,
     p.Email,
     p.Phone,
@@ -338,7 +338,7 @@ LEFT JOIN HR.ref_Types rt ON rt.TypeID = e.EmployeeType
                           AND rt.Category = 'CONTRACT_TYPE'
 LEFT JOIN HR.tbl_jobs j ON j.JobID = e.JobID
 OUTER APPLY (
-    SELECT TOP 1 
+    SELECT TOP 1
         es.ScheduleID,
         es.ValidFrom,
         es.ValidTo
@@ -347,6 +347,15 @@ OUTER APPLY (
     ORDER BY es.ValidFrom DESC, es.EmpScheduleID DESC
 ) es_current
 LEFT JOIN HR.tbl_Schedules ts ON ts.ScheduleID = es_current.ScheduleID
+OUTER APPLY (
+    -- Último sueldo del empleado en HR.tbl_SalaryHistory, sin importar si el
+    -- documento fuente fue un Contrato (Código de Trabajo) o una Acción de
+    -- Personal (LOSEP/LOES) — ver Database/hr/18_salary_history_unification.sql.
+    SELECT TOP 1 sh.NewSalary
+    FROM HR.tbl_SalaryHistory sh
+    WHERE sh.EmployeeID = e.EmployeeID
+    ORDER BY sh.ChangedAt DESC, sh.SalaryHistoryID DESC
+) sh_latest
 WHERE e.IsActive = 1
 
 GO
@@ -379,7 +388,7 @@ SELECT
     e.DepartmentID,
     d.Name                                                  AS Department,
 
-    1.00                                                    AS BaseSalary,  -- TODO: reemplazar con columna real
+    sh_latest.NewSalary                                     AS BaseSalary,
     e.HireDate
 
 FROM HR.tbl_People          p
@@ -407,7 +416,15 @@ OUTER APPLY (
     ORDER BY es.ValidFrom DESC, es.EmpScheduleID DESC
 ) es_current
 
-LEFT JOIN HR.tbl_Schedules  ts  ON ts.ScheduleID    = es_current.ScheduleID;
+LEFT JOIN HR.tbl_Schedules  ts  ON ts.ScheduleID    = es_current.ScheduleID
+
+OUTER APPLY (
+    -- Ver comentario equivalente en vw_EmployeeDetails.
+    SELECT TOP 1 sh.NewSalary
+    FROM HR.tbl_SalaryHistory sh
+    WHERE sh.EmployeeID = e.EmployeeID
+    ORDER BY sh.ChangedAt DESC, sh.SalaryHistoryID DESC
+) sh_latest;
 
 
 GO

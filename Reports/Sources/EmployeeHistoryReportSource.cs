@@ -90,7 +90,9 @@ public sealed class EmployeeHistoryReportSource : IReportSource
             GeneratedAt = DateTime.Now,
             Columns     = _columns,
             Rows        = rows,
-            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape
+            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 

@@ -43,6 +43,7 @@ public class EmployeesRepository : ServiceAwareEfRepository<Employees, int>, IEm
         bool? isActive,
         DateTime? hireDateFrom,
         DateTime? hireDateTo,
+        int? laborRegimeId = null,
         CancellationToken ct = default)
     {
         var regimeNames = await _db.RefTypes.AsNoTracking()
@@ -76,7 +77,9 @@ public class EmployeesRepository : ServiceAwareEfRepository<Employees, int>, IEm
             baseQuery = baseQuery.Where(x => x.e.HireDate <= to);
         }
 
-        var employees = await baseQuery.ToListAsync(ct);
+        var employees = await baseQuery
+            .OrderBy(x => x.p.LastName).ThenBy(x => x.p.FirstName).ThenBy(x => x.e.HireDate)
+            .ToListAsync(ct);
         var personIds = employees.Select(x => x.p.PersonId).Distinct().ToList();
 
         // Sueldo: contrato más reciente por persona (prioriza Status=VIGENTE), luego
@@ -98,8 +101,8 @@ public class EmployeesRepository : ServiceAwareEfRepository<Employees, int>, IEm
         var contractIds = latestContractByPerson.Values.Select(c => c.ContractID).ToList();
 
         var salaryByContract = await _db.SalaryHistory.AsNoTracking()
-            .Where(s => contractIds.Contains(s.ContractId))
-            .GroupBy(s => s.ContractId)
+            .Where(s => s.ContractId.HasValue && contractIds.Contains(s.ContractId.Value))
+            .GroupBy(s => s.ContractId!.Value)
             .Select(g => new
             {
                 ContractId = g.Key,
@@ -121,7 +124,7 @@ public class EmployeesRepository : ServiceAwareEfRepository<Employees, int>, IEm
             return new EmployeeReportDto
             {
                 Id = x.e.EmployeeId,
-                FullName = $"{x.p.FirstName} {x.p.LastName}",
+                FullName = $"{x.p.LastName} {x.p.FirstName}",
                 FirstName = x.p.FirstName,
                 LastName = x.p.LastName,
                 IdentificationNumber = x.p.IdCard,

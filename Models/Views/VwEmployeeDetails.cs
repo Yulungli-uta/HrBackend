@@ -35,7 +35,7 @@ namespace WsUtaSystem.Models.Views
         public DateTime HireDate { get; set; }
         // Propiedades calculadas
         [NotMapped]
-        public string FullName => $"{FirstName} {LastName}";
+        public string FullName => $"{LastName} {FirstName}";
         [NotMapped]
         public bool HasActiveSalary => BaseSalary.HasValue && BaseSalary > 0;
 

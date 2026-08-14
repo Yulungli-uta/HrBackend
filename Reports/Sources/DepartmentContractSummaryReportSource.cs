@@ -51,6 +51,7 @@ public sealed class DepartmentContractSummaryReportSource : IReportSource
         var summary = (await _employeeDetailsService.GetDepartmentContractCountsAsync(
             filter.DepartmentId,
             filter.EmployeeTypeId,
+            filter.LaborRegimeId,
             CancellationToken.None)).ToList();
 
         _logger.LogInformation(
@@ -66,7 +67,9 @@ public sealed class DepartmentContractSummaryReportSource : IReportSource
             GeneratedAt = DateTime.Now,
             Columns = _columns,
             Rows = BuildRows(summary),
-            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape
+            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 

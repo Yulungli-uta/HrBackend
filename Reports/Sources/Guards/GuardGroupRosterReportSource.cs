@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Data;
 using WsUtaSystem.Reports.Abstractions;
@@ -106,8 +107,9 @@ public sealed class GuardGroupRosterReportSource : IReportSource
             empQuery = empQuery.Where(ge => ge.GroupId == filter.GroupId.Value);
 
         var groupEmployees = await empQuery
-            .OrderBy(ge => ge.Group!.Name)
-            .ThenBy(ge => ge.Employee!.People!.LastName)
+            .OrderBy(ge => ge.Employee!.People!.LastName)
+            .ThenBy(ge => ge.Employee!.People!.FirstName)
+            .ThenBy(ge => ge.ValidFrom)
             .ToListAsync();
 
         // Filtro por ubicación: solo empleados cuyo grupo tiene esa ubicación o tienen asignación individual a ella
@@ -144,7 +146,7 @@ public sealed class GuardGroupRosterReportSource : IReportSource
             {
                 [ColGroup]       = ge.Group?.Name ?? "—",
                 [ColIdCard]      = ge.Employee?.People?.IdCard ?? "—",
-                [ColGuard]       = $"{ge.Employee?.People?.FirstName} {ge.Employee?.People?.LastName}".Trim(),
+                [ColGuard]       = ge.Employee?.People.GetFullName() ?? string.Empty,
                 [ColGroupLoc]    = groupLocLabel,
                 [ColAssignedLoc] = empLocLabel,
                 [ColPeriod]      = activePeriod?.Name ?? "Sin periodo activo",

@@ -224,7 +224,7 @@ public class EntityToDtoProfile : Profile
             // 3. Nombre Completo (Concatenación segura)
             .ForMember(d => d.EmployeeFullName, o => o.MapFrom(s =>
                 (s.Employee != null && s.Employee.People != null)
-                    ? $"{s.Employee.People.FirstName} {s.Employee.People.LastName}".Trim()
+                    ? $"{s.Employee.People.LastName} {s.Employee.People.FirstName}".Trim()
                     : null))
 
             // 4. Datos de Identidad y Contacto

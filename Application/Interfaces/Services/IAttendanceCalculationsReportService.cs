@@ -54,4 +54,15 @@ public interface IAttendanceCalculationsReportService
     Task<IReadOnlyList<AttendanceReportDto>> GetAttendanceDataAsync(
         ReportFilterDto filter,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene el reporte consolidado de subsidio de alimentación: días efectivamente
+    /// laborados por empleado en el período, multiplicados por el valor diario
+    /// parametrizado en <c>HR.tbl_Parameters</c> (<c>FOOD_SUBSIDY_DAILY_VALUE</c>).
+    /// </summary>
+    /// <param name="filter">Filtros del reporte.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<FoodSubsidySummaryReportDto>> GetFoodSubsidySummaryDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
 }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Data;
 using WsUtaSystem.Reports.Abstractions;
@@ -88,7 +89,7 @@ public sealed class GuardScheduleMatrixReportSource : IReportSource
                 return new
                 {
                     g.Key,
-                    Name     = $"{first.Employee?.People?.FirstName} {first.Employee?.People?.LastName}".Trim(),
+                    Name     = first.Employee?.People.GetFullName() ?? string.Empty,
                     IdCard   = first.Employee?.People?.IdCard ?? "",
                     Group    = first.Group?.Name ?? "—",
                     Location = first.Location?.LocationCode != null
@@ -96,8 +97,7 @@ public sealed class GuardScheduleMatrixReportSource : IReportSource
                                : (first.Location?.LocationName ?? "—"),
                 };
             })
-            .OrderBy(e => e.Group)
-            .ThenBy(e => e.Name)
+            .OrderBy(e => e.Name)
             .ToList();
 
         _logger.LogInformation("GuardScheduleMatrix report: {EmpCount} guards × {DateCount} days.", empInfo.Count, dates.Count);

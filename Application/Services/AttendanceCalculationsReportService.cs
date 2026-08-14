@@ -23,14 +23,20 @@ namespace WsUtaSystem.Application.Services;
 /// </remarks>
 public sealed class AttendanceCalculationsReportService : IAttendanceCalculationsReportService
 {
+    private const string FoodSubsidyDailyValueParam = "FOOD_SUBSIDY_DAILY_VALUE";
+    private const decimal FoodSubsidyDailyValueDefault = 3.50m;
+
     private readonly IAttendanceCalculationsReportRepository _repository;
+    private readonly IParametersRepository _parametersRepository;
     private readonly ILogger<AttendanceCalculationsReportService> _logger;
 
     public AttendanceCalculationsReportService(
         IAttendanceCalculationsReportRepository repository,
+        IParametersRepository parametersRepository,
         ILogger<AttendanceCalculationsReportService> logger)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _parametersRepository = parametersRepository ?? throw new ArgumentNullException(nameof(parametersRepository));
         _logger     = logger     ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -112,5 +118,48 @@ public sealed class AttendanceCalculationsReportService : IAttendanceCalculation
         _logger.LogInformation("Reporte de asistencia generado. Total registros: {Count}", data.Count);
 
         return data;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<FoodSubsidySummaryReportDto>> GetFoodSubsidySummaryDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        _logger.LogInformation(
+            "Generando reporte de subsidio de alimentación. Período: {Start} - {End} | DeptId: {DeptId} | EmployeeId: {EmpId} | Cédula: {IdCard} | RegimeId: {RegimeId}",
+            filter.StartDate?.ToString("yyyy-MM-dd") ?? "N/A",
+            filter.EndDate?.ToString("yyyy-MM-dd")   ?? "N/A",
+            filter.DepartmentId?.ToString()   ?? "Todas",
+            filter.EmployeeId?.ToString()     ?? "Todos",
+            filter.Identification             ?? "Todas",
+            filter.LaborRegimeId?.ToString()  ?? "Todos");
+
+        var unitValue = await GetParameterDecimalAsync(FoodSubsidyDailyValueParam, FoodSubsidyDailyValueDefault, ct);
+        var data = await _repository.GetFoodSubsidySummaryDataAsync(filter, ct);
+
+        var result = data
+            .Select(r => r with
+            {
+                UnitValue  = unitValue,
+                TotalValue = r.DaysWorked * unitValue
+            })
+            .ToList();
+
+        _logger.LogInformation(
+            "Reporte de subsidio de alimentación generado. Total registros: {Count} | Valor diario: {UnitValue}",
+            result.Count, unitValue);
+
+        return result;
+    }
+
+    private async Task<decimal> GetParameterDecimalAsync(string name, decimal defaultValue, CancellationToken ct)
+    {
+        var list = await _parametersRepository.GetByNameAsync(name, ct);
+        var value = list?.FirstOrDefault(p => p.IsActive)?.Pvalues;
+        return decimal.TryParse(value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : defaultValue;
     }
 }

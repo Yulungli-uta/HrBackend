@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models.Guards;
@@ -89,7 +90,9 @@ public sealed class GuardShiftChangesReportSource : IReportSource
                                    || c.ReplacementEmployeeId == filter.EmployeeId.Value);
 
         var data = await query
-            .OrderByDescending(c => c.RequestedAt)
+            .OrderBy(c => c.OriginalEmployee!.People!.LastName)
+            .ThenBy(c => c.OriginalEmployee!.People!.FirstName)
+            .ThenByDescending(c => c.RequestedAt)
             .ToListAsync();
 
         _logger.LogInformation("GuardShiftChanges report: {Count} records.", data.Count);
@@ -102,9 +105,9 @@ public sealed class GuardShiftChangesReportSource : IReportSource
             {
                 [ColDate]         = c.Planning?.WorkDate.ToString("dd/MM/yyyy") ?? "—",
                 [ColOriginalCard] = c.OriginalEmployee?.People?.IdCard ?? "—",
-                [ColOriginal]     = $"{c.OriginalEmployee?.People?.FirstName} {c.OriginalEmployee?.People?.LastName}".Trim(),
+                [ColOriginal]     = c.OriginalEmployee?.People.GetFullName() ?? string.Empty,
                 [ColReplacement]  = c.ReplacementEmployee != null
-                                    ? $"{c.ReplacementEmployee.People?.FirstName} {c.ReplacementEmployee.People?.LastName}".Trim()
+                                    ? c.ReplacementEmployee.People.GetFullName()
                                     : "—",
                 [ColGroup]        = c.Planning?.Group?.Name ?? "—",
                 [ColLocation]     = locLabel,

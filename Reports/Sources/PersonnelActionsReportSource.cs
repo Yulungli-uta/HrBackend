@@ -86,7 +86,9 @@ public sealed class PersonnelActionsReportSource : IReportSource
                 [ColStatus]     = r.StatusName,
                 [ColDoc]        = r.HasDocument ? "Sí" : "No",
             }).ToList(),
-            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape
+            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 

@@ -42,7 +42,7 @@ public class UserAccessScopeService : IUserAccessScopeService
         var employeeNames = await _db.Set<WsUtaSystem.Models.Views.VwEmployeeDetails>()
             .AsNoTracking()
             .Where(e => employeeIds.Contains(e.EmployeeID))
-            .ToDictionaryAsync(e => e.EmployeeID, e => (e.FirstName + " " + e.LastName, e.Email), ct);
+            .ToDictionaryAsync(e => e.EmployeeID, e => (e.LastName + " " + e.FirstName, e.Email), ct);
 
         return items.Select(s => ToDto(s, employeeNames)).ToList();
     }
@@ -268,7 +268,7 @@ public class UserAccessScopeService : IUserAccessScopeService
         {
             Id = s.Id,
             EmployeeId = s.EmployeeId,
-            EmployeeName = employee is null ? null : $"{employee.FirstName} {employee.LastName}",
+            EmployeeName = employee is null ? null : $"{employee.LastName} {employee.FirstName}".Trim(),
             EmployeeEmail = employee?.Email,
             ModuleTypeId = s.ModuleTypeId,
             ModuleTypeName = moduleName,

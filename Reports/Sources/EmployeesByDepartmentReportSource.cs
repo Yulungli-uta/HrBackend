@@ -61,6 +61,7 @@ namespace WsUtaSystem.Reports.Sources;
             var employees = (await _employeeDetailsService.GetByFiltersAsync(
                 filter.DepartmentId,
                 filter.EmployeeTypeId,
+                filter.LaborRegimeId,
                 CancellationToken.None)).ToList();
 
             _logger.LogInformation(
@@ -78,7 +79,9 @@ namespace WsUtaSystem.Reports.Sources;
                 GeneratedAt = DateTime.Now,
                 Columns = _columns,
                 Rows = BuildRows(employees),
-                Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape
+                Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+                VerticalHeaders = filter.VerticalHeaders ?? false,
+                RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
             };
         }
 
@@ -95,7 +98,7 @@ namespace WsUtaSystem.Reports.Sources;
                     [ColIdCard] = emp.IDCard,
                     [ColFullName] = emp.FullName,
                     [ColEmail] = emp.Email,
-                    [ColEmployeeType] = MapEmployeeType(emp.EmployeeType),
+                    [ColEmployeeType] = string.IsNullOrWhiteSpace(emp.ContractType) ? "Sin tipo" : emp.ContractType,
                     [ColDepartment] = string.IsNullOrWhiteSpace(emp.Department) ? "Sin dependencia" : emp.Department,
                     [ColContractType] = string.IsNullOrWhiteSpace(emp.ContractType) ? "Sin contrato" : emp.ContractType,
                     [ColSchedule] = string.IsNullOrWhiteSpace(emp.Schedule) ? "Sin horario" : emp.Schedule
@@ -125,7 +128,17 @@ namespace WsUtaSystem.Reports.Sources;
             }
 
             if (filter.EmployeeTypeId.HasValue && filter.EmployeeTypeId.Value > 0)
-                parts.Add($"Tipo Empleado: {MapEmployeeType(filter.EmployeeTypeId.Value)}");
+            {
+                // Resuelve el nombre desde el propio resultado (ya trae ContractType
+                // correctamente unido a ref_Types) en vez de un mapeo hardcodeado que
+                // nunca coincidía con los valores reales del catálogo (bug encontrado
+                // 2026-08-11, mostraba el código crudo en vez de la descripción).
+                var typeName = employees
+                    .Where(x => x.EmployeeType == filter.EmployeeTypeId.Value)
+                    .Select(x => x.ContractType)
+                    .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+                parts.Add($"Tipo Empleado: {typeName ?? filter.EmployeeTypeId.Value.ToString()}");
+            }
             else
                 parts.Add("Tipo Empleado: Todos");
 
@@ -133,14 +146,5 @@ namespace WsUtaSystem.Reports.Sources;
 
             return string.Join(" | ", parts);
         }
-
-        private static string MapEmployeeType(int? employeeType) => employeeType switch
-        {
-            null => "Sin tipo",
-            1 => "Docente",
-            2 => "Administrativo",
-            3 => "Trabajador",
-            _ => employeeType.Value.ToString()
-        };
     }
 

@@ -25,7 +25,7 @@ public sealed class EmployeesReportSource : IReportSource
     private const string ColDepartment = "department";
     private const string ColEmpType    = "employee_type";
     private const string ColJobTitle   = "job_title";
-    private const string ColContract   = "contract_type";
+    private const string ColContract   = "document_number";
     private const string ColStartDate  = "start_date";
     private const string ColSalary     = "salary";
     private const string ColStatus     = "status";
@@ -38,7 +38,7 @@ public sealed class EmployeesReportSource : IReportSource
         new(ColDepartment, "Dependencia",      Width: 2.0f),
         new(ColEmpType,    "Régimen",          Width: 1.6f),
         new(ColJobTitle,   "Cargo",            Width: 2.0f),
-        new(ColContract,   "Tipo Contrato",    Width: 1.6f),
+        new(ColContract,   "N° Documento",     Width: 1.6f),
         new(ColStartDate,  "Fecha Ingreso",    Width: 1.4f, Alignment: ColumnAlignment.Center),
         new(ColSalary,     "RMU",              Width: 1.2f, Alignment: ColumnAlignment.Right),
         new(ColStatus,     "Estado",           Width: 1.2f, Alignment: ColumnAlignment.Center),
@@ -64,7 +64,8 @@ public sealed class EmployeesReportSource : IReportSource
             filter.EmployeeTypeId,
             filter.IsActive,
             filter.StartDate,
-            filter.EndDate);
+            filter.EndDate,
+            filter.LaborRegimeId);
         var records = data?.ToList() ?? [];
 
         _logger.LogInformation("Employees report: {Count} records.", records.Count);
@@ -78,7 +79,9 @@ public sealed class EmployeesReportSource : IReportSource
             GeneratedAt = DateTime.Now,
             Columns     = _columns,
             Rows        = BuildRows(records),
-            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape
+            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 
@@ -96,7 +99,7 @@ public sealed class EmployeesReportSource : IReportSource
                 [ColDepartment] = string.IsNullOrWhiteSpace(r.DepartmentName) ? "Sin dependencia" : r.DepartmentName,
                 [ColEmpType]    = r.EmployeeType,
                 [ColJobTitle]   = string.IsNullOrWhiteSpace(r.JobTitle) ? "Sin cargo" : r.JobTitle,
-                [ColContract]   = r.ContractType ?? "Sin contrato",
+                [ColContract]   = r.DocumentNumber ?? "—",
                 [ColStartDate]  = r.HireDate.ToString("dd/MM/yyyy"),
                 [ColSalary]     = r.BaseSalary.ToString("N2"),
                 [ColStatus]     = r.IsActive ? "Activo" : "Inactivo",
@@ -110,6 +113,7 @@ public sealed class EmployeesReportSource : IReportSource
         var parts = new List<string>();
         if (filter.DepartmentId.HasValue) parts.Add($"Dependencia ID: {filter.DepartmentId}");
         if (filter.IsActive.HasValue)     parts.Add(filter.IsActive.Value ? "Solo activos" : "Solo inactivos");
+        if (filter.LaborRegimeId.HasValue) parts.Add($"Régimen ID: {filter.LaborRegimeId}");
         parts.Add($"Total: {count}");
         return string.Join(" | ", parts);
     }

@@ -100,7 +100,7 @@ namespace WsUtaSystem.Controllers.HR
         [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetByDepartmentId(int departmentId, CancellationToken ct = default)
         {
-            var employees = await _employeeDetailsService.GetByFiltersAsync(departmentId, null, ct);
+            var employees = await _employeeDetailsService.GetByFiltersAsync(departmentId, null, ct: ct);
             return Ok(employees);
         }
 

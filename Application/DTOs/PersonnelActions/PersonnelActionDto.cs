@@ -228,6 +228,12 @@ public sealed record PersonnelActionQueryFilter(
     DateOnly? EndDate,
     /// <summary>Búsqueda libre: cédula del empleado, nombre completo o N° de acción (contiene, sin distinguir mayúsculas).</summary>
     string? Search = null,
+    /// <summary>
+    /// Filtro opcional elegido por el usuario (distinto de <see cref="AllowedDepartmentIds"/>,
+    /// que es la restricción de permisos). Se valida contra DestinationDepartmentId; si la
+    /// acción no tiene destino, se usa OriginDepartmentId como referencia.
+    /// </summary>
+    int? DepartmentId = null,
     int Page = 1,
     int PageSize = 20,
     /// <summary>

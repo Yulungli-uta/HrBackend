@@ -77,7 +77,7 @@ public class DepartmentAuthorityService
 
         var person = authority.Employee?.People;
         var fullName = person != null
-            ? $"{person.FirstName} {person.LastName}".Trim()
+            ? $"{person.LastName} {person.FirstName}".Trim()
             : "Sin nombre";
 
         return new DepartmentAuthorityDenominationDto

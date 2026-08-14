@@ -76,6 +76,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
     private readonly IEmployeeLaborRegimeService _laborRegimeService;
     private readonly IPersonnelMovementsService _movementsService;
     private readonly ITramiteRequirementsService _tramiteRequirements;
+    private readonly ISalaryHistoryService _salaryHistory;
 
     public ContractsService(
         IContractsRepository repo,
@@ -93,7 +94,8 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         IEmployeeProvisioningOrchestrator provisioningOrchestrator,
         IEmployeeLaborRegimeService laborRegimeService,
         IPersonnelMovementsService movementsService,
-        ITramiteRequirementsService tramiteRequirements
+        ITramiteRequirementsService tramiteRequirements,
+        ISalaryHistoryService salaryHistory
     ) : base(repo)
     {
         _repository                = repo                       ?? throw new ArgumentNullException(nameof(repo));
@@ -112,6 +114,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         _laborRegimeService        = laborRegimeService         ?? throw new ArgumentNullException(nameof(laborRegimeService));
         _movementsService          = movementsService           ?? throw new ArgumentNullException(nameof(movementsService));
         _tramiteRequirements       = tramiteRequirements        ?? throw new ArgumentNullException(nameof(tramiteRequirements));
+        _salaryHistory             = salaryHistory              ?? throw new ArgumentNullException(nameof(salaryHistory));
     }
 
     // -------------------------------------------------------
@@ -219,6 +222,11 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             ValidateDates(current);
 
             await base.UpdateAsync(id, current, ct);
+
+            // Corrige (o crea si aún no existía) la fila de SalaryHistory ligada
+            // específicamente a ESTE contrato — nunca la de otro contrato/acción
+            // del mismo empleado.
+            await RecordSalaryHistoryForContractAsync(current, $"Corrección de contrato: {reason}", ct);
 
             var after = AuditSnapshotHelper.Snapshot(current);
             await AuditSnapshotHelper.WriteCorrectionAuditAsync(
@@ -1261,6 +1269,11 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             updatedBy,
             ct);
 
+        // El contrato ya quedó FIRMADO_CARGADO (uno de los dos estados que justifican
+        // registrar el sueldo en SalaryHistory, junto con VIGENTE) — se registra aquí,
+        // una sola vez, sin importar si más abajo continúa a VIGENTE o a FINALIZADO.
+        await RecordSalaryHistoryForContractAsync(contract, "Contrato firmado y cargado.", ct);
+
         // 2026-08-06: "Ingresar Histórico" — el paso de subir el documento firmado de un
         // contrato histórico NO ocurre en la misma sesión que su creación (a diferencia de
         // Acciones de Personal), así que un flag transitorio pasado solo en el momento de
@@ -1315,6 +1328,36 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             contract, StatusVigente,
             "Contrato vigente tras firma y carga de documento.",
             updatedBy, ct);
+    }
+
+    /// <summary>
+    /// Registra/actualiza en <c>HR.tbl_SalaryHistory</c> el sueldo del contrato indicado
+    /// (documento fuente = este <see cref="Contracts.ContractID"/>). No hace nada si el
+    /// contrato no tiene <see cref="Contracts.BaseSalary"/> cargado — el disparo automático
+    /// (firma) y la corrección manual comparten esta misma lógica de upsert.
+    /// </summary>
+    private async Task RecordSalaryHistoryForContractAsync(Contracts contract, string reason, CancellationToken ct)
+    {
+        if (!contract.BaseSalary.HasValue)
+            return;
+
+        var employeeId = await _db.Employees
+            .AsNoTracking()
+            .Where(e => e.PersonID == contract.PersonID && e.IsActive)
+            .Select(e => e.EmployeeId)
+            .FirstOrDefaultAsync(ct);
+
+        if (employeeId == 0)
+        {
+            _logger.LogWarning(
+                "ContractsService: no se encontró empleado activo para PersonID={PersonID} (ContractID={ContractID}) — no se registra SalaryHistory.",
+                contract.PersonID, contract.ContractID);
+            return;
+        }
+
+        await _salaryHistory.UpsertForContractAsync(
+            contract.ContractID, employeeId, contract.BaseSalary.Value,
+            _currentUser.UserName ?? _currentUser.Email ?? "system", reason, ct);
     }
 
     public async Task FinalizeDocumentAsync(
@@ -1657,7 +1700,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             where emp.EmployeeId == employeeId.Value
             select new
             {
-                Name     = person.FirstName + " " + person.LastName,
+                Name     = person.LastName + " " + person.FirstName,
                 JobTitle = (string?)job.Description
             }
         ).FirstOrDefaultAsync(ct);
@@ -1718,20 +1761,20 @@ public class ContractsService : Service<Contracts, int>, IContractsService
                && (!filter.CreatedByEmployeeId.HasValue || c.CreatedBy     == filter.CreatedByEmployeeId.Value)
                && (!filter.EmployeeId.HasValue        || (owner != null && owner.EmployeeId == filter.EmployeeId.Value))
                && (string.IsNullOrEmpty(filter.Status) || (rs != null && rs.Name == filter.Status))
-            orderby c.StartDate descending
+            orderby p.LastName, p.FirstName, c.StartDate descending
             select new ContractReportDto
             {
                 ContractId        = c.ContractID,
                 ContractCode      = c.ContractCode,
                 PersonIdCard      = p.IdCard,
-                PersonFullName    = p.FirstName + " " + p.LastName,
+                PersonFullName    = p.LastName + " " + p.FirstName,
                 DepartmentName    = d.Name,
                 ContractTypeName  = ct2.Name,
                 LaborRegimeName   = lr != null ? lr.Name : null,
                 WorkModalityName  = wm != null ? wm.Name : null,
                 ContractedHours   = c.ContractedHours,
                 JobTitle          = j != null ? j.Description : null,
-                CreatedByName     = cbp != null ? cbp.FirstName + " " + cbp.LastName : null,
+                CreatedByName     = cbp != null ? cbp.LastName + " " + cbp.FirstName : null,
                 StartDate         = c.StartDate,
                 EndDate           = c.EndDate,
                 StatusName        = rs != null ? rs.Name : "—"

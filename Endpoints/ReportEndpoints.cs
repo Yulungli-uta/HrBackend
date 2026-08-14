@@ -352,9 +352,9 @@ public static class ReportEndpoints
             [FromQuery] DateTime? endDate,
             [FromQuery] string? reportType,
             [FromQuery] Guid? userId,
-            [FromQuery] int top,
             [FromServices] IReportAuditService auditService,
-            HttpContext context) =>
+            HttpContext context,
+            [FromQuery] int top = 100) =>
         {
             var audits = await auditService.GetAuditsAsync(startDate, endDate, reportType, userId, top);
             //context.Response.DisableCache();

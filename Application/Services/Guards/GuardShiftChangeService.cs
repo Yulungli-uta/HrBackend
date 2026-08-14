@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Guards;
@@ -288,9 +289,9 @@ public class GuardShiftChangeService : IGuardShiftChangeService
         new(c.ShiftChangeId, c.PlanningId,
             c.Planning?.WorkDate ?? default,
             c.OriginalEmployeeId,
-            c.OriginalEmployee is null ? "" : $"{c.OriginalEmployee.People?.FirstName} {c.OriginalEmployee.People?.LastName}",
+            c.OriginalEmployee is null ? "" : c.OriginalEmployee.People.GetFullName(),
             c.ReplacementEmployeeId,
-            c.ReplacementEmployee is null ? null : $"{c.ReplacementEmployee.People?.FirstName} {c.ReplacementEmployee.People?.LastName}",
+            c.ReplacementEmployee is null ? null : c.ReplacementEmployee.People.GetFullName(),
             c.OriginalScheduleId, c.OriginalSchedule?.Description ?? "",
             c.NewScheduleId, c.NewSchedule?.Description,
             c.ChangeType?.Name ?? "", c.StatusType?.Name ?? "",

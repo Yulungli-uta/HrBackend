@@ -71,7 +71,7 @@ public sealed class GeneratedDocumentRepository : IGeneratedDocumentRepository
                 x.tmpl.Name,
                 x.tmpl.TemplateCode,
                 x.doc.EmployeeId,
-                x.person.FirstName + " " + x.person.LastName,
+                x.person.LastName + " " + x.person.FirstName,
                 x.person.IdCard,
                 x.doc.EntityType,   // enum real
                 x.doc.EntityId,
@@ -126,7 +126,7 @@ public sealed class GeneratedDocumentRepository : IGeneratedDocumentRepository
             result.tmpl.Name,
             result.tmpl.TemplateCode,
             result.doc.EmployeeId,
-            result.person.FirstName + " " + result.person.LastName,
+            result.person.LastName + " " + result.person.FirstName,
             result.person.IdCard,
             result.doc.EntityType,  // enum real
             result.doc.EntityId,
@@ -173,7 +173,7 @@ public sealed class GeneratedDocumentRepository : IGeneratedDocumentRepository
                 tmpl.Name,
                 tmpl.TemplateCode,
                 doc.EmployeeId,
-                person.FirstName + " " + person.LastName,
+                person.LastName + " " + person.FirstName,
                 person.IdCard,
                 doc.EntityType, // enum real
                 doc.EntityId,

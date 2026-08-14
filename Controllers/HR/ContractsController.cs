@@ -78,6 +78,7 @@ public class ContractsController : ControllerBase
         [FromQuery] int? certificationId = null,
         [FromQuery] int? year = null,
         [FromQuery] int? employeeId = null,
+        [FromQuery] int? departmentId = null,
         [FromQuery] DateTime? startDateFrom = null,
         [FromQuery] DateTime? startDateTo = null,
         [FromQuery] string? sortDirection = "desc",
@@ -105,7 +106,7 @@ public class ContractsController : ControllerBase
         System.Linq.Expressions.Expression<Func<Contracts, bool>>? predicate = null;
 
         if (hasSearch || statusTypeId.HasValue || certificationId.HasValue || hasYear
-            || personId.HasValue || startDateFrom.HasValue || startDateTo.HasValue || hasDeptScope)
+            || personId.HasValue || departmentId.HasValue || startDateFrom.HasValue || startDateTo.HasValue || hasDeptScope)
         {
             predicate = c =>
                 (!hasSearch || c.ContractCode.ToLower().Contains(term) ||
@@ -114,6 +115,7 @@ public class ContractsController : ControllerBase
                 (!certificationId.HasValue || c.CertificationID == certificationId.Value) &&
                 (!hasYear                  || (c.CreatedAt != null && c.CreatedAt.Value.Year == year!.Value)) &&
                 (!personId.HasValue        || c.PersonID == personId.Value) &&
+                (!departmentId.HasValue    || c.DepartmentID == departmentId.Value) &&
                 (!startDateFrom.HasValue   || c.StartDate >= startDateFrom.Value) &&
                 (!startDateTo.HasValue     || c.StartDate <= startDateTo.Value) &&
                 (!hasDeptScope             || allowedDeptIds!.Contains(c.DepartmentID));

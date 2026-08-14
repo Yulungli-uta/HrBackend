@@ -69,7 +69,7 @@ public sealed class ResignationRetirementRepository : IResignationRetirementRepo
                 from bossEmp in _db.Employees.AsNoTracking()
                 where bossEmp.EmployeeId == employee.ImmediateBossId.Value
                 join bossPerson in _db.People.AsNoTracking() on bossEmp.PersonID equals bossPerson.PersonId
-                select bossPerson.FirstName + " " + bossPerson.LastName
+                select bossPerson.LastName + " " + bossPerson.FirstName
             ).FirstOrDefaultAsync(ct);
         }
 
@@ -161,7 +161,7 @@ public sealed class ResignationRetirementRepository : IResignationRetirementRepo
             EmployeeId: employee.EmployeeId,
             PersonId: employee.PersonId,
             IdCard: employee.IdCard,
-            FullName: $"{employee.FirstName} {employee.LastName}",
+            FullName: $"{employee.LastName} {employee.FirstName}",
             Email: employee.EmployeeEmail ?? employee.Email,
             PersonalEmail: employee.PersonalEmail,
             Phone: employee.Phone,
@@ -238,7 +238,7 @@ public sealed class ResignationRetirementRepository : IResignationRetirementRepo
             from emp in _db.Employees.AsNoTracking()
             join person in _db.People.AsNoTracking() on emp.PersonID equals person.PersonId
             where actorIds.Contains(emp.EmployeeId)
-            select new { emp.EmployeeId, FullName = person.FirstName + " " + person.LastName }
+            select new { emp.EmployeeId, FullName = person.LastName + " " + person.FirstName }
         ).ToDictionaryAsync(x => x.EmployeeId, x => x.FullName, ct);
 
         string? generatedDocumentFileName = null;
@@ -335,7 +335,7 @@ public sealed class ResignationRetirementRepository : IResignationRetirementRepo
             .Select(x => new ResignationRetirementSummaryDto(
                 x.r.RequestId,
                 x.r.EmployeeId,
-                x.person.FirstName + " " + x.person.LastName,
+                x.person.LastName + " " + x.person.FirstName,
                 x.person.IdCard,
                 x.DepartmentName,
                 x.r.RequestType,

@@ -52,6 +52,52 @@ public class FamilyBurdenController : ControllerBase
         return Ok(_mapper.Map<FamilyBurdenDto>(e));
     }
 
+    /// <summary>Contadores agregados (total, por estado, con discapacidad) para dato gerencial.</summary>
+    [HttpGet("stats")]
+    [RequirePermission("FAMILY_BURDEN.APPROVE")]
+    public async Task<IActionResult> GetStats(CancellationToken ct)
+        => Ok(await _svc.GetStatsAsync(ct));
+
+    /// <summary>Listado paginado para la pantalla de validación, filtrable por estado.</summary>
+    [HttpGet("validation")]
+    [RequirePermission("FAMILY_BURDEN.APPROVE")]
+    public async Task<IActionResult> GetForValidation(
+        [FromQuery] int? statusTypeId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        var result = await _svc.GetForValidationAsync(statusTypeId, page, pageSize, ct);
+        return Ok(result);
+    }
+
+    /// <summary>Aprueba una carga familiar registrada.</summary>
+    [HttpPost("{id:int}/approve")]
+    [RequirePermission("FAMILY_BURDEN.APPROVE")]
+    public async Task<IActionResult> Approve([FromRoute] int id, CancellationToken ct)
+    {
+        var approverId = _currentUser.EmployeeId
+            ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede aprobar cargas familiares.");
+
+        await _svc.ApproveAsync(id, approverId, ct);
+        return NoContent();
+    }
+
+    /// <summary>Rechaza una carga familiar registrada con motivo obligatorio.</summary>
+    [HttpPost("{id:int}/reject")]
+    [RequirePermission("FAMILY_BURDEN.APPROVE")]
+    public async Task<IActionResult> Reject([FromRoute] int id, [FromBody] FamilyBurdenRejectDto dto, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Reason))
+            return BadRequest(new { message = "El motivo de rechazo es obligatorio." });
+
+        var rejecterId = _currentUser.EmployeeId
+            ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede rechazar cargas familiares.");
+
+        await _svc.RejectAsync(id, rejecterId, dto.Reason, ct);
+        return NoContent();
+    }
+
     /// <summary>Obtiene toda la carga familiar de una persona.</summary>
     /// <param name="personId">ID de la persona</param>
     [HttpGet("person/{personId:int}")]
@@ -108,7 +154,8 @@ public class FamilyBurdenController : ControllerBase
             entity.PersonId = myPersonId.Value;
         }
 
-        var (created, storedFile, error) = await _svc.CreateWithDocumentAsync(entity, dto.File, dto.DocumentTypeId, ct);
+        var (created, storedFile, error) = await _svc.CreateWithDocumentAsync(
+            entity, dto.File, dto.DocumentTypeId, dto.DisabilityFile, dto.DisabilityDocumentTypeId, ct);
         if (error != null) return BadRequest(new { message = error });
 
         var result = new FamilyBurdenWithDocumentResultDto

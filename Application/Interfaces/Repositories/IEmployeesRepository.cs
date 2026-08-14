@@ -18,5 +18,6 @@ public interface IEmployeesRepository : IRepository<Employees, int> {
         bool? isActive,
         DateTime? hireDateFrom,
         DateTime? hireDateTo,
+        int? laborRegimeId = null,
         CancellationToken ct = default);
 }

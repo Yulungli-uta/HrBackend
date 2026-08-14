@@ -60,6 +60,8 @@ public sealed class SalaryHistoryConfiguration : IEntityTypeConfiguration<Salary
         e.HasKey(x => x.SalaryHistoryId);
         e.Property(x => x.SalaryHistoryId).HasColumnName("SalaryHistoryID");
         e.Property(x => x.ContractId).HasColumnName("ContractID");
+        e.Property(x => x.ActionId).HasColumnName("ActionID");
+        e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
         e.Property(x => x.Reason).HasMaxLength(300);
     }
 }

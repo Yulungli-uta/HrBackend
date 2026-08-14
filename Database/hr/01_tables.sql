@@ -864,11 +864,23 @@ CREATE TABLE [HR].[tbl_FamilyBurden] (
     [LastName] NVARCHAR(100) NOT NULL,
     [BirthDate] DATE NOT NULL,
     [DisabilityTypeID] INT NULL,
+    [StatusTypeID] INT NULL,
+    [ApprovedAt] DATETIME2 NULL,
+    [ApprovedBy] INT NULL,
+    [RejectedAt] DATETIME2 NULL,
+    [RejectedBy] INT NULL,
+    [RejectionReason] NVARCHAR(500) NULL,
     [CreatedAt] DATETIME2 DEFAULT (getdate()) NOT NULL,
     [CreatedBy] INT NULL,
     [UpdatedAt] DATETIME2 NULL,
     [UpdatedBy] INT NULL
 );
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_FamilyBurden_StatusType')
+ALTER TABLE [HR].[tbl_FamilyBurden]
+    ADD CONSTRAINT [FK_FamilyBurden_StatusType]
+    FOREIGN KEY ([StatusTypeID]) REFERENCES [HR].[ref_Types] ([TypeID]);
 GO
 
 -- ------------------------------------------------------------
@@ -1440,6 +1452,18 @@ CREATE TABLE [HR].[TBL_PARAMETERS] (
     [UpdatedAt] DATETIME2 NULL,
     [UpdatedBy] NVARCHAR(50) NULL
 );
+GO
+
+-- ============================================================
+-- Valor diario del subsidio de alimentacion (personal de Codigo de Trabajo).
+-- Parametrizado en HR.tbl_Parameters para que RRHH pueda ajustarlo sin
+-- requerir cambios de codigo. Se multiplica por los dias efectivamente
+-- laborados (HR.tbl_AttendanceCalculations.FoodSubsidy = 1) en el reporte
+-- consolidado de subsidio de alimentacion.
+-- ============================================================
+IF NOT EXISTS (SELECT 1 FROM [HR].[tbl_Parameters] WHERE [name] = 'FOOD_SUBSIDY_DAILY_VALUE')
+INSERT INTO [HR].[tbl_Parameters] ([name], [Pvalues], [Description], [DataType], [IsActive])
+VALUES ('FOOD_SUBSIDY_DAILY_VALUE', '3.50', 'VALOR DIARIO DEL SUBSIDIO DE ALIMENTACION PARA PERSONAL DE CODIGO DE TRABAJO', 'NUMERO', 1);
 GO
 
 -- ------------------------------------------------------------

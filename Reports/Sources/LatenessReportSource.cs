@@ -119,6 +119,8 @@ public sealed class LatenessReportSource : IReportSource
             Columns     = Columns,
             Rows        = rows,
             Orientation = filter.GetPageOrientation() ?? PageOrientation.Portrait,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 

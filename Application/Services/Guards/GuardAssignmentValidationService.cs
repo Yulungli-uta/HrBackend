@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
@@ -185,7 +186,7 @@ public class GuardAssignmentValidationService : IGuardAssignmentValidationServic
 
     private static GuardAssignmentValidationDto MapToDto(GuardAssignmentValidation v) =>
         new(v.ValidationId, v.EmployeeId,
-            v.Employee is null ? "" : $"{v.Employee.People?.FirstName} {v.Employee.People?.LastName}",
+            v.Employee is null ? "" : v.Employee.People.GetFullName(),
             v.PlanningId, v.ShiftChangeId,
             v.ValidationType?.Name ?? "", v.ResultType?.Name ?? "", v.SeverityType?.Name ?? "",
             v.ValidationDate, v.Message, v.Details);

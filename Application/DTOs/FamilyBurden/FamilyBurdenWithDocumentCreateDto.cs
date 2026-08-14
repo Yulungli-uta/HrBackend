@@ -15,4 +15,8 @@ public class FamilyBurdenWithDocumentCreateDto
 
     public IFormFile? File { get; set; }
     public int? DocumentTypeId { get; set; }
+
+    /// <summary>Certificado de discapacidad (opcional) — solo aplica si DisabilityTypeId != null.</summary>
+    public IFormFile? DisabilityFile { get; set; }
+    public int? DisabilityDocumentTypeId { get; set; }
 }

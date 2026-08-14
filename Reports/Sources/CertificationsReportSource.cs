@@ -92,7 +92,9 @@ public sealed class CertificationsReportSource : IReportSource
                 [ColRejection]  = r.RejectionReason ?? "—",
                 [ColCreated]    = r.CreatedAt?.ToString("dd/MM/yyyy") ?? "—",
             }).ToList(),
-            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape
+            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 

@@ -639,12 +639,12 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
                && (string.IsNullOrEmpty(filter.Status) || perm.Status == filter.Status)
                && (!filter.EmployeeId.HasValue || perm.EmployeeId == filter.EmployeeId.Value)
                && (!filter.DepartmentId.HasValue || (d != null && d.DepartmentId == filter.DepartmentId.Value))
-            orderby perm.StartDate descending
+            orderby per.LastName, per.FirstName, perm.StartDate descending
             select new PermissionReportDto
             {
                 PermissionId      = perm.PermissionId,
                 PersonIdCard      = per.IdCard,
-                PersonFullName    = per.FirstName + " " + per.LastName,
+                PersonFullName    = per.LastName + " " + per.FirstName,
                 DepartmentName    = d != null ? d.Name : "—",
                 PermissionTypeName = pt.Name,
                 StartDate         = perm.StartDate,
@@ -653,7 +653,7 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
                 ChargedToVacation = perm.ChargedToVacation,
                 Justification     = perm.Justification,
                 Status            = perm.Status,
-                ApprovedByName    = approverPerson != null ? approverPerson.FirstName + " " + approverPerson.LastName : null
+                ApprovedByName    = approverPerson != null ? approverPerson.LastName + " " + approverPerson.FirstName : null
             };
 
         return await query.ToListAsync(ct);

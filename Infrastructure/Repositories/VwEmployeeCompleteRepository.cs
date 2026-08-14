@@ -23,8 +23,8 @@ namespace WsUtaSystem.Infrastructure.Repositories
         public async Task<IEnumerable<VwEmployeeComplete>> GetAllAsync(CancellationToken ct = default)
         {
             return await Query()
-                .OrderBy(e => e.FirstName)
-                .ThenBy(e => e.LastName)
+                .OrderBy(e => e.LastName)
+                .ThenBy(e => e.FirstName)
                 .ToListAsync(ct);
         }
 
@@ -40,8 +40,8 @@ namespace WsUtaSystem.Infrastructure.Repositories
         {
             return await Query()
                 .Where(e => e.Department == department)
-                .OrderBy(e => e.FirstName)
-                .ThenBy(e => e.LastName)
+                .OrderBy(e => e.LastName)
+                .ThenBy(e => e.FirstName)
                 .ToListAsync(ct);
         }
 
@@ -51,8 +51,8 @@ namespace WsUtaSystem.Infrastructure.Repositories
             CancellationToken ct = default)
         {
             var query = Query()
-                .OrderBy(e => e.FirstName)
-                .ThenBy(e => e.LastName);
+                .OrderBy(e => e.LastName)
+                .ThenBy(e => e.FirstName);
 
             var totalCount = await query.LongCountAsync(ct);
 
@@ -78,24 +78,30 @@ namespace WsUtaSystem.Infrastructure.Repositories
         {
             var query = Query();
 
+            // Búsqueda por palabra: cada palabra escrita (ej. "Perez Juan") debe
+            // aparecer en ALGUNO de los campos, no las dos juntas en un solo campo.
             if (!string.IsNullOrWhiteSpace(search))
             {
-                var term = search.Trim().ToLower();
-
-                query = query.Where(e =>
-                    (e.FirstName != null && e.FirstName.ToLower().Contains(term)) ||
-                    (e.LastName != null && e.LastName.ToLower().Contains(term)) ||
-                    (e.FullName != null && e.FullName.ToLower().Contains(term)) ||
-                    (e.IDCard != null && e.IDCard.ToLower().Contains(term)) ||
-                    (e.Email != null && e.Email.ToLower().Contains(term)) ||
-                    (e.Department != null && e.Department.ToLower().Contains(term)));
+                var words = search.Trim().ToLower()
+                    .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var word in words)
+                {
+                    var w = word;
+                    query = query.Where(e =>
+                        (e.FirstName != null && e.FirstName.ToLower().Contains(w)) ||
+                        (e.LastName != null && e.LastName.ToLower().Contains(w)) ||
+                        (e.FullName != null && e.FullName.ToLower().Contains(w)) ||
+                        (e.IDCard != null && e.IDCard.ToLower().Contains(w)) ||
+                        (e.Email != null && e.Email.ToLower().Contains(w)) ||
+                        (e.Department != null && e.Department.ToLower().Contains(w)));
+                }
             }
 
             var totalCount = await query.LongCountAsync(ct);
 
             var items = await query
-                .OrderBy(e => e.FirstName)
-                .ThenBy(e => e.LastName)
+                .OrderBy(e => e.LastName)
+                .ThenBy(e => e.FirstName)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync(ct);
@@ -119,17 +125,23 @@ namespace WsUtaSystem.Infrastructure.Repositories
         {
             var query = Query();
 
+            // Búsqueda por palabra: cada palabra escrita (ej. "Perez Juan") debe
+            // aparecer en ALGUNO de los campos, no las dos juntas en un solo campo.
             if (!string.IsNullOrWhiteSpace(search))
             {
-                var term = search.Trim().ToLower();
-
-                query = query.Where(e =>
-                    (e.FirstName != null && e.FirstName.ToLower().Contains(term)) ||
-                    (e.LastName != null && e.LastName.ToLower().Contains(term)) ||
-                    (e.FullName != null && e.FullName.ToLower().Contains(term)) ||
-                    (e.IDCard != null && e.IDCard.ToLower().Contains(term)) ||
-                    (e.Email != null && e.Email.ToLower().Contains(term)) ||
-                    (e.Department != null && e.Department.ToLower().Contains(term)));
+                var words = search.Trim().ToLower()
+                    .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var word in words)
+                {
+                    var w = word;
+                    query = query.Where(e =>
+                        (e.FirstName != null && e.FirstName.ToLower().Contains(w)) ||
+                        (e.LastName != null && e.LastName.ToLower().Contains(w)) ||
+                        (e.FullName != null && e.FullName.ToLower().Contains(w)) ||
+                        (e.IDCard != null && e.IDCard.ToLower().Contains(w)) ||
+                        (e.Email != null && e.Email.ToLower().Contains(w)) ||
+                        (e.Department != null && e.Department.ToLower().Contains(w)));
+                }
             }
 
             if (employeeType.HasValue)
@@ -150,8 +162,8 @@ namespace WsUtaSystem.Infrastructure.Repositories
             var totalCount = await query.LongCountAsync(ct);
 
             var items = await query
-                .OrderBy(e => e.FirstName)
-                .ThenBy(e => e.LastName)
+                .OrderBy(e => e.LastName)
+                .ThenBy(e => e.FirstName)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync(ct);

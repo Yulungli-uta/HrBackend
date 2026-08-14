@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.DTOs.ContractRequestPerson;
 using WsUtaSystem.Application.Interfaces.Repositories;
@@ -362,9 +363,7 @@ public class ContractRequestPersonService
         RequestPersonId      = p.RequestPersonId,
         RequestId            = p.RequestId,
         PersonId             = p.PersonId,
-        PersonFullName       = p.Person != null
-                               ? $"{p.Person.FirstName} {p.Person.LastName}".Trim()
-                               : null,
+        PersonFullName       = p.Person.GetFullName(),
         PersonIdentification = p.Person?.IdCard,
         JobId                = p.JobId,
         JobName              = p.Job?.Description,

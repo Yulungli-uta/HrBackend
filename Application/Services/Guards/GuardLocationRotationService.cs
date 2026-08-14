@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Guards;
@@ -247,7 +248,7 @@ public class GuardLocationRotationService : IGuardLocationRotationService
             a.Group?.Name,
             a.Group?.GroupCode,
             a.EmployeeId,
-            a.Employee is null ? null : $"{a.Employee.People?.FirstName} {a.Employee.People?.LastName}".Trim(),
+            a.Employee is null ? null : a.Employee.People.GetFullName(),
             a.Employee?.People?.IdCard,
             a.LocationId,
             a.Location?.LocationName ?? string.Empty,

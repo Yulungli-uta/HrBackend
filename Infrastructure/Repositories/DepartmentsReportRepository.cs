@@ -34,10 +34,28 @@ public sealed class DepartmentsReportRepository : IDepartmentsReportRepository
             .AsNoTracking()
             .Where(d => includeInactive || d.IsActive)
             .OrderBy(d => d.Name)
-            .Select(d => new { d.DepartmentId, d.Name, d.Code, d.IsActive, d.CreatedAt, d.UpdatedAt })
+            .Select(d => new { d.DepartmentId, d.Name, d.Code, d.IsActive, d.CreatedAt, d.UpdatedAt, d.DepartmentType, d.DepartmentScope, d.ParentId })
             .ToListAsync(ct);
 
         if (departments.Count == 0) return [];
+
+        // Tipo/Ámbito (ref_Types) y nombre de la dependencia padre — resueltos aparte
+        // porque no son traducibles a un único Select() sin duplicar el join por cada
+        // categoría distinta de ref_Types.
+        var refTypeIds = departments
+            .SelectMany(d => new[] { d.DepartmentType, d.DepartmentScope })
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+        var refTypeNames = await _db.RefTypes.AsNoTracking()
+            .Where(r => refTypeIds.Contains(r.TypeId))
+            .ToDictionaryAsync(r => r.TypeId, r => r.Name, ct);
+
+        var parentIds = departments.Where(d => d.ParentId.HasValue).Select(d => d.ParentId!.Value).Distinct().ToList();
+        var parentNames = await _db.Departments.AsNoTracking()
+            .Where(d => parentIds.Contains(d.DepartmentId))
+            .ToDictionaryAsync(d => d.DepartmentId, d => d.Name, ct);
 
         var deptIds = departments.Select(d => d.DepartmentId).ToList();
 
@@ -66,8 +84,8 @@ public sealed class DepartmentsReportRepository : IDepartmentsReportRepository
 
         var salariesByContract = await _db.SalaryHistory
             .AsNoTracking()
-            .Where(s => contractIds.Contains(s.ContractId))
-            .Select(s => new { s.ContractId, s.NewSalary, s.ChangedAt })
+            .Where(s => s.ContractId.HasValue && contractIds.Contains(s.ContractId.Value))
+            .Select(s => new { ContractId = s.ContractId!.Value, s.NewSalary, s.ChangedAt })
             .ToListAsync(ct);
 
         var latestSalaryByContract = salariesByContract
@@ -95,6 +113,9 @@ public sealed class DepartmentsReportRepository : IDepartmentsReportRepository
                 DepartmentCode    = dept.Code,
                 FacultyName       = string.Empty, // HR.tbl_Faculties ya no existe
                 FacultyCode       = string.Empty,
+                DepartmentTypeName  = dept.DepartmentType.HasValue && refTypeNames.TryGetValue(dept.DepartmentType.Value, out var dtName) ? dtName : null,
+                DepartmentScopeName = dept.DepartmentScope.HasValue && refTypeNames.TryGetValue(dept.DepartmentScope.Value, out var dsName) ? dsName : null,
+                ParentDepartmentName = dept.ParentId.HasValue && parentNames.TryGetValue(dept.ParentId.Value, out var pName) ? pName : null,
                 IsActive          = dept.IsActive,
                 TotalEmployees    = deptEmployees.Count,
                 ActiveEmployees   = deptEmployees.Count(e => e.IsActive),

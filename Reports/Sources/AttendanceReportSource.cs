@@ -70,7 +70,9 @@ public sealed class AttendanceReportSource : IReportSource
             GeneratedAt = DateTime.Now,
             Columns     = _columns,
             Rows        = BuildRows(records),
-            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape
+            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 

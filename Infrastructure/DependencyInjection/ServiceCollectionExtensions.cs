@@ -435,6 +435,14 @@ public static class ServiceCollectionExtensions
             WsUtaSystem.Reports.Abstractions.IReportSource,
             WsUtaSystem.Reports.Sources.AttendanceCrossReportSource>();
 
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.FoodSubsidySummaryReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.FamilySubsidyReportSource>();
+
         // ── Reportes módulo Guardias ──────────────────────────────────────────
         services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportSource,

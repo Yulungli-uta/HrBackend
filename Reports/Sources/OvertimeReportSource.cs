@@ -125,6 +125,8 @@ public sealed class OvertimeReportSource : IReportSource
             Columns     = Columns,
             Rows        = rows,
             Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 

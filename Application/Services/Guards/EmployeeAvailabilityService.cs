@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
@@ -37,7 +38,7 @@ public class EmployeeAvailabilityService : IEmployeeAvailabilityService
 
         return blocks.Select(b => new EmployeeAvailabilityBlockDto(
             b.BlockId, b.EmployeeId,
-            $"{b.Employee?.People?.FirstName} {b.Employee?.People?.LastName}",
+            b.Employee?.People.GetFullName() ?? string.Empty,
             b.SourceType?.Name ?? "", b.SourceTable, b.SourceId,
             b.StartDateTime, b.EndDateTime, b.StatusType?.Name ?? "", b.Reason
         )).ToList();
@@ -72,7 +73,7 @@ public class EmployeeAvailabilityService : IEmployeeAvailabilityService
         {
             Items = items.Select(b => new EmployeeAvailabilityBlockDto(
                 b.BlockId, b.EmployeeId,
-                $"{b.Employee?.People?.FirstName} {b.Employee?.People?.LastName}",
+                b.Employee?.People.GetFullName() ?? string.Empty,
                 b.SourceType?.Name ?? "", b.SourceTable, b.SourceId,
                 b.StartDateTime, b.EndDateTime, b.StatusType?.Name ?? "", b.Reason
             )).ToList(),
@@ -108,7 +109,7 @@ public class EmployeeAvailabilityService : IEmployeeAvailabilityService
 
         return new EmployeeAvailabilityBlockDto(
             entity.BlockId, entity.EmployeeId,
-            $"{emp.People?.FirstName} {emp.People?.LastName}",
+            emp.People.GetFullName(),
             "", null, null, entity.StartDateTime, entity.EndDateTime, "ACTIVE", entity.Reason
         );
     }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Guards;
@@ -52,7 +53,7 @@ public class GuardEmployeeSpecialRuleService : IGuardEmployeeSpecialRuleService
         {
             var term = search.Trim().ToLower();
             q = q.Where(r =>
-                (r.Employee!.People!.FirstName + " " + r.Employee.People.LastName).ToLower().Contains(term) ||
+                (r.Employee!.People!.LastName + " " + r.Employee.People.FirstName).ToLower().Contains(term) ||
                 r.Employee.People.IdCard.ToLower().Contains(term));
         }
 
@@ -147,7 +148,7 @@ public class GuardEmployeeSpecialRuleService : IGuardEmployeeSpecialRuleService
         new(
             r.SpecialRuleId,
             r.EmployeeId,
-            r.Employee is null ? string.Empty : $"{r.Employee.People?.FirstName} {r.Employee.People?.LastName}".Trim(),
+            r.Employee is null ? string.Empty : r.Employee.People.GetFullName(),
             r.Employee?.People?.IdCard,
             r.FixedLocationId,
             r.FixedLocation?.LocationName,

@@ -35,7 +35,7 @@ public sealed class EmployeeInternalRequestRepository : IEmployeeInternalRequest
             {
                 r.RequestId,
                 r.EmployeeId,
-                EmployeeFullName = person.FirstName + " " + person.LastName,
+                EmployeeFullName = person.LastName + " " + person.FirstName,
                 EmployeeIdCard = person.IdCard,
                 emp.DepartmentId,
                 DepartmentName = dept != null ? dept.Name : null,
@@ -70,7 +70,7 @@ public sealed class EmployeeInternalRequestRepository : IEmployeeInternalRequest
                 from emp in _db.Employees.AsNoTracking()
                 join person in _db.People.AsNoTracking() on emp.PersonID equals person.PersonId
                 where emp.EmployeeId == row.ResolvedBy.Value
-                select person.FirstName + " " + person.LastName
+                select person.LastName + " " + person.FirstName
             ).FirstOrDefaultAsync(ct);
         }
 
@@ -115,7 +115,7 @@ public sealed class EmployeeInternalRequestRepository : IEmployeeInternalRequest
             .Skip((filter.Page - 1) * filter.PageSize)
             .Take(filter.PageSize)
             .Select(x => new EmployeeInternalRequestSummaryDto(
-                x.r.RequestId, x.r.EmployeeId, x.person.FirstName + " " + x.person.LastName, x.person.IdCard,
+                x.r.RequestId, x.r.EmployeeId, x.person.LastName + " " + x.person.FirstName, x.person.IdCard,
                 x.DepartmentName, x.r.RequestType, x.r.Subject, x.r.Status, x.r.CreatedAt))
             .ToListAsync(ct);
 

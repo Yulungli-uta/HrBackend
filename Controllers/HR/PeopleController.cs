@@ -50,22 +50,10 @@ public class PeopleController : ControllerBase
         if (page < 1) page = 1;
         if (pageSize < 1 || pageSize > 200) pageSize = 20;
 
-        System.Linq.Expressions.Expression<Func<People, bool>>? predicate = null;
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var term = search.Trim().ToLower();
-
-            predicate = p =>
-                (p.FirstName != null && p.FirstName.ToLower().Contains(term)) ||
-                (p.LastName != null && p.LastName.ToLower().Contains(term)) ||
-                (p.IdCard != null && p.IdCard.ToLower().Contains(term)) ||
-                (p.Email != null && p.Email.ToLower().Contains(term));
-        }
-
-        var pagedEntities = predicate is not null
-            ? await _svc.GetPagedAsync(predicate, page, pageSize, ct)
-            : await _svc.GetPagedAsync(page, pageSize, ct);
+        // SearchPagedAsync: búsqueda por palabra (cada palabra en algún campo, sin
+        // importar el orden) y ordenado por Apellido — antes esta consulta no
+        // pasaba ningún orderBy, la paginación corría sin orden determinístico.
+        var pagedEntities = await _svc.SearchPagedAsync(search, page, pageSize, ct);
 
         var dtoItems = _mapper.Map<List<PeopleDto>>(pagedEntities.Items);
 

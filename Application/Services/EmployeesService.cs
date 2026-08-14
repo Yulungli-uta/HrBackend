@@ -31,8 +31,9 @@ public class EmployeesService : Service<Employees, int>, IEmployeesService
         bool? isActive,
         DateTime? hireDateFrom,
         DateTime? hireDateTo,
+        int? laborRegimeId = null,
         CancellationToken ct = default)
     {
-        return await _Repo.GetEmployeesReportDataAsync(departmentId, employeeType, isActive, hireDateFrom, hireDateTo, ct);
+        return await _Repo.GetEmployeesReportDataAsync(departmentId, employeeType, isActive, hireDateFrom, hireDateTo, laborRegimeId, ct);
     }
 }

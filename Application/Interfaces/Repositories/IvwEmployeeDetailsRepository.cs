@@ -46,16 +46,21 @@ namespace WsUtaSystem.Application.Interfaces.Repositories
         Task<IEnumerable<VwEmployeeDetails>> GetByFiltersAsync(
             int? departmentId,
             int? employeeType,
+            int? laborRegimeId = null,
             CancellationToken ct = default);
 
         Task<IEnumerable<DepartmentContractCountDto>> GetDepartmentContractCountsAsync(
             int? departmentId,
             int? employeeType,
+            int? laborRegimeId = null,
             CancellationToken ct = default);
 
         Task<IEnumerable<ScheduleContractCountDto>> GetScheduleContractCountsAsync(
             int? departmentId,
             int? employeeType,
+            int? laborRegimeId = null,
+            int? departmentTypeId = null,
+            int? departmentScopeId = null,
             CancellationToken ct = default);
 
         /// <summary>Cobertura de horario asignado, calculada en SQL (evita traer la tabla completa al cliente).</summary>

@@ -79,5 +79,20 @@ public enum ReportType
     /// Reporte SIIES Formación Profesional (matriz 5.5, Formación Terminado). Una fila por título
     /// académico de un docente. No segrega CEDULA/PASAPORTE (no aplica a esta matriz).
     /// </summary>
-    SiiesFormacionProfesional = 26
+    SiiesFormacionProfesional = 26,
+
+    /// <summary>
+    /// Reporte consolidado de subsidio de alimentación: días efectivamente laborados
+    /// por empleado en el período (HR.tbl_AttendanceCalculations.FoodSubsidy) multiplicados
+    /// por el valor diario parametrizado en HR.tbl_Parameters (FOOD_SUBSIDY_DAILY_VALUE).
+    /// </summary>
+    FoodSubsidySummary = 27,
+
+    /// <summary>
+    /// Reporte de subsidio de cargas familiares: cantidad de cargas familiares aprobadas
+    /// que califican (menores de la edad tope parametrizada, o cualquier edad con
+    /// discapacidad registrada) por empleado, multiplicada por el valor base parametrizado
+    /// en HR.tbl_Parameters (FAMILY_SUBSIDY_BASE_VALUE).
+    /// </summary>
+    FamilySubsidySummary = 28
 }

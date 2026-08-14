@@ -21,6 +21,13 @@ public record EmployeeReportDto
     public decimal BaseSalary { get; init; }
     public decimal NetSalary { get; init; }
     public string? ContractType { get; init; }
+    /// <summary>
+    /// Número de documento (contrato o acción de personal) del régimen laboral principal
+    /// vigente del empleado (HR.tbl_EmployeeLaborRegime.DocumentNumber, IsPrincipal=1 AND
+    /// IsActive=1). Reemplaza a <see cref="ContractType"/> en el reporte v2 de Empleados —
+    /// es más útil identificar el documento exacto que el tipo genérico de contrato.
+    /// </summary>
+    public string? DocumentNumber { get; init; }
     public DateTime? ContractStartDate { get; init; }
     public DateTime? ContractEndDate { get; init; }
     public DateTime HireDate { get; init; }

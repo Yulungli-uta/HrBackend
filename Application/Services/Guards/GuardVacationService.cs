@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Guards;
@@ -499,7 +500,7 @@ public class GuardVacationService : IGuardVacationService
         new(
             p.GuardVacationPlanId,
             p.EmployeeId,
-            p.Employee is null ? string.Empty : $"{p.Employee.People?.FirstName} {p.Employee.People?.LastName}".Trim(),
+            p.Employee is null ? string.Empty : p.Employee.People.GetFullName(),
             p.Employee?.People?.IdCard,
             p.VacationYear,
             p.PlannedStartDate,
@@ -507,10 +508,10 @@ public class GuardVacationService : IGuardVacationService
             p.StatusTypeId,
             p.StatusType?.Name ?? string.Empty,
             p.DirectionApprovedBy,
-            p.DirectionApprover is null ? null : $"{p.DirectionApprover.People?.FirstName} {p.DirectionApprover.People?.LastName}".Trim(),
+            p.DirectionApprover is null ? null : p.DirectionApprover.People.GetFullName(),
             p.DirectionApprovedAt,
             p.SubmittedToDirectionBy,
-            p.SubmittedByEmployee is null ? null : $"{p.SubmittedByEmployee.People?.FirstName} {p.SubmittedByEmployee.People?.LastName}".Trim(),
+            p.SubmittedByEmployee is null ? null : p.SubmittedByEmployee.People.GetFullName(),
             p.SubmittedToDirectionAt,
             p.Notes
         );
@@ -519,7 +520,7 @@ public class GuardVacationService : IGuardVacationService
         new(
             r.GuardVacationRequestId,
             r.EmployeeId,
-            r.Employee is null ? string.Empty : $"{r.Employee.People?.FirstName} {r.Employee.People?.LastName}".Trim(),
+            r.Employee is null ? string.Empty : r.Employee.People.GetFullName(),
             r.Employee?.People?.IdCard,
             r.GuardVacationPlanId,
             r.VacationId,
@@ -533,13 +534,13 @@ public class GuardVacationService : IGuardVacationService
             r.Reason,
             r.StatusType?.Name ?? string.Empty,
             r.RequestedBy,
-            r.Requester is null ? null : $"{r.Requester.People?.FirstName} {r.Requester.People?.LastName}".Trim(),
+            r.Requester is null ? null : r.Requester.People.GetFullName(),
             r.RequestedAt,
             r.DirectionApprovedBy,
-            r.DirectionApprover is null ? null : $"{r.DirectionApprover.People?.FirstName} {r.DirectionApprover.People?.LastName}".Trim(),
+            r.DirectionApprover is null ? null : r.DirectionApprover.People.GetFullName(),
             r.DirectionApprovedAt,
             r.SubmittedToDirectionBy,
-            r.SubmittedByEmployee is null ? null : $"{r.SubmittedByEmployee.People?.FirstName} {r.SubmittedByEmployee.People?.LastName}".Trim(),
+            r.SubmittedByEmployee is null ? null : r.SubmittedByEmployee.People.GetFullName(),
             r.SubmittedToDirectionAt,
             r.RejectionReason,
             r.RejectedAt

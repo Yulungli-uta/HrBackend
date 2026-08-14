@@ -63,6 +63,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
     private readonly IPersonnelMovementsService _movementsService;
     private readonly IContractsService _contractsService;
     private readonly ICurrentUserService _currentUser;
+    private readonly ISalaryHistoryService _salaryHistory;
 
     /// <summary>
     /// Código de PersonnelActionType cuyo efecto colateral, al cargar el documento firmado,
@@ -85,7 +86,8 @@ public sealed class PersonnelActionService : IPersonnelActionService
         IEmployeeLaborRegimeService laborRegimeService,
         IPersonnelMovementsService movementsService,
         IContractsService contractsService,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        ISalaryHistoryService salaryHistory)
     {
         _actionRepository          = actionRepository;
         _personnelActionType       = personnelActionType;
@@ -101,6 +103,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         _laborRegimeService        = laborRegimeService;
         _contractsService          = contractsService;
         _currentUser               = currentUser;
+        _salaryHistory             = salaryHistory;
     }
 
     /// <inheritdoc />
@@ -263,6 +266,23 @@ public sealed class PersonnelActionService : IPersonnelActionService
         await _actionRepository.UpdateAsync(action, ct);
     }
 
+    /// <summary>
+    /// Registra/actualiza en <c>HR.tbl_SalaryHistory</c> el sueldo de la acción indicada
+    /// (documento fuente = este <see cref="PersonnelAction.ActionId"/>). No hace nada si la
+    /// acción no tiene <see cref="PersonnelAction.NewRmu"/> o <see cref="PersonnelAction.EmployeeId"/>
+    /// cargados — el disparo automático (firma) y la corrección manual comparten esta misma
+    /// lógica de upsert.
+    /// </summary>
+    private async Task RecordSalaryHistoryForActionAsync(PersonnelAction action, string reason, CancellationToken ct)
+    {
+        if (!action.NewRmu.HasValue || !action.EmployeeId.HasValue)
+            return;
+
+        await _salaryHistory.UpsertForActionAsync(
+            action.ActionId, action.EmployeeId.Value, action.PreviousRmu ?? 0m, action.NewRmu.Value,
+            _currentUser.UserName ?? _currentUser.Email ?? "system", reason, ct);
+    }
+
     /// <inheritdoc />
     public async Task CorrectAsync(
         int actionId,
@@ -310,6 +330,11 @@ public sealed class PersonnelActionService : IPersonnelActionService
         action.UpdatedBy               = correctedBy;
 
         await _actionRepository.UpdateAsync(action, ct);
+
+        // Corrige (o crea si aún no existía) la fila de SalaryHistory ligada
+        // específicamente a ESTA acción — nunca la de otro contrato/acción
+        // del mismo empleado.
+        await RecordSalaryHistoryForActionAsync(action, $"Corrección de acción de personal: {reason}", ct);
 
         var after = AuditSnapshotHelper.Snapshot(action);
         await AuditSnapshotHelper.WriteCorrectionAuditAsync(
@@ -428,6 +453,11 @@ public sealed class PersonnelActionService : IPersonnelActionService
 
         await TransitionStatusAsync(actionId, action.Status, "FIRMADO_CARGADO",
             request.Comment, updatedBy, ct);
+
+        // La acción ya quedó FIRMADO_CARGADO (uno de los dos estados que justifican
+        // registrar el sueldo en SalaryHistory, junto con VIGENTE) — se registra aquí,
+        // una sola vez, sin importar si más abajo continúa a VIGENTE o a FINALIZADO.
+        await RecordSalaryHistoryForActionAsync(action, "Acción de personal firmada y cargada.", ct);
 
         await _actionRepository.LinkSignedDocumentAsync(actionId, request.StoredFileId, ct);
 
@@ -1346,13 +1376,13 @@ public sealed class PersonnelActionService : IPersonnelActionService
                && (!filter.EmployeeId.HasValue  || a.EmployeeId == filter.EmployeeId.Value || a.PersonId == filter.EmployeeId.Value)
                && (!filter.ActionTypeId.HasValue || a.ActionTypeId == filter.ActionTypeId.Value)
                && (categories == null || categories.Count == 0 || categories.Contains(pat.ActionCategory))
-            orderby a.ActionDate descending
+            orderby p.LastName, p.FirstName, a.ActionDate descending
             select new PersonnelActionReportDto
             {
                 ActionId               = a.ActionId,
                 ActionNumber           = a.ActionNumber,
                 PersonIdCard           = p.IdCard,
-                PersonFullName         = p.FirstName + " " + p.LastName,
+                PersonFullName         = p.LastName + " " + p.FirstName,
                 DepartmentName         = od != null ? od.Name : dd != null ? dd.Name : null,
                 ActionTypeName         = pat.Name,
                 ActionCategory         = pat.ActionCategory,

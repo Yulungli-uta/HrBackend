@@ -3,6 +3,7 @@ using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Data;
+using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Infrastructure.Repositories;
 
@@ -75,7 +76,7 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
             {
                 EmployeeId            = x.calc.EmployeeId,
                 IdCard                = x.person.IdCard,
-                FullName              = x.person.FirstName + " " + x.person.LastName,
+                FullName              = x.person.LastName + " " + x.person.FirstName,
                 WorkDate              = x.calc.WorkDate,
                 MinutesLate           = x.calc.MinutesLate,
                 TardinessMin          = x.calc.TardinessMin,
@@ -136,7 +137,7 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
             {
                 EmployeeId          = x.calc.EmployeeId,
                 IdCard              = x.person.IdCard,
-                FullName            = x.person.FirstName + " " + x.person.LastName,
+                FullName            = x.person.LastName + " " + x.person.FirstName,
                 WorkDate            = x.calc.WorkDate,
                 TotalWorkedMinutes  = x.calc.TotalWorkedMinutes,
                 OvertimeMinutes     = x.calc.OvertimeMinutes,
@@ -197,7 +198,7 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
             {
                 EmployeeId              = x.calc.EmployeeId,
                 IdCard                  = x.person.IdCard,
-                FullName                = x.person.FirstName + " " + x.person.LastName,
+                FullName                = x.person.LastName + " " + x.person.FirstName,
                 WorkDate                = x.calc.WorkDate,
                 TotalWorkedMinutes      = x.calc.TotalWorkedMinutes,
                 RegularMinutes          = x.calc.RegularMinutes,
@@ -268,7 +269,7 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
             {
                 AttendanceDate       = x.calc.WorkDate.ToDateTime(TimeOnly.MinValue),
                 EmployeeId           = x.calc.EmployeeId,
-                EmployeeName         = x.person.FirstName + " " + x.person.LastName,
+                EmployeeName         = x.person.LastName + " " + x.person.FirstName,
                 IdentificationNumber = x.person.IdCard,
                 DepartmentName       = x.dept != null ? x.dept.Name : string.Empty,
                 CheckIn              = x.calc.FirstPunchIn,
@@ -282,5 +283,78 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
             .ToListAsync(ct);
 
         return result.AsReadOnly();
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<FoodSubsidySummaryReportDto>> GetFoodSubsidySummaryDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        var startDate = filter.StartDate.HasValue
+            ? DateOnly.FromDateTime(filter.StartDate.Value)
+            : DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+
+        var endDate = filter.EndDate.HasValue
+            ? DateOnly.FromDateTime(filter.EndDate.Value)
+            : DateOnly.FromDateTime(DateTime.Today);
+
+        var query = from calc in _db.AttendanceCalculations.AsNoTracking()
+                    join ved in _db.vwEmployeeDetails.AsNoTracking()
+                        on calc.EmployeeId equals ved.EmployeeID
+                    where calc.WorkDate >= startDate && calc.WorkDate <= endDate
+                    select new { calc, ved };
+
+        // Filtro opcional por empleado
+        if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
+            query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
+
+        // Filtro opcional por dependencia
+        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
+            query = query.Where(x => x.ved.DepartmentID == filter.DepartmentId.Value);
+
+        // Filtro opcional por cédula exacta
+        if (!string.IsNullOrWhiteSpace(filter.Identification))
+            query = query.Where(x => x.ved.IDCard == filter.Identification);
+
+        // Filtro opcional por régimen laboral. No se aplica por defecto: el flag
+        // FoodSubsidy ya solo se activa para Código de Trabajo, así que el resto de
+        // empleados queda excluido naturalmente (0 días) sin necesidad de forzar este filtro.
+        // Mismo criterio que VwEmployeeDetailsRepository.GetByFiltersAsync: prioriza
+        // EmployeeLaborRegime; si el empleado no tiene ningún registro activo ahí,
+        // cae a EmployeeType legacy en vez de excluirlo en silencio.
+        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
+        {
+            var regimeId = filter.LaborRegimeId.Value;
+            query = query.Where(x =>
+                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
+                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
+                    && x.ved.EmployeeType == regimeId));
+        }
+
+        var grouped = await query
+            .GroupBy(x => new
+            {
+                x.calc.EmployeeId,
+                x.ved.IDCard,
+                FullName = x.ved.LastName + " " + x.ved.FirstName,
+                x.ved.Department,
+                x.ved.ContractType
+            })
+            .Select(g => new FoodSubsidySummaryReportDto
+            {
+                EmployeeId     = g.Key.EmployeeId,
+                IdCard         = g.Key.IDCard,
+                FullName       = g.Key.FullName,
+                DepartmentName = g.Key.Department,
+                ContractType   = g.Key.ContractType,
+                DaysWorked     = g.Sum(x => x.calc.FoodSubsidy)
+            })
+            .Where(r => r.DaysWorked > 0)
+            .OrderBy(r => r.FullName)
+            .ToListAsync(ct);
+
+        return grouped.AsReadOnly();
     }
 }

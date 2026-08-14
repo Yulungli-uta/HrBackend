@@ -20,24 +20,20 @@ public sealed class DepartmentsReportSource : IReportSource
 
     public ReportType ReportType => ReportType.Departments;
 
-    private const string ColCode       = "code";
     private const string ColName       = "name";
-    private const string ColFaculty    = "faculty";
+    private const string ColType       = "department_type";
+    private const string ColScope      = "department_scope";
+    private const string ColParent     = "parent_department";
     private const string ColTotal      = "total";
-    private const string ColActive     = "active";
-    private const string ColInactive   = "inactive";
-    private const string ColAvgSalary  = "avg_salary";
     private const string ColStatus     = "status";
 
     private static readonly IReadOnlyList<ReportColumn> _columns =
     [
-        new(ColCode,      "Código",            Width: 1.2f),
         new(ColName,      "Dependencia",       Width: 2.8f),
-        new(ColFaculty,   "Facultad",          Width: 2.0f),
+        new(ColType,      "Tipo",              Width: 1.6f),
+        new(ColScope,     "Ámbito",            Width: 1.6f),
+        new(ColParent,    "Dependencia Padre", Width: 2.2f),
         new(ColTotal,     "N° Empleados",      Width: 1.4f, Alignment: ColumnAlignment.Right),
-        new(ColActive,    "Activos",           Width: 1.0f, Alignment: ColumnAlignment.Right),
-        new(ColInactive,  "Inactivos",         Width: 1.0f, Alignment: ColumnAlignment.Right),
-        new(ColAvgSalary, "RMU Promedio",      Width: 1.4f, Alignment: ColumnAlignment.Right),
         new(ColStatus,    "Estado",            Width: 1.0f, Alignment: ColumnAlignment.Center),
     ];
 
@@ -70,7 +66,9 @@ public sealed class DepartmentsReportSource : IReportSource
             GeneratedAt = DateTime.Now,
             Columns     = _columns,
             Rows        = BuildRows(records),
-            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape
+            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 
@@ -82,13 +80,11 @@ public sealed class DepartmentsReportSource : IReportSource
         {
             rows.Add(new Dictionary<string, object?>
             {
-                [ColCode]      = r.DepartmentCode,
                 [ColName]      = r.DepartmentName,
-                [ColFaculty]   = string.IsNullOrWhiteSpace(r.FacultyName) ? "-" : r.FacultyName,
+                [ColType]      = string.IsNullOrWhiteSpace(r.DepartmentTypeName) ? "—" : r.DepartmentTypeName,
+                [ColScope]     = string.IsNullOrWhiteSpace(r.DepartmentScopeName) ? "—" : r.DepartmentScopeName,
+                [ColParent]    = string.IsNullOrWhiteSpace(r.ParentDepartmentName) ? "—" : r.ParentDepartmentName,
                 [ColTotal]     = r.TotalEmployees,
-                [ColActive]    = r.ActiveEmployees,
-                [ColInactive]  = r.InactiveEmployees,
-                [ColAvgSalary] = r.AverageSalary.ToString("N2"),
                 [ColStatus]    = r.IsActive ? "Activo" : "Inactivo",
             });
         }

@@ -49,6 +49,12 @@ public record ReportFilterDto
     /// <summary>Filtra por régimen laboral (TypeId de ref_Types categoría LABOR_REGIME). Null = todos.</summary>
     public int? LaborRegimeId { get; init; }
 
+    /// <summary>Filtra por tipo de dependencia (TypeId de ref_Types categoría DEPARTMENT_TYPE). Null = todos.</summary>
+    public int? DepartmentTypeId { get; init; }
+
+    /// <summary>Filtra por ámbito de dependencia (TypeId de ref_Types categoría DEPARTMENT_SCOPE). Null = todos.</summary>
+    public int? DepartmentScopeId { get; init; }
+
     /// <summary>Filtra contratos por el empleado que los creó (ID de tbl_Employees). Null = todos.</summary>
     public int? CreatedByEmployeeId { get; init; }
 

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.DTOs.ContractRequest;
 using WsUtaSystem.Application.DTOs.ContractRequestPerson;
@@ -175,7 +176,7 @@ public class ContractRequestService : Service<ContractRequest, int>, IContractRe
         return people.Select(p => new AvailablePersonDto
         {
             PersonId       = p.PersonId,
-            FullName       = $"{p.FirstName} {p.LastName}".Trim(),
+            FullName       = p.GetFullName(),
             Identification = p.IdCard
         }).ToList();
     }

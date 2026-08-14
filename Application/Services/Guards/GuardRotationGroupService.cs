@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
@@ -45,16 +46,16 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         {
             var term = search.Trim().ToLower();
             query = query.Where(e =>
-                (e.People!.FirstName + " " + e.People.LastName).ToLower().Contains(term) ||
+                (e.People!.LastName + " " + e.People.FirstName).ToLower().Contains(term) ||
                 (e.People.IdCard != null && e.People.IdCard.ToLower().Contains(term)));
         }
 
         return await query
-            .OrderBy(e => e.People!.FirstName).ThenBy(e => e.People!.LastName)
+            .OrderBy(e => e.People!.LastName).ThenBy(e => e.People!.FirstName)
             .Take(20)
             .Select(e => new EligibleEmployeeDto(
                 e.EmployeeId,
-                $"{e.People!.FirstName} {e.People.LastName}",
+                e.People!.LastName + " " + e.People.FirstName,
                 e.People.IdCard,
                 e.Email ?? e.People.Email))
             .ToListAsync(ct);
@@ -235,7 +236,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
 
         return group.Employees.Select(e => new GuardRotationGroupEmployeeDto(
             e.GroupEmployeeId, e.GroupId, group.Name, e.EmployeeId,
-            $"{e.Employee?.People?.FirstName} {e.Employee?.People?.LastName}",
+            e.Employee?.People.GetFullName() ?? string.Empty,
             e.Employee?.People?.IdCard,
             e.ValidFrom, e.ValidTo, e.IsActive, e.Notes
         )).ToList();
@@ -265,7 +266,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
 
         return new GuardRotationGroupEmployeeDto(
             entity.GroupEmployeeId, groupId, group.Name, dto.EmployeeId,
-            $"{employee.People?.FirstName} {employee.People?.LastName}",
+            employee.People.GetFullName(),
             employee.People?.IdCard,
             entity.ValidFrom, entity.ValidTo, entity.IsActive, entity.Notes
         );

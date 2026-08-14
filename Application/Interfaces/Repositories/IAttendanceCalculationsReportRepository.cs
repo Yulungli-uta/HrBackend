@@ -68,4 +68,21 @@ public interface IAttendanceCalculationsReportRepository
     Task<IReadOnlyList<AttendanceReportDto>> GetAttendanceDataAsync(
         ReportFilterDto filter,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene el consolidado de días efectivamente laborados por empleado (suma de
+    /// <c>FoodSubsidy = 1</c>) en el rango de fechas indicado, para el reporte de
+    /// subsidio de alimentación. No filtra por tipo de contrato/régimen: el flag
+    /// <c>FoodSubsidy</c> ya solo se activa para personal de Código de Trabajo, así
+    /// que el resto de empleados aparece naturalmente con 0 días y queda excluido.
+    /// Solo incluye empleados con al menos un día con subsidio (&gt; 0).
+    /// </summary>
+    /// <param name="filter">
+    /// Filtros del reporte: StartDate, EndDate, DepartmentId, EmployeeId,
+    /// Identification (cédula) y LaborRegimeId (todos opcionales).
+    /// </param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<FoodSubsidySummaryReportDto>> GetFoodSubsidySummaryDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
 }

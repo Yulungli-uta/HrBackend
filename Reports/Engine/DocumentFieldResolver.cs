@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using WsUtaSystem.Application.Common.Enums;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
@@ -233,7 +234,7 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
         return fieldName.ToUpperInvariant() switch
         {
             "EMPLOYEE_ID"        => employee.EmployeeId.ToString(),
-            "EMPLOYEE_FULLNAME"  => p is not null ? $"{p.FirstName} {p.LastName}".ToUpperInvariant() : null,
+            "EMPLOYEE_FULLNAME"  => p is not null ? p.GetFullName().ToUpperInvariant() : null,
             "EMPLOYEE_FIRSTNAME" => p?.FirstName?.ToUpperInvariant(),
             "EMPLOYEE_LASTNAME"  => p?.LastName?.ToUpperInvariant(),
             "EMPLOYEE_IDCARD"    => p?.IdCard,
@@ -328,7 +329,7 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
             if (result.ContainsKey(roleCode)) continue; // ya resuelto por otra fila del mismo rol
 
             var person = row.Employee?.People;
-            var fullName = person is null ? string.Empty : $"{person.FirstName} {person.LastName}".Trim();
+            var fullName = person.GetFullName();
             var title = row.Denomination ?? row.AuthorityType!.Name;
 
             result[roleCode] = (fullName, title);

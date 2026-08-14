@@ -199,7 +199,7 @@ public class VacationBalanceAdjustmentService : IVacationBalanceAdjustmentServic
 
         var employeeNames = await _db.Set<WsUtaSystem.Models.Views.VwEmployeeDetails>().AsNoTracking()
             .Where(e => employeeIds.Contains(e.EmployeeID))
-            .ToDictionaryAsync(e => e.EmployeeID, e => e.FirstName + " " + e.LastName, ct);
+            .ToDictionaryAsync(e => e.EmployeeID, e => e.LastName + " " + e.FirstName, ct);
 
         var regimeNames = await _db.RefTypes.AsNoTracking()
             .Where(r => regimeIds.Contains(r.TypeId))

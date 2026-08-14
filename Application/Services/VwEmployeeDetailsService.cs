@@ -248,11 +248,12 @@ public class VwEmployeeDetailsService : IvwEmployeeDetailsService
     public async Task<IEnumerable<VwEmployeeDetails>> GetByFiltersAsync(
     int? departmentId,
     int? employeeType,
+    int? laborRegimeId = null,
     CancellationToken ct = default)
     {
         try
         {
-            return await _repository.GetByFiltersAsync(departmentId, employeeType, ct);
+            return await _repository.GetByFiltersAsync(departmentId, employeeType, laborRegimeId, ct);
         }
         catch (Exception ex)
         {
@@ -266,11 +267,12 @@ public class VwEmployeeDetailsService : IvwEmployeeDetailsService
     public async Task<IEnumerable<DepartmentContractCountDto>> GetDepartmentContractCountsAsync(
         int? departmentId,
         int? employeeType,
+        int? laborRegimeId = null,
         CancellationToken ct = default)
     {
         try
         {
-            return await _repository.GetDepartmentContractCountsAsync(departmentId, employeeType, ct);
+            return await _repository.GetDepartmentContractCountsAsync(departmentId, employeeType, laborRegimeId, ct);
         }
         catch (Exception ex)
         {
@@ -284,11 +286,14 @@ public class VwEmployeeDetailsService : IvwEmployeeDetailsService
     public async Task<IEnumerable<ScheduleContractCountDto>> GetScheduleContractCountsAsync(
         int? departmentId,
         int? employeeType,
+        int? laborRegimeId = null,
+        int? departmentTypeId = null,
+        int? departmentScopeId = null,
         CancellationToken ct = default)
     {
         try
         {
-            return await _repository.GetScheduleContractCountsAsync(departmentId, employeeType, ct);
+            return await _repository.GetScheduleContractCountsAsync(departmentId, employeeType, laborRegimeId, departmentTypeId, departmentScopeId, ct);
         }
         catch (Exception ex)
         {

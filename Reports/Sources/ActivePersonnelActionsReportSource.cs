@@ -86,7 +86,9 @@ public sealed class ActivePersonnelActionsReportSource : IReportSource
                 [ColEffective]  = r.EffectiveDate?.ToString("dd/MM/yyyy") ?? "—",
                 [ColEnd]        = r.EndDate?.ToString("dd/MM/yyyy") ?? "Indefinida",
             }).ToList(),
-            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape
+            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 

@@ -147,6 +147,8 @@ public sealed class GuardLocationCoverageReportSource : IReportSource
             Columns     = _columns,
             Rows        = sortedRows,
             Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 }

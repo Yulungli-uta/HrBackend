@@ -13,6 +13,16 @@ namespace WsUtaSystem.Reports.Sources;
 /// </summary>
 /// <remarks>
 /// <para>
+/// <b>Deprecado 2026-08-11</b> (confirmado con el usuario): ~90% de sus columnas ya
+/// están cubiertas 1:1 por <see cref="AttendanceCrossReportSource"/> (attendance-cross),
+/// que además tiene 13 columnas más (permisos, vacaciones, justificaciones, licencias,
+/// estado) y sí soporta el filtro de régimen laboral a nivel de consulta — este reporte
+/// v1/Dapper no lo soporta porque requeriría un ALTER PROCEDURE sobre
+/// HR.sp_GetReportAttendanceSumary. Se ocultó del menú lateral y de la galería de
+/// reportes, pero NO se borró (ni este ReportSource ni el SP) — sigue funcionando si
+/// alguien llega por URL directa. Mismo criterio que TimeRecoveryPlans/Logs.
+/// </para>
+/// <para>
 /// Principio SRP: esta clase tiene una única responsabilidad — consultar los datos
 /// de asistencia desde el repositorio y construir la <see cref="ReportDefinition"/>
 /// con las columnas y filas correctas. No sabe nada de PDF ni Excel.
@@ -121,7 +131,9 @@ public sealed class AttendanceSummaryReportSource : IReportSource
             GeneratedAt = DateTime.Now,
             Columns     = _columns,
             Rows        = rows,
-            Orientation = orientation
+            Orientation = orientation,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 

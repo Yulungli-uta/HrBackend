@@ -86,7 +86,9 @@ public sealed class GrantedPermissionsReportSource : IReportSource
                 [ColStatus]     = r.Status,
                 [ColApprovedBy] = r.ApprovedByName ?? "—",
             }).ToList(),
-            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape
+            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 

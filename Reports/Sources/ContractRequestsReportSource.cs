@@ -89,7 +89,9 @@ public sealed class ContractRequestsReportSource : IReportSource
                 [ColObs]        = r.Observation ?? "—",
                 [ColCreated]    = r.CreatedAt.ToString("dd/MM/yyyy"),
             }).ToList(),
-            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape
+            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 

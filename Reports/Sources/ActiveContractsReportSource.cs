@@ -103,7 +103,9 @@ public sealed class ActiveContractsReportSource : IReportSource
                 [ColEnd]        = r.EndDate.ToString("dd/MM/yyyy"),
                 [ColCreatedBy]  = r.CreatedByName ?? "—",
             }).ToList(),
-            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape
+            Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,
+            VerticalHeaders = filter.VerticalHeaders ?? false,
+            RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
 }

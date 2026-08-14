@@ -123,7 +123,7 @@ public sealed class EmployeeCertificateRepository : IEmployeeCertificateReposito
             {
                 r.RequestId,
                 r.EmployeeId,
-                EmployeeFullName = person.FirstName + " " + person.LastName,
+                EmployeeFullName = person.LastName + " " + person.FirstName,
                 emp.DepartmentId,
                 r.CertificateType,
                 r.Purpose,

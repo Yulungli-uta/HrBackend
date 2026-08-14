@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.TeacherStructure;
@@ -163,7 +164,7 @@ public class TeacherStructureService : ITeacherStructureService
     private static TeacherStructureDto MapToDto(TeacherStructure t) => new(
         t.TeacherStructureId,
         t.EmployeeId,
-        t.Employee is null ? string.Empty : $"{t.Employee.People?.FirstName} {t.Employee.People?.LastName}".Trim(),
+        t.Employee is null ? string.Empty : t.Employee.People.GetFullName(),
         t.Employee?.People?.IdCard,
         t.LadderId,
         t.Ladder?.Name,

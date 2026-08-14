@@ -26,7 +26,7 @@ public sealed class AcademicPromotionRepository : IAcademicPromotionRepository
                 person.PersonId,
                 employee.EmployeeId,
                 person.IdCard,
-                person.FirstName + " " + person.LastName,
+                person.LastName + " " + person.FirstName,
                 employee.DepartmentId)
         ).FirstOrDefaultAsync(ct);
 

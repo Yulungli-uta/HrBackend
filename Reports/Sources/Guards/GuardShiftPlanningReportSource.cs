@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Data;
 using WsUtaSystem.Reports.Abstractions;
@@ -85,9 +86,9 @@ public sealed class GuardShiftPlanningReportSource : IReportSource
             query = query.Where(p => p.EmployeeId == filter.EmployeeId.Value);
 
         var data = await query
-            .OrderBy(p => p.WorkDate)
-            .ThenBy(p => p.Location!.LocationName)
-            .ThenBy(p => p.Employee!.People!.LastName)
+            .OrderBy(p => p.Employee!.People!.LastName)
+            .ThenBy(p => p.Employee!.People!.FirstName)
+            .ThenBy(p => p.WorkDate)
             .ToListAsync();
 
         _logger.LogInformation("GuardShiftPlanning report: {Count} records.", data.Count);
@@ -95,7 +96,7 @@ public sealed class GuardShiftPlanningReportSource : IReportSource
         var rows = data.Select(p => (IReadOnlyDictionary<string, object?>)new Dictionary<string, object?>
         {
             [ColIdCard]      = p.Employee?.People?.IdCard ?? "",
-            [ColGuard]       = $"{p.Employee?.People?.FirstName} {p.Employee?.People?.LastName}".Trim(),
+            [ColGuard]       = p.Employee?.People.GetFullName() ?? string.Empty,
             [ColGroup]       = p.Group?.Name ?? "—",
             [ColLocation]    = p.Location?.LocationCode != null
                                ? $"[{p.Location.LocationCode}] {p.Location.LocationName}"
