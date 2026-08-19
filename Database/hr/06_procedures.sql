@@ -6190,6 +6190,9 @@ BEGIN
         @HasPermission BIT = 0,
         @HasMedicalLeave BIT = 0;
 
+    DECLARE @EmployeeDepartmentId INT;
+    SELECT @EmployeeDepartmentId = DepartmentId FROM HR.tbl_Employees WHERE EmployeeID = @EmployeeID;
+
     ;WITH VacationWindows AS
     (
         SELECT
@@ -6199,6 +6202,47 @@ BEGIN
         WHERE v.EmployeeID = @EmployeeID
           AND v.Status IN ('Planned', 'InProgress', 'Completed')
           AND @WorkDate BETWEEN v.StartDate AND v.EndDate
+
+        UNION ALL
+
+        -- Planificación masiva de vacaciones (cierre institucional/departamental) En
+        -- Ejecución o ya Finalizada, salvo que el empleado esté en la exclusión de ese
+        -- plan (2026-08-17; estados actualizados 2026-08-18 tras pasar la transición de
+        -- estado a automática por fecha vía DailyMassVacationPlanTransitionJob).
+        -- No crea filas en tbl_Vacations, se lee directo de acá — aditivo, no afecta a
+        -- nadie fuera de un plan que le aplique.
+        -- Modo "por horas" (StartTime/EndTime con valor, StartDate=EndDate): la ventana es
+        -- solo esa franja del día, no el día completo.
+        -- 2026-08-18: Status se resuelve por HR.ref_Types (categoría
+        -- MASS_VACATION_PLAN_STATUS, valores IN_PROGRESS/FINISHED), no por string
+        -- hardcodeado — el TypeID es IDENTITY y varía entre ambientes.
+        SELECT
+            OverlapStart = CASE
+                WHEN mvp.StartTime IS NOT NULL AND mvp.EndTime IS NOT NULL
+                    THEN CASE WHEN DATEADD(MINUTE, DATEDIFF(MINUTE, 0, mvp.StartTime), CAST(mvp.StartDate AS DATETIME2)) > @ShiftStart
+                              THEN DATEADD(MINUTE, DATEDIFF(MINUTE, 0, mvp.StartTime), CAST(mvp.StartDate AS DATETIME2))
+                              ELSE @ShiftStart END
+                ELSE CASE WHEN CAST(mvp.StartDate AS DATETIME2) > @ShiftStart THEN CAST(mvp.StartDate AS DATETIME2) ELSE @ShiftStart END
+            END,
+            OverlapEnd = CASE
+                WHEN mvp.StartTime IS NOT NULL AND mvp.EndTime IS NOT NULL
+                    THEN CASE WHEN DATEADD(MINUTE, DATEDIFF(MINUTE, 0, mvp.EndTime), CAST(mvp.StartDate AS DATETIME2)) < @ShiftEnd
+                              THEN DATEADD(MINUTE, DATEDIFF(MINUTE, 0, mvp.EndTime), CAST(mvp.StartDate AS DATETIME2))
+                              ELSE @ShiftEnd END
+                ELSE CASE WHEN DATEADD(DAY, 1, CAST(mvp.EndDate AS DATETIME2)) < @ShiftEnd THEN DATEADD(DAY, 1, CAST(mvp.EndDate AS DATETIME2)) ELSE @ShiftEnd END
+            END
+        FROM HR.tbl_MassVacationPlan mvp
+        WHERE mvp.StatusTypeId IN (
+              SELECT rt.TypeID FROM HR.ref_Types rt
+              WHERE rt.Category = 'MASS_VACATION_PLAN_STATUS' AND rt.Name IN ('IN_PROGRESS', 'FINISHED')
+          )
+          AND mvp.IsDeleted = 0
+          AND (mvp.DepartmentId IS NULL OR mvp.DepartmentId = @EmployeeDepartmentId)
+          AND @WorkDate BETWEEN mvp.StartDate AND mvp.EndDate
+          AND NOT EXISTS (
+              SELECT 1 FROM HR.tbl_MassVacationPlanExclusion mvpe
+              WHERE mvpe.PlanId = mvp.PlanId AND mvpe.EmployeeId = @EmployeeID
+          )
     )
     SELECT
         @VacationMinutes = ISNULL(SUM(

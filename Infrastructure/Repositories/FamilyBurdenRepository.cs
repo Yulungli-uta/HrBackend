@@ -18,7 +18,7 @@ public class FamilyBurdenRepository : ServiceAwareEfRepository<FamilyBurden, int
     }
 
     public async Task<PagedResult<FamilyBurdenValidationListItemDto>> GetForValidationAsync(
-        int? statusTypeId, int page, int pageSize, CancellationToken ct)
+        int? statusTypeId, string? search, int page, int pageSize, CancellationToken ct)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
@@ -44,6 +44,14 @@ public class FamilyBurdenRepository : ServiceAwareEfRepository<FamilyBurden, int
         if (statusTypeId.HasValue)
             query = query.Where(x => x.fb.StatusTypeId == statusTypeId.Value);
 
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(x =>
+                EF.Functions.Like(x.person.IdCard, $"%{term}%") ||
+                EF.Functions.Like(x.person.LastName + " " + x.person.FirstName, $"%{term}%"));
+        }
+
         var totalCount = await query.LongCountAsync(ct);
 
         var items = await query
@@ -62,6 +70,7 @@ public class FamilyBurdenRepository : ServiceAwareEfRepository<FamilyBurden, int
                 BirthDate = x.fb.BirthDate,
                 DisabilityTypeId = x.fb.DisabilityTypeId,
                 DisabilityTypeName = x.disability != null ? x.disability.Name : null,
+                DisabilityPercentage = x.fb.DisabilityPercentage,
                 StatusTypeId = x.fb.StatusTypeId,
                 StatusName = x.status != null ? x.status.Name : "REGISTRADO",
                 CreatedAt = x.fb.CreatedAt,

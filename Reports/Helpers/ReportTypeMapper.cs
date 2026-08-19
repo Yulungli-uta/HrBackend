@@ -77,6 +77,7 @@ public static class ReportTypeMapper
 
             ["food-subsidy-summary"] = ReportType.FoodSubsidySummary,
             ["family-subsidy-summary"] = ReportType.FamilySubsidySummary,
+            ["seniority-bonus-summary"] = ReportType.SeniorityBonusSummary,
         };
 
     /// <summary>

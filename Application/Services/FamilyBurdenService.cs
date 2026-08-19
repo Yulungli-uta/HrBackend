@@ -135,8 +135,8 @@ public class FamilyBurdenService : Service<FamilyBurden, int>, IFamilyBurdenServ
     }
 
     public async Task<PagedResult<FamilyBurdenValidationListItemDto>> GetForValidationAsync(
-        int? statusTypeId, int page, int pageSize, CancellationToken ct)
-        => await _repository.GetForValidationAsync(statusTypeId, page, pageSize, ct);
+        int? statusTypeId, string? search, int page, int pageSize, CancellationToken ct)
+        => await _repository.GetForValidationAsync(statusTypeId, search, page, pageSize, ct);
 
     public async Task<FamilyBurdenStatsDto> GetStatsAsync(CancellationToken ct)
         => await _repository.GetStatsAsync(ct);

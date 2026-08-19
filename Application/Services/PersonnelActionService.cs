@@ -147,9 +147,20 @@ public sealed class PersonnelActionService : IPersonnelActionService
         int personId = request.personId;
         var employee = await _employeesRepository.GetByPersonIdAsync(personId, ct);
 
-        // Reservar el número de acción de forma atómica desde la secuencia del tipo
-        var (reservedNumber, _, _) = await _personnelActionType
-            .ConsumeNextNumberAsync(request.ActionTypeId, DateTime.Now.Year, ct);
+        // Reservar el número de acción de forma atómica desde la secuencia del tipo — salvo
+        // en registro histórico con número manual: el usuario ya tiene el número real del
+        // documento que existía antes de este sistema, no se le genera uno nuevo.
+        string reservedNumber;
+        if (request.IsHistoricalEntry && !string.IsNullOrWhiteSpace(request.ActionNumber))
+        {
+            reservedNumber = request.ActionNumber.Trim();
+            await ValidateActionNumberUniqueAsync(0, reservedNumber, ct);
+        }
+        else
+        {
+            (reservedNumber, _, _) = await _personnelActionType
+                .ConsumeNextNumberAsync(request.ActionTypeId, DateTime.Now.Year, ct);
+        }
 
         var action = new PersonnelAction
         {
@@ -283,6 +294,25 @@ public sealed class PersonnelActionService : IPersonnelActionService
             _currentUser.UserName ?? _currentUser.Email ?? "system", reason, ct);
     }
 
+    /// <summary>
+    /// ActionNumber ya está respaldado por índice único (UQ_PersonnelActions_ActionNumber),
+    /// pero se valida aquí antes para dar un mensaje claro en vez del 409 genérico de
+    /// violación de índice — relevante ahora que la corrección permite editarlo.
+    /// </summary>
+    private async Task ValidateActionNumberUniqueAsync(int actionId, string? actionNumber, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(actionNumber)) return;
+
+        var duplicateId = await _db.Set<PersonnelAction>()
+            .Where(a => a.ActionNumber == actionNumber && a.ActionId != actionId)
+            .Select(a => (int?)a.ActionId)
+            .FirstOrDefaultAsync(ct);
+
+        if (duplicateId.HasValue)
+            throw new BusinessRuleException(
+                $"El número de acción '{actionNumber}' ya está en uso por la acción #{duplicateId.Value}. Verifique el número de documento.");
+    }
+
     /// <inheritdoc />
     public async Task CorrectAsync(
         int actionId,
@@ -302,7 +332,9 @@ public sealed class PersonnelActionService : IPersonnelActionService
 
         // A diferencia de UpdateAsync, la corrección se permite en cualquier estado (incluido
         // VIGENTE/FINALIZADO) — exige motivo obligatorio y queda auditada en HR.Audit.
-        action.ActionNumber            = request.ActionNumber?.Trim();
+        var newActionNumber = request.ActionNumber?.Trim();
+        await ValidateActionNumberUniqueAsync(actionId, newActionNumber, ct);
+        action.ActionNumber            = newActionNumber;
         action.ActionDate              = request.ActionDate;
         action.EffectiveDate           = request.EffectiveDate;
         action.EndDate                 = request.EndDate;
@@ -409,17 +441,26 @@ public sealed class PersonnelActionService : IPersonnelActionService
             actionId, action.EmployeeId, action.PersonId, action.ContractId,
             overrides, generatedBy, ct);
 
-        if (docResponse is not null &&
-            !string.Equals(action.Status, "GENERADO", StringComparison.OrdinalIgnoreCase))
+        // A diferencia de CreateAsync/ApproveAsync (donde generar el documento es un paso
+        // opcional dentro de otra operación principal), este método SOLO existe para generar
+        // el documento — si no se pudo generar (sin plantilla, plantilla no publicada, etc.),
+        // no hay nada más que ofrecer como "éxito". Antes esto devolvía 200 igual, con el
+        // estado sin cambiar, y el frontend mostraba "Documento generado" aunque no se generó
+        // nada (bug reportado 2026-08-18).
+        if (docResponse is null)
+            throw new BusinessRuleException(
+                "No se pudo generar el documento: el tipo de acción no tiene una plantilla publicada asignada. Contacte a un administrador para configurarla.");
+
+        if (!string.Equals(action.Status, "GENERADO", StringComparison.OrdinalIgnoreCase))
             await TransitionStatusAsync(actionId, action.Status, "GENERADO",
                 "Documento generado.", generatedBy, ct);
 
         return new CreatePersonnelActionResponse(
             ActionId: actionId, ActionNumber: action.ActionNumber,
-            Status: docResponse is not null ? "GENERADO" : action.Status,
-            GeneratedDocumentId: docResponse?.DocumentId,
-            PdfBase64: docResponse?.PdfBase64,
-            FileName: docResponse?.FileName);
+            Status: "GENERADO",
+            GeneratedDocumentId: docResponse.DocumentId,
+            PdfBase64: docResponse.PdfBase64,
+            FileName: docResponse.FileName);
     }
 
     /// <inheritdoc />
@@ -851,8 +892,17 @@ public sealed class PersonnelActionService : IPersonnelActionService
         // SwornDeclaration=true → presentó la declaración (marca en SI); false → marca en NO APLICA.
         r["DECLARACION_JURADA_SI_MARK"]    = d.SwornDeclaration ? "X" : string.Empty;
         r["DECLARACION_JURADA_MARK"]       = d.SwornDeclaration ? string.Empty : "X";
-        Set(r, "CURRENT_INSTITUTIONAL_PROCESS", d.InstitutionalProcessName);
-        Set(r, "CURRENT_MANAGEMENT_LEVEL",      d.ManagementLevelName);
+
+        // 2026-08-18: el campo único "Proceso Institucional"/"Nivel de Gestión" del
+        // formulario describe la clasificación del PUESTO DE DESTINO (a dónde se mueve el
+        // empleado), no la de origen — antes se imprimía en SITUACIÓN ACTUAL por error.
+        // La clasificación ACTUAL se consulta de la Acción de Personal previa de este
+        // mismo empleado (lo que quedó como su PROPUESTA la última vez); si no hay acción
+        // previa, queda vacía — nunca se inventa/deriva de otra fuente.
+        Set(r, "CURRENT_INSTITUTIONAL_PROCESS",  d.PreviousInstitutionalProcessName);
+        Set(r, "CURRENT_MANAGEMENT_LEVEL",       d.PreviousManagementLevelName);
+        Set(r, "PROPOSED_INSTITUTIONAL_PROCESS", d.InstitutionalProcessName ?? d.DestinationDepartmentTypeName);
+        Set(r, "PROPOSED_MANAGEMENT_LEVEL",      d.ManagementLevelName ?? d.DestinationDepartmentTypeDescription);
 
         // Responsables del documento: nombre completo y cargo
         Set(r, "DTH_DIRECTOR_NAME",        d.DthDirectorName);
@@ -874,7 +924,14 @@ public sealed class PersonnelActionService : IPersonnelActionService
         if (cb == "CB_REINGRESO") r["CB_REINGRESO2"] = "X";
 
         // Detalle libre solo cuando corresponde a la casilla marcada (reutiliza Observations).
-        if (cb == "CB_OTRO")    Set(r, "ACTION_OTHER_DETAIL",   d.Observations);
+        if (cb == "CB_OTRO")
+        {
+            // "Cambio de Dedicación" no tiene casilla propia en el formulario RGLOSEP — se
+            // marca OTRO y se imprime el tipo de acción como detalle en vez de las
+            // Observaciones libres (que suelen estar vacías o hablar de otra cosa).
+            var isDedicacion = d.ActionTypeName?.ToUpperInvariant().Contains("DEDICACI") ?? false;
+            Set(r, "ACTION_OTHER_DETAIL", isDedicacion ? d.ActionTypeName : d.Observations);
+        }
         if (cb == "CB_ENCARGO") Set(r, "ACTION_ENCARGO_DETAIL", d.Observations);
 
         return r;
@@ -889,6 +946,19 @@ public sealed class PersonnelActionService : IPersonnelActionService
     {
         if (actionTypeName is null) return null;
         var n = actionTypeName.ToUpperInvariant();
+
+        // Casos específicos que no calzan (o calzarían mal) con las reglas genéricas de
+        // abajo — revisados 2026-08-18 contra los 22 tipos reales de HR.tbl_Personnel_Action_Type.
+        // Deben ir ANTES de las reglas genéricas para ganarles (ej. "Cambio de Sueldo"
+        // contiene "CAMBIO", que si no fuera por esto marcaría CAMBIO ADMINISTRATIVO).
+        if (n.Contains("NOMBRAMIENTO"))                        return "CB_INGRESO";        // Nombramiento / Nombramiento Provisional
+        if (n.Contains("PROMOCI"))                             return "CB_ASCENSO";        // Promoción en Categoría y Nivel
+        if (n.Contains("REINTEGRO"))                           return "CB_RESTITUCION";    // Reintegro al Cargo
+        if (n.Contains("RENUNCIA") || n.Contains("JUBILACI"))  return "CB_CESACION";       // Renuncia o Jubilación
+        if (n.Contains("HOMOLOGACI"))                          return "CB_REVISION_CLASI"; // Homologación de Puesto
+        if (n.Contains("SUELDO"))                              return "CB_INCREMENTO_RMU"; // Cambio de Sueldo
+        if (n.Contains("DEDICACI"))                            return "CB_OTRO";           // Cambio de Dedicación: sin casilla propia en el formulario RGLOSEP
+
         if (n.Contains("INGRESO") && !n.Contains("REIN"))    return "CB_INGRESO";
         if (n.Contains("REINGRESO"))                          return "CB_REINGRESO";
         if (n.Contains("RESTITU"))                            return "CB_RESTITUCION";

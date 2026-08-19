@@ -25,6 +25,12 @@ public class Employees : IAuditable, ISoftDeletable
     public int? BudgetUnitTypeId { get; set; }
 
     public DateOnly HireDate { get; set; }
+
+    /// <summary>Fecha de antigüedad para beneficios que no necesariamente coincide con HireDate
+    /// (ej. bono vacacional de Código de Trabajo a los 5 años, calculado desde la fecha de
+    /// contrato indefinido en vez de la fecha de ingreso). NULL = usar HireDate como respaldo.</summary>
+    public DateOnly? SeniorityDate { get; set; }
+
     public string? Email { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;

@@ -94,5 +94,12 @@ public enum ReportType
     /// discapacidad registrada) por empleado, multiplicada por el valor base parametrizado
     /// en HR.tbl_Parameters (FAMILY_SUBSIDY_BASE_VALUE).
     /// </summary>
-    FamilySubsidySummary = 28
+    FamilySubsidySummary = 28,
+
+    /// <summary>
+    /// Reporte de subsidio de antigüedad: RMU actual por empleado (SalaryHistory) multiplicado
+    /// por el porcentaje parametrizado en HR.tbl_Parameters (SENIORITY_SUBSIDY_PERCENT) y por
+    /// los años completos de antigüedad (Employees.SeniorityDate, o HireDate si no tiene).
+    /// </summary>
+    SeniorityBonusSummary = 29
 }

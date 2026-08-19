@@ -142,6 +142,53 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 .FirstOrDefaultAsync(ct)
             : null;
 
+        // Clasificación "actual" (Proceso Institucional / Nivel de Gestión) del empleado:
+        // se consulta la Acción de Personal previa más reciente de este mismo empleado y se
+        // usa lo que quedó registrado ahí (era su clasificación PROPUESTA en su momento, hoy
+        // es su clasificación ACTUAL real). Si no hay acción previa o no tenía estos campos,
+        // se deja vacío — nunca se deriva/inventa de otra fuente. Pedido explícito del
+        // usuario 2026-08-18 (reemplaza al intento anterior de derivarlo del tipo del
+        // departamento de origen).
+        string? previousInstitutionalProcessName = null;
+        string? previousManagementLevelName = null;
+        if (result.action.EmployeeId.HasValue)
+        {
+            var previousAction = await _db.PersonnelActions.AsNoTracking()
+                .Where(a => a.EmployeeId == result.action.EmployeeId.Value && a.ActionId != actionId)
+                .OrderByDescending(a => a.ActionDate)
+                .ThenByDescending(a => a.ActionId)
+                .FirstOrDefaultAsync(ct);
+
+            if (previousAction is not null)
+            {
+                previousInstitutionalProcessName = previousAction.InstitutionalProcess.HasValue
+                    ? await _db.RefTypes.AsNoTracking()
+                        .Where(r => r.TypeId == previousAction.InstitutionalProcess.Value)
+                        .Select(r => r.Name)
+                        .FirstOrDefaultAsync(ct)
+                    : null;
+
+                previousManagementLevelName = previousAction.ManagementLevel.HasValue
+                    ? await _db.RefTypes.AsNoTracking()
+                        .Where(r => r.TypeId == previousAction.ManagementLevel.Value)
+                        .Select(r => r.Name)
+                        .FirstOrDefaultAsync(ct)
+                    : null;
+            }
+        }
+
+        // Tipo de departamento de destino — fallback de PROPOSED_INSTITUTIONAL_PROCESS/
+        // PROPOSED_MANAGEMENT_LEVEL cuando no se elige manualmente en el formulario.
+        var destDeptType = result.action.DestinationDepartmentId.HasValue
+            ? await (
+                from d in _db.Departments.AsNoTracking()
+                join rt in _db.RefTypes.AsNoTracking() on d.DepartmentType equals (int?)rt.TypeId into rtJoin
+                from rt in rtJoin.DefaultIfEmpty()
+                where d.DepartmentId == result.action.DestinationDepartmentId.Value
+                select new { rt.Name, rt.Description }
+            ).FirstOrDefaultAsync(ct)
+            : null;
+
         var originJobTitle = result.action.OriginJobId.HasValue
             ? await _db.Jobs.AsNoTracking()
                 .Where(j => j.JobID == result.action.OriginJobId.Value)
@@ -210,11 +257,15 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             result.action.OriginJobId,
             originJobTitle,
             result.action.OriginBudgetCode,
+            previousInstitutionalProcessName,
+            previousManagementLevelName,
             result.action.DestinationDepartmentId,
             destDeptName,
             result.action.DestinationJobId,
             destJobTitle,
             result.action.DestinationBudgetCode,
+            destDeptType?.Name,
+            destDeptType?.Description,
             result.action.PreviousRmu,
             result.action.NewRmu,
             result.action.LegalBasis,
@@ -408,11 +459,37 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             where emp.EmployeeId == employeeId.Value
             select new
             {
-                Name     = person.LastName + " " + person.FirstName,
+                person.LastName,
+                person.FirstName,
+                person.PreferredDenomination,
                 JobTitle = (string?)job.Description
             }
         ).FirstOrDefaultAsync(ct);
 
-        return row is null ? (null, null) : (row.Name, row.JobTitle);
+        if (row is null) return (null, null);
+
+        // Nombre a imprimir: PreferredDenomination (nombre/título formal autoeditado) si
+        // existe, si no la concatenación LastName+FirstName de siempre.
+        var name = !string.IsNullOrWhiteSpace(row.PreferredDenomination)
+            ? row.PreferredDenomination.Trim()
+            : $"{row.LastName} {row.FirstName}".Trim();
+
+        // Si la persona seleccionada tiene una autoridad institucional vigente (Rector,
+        // Vicerrector, Decano, etc. en HR.tbl_DepartmentAuthorities), su denominación de
+        // autoridad prevalece sobre el cargo genérico de HR.tbl_Employees.JobId — es la
+        // que corresponde para firmar/aprobar documentos oficiales, no el puesto base.
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var authorityDenomination = await _db.DepartmentAuthorities.AsNoTracking()
+            .Where(a => a.EmployeeId == employeeId.Value
+                && a.IsActive
+                && a.StartDate <= today
+                && (a.EndDate == null || a.EndDate >= today))
+            .OrderByDescending(a => a.StartDate)
+            .Select(a => a.Denomination)
+            .FirstOrDefaultAsync(ct);
+
+        var jobTitle = !string.IsNullOrWhiteSpace(authorityDenomination) ? authorityDenomination : row.JobTitle;
+
+        return (name, jobTitle);
     }
 }

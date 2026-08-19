@@ -3,6 +3,7 @@
 // Motor Documental Institucional — Acciones de Personal LOSEP/RLOSEP
 // ============================================================
 using Microsoft.AspNetCore.Mvc;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.PersonnelActions;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -311,8 +312,16 @@ public sealed class PersonnelActionsController : ControllerBase
         catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
 
         var generatedBy = _currentUser.EmployeeId ?? 0;
-        var result = await _personnelActionService.GenerateDocumentAsync(
-            id, request?.Overrides, generatedBy, ct);
+        CreatePersonnelActionResponse result;
+        try
+        {
+            result = await _personnelActionService.GenerateDocumentAsync(
+                id, request?.Overrides, generatedBy, ct);
+        }
+        catch (BusinessRuleException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
 
         _logger.LogInformation(
             "Documento PDF generado/regenerado para Acción Id={ActionId} por EmployeeId={UserId}",

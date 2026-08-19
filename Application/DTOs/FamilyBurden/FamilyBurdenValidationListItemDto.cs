@@ -11,12 +11,13 @@ public class FamilyBurdenValidationListItemDto
     public int PersonId { get; set; }
     public string EmployeeFullName { get; set; } = string.Empty;
     public string EmployeeIdCard { get; set; } = string.Empty;
-    public string DependentId { get; set; } = string.Empty;
+    public string? DependentId { get; set; }
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public DateOnly BirthDate { get; set; }
     public int? DisabilityTypeId { get; set; }
     public string? DisabilityTypeName { get; set; }
+    public decimal? DisabilityPercentage { get; set; }
     public int? StatusTypeId { get; set; }
     public string StatusName { get; set; } = string.Empty;
     public DateTime? CreatedAt { get; set; }

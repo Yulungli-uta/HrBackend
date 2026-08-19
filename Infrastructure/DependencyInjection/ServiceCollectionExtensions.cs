@@ -443,6 +443,10 @@ public static class ServiceCollectionExtensions
             WsUtaSystem.Reports.Abstractions.IReportSource,
             WsUtaSystem.Reports.Sources.FamilySubsidyReportSource>();
 
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.SeniorityBonusReportSource>();
+
         // ── Reportes módulo Guardias ──────────────────────────────────────────
         services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportSource,
@@ -627,6 +631,9 @@ public static class ServiceCollectionExtensions
         // ── Módulo: Cargas Familiares ─────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IFamilyBurdenRepository, WsUtaSystem.Infrastructure.Repositories.FamilyBurdenRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IFamilyBurdenService, WsUtaSystem.Application.Services.FamilyBurdenService>();
+
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IMassVacationPlanRepository, WsUtaSystem.Infrastructure.Repositories.MassVacationPlanRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IMassVacationPlanService, WsUtaSystem.Application.Services.MassVacationPlanService>();
 
         // ── Módulo: Certificación Financiera ──────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IFinancialCertificationRepository, WsUtaSystem.Infrastructure.Repositories.FinancialCertificationRepository>();

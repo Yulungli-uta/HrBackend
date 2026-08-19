@@ -32,4 +32,5 @@ public class PeopleDto
     public int? SpecialNeedsTypeId { get; set; }
     public decimal? DisabilityPercentage { get; set; }
     public string? ConadisCard { get; set; }
+    public string? PreferredDenomination { get; set; }
 }

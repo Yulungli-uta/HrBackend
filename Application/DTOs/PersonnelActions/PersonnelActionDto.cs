@@ -40,6 +40,16 @@ public sealed record PersonnelActionDetailDto(
     int? OriginJobId,
     string? OriginJobTitle,
     string? OriginBudgetCode,
+    /// <summary>Proceso Institucional que quedó registrado como PROPUESTA en la Acción de
+    /// Personal previa de este mismo empleado (esa es su clasificación "actual" real, ya
+    /// que reachedVigente en su momento). NULL si no hay acción previa — se deja vacío en
+    /// el documento, nunca se deriva/inventa de otra fuente (ej. tipo de departamento).
+    /// 2026-08-18: reemplaza al intento anterior de derivarlo del tipo de departamento de
+    /// origen, que el usuario pidió explícitamente no usar.</summary>
+    string? PreviousInstitutionalProcessName,
+    /// <summary>Nivel de Gestión de la Acción de Personal previa del empleado — mismo criterio
+    /// que PreviousInstitutionalProcessName.</summary>
+    string? PreviousManagementLevelName,
 
     // Cargo destino
     int? DestinationDepartmentId,
@@ -47,6 +57,11 @@ public sealed record PersonnelActionDetailDto(
     int? DestinationJobId,
     string? DestinationJobTitle,
     string? DestinationBudgetCode,
+    /// <summary>Nombre del tipo de departamento de destino — fallback de PROPOSED_INSTITUTIONAL_PROCESS
+    /// cuando no se elige manualmente InstitutionalProcess.</summary>
+    string? DestinationDepartmentTypeName,
+    /// <summary>Descripción del tipo de departamento de destino — fallback de PROPOSED_MANAGEMENT_LEVEL.</summary>
+    string? DestinationDepartmentTypeDescription,
 
     // Datos económicos
     decimal? PreviousRmu,

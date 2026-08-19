@@ -27,8 +27,14 @@ public sealed class FamilySubsidyReportSource : IReportSource
     private const string ApprovedStatusName = "APROBADO";
     private const string MaxAgeParam = "FAMILY_SUBSIDY_MAX_AGE";
     private const decimal MaxAgeDefault = 18m;
-    private const string BaseValueParam = "FAMILY_SUBSIDY_BASE_VALUE";
-    private const decimal BaseValueDefault = 0m;
+
+    // Fórmula real (Cláusula Vigésima Séptima, Décimo Octavo Contrato Colectivo UTA):
+    // 1% del SBU por cada carga familiar calificada — NO un valor fijo institucional.
+    // FAMILY_SUBSIDY_BASE_VALUE quedó obsoleto 2026-08-17 (no se borra, solo se desactiva).
+    private const string SbuParam = "SBU_VALUE";
+    private const decimal SbuDefault = 0m;
+    private const string SubsidyPercentParam = "FAMILY_SUBSIDY_PERCENT";
+    private const decimal SubsidyPercentDefault = 0m;
 
     private readonly AppDbContext _db;
     private readonly IParametersRepository _parametersRepository;
@@ -77,7 +83,9 @@ public sealed class FamilySubsidyReportSource : IReportSource
             filter.DepartmentId, filter.EmployeeId);
 
         var maxAge = await GetParameterDecimalAsync(MaxAgeParam, MaxAgeDefault, ct);
-        var unitValue = await GetParameterDecimalAsync(BaseValueParam, BaseValueDefault, ct);
+        var sbu = await GetParameterDecimalAsync(SbuParam, SbuDefault, ct);
+        var subsidyPercent = await GetParameterDecimalAsync(SubsidyPercentParam, SubsidyPercentDefault, ct);
+        var unitValue = Math.Round(sbu * subsidyPercent / 100m, 2);
         var cutoffDate = DateOnly.FromDateTime(DateTime.Today).AddYears(-(int)maxAge);
 
         var approvedStatusId = await _db.Set<RefTypes>()
@@ -94,6 +102,12 @@ public sealed class FamilySubsidyReportSource : IReportSource
             join dept in _db.Departments.AsNoTracking() on emp.DepartmentId equals dept.DepartmentId into deptJoin
             from dept in deptJoin.DefaultIfEmpty()
             select new { fb, emp, person, dept };
+
+        // Por defecto solo empleados activos (mismo criterio que los reportes SIIES):
+        // el subsidio es un beneficio de nómina vigente, no debe sumar a alguien que ya
+        // no trabaja en la institución salvo que se pida explícitamente para revisión histórica.
+        if (filter.IncludeInactive != true)
+            query = query.Where(x => x.emp.IsActive);
 
         if (filter.EmployeeId.HasValue)
             query = query.Where(x => x.emp.EmployeeId == filter.EmployeeId.Value);
@@ -195,6 +209,7 @@ public sealed class FamilySubsidyReportSource : IReportSource
             parts.Add($"Aprobadas entre: {from} - {to}");
         }
 
+        parts.Add(filter.IncludeInactive == true ? "Incluye empleados inactivos" : "Solo empleados activos");
         parts.Add($"Edad tope: {maxAge:N0} años (excepto discapacidad, permanente)");
         parts.Add($"Valor por carga: {unitValue.ToString("N2", CultureInfo.InvariantCulture)}");
         parts.Add($"Total empleados: {records.Count}");

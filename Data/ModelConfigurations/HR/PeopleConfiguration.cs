@@ -25,6 +25,7 @@ public sealed class PeopleConfiguration : IEntityTypeConfiguration<People>
         e.Property(x => x.Disability).HasMaxLength(200);
         e.Property(x => x.Address).HasMaxLength(255);
         e.Property(x => x.ConadisCard).HasMaxLength(50);
+        e.Property(x => x.PreferredDenomination).HasMaxLength(200);
         e.Property(x => x.CountryId).HasColumnName("CountryID");
         e.Property(x => x.ProvinceId).HasColumnName("ProvinceID");
         e.Property(x => x.CantonId).HasColumnName("CantonID");

@@ -61,7 +61,10 @@ public class DepartmentAuthorityRepository
             .Where(a => a.DepartmentId == departmentId);
 
         if (onlyActive)
-            query = query.Where(a => a.IsActive && a.EndDate == null);
+        {
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            query = query.Where(a => a.IsActive && a.StartDate <= today && (a.EndDate == null || a.EndDate >= today));
+        }
 
         return await ToPagedResultAsync(query, page, pageSize, ct);
     }
@@ -83,11 +86,15 @@ public class DepartmentAuthorityRepository
     /// <inheritdoc/>
     public async Task<List<DepartmentAuthority>> GetActiveByDepartmentAsync(
         int departmentId,
-        CancellationToken ct) =>
-        await QueryWithIncludes()
-            .Where(a => a.DepartmentId == departmentId && a.IsActive && a.EndDate == null)
+        CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        return await QueryWithIncludes()
+            .Where(a => a.DepartmentId == departmentId && a.IsActive
+                && a.StartDate <= today && (a.EndDate == null || a.EndDate >= today))
             .OrderBy(a => a.AuthorityTypeId)
             .ToListAsync(ct);
+    }
 
     /// <inheritdoc/>
     public async Task<DepartmentAuthority?> GetActiveAuthorityByIdCardAsync(
@@ -158,7 +165,10 @@ public class DepartmentAuthorityRepository
         var query = QueryWithIncludes();
 
         if (onlyActive)
-            query = query.Where(a => a.IsActive && a.EndDate == null);
+        {
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            query = query.Where(a => a.IsActive && a.StartDate <= today && (a.EndDate == null || a.EndDate >= today));
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {

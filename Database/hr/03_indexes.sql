@@ -421,6 +421,12 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='UQ_PersonnelActions_ActionN
     CREATE UNIQUE NONCLUSTERED INDEX [UQ_PersonnelActions_ActionNumber] ON [HR].[tbl_PersonnelActions] ([ActionNumber]);
 GO
 
+-- 2026-08-18: ContractCode no tenía ninguna protección de unicidad — agregado tras
+-- encontrar y renombrar 12 contratos de prueba duplicados (PRUEBA-001..012).
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='UQ_Contracts_ContractCode')
+    CREATE UNIQUE NONCLUSTERED INDEX [UQ_Contracts_ContractCode] ON [HR].[tbl_Contracts] ([ContractCode]);
+GO
+
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_PunchJustifications_Employee_Status')
     CREATE NONCLUSTERED INDEX [IX_PunchJustifications_Employee_Status] ON [HR].[tbl_PunchJustifications] ([EmployeeID], [Status]);
 GO

@@ -17,8 +17,9 @@ public interface IFamilyBurdenService : IService<FamilyBurden, int>
         CancellationToken ct);
 
     /// <summary>Listado para la pantalla de validación (nombre de empleado + catálogos resueltos).</summary>
+    /// <param name="search">Filtro opcional por cédula o nombre/apellido del empleado titular.</param>
     Task<PagedResult<FamilyBurdenValidationListItemDto>> GetForValidationAsync(
-        int? statusTypeId, int page, int pageSize, CancellationToken ct);
+        int? statusTypeId, string? search, int page, int pageSize, CancellationToken ct);
 
     /// <summary>Contadores agregados para las tarjetas de resumen (dato gerencial).</summary>
     Task<FamilyBurdenStatsDto> GetStatsAsync(CancellationToken ct);

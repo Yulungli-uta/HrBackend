@@ -167,6 +167,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             // ✅ Update campo por campo (en Service, buena práctica)
             ApplyDto(dto, current);
 
+            await ValidateContractCodeUniqueAsync(current.ContractID, current.ContractCode, ct);
             ValidateDates(current);
 
             // Checklist de documentos obligatorios (HR.tbl_TramiteRequirements) — se valida aquí
@@ -219,6 +220,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             // A diferencia de UpdateAsync, la corrección se permite en cualquier estado
             // (incluido VIGENTE) — exige motivo obligatorio y queda auditada en HR.Audit.
             ApplyDto(dto, current);
+            await ValidateContractCodeUniqueAsync(current.ContractID, current.ContractCode, ct);
             ValidateDates(current);
 
             await base.UpdateAsync(id, current, ct);
@@ -815,6 +817,25 @@ public class ContractsService : Service<Contracts, int>, IContractsService
     {
         if (entity.EndDate < entity.StartDate)
             throw new Exception("EndDate no puede ser menor que StartDate.");
+    }
+
+    /// <summary>
+    /// ContractCode es el número de documento oficial — respaldado por índice único
+    /// (UQ_Contracts_ContractCode, 2026-08-18) a nivel de BD, pero se valida aquí antes
+    /// para dar un mensaje claro en vez del 409 genérico de violación de índice.
+    /// </summary>
+    private async Task ValidateContractCodeUniqueAsync(int contractId, string contractCode, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(contractCode)) return;
+
+        var duplicateId = await _db.Contracts
+            .Where(c => c.ContractCode == contractCode && c.ContractID != contractId)
+            .Select(c => (int?)c.ContractID)
+            .FirstOrDefaultAsync(ct);
+
+        if (duplicateId.HasValue)
+            throw new BusinessRuleException(
+                $"El código de contrato '{contractCode}' ya está en uso por el contrato #{duplicateId.Value}. Verifique el número de documento.");
     }
 
     private static void ApplyDto(ContractsUpdateDto dto, Contracts target)
@@ -1700,12 +1721,40 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             where emp.EmployeeId == employeeId.Value
             select new
             {
-                Name     = person.LastName + " " + person.FirstName,
+                person.LastName,
+                person.FirstName,
+                person.PreferredDenomination,
                 JobTitle = (string?)job.Description
             }
         ).FirstOrDefaultAsync(ct);
 
-        return row is null ? (null, null) : (row.Name, row.JobTitle);
+        if (row is null) return (null, null);
+
+        // Nombre a imprimir: PreferredDenomination (nombre/título formal autoeditado) si
+        // existe, si no la concatenación LastName+FirstName de siempre. Mismo criterio
+        // que PersonnelActionRepository.ResolveEmployeeAsync — solo aplica a firmas de
+        // documentos (Acciones de Personal / Contratos), no es un cambio global de cómo
+        // se muestra el nombre en el resto del sistema.
+        var name = !string.IsNullOrWhiteSpace(row.PreferredDenomination)
+            ? row.PreferredDenomination.Trim()
+            : $"{row.LastName} {row.FirstName}".Trim();
+
+        // Si la persona seleccionada tiene una autoridad institucional vigente (Rector,
+        // Vicerrector, Decano, etc.), su denominación de autoridad prevalece sobre el
+        // cargo genérico de HR.tbl_Employees.JobId.
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var authorityDenomination = await _db.DepartmentAuthorities.AsNoTracking()
+            .Where(a => a.EmployeeId == employeeId.Value
+                && a.IsActive
+                && a.StartDate <= today
+                && (a.EndDate == null || a.EndDate >= today))
+            .OrderByDescending(a => a.StartDate)
+            .Select(a => a.Denomination)
+            .FirstOrDefaultAsync(ct);
+
+        var jobTitle = !string.IsNullOrWhiteSpace(authorityDenomination) ? authorityDenomination : row.JobTitle;
+
+        return (name, jobTitle);
     }
 
     /// <summary>

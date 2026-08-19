@@ -58,16 +58,17 @@ public class FamilyBurdenController : ControllerBase
     public async Task<IActionResult> GetStats(CancellationToken ct)
         => Ok(await _svc.GetStatsAsync(ct));
 
-    /// <summary>Listado paginado para la pantalla de validación, filtrable por estado.</summary>
+    /// <summary>Listado paginado para la pantalla de validación, filtrable por estado y por cédula/nombre del empleado titular.</summary>
     [HttpGet("validation")]
     [RequirePermission("FAMILY_BURDEN.APPROVE")]
     public async Task<IActionResult> GetForValidation(
         [FromQuery] int? statusTypeId,
+        [FromQuery] string? search,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
     {
-        var result = await _svc.GetForValidationAsync(statusTypeId, page, pageSize, ct);
+        var result = await _svc.GetForValidationAsync(statusTypeId, search, page, pageSize, ct);
         return Ok(result);
     }
 
@@ -145,6 +146,7 @@ public class FamilyBurdenController : ControllerBase
             LastName = dto.LastName,
             BirthDate = dto.BirthDate,
             DisabilityTypeId = dto.DisabilityTypeId,
+            DisabilityPercentage = dto.DisabilityPercentage,
         };
 
         if (!ElevatedRoles.Any(User.IsInRole))

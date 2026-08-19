@@ -12,6 +12,7 @@ public class EmployeesCreateDto
     public int? CategoriaDocenteLoesTypeId { get; set; }
     public int? BudgetUnitTypeId { get; set; }
     public DateOnly HireDate { get; set; }
+    public DateOnly? SeniorityDate { get; set; }
     public string? Email { get; set; }
     public bool IsActive { get; set; } = true;
     public int? CreatedBy { get; set; }

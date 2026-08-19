@@ -34,6 +34,14 @@ public class People : IAuditable {
   public int? SpecialNeedsTypeId { get; set; }
   public decimal? DisabilityPercentage { get; set; }
   public string? ConadisCard { get; set; }
+
+  /// <summary>Nombre/título formal preferido de la persona (ej. "Dra. Sara Camacho
+  /// Estrada, PhD."), editable desde Datos Personales (autoservicio propio o RRHH sobre
+  /// cualquier persona). Si está lleno, reemplaza a LastName+FirstName al imprimir el
+  /// nombre en documentos oficiales — ver <see cref="Application.Common.Extensions.PeopleNameExtensions.GetFullName"/>.
+  /// Si es NULL/vacío, se usa la concatenación de siempre.</summary>
+  public string? PreferredDenomination { get; set; }
+
   public DateTime? CreatedAt { get; set; }
   public int? CreatedBy { get; set; }
   public DateTime? UpdatedAt { get; set; }

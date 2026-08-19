@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq.Expressions;
 using WsUtaSystem.Application.DTOs.ContractType;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Security;
@@ -28,6 +29,66 @@ public class ContractTypeController : ControllerBase
     {
         var e = await _svc.GetByIdAsync(id, ct);
         return e is null ? NotFound() : Ok(_mapper.Map<ContractTypeDto>(e));
+    }
+
+    /// <summary>Retorna un resultado paginado de tipos de contrato.</summary>
+    /// <param name="page">Número de página (base 1).</param>
+    /// <param name="pageSize">Cantidad de registros por página. Máximo 200.</param>
+    /// <param name="search">Texto de búsqueda por nombre, código o descripción.</param>
+    /// <param name="status">Filtra por estado ("1" activo, "0" inactivo). Null = todos.</param>
+    [HttpGet("paged")]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        [FromQuery] string? status = null,
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 200) pageSize = 20;
+
+        var hasSearch = !string.IsNullOrWhiteSpace(search);
+        var hasStatus = !string.IsNullOrWhiteSpace(status);
+
+        Expression<Func<ContractType, bool>>? predicate = null;
+
+        if (hasSearch && hasStatus)
+        {
+            var term = search!.Trim().ToLower();
+            predicate = c => c.Status == status &&
+                (c.Name.ToLower().Contains(term) ||
+                 (c.ContractCode != null && c.ContractCode.ToLower().Contains(term)) ||
+                 (c.Description != null && c.Description.ToLower().Contains(term)));
+        }
+        else if (hasSearch)
+        {
+            var term = search!.Trim().ToLower();
+            predicate = c =>
+                c.Name.ToLower().Contains(term) ||
+                (c.ContractCode != null && c.ContractCode.ToLower().Contains(term)) ||
+                (c.Description != null && c.Description.ToLower().Contains(term));
+        }
+        else if (hasStatus)
+        {
+            predicate = c => c.Status == status;
+        }
+
+        var pagedEntities = predicate is not null
+            ? await _svc.GetPagedAsync(predicate, page, pageSize, ct)
+            : await _svc.GetPagedAsync(page, pageSize, ct);
+
+        var dtoItems = _mapper.Map<List<ContractTypeDto>>(pagedEntities.Items);
+
+        return Ok(new
+        {
+            items = dtoItems,
+            page = pagedEntities.Page,
+            pageSize = pagedEntities.PageSize,
+            totalCount = pagedEntities.TotalCount,
+            totalPages = pagedEntities.TotalPages,
+            hasPreviousPage = pagedEntities.HasPreviousPage,
+            hasNextPage = pagedEntities.HasNextPage
+        });
     }
 
     /// <summary>Crea un nuevo registro.</summary>

@@ -825,6 +825,7 @@ CREATE TABLE [HR].[tbl_Employees] (
     [DepartmentID] INT NULL,
     [ImmediateBossID] INT NULL,
     [HireDate] DATE NOT NULL,
+    [SeniorityDate] DATE NULL, -- fecha de antigüedad para beneficios (ej. bono vacacional CT a los 5 años); distinta de HireDate cuando aplica un criterio contractual específico (ej. fecha de contrato indefinido)
     [Email] NVARCHAR(150) NULL,
     [IsActive] BIT DEFAULT ((1)) NOT NULL,
     [CreatedBy] INT NULL,
@@ -858,12 +859,13 @@ IF OBJECT_ID('[HR].[tbl_FamilyBurden]') IS NULL
 CREATE TABLE [HR].[tbl_FamilyBurden] (
     [BurdenID] INT IDENTITY(1,1) NOT NULL,
     [PersonID] INT NOT NULL,
-    [DependentID] NVARCHAR(20) NOT NULL,
+    [DependentID] NVARCHAR(20) NULL, -- nulo permitido: dependientes (menores) sin cédula emitida aún
     [IdentificationTypeID] INT NOT NULL,
     [FirstName] NVARCHAR(100) NOT NULL,
     [LastName] NVARCHAR(100) NOT NULL,
     [BirthDate] DATE NOT NULL,
     [DisabilityTypeID] INT NULL,
+    [DisabilityPercentage] DECIMAL(5,2) NULL,
     [StatusTypeID] INT NULL,
     [ApprovedAt] DATETIME2 NULL,
     [ApprovedBy] INT NULL,
@@ -1537,6 +1539,11 @@ CREATE TABLE [HR].[tbl_People] (
     [SpecialNeedsTypeID] INT NULL,
     [DisabilityPercentage] DECIMAL(5,2) NULL,
     [CONADISCard] NVARCHAR(50) NULL,
+    -- 2026-08-18: nombre/título formal preferido de la persona (ej. "Dra. Sara Camacho
+    -- Estrada, PhD."), editable por HR desde la pantalla de Personas. Si está lleno,
+    -- reemplaza a LastName+FirstName al imprimir el nombre en documentos oficiales
+    -- (ver PeopleNameExtensions.GetFullName); si no, se usa la concatenación de siempre.
+    [PreferredDenomination] NVARCHAR(200) NULL,
     [RowVersion] TIMESTAMP NOT NULL,
     [CreatedBy] INT NULL,
     [UpdatedBy] INT NULL
@@ -2182,6 +2189,54 @@ CREATE TABLE [HR].[tbl_Vacations] (
     [CreatedBy] INT NULL,
     [UpdatedBy] INT NULL,
     [IsDeleted] BIT DEFAULT ((0)) NOT NULL
+);
+GO
+
+-- ------------------------------------------------------------
+-- Planificación masiva de vacaciones (cierre colectivo institucional o por
+-- departamento) — 2026-08-17. Un plan = un periodo; no genera una fila por
+-- empleado en tbl_Vacations, solo la tabla de exclusión (quién trabaja normal).
+IF OBJECT_ID('[HR].[tbl_MassVacationPlan]') IS NULL
+CREATE TABLE [HR].[tbl_MassVacationPlan] (
+    [PlanId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [DepartmentId] INT NULL, -- NULL = toda la institución
+    [Description] NVARCHAR(500) NULL,
+    [StartDate] DATE NOT NULL,
+    [EndDate] DATE NOT NULL,
+    -- Modo "por horas": StartTime/EndTime con valor = aplica solo esa franja horaria de
+    -- StartDate (StartDate debe ser = EndDate en ese caso). NULL = día(s) completo(s).
+    [StartTime] TIME NULL,
+    [EndTime] TIME NULL,
+    [VacationYear] INT NOT NULL,
+    -- 2026-08-18: PLANNED -> IN_PROGRESS -> FINISHED, automático por fecha via Quartz
+    -- (DailyMassVacationPlanTransitionJob); o CANCELLED manual mientras PLANNED.
+    -- 2026-08-18: convertido a FK ref_Types (categoría MASS_VACATION_PLAN_STATUS) en vez
+    -- de string hardcodeado, siguiendo el mismo patrón que GuardVacationPlan.StatusTypeId.
+    [StatusTypeId] INT NOT NULL,
+    [CreatedBy] INT NULL,
+    [CreatedAt] DATETIME2 NULL,
+    [ExecutedBy] INT NULL,
+    [ExecutedAt] DATETIME2 NULL,
+    [UpdatedBy] INT NULL,
+    [UpdatedAt] DATETIME2 NULL,
+    [IsDeleted] BIT NOT NULL DEFAULT ((0)),
+    CONSTRAINT [FK_MassVacationPlan_Department] FOREIGN KEY ([DepartmentId]) REFERENCES [HR].[tbl_Departments]([DepartmentID]),
+    CONSTRAINT [FK_MassVacationPlan_StatusType] FOREIGN KEY ([StatusTypeId]) REFERENCES [HR].[ref_Types]([TypeID])
+);
+GO
+
+-- ------------------------------------------------------------
+IF OBJECT_ID('[HR].[tbl_MassVacationPlanExclusion]') IS NULL
+CREATE TABLE [HR].[tbl_MassVacationPlanExclusion] (
+    [ExclusionId] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [PlanId] INT NOT NULL,
+    [EmployeeId] INT NOT NULL,
+    [Reason] NVARCHAR(500) NULL,
+    [CreatedBy] INT NULL,
+    [CreatedAt] DATETIME2 NULL,
+    CONSTRAINT [FK_MassVacationPlanExclusion_Plan] FOREIGN KEY ([PlanId]) REFERENCES [HR].[tbl_MassVacationPlan]([PlanId]),
+    CONSTRAINT [FK_MassVacationPlanExclusion_Employee] FOREIGN KEY ([EmployeeId]) REFERENCES [HR].[tbl_Employees]([EmployeeID]),
+    CONSTRAINT [UQ_MassVacationPlanExclusion] UNIQUE ([PlanId], [EmployeeId])
 );
 GO
 

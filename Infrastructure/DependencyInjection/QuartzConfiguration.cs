@@ -76,6 +76,19 @@ public static class QuartzConfiguration
                     .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
                 .WithDescription("Acredita vacaciones mensual el día 1 (acredita el mes anterior)")
                 .UsingJobData("TimeZone", timeZone));
+
+            // 5. Transición diaria de planes de vacaciones masivas - 1:00 AM
+            // Corre antes del cálculo de asistencia (7:00 AM) para que el cruce de
+            // asistencia del día ya vea los planes recién puestos En Ejecución.
+            var massVacationTransitionKey = new JobKey("DailyMassVacationPlanTransitionJob");
+            q.AddJob<DailyMassVacationPlanTransitionJob>(opts => opts.WithIdentity(massVacationTransitionKey));
+            q.AddTrigger(opts => opts
+                .ForJob(massVacationTransitionKey)
+                .WithIdentity("DailyMassVacationPlanTransitionTrigger")
+                .WithCronSchedule("0 0 1 * * ?", x => x
+                    .InTimeZone(TimeZoneInfo.FindSystemTimeZoneById(timeZone)))
+                .WithDescription("Pasa planes de vacaciones masivas de Planificado a En Ejecución (con descuento de saldo) y de En Ejecución a Finalizado, según fecha")
+                .UsingJobData("TimeZone", timeZone));
         });
 
         services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);

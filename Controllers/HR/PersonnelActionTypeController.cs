@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq.Expressions;
 using WsUtaSystem.Application.DTOs.PersonnelActionType;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Security;
@@ -46,6 +47,49 @@ public sealed class PersonnelActionTypeController : ControllerBase
     {
         var entity = await _svc.GetByIdAsync(id, ct);
         return entity is null ? NotFound() : Ok(_mapper.Map<PersonnelActionTypeDto>(entity));
+    }
+
+    /// <summary>Retorna un resultado paginado de tipos de acción de personal.</summary>
+    /// <param name="page">Número de página (base 1).</param>
+    /// <param name="pageSize">Cantidad de registros por página. Máximo 200.</param>
+    /// <param name="search">Texto de búsqueda por nombre, código o descripción.</param>
+    [HttpGet("paged")]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 200) pageSize = 20;
+
+        Expression<Func<PersonnelActionType, bool>>? predicate = null;
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            predicate = a =>
+                a.Name.ToLower().Contains(term) ||
+                a.Code.ToLower().Contains(term) ||
+                (a.Description != null && a.Description.ToLower().Contains(term));
+        }
+
+        var pagedEntities = predicate is not null
+            ? await _svc.GetPagedAsync(predicate, page, pageSize, ct)
+            : await _svc.GetPagedAsync(page, pageSize, ct);
+
+        var dtoItems = _mapper.Map<List<PersonnelActionTypeDto>>(pagedEntities.Items);
+
+        return Ok(new
+        {
+            items = dtoItems,
+            page = pagedEntities.Page,
+            pageSize = pagedEntities.PageSize,
+            totalCount = pagedEntities.TotalCount,
+            totalPages = pagedEntities.TotalPages,
+            hasPreviousPage = pagedEntities.HasPreviousPage,
+            hasNextPage = pagedEntities.HasNextPage
+        });
     }
 
     /// <summary>
