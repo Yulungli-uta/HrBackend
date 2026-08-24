@@ -122,7 +122,14 @@ public sealed record PersonnelActionDetailDto(
     // el aprovisionamiento/deshabilitación automática de AD al cargar el documento
     // firmado, pero el DTO nunca los incluía — siempre llegaban como undefined/false.
     bool ActionTypeRequiresAdUserCreation,
-    bool ActionTypeRequiresAdUserDisable
+    bool ActionTypeRequiresAdUserDisable,
+
+    // 2026-08-20: Lugar de Trabajo — mismo patrón que InstitutionalProcess/ManagementLevel:
+    // WorkplaceName es lo elegido manualmente para esta acción (situación propuesta);
+    // PreviousWorkplaceName viene de la acción anterior del empleado (situación actual).
+    int? Workplace,
+    string? WorkplaceName,
+    string? PreviousWorkplaceName
 );
 
 // ── Solicitudes ──────────────────────────────────────────────────────────────────
@@ -167,6 +174,7 @@ public sealed record CreatePersonnelActionRequest(
     bool SwornDeclaration,
     int? InstitutionalProcess,
     int? ManagementLevel,
+    int? Workplace,
 
     // Responsables del documento
     int? DthDirectorId,
@@ -209,6 +217,7 @@ public sealed record UpdatePersonnelActionRequest(
     bool SwornDeclaration,
     int? InstitutionalProcess,
     int? ManagementLevel,
+    int? Workplace,
 
     // Responsables del documento
     int? DthDirectorId,

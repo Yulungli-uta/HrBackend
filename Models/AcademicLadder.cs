@@ -24,11 +24,25 @@ public class AcademicLadder : IAuditable
     /// <summary>Sueldo base de referencia para esta combinación Categoría × Dedicación.</summary>
     public decimal? BaseRmu { get; set; }
 
+    /// <summary>Piso real observado de RMU para este escalón (matriz de personal). Complementa
+    /// a BaseRmu, que es un valor único de referencia — en la práctica el sueldo varía dentro
+    /// de un rango para el mismo escalón (antigüedad, negociación puntual, etc.).</summary>
+    public decimal? RmuMin { get; set; }
+
+    /// <summary>Techo real observado de RMU para este escalón. Ver RmuMin.</summary>
+    public decimal? RmuMax { get; set; }
+
     /// <summary>Denominación exacta exigida por el catálogo SIIES (Tabla 9) para este escalón, cuando aplica.</summary>
     public string? SiiesLabel { get; set; }
+
+    /// <summary>Agrupación institucional (ref_Types.Category=ACADEMIC_GROUP_TYPE, ej. "Personal
+    /// Académico Agregado") tal como aparece en la matriz de personal — misma categoría que
+    /// CategoryTypeId, solo que con la nomenclatura usada en ese documento.</summary>
+    public int? AcademicGroupTypeId { get; set; }
 
     public virtual RefTypes? CategoryType { get; set; }
     public virtual RefTypes? LevelType { get; set; }
     public virtual RefTypes? DedicationType { get; set; }
+    public virtual RefTypes? AcademicGroupType { get; set; }
     public virtual AcademicLadder? NextLadder { get; set; }
 }

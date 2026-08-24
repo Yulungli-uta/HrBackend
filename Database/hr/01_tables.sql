@@ -1367,6 +1367,11 @@ CREATE TABLE [HR].[tbl_Occupational_Groups] (
     [Description] NVARCHAR(200) NOT NULL,
     [RMU] DECIMAL(10,2) NOT NULL,
     [DegreeID] INT NOT NULL,
+    -- Clasificación institucional "Escala UEP" (ref_Types.Category=UEP_SCALE_TYPE), cuando este
+    -- grupo ocupacional también se identifica bajo esa nomenclatura en la matriz de personal.
+    -- No reemplaza el RMU/GroupID de la escala LOSEP — es solo una etiqueta adicional, ya que
+    -- los montos UEP coinciden exactamente con los de Servidor Público/Directivo/NJS existentes.
+    [UepScaleTypeId] INT NULL,
     [IsActive] BIT DEFAULT ((1)) NOT NULL,
     [CreatedAt] DATETIME2 DEFAULT (getdate()) NOT NULL,
     [UpdatedAt] DATETIME2 NULL,

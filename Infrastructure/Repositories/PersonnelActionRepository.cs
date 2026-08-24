@@ -151,6 +151,7 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
         // departamento de origen).
         string? previousInstitutionalProcessName = null;
         string? previousManagementLevelName = null;
+        string? previousWorkplaceName = null;
         if (result.action.EmployeeId.HasValue)
         {
             var previousAction = await _db.PersonnelActions.AsNoTracking()
@@ -171,6 +172,15 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 previousManagementLevelName = previousAction.ManagementLevel.HasValue
                     ? await _db.RefTypes.AsNoTracking()
                         .Where(r => r.TypeId == previousAction.ManagementLevel.Value)
+                        .Select(r => r.Name)
+                        .FirstOrDefaultAsync(ct)
+                    : null;
+
+                // Lugar de Trabajo "actual" — mismo criterio: lo que quedó como PROPUESTA en
+                // la acción anterior del empleado, nunca inventado de otra fuente.
+                previousWorkplaceName = previousAction.Workplace.HasValue
+                    ? await _db.RefTypes.AsNoTracking()
+                        .Where(r => r.TypeId == previousAction.Workplace.Value)
                         .Select(r => r.Name)
                         .FirstOrDefaultAsync(ct)
                     : null;
@@ -228,6 +238,13 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
         var mgmtLevelName = result.action.ManagementLevel.HasValue
             ? await _db.RefTypes.AsNoTracking()
                 .Where(r => r.TypeId == result.action.ManagementLevel.Value)
+                .Select(r => r.Name)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var workplaceName = result.action.Workplace.HasValue
+            ? await _db.RefTypes.AsNoTracking()
+                .Where(r => r.TypeId == result.action.Workplace.Value)
                 .Select(r => r.Name)
                 .FirstOrDefaultAsync(ct)
             : null;
@@ -304,7 +321,10 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             result.action.UpdatedBy,
             result.actionType.ReachesVigente,
             result.actionType.RequiresAdUserCreation,
-            result.actionType.RequiresAdUserDisable
+            result.actionType.RequiresAdUserDisable,
+            result.action.Workplace,
+            workplaceName,
+            previousWorkplaceName
         );
     }
 

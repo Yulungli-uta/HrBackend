@@ -471,6 +471,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
                 SwornDeclaration: false,
                 InstitutionalProcess: null,
                 ManagementLevel: null,
+                Workplace: null,
                 DthDirectorId: null,
                 AuthorityNominatorId: null,
                 ElaboratorId: null,

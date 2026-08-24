@@ -188,6 +188,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
             SwornDeclaration        = request.SwornDeclaration,
             InstitutionalProcess    = request.InstitutionalProcess,
             ManagementLevel        = request.ManagementLevel,
+            Workplace               = request.Workplace,
             DthDirectorId           = request.DthDirectorId,
             AuthorityNominatorId    = request.AuthorityNominatorId,
             ElaboratorId            = request.ElaboratorId,
@@ -265,6 +266,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         action.SwornDeclaration        = request.SwornDeclaration;
         action.InstitutionalProcess    = request.InstitutionalProcess;
         action.ManagementLevel         = request.ManagementLevel;
+        action.Workplace               = request.Workplace;
         action.EmployeeTypeId          = request.EmployeeTypeId is > 0 ? request.EmployeeTypeId : action.EmployeeTypeId;
         action.DthDirectorId           = request.DthDirectorId;
         action.AuthorityNominatorId    = request.AuthorityNominatorId;
@@ -352,6 +354,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         action.SwornDeclaration        = request.SwornDeclaration;
         action.InstitutionalProcess    = request.InstitutionalProcess;
         action.ManagementLevel         = request.ManagementLevel;
+        action.Workplace               = request.Workplace;
         action.EmployeeTypeId          = request.EmployeeTypeId is > 0 ? request.EmployeeTypeId : action.EmployeeTypeId;
         action.DthDirectorId           = request.DthDirectorId;
         action.AuthorityNominatorId    = request.AuthorityNominatorId;
@@ -885,6 +888,26 @@ public sealed class PersonnelActionService : IPersonnelActionService
         Set(r, "PROPOSED_JOB_TITLE", d.DestinationJobTitle);
         Set(r, "PROPOSED_SALARY",    d.NewRmu?.ToString("N2"));
         Set(r, "PROPOSED_BUDGET_CODE",d.DestinationBudgetCode);
+
+        // Lugar de Trabajo: mismo patrón que Proceso Institucional/Nivel de Gestión — la
+        // PROPUESTA es lo que el usuario eligió manualmente en esta acción; la ACTUAL es lo
+        // que quedó como propuesta en la acción anterior del empleado.
+        Set(r, "CURRENT_WORKPLACE",  d.PreviousWorkplaceName);
+        Set(r, "PROPOSED_WORKPLACE",d.WorkplaceName);
+
+        // 2026-08-20: la decisión de colapsar SITUACIÓN PROPUESTA a solo el nombre de la
+        // acción se basa en el TIPO de acción (ActionTypeReachesVigente=0: Comisión, Licencia,
+        // Sanción, Vulnerabilidad, Vacaciones, Cesación, etc. — no representan cambio de
+        // puesto/departamento, ver comentario en FinalizeAsync), NUNCA en si el registro
+        // tiene datos de cargo destino cargados — corregido a pedido del usuario: antes se
+        // basaba en los datos (DestinationDepartmentName/JobTitle/etc.), lo que hacía que
+        // acciones de Vacaciones con un departamento destino igual al de origen (copiado por
+        // el formulario) mostraran la grilla completa en vez de colapsar.
+        if (!d.ActionTypeReachesVigente)
+        {
+            r["PROPOSED_FIELDS_DISPLAY"] = "none";
+            Set(r, "PROPOSED_ACTION_LABEL", d.ActionTypeName);
+        }
         Set(r, "EMPLOYEE_FULLNAME",  d.EmployeeFullName);
         Set(r, "EMPLOYEE_IDCARD",    d.EmployeeIdCard);
 

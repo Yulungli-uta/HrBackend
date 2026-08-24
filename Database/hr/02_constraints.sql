@@ -650,6 +650,13 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Occupational_Grou
             REFERENCES [HR].[tbl_Degrees] ([DegreeID]);
 GO
 
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_OccupationalGroups_UepScaleType')
+    ALTER TABLE [HR].[tbl_Occupational_Groups]
+        ADD CONSTRAINT [FK_OccupationalGroups_UepScaleType]
+            FOREIGN KEY ([UepScaleTypeId])
+            REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
+
 -- --- Tabla: TBL_StoredFile ---
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_TBL_StoredFile_DirectoryCode')
     ALTER TABLE [HR].[TBL_StoredFile]

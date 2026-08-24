@@ -26,6 +26,9 @@ public sealed class AcademicLadderConfiguration : IEntityTypeConfiguration<Acade
 
         e.Property(x => x.DedicationTypeId).HasColumnName("DedicationTypeID");
         e.Property(x => x.BaseRmu).HasColumnName("BaseRMU").HasColumnType("DECIMAL(10,2)");
+        e.Property(x => x.RmuMin).HasColumnType("DECIMAL(10,2)");
+        e.Property(x => x.RmuMax).HasColumnType("DECIMAL(10,2)");
+        e.Property(x => x.AcademicGroupTypeId).HasColumnName("AcademicGroupTypeId");
 
         e.HasOne(x => x.CategoryType)
             .WithMany()
@@ -49,6 +52,12 @@ public sealed class AcademicLadderConfiguration : IEntityTypeConfiguration<Acade
             .WithMany()
             .HasForeignKey(x => x.NextLadderId)
             .HasConstraintName("FK_AcadLadder_Next")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.AcademicGroupType)
+            .WithMany()
+            .HasForeignKey(x => x.AcademicGroupTypeId)
+            .HasConstraintName("FK_AcademicLadder_AcademicGroupType")
             .OnDelete(DeleteBehavior.Restrict);
     }
 }
