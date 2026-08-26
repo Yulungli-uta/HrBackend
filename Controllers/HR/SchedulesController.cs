@@ -15,8 +15,14 @@ namespace WsUtaSystem.Controllers.HR;
 public class SchedulesController : ControllerBase
 {
     private readonly ISchedulesService _svc;
+    private readonly IEmployeeLaborRegimeService _laborRegimeSvc;
     private readonly IMapper _mapper;
-    public SchedulesController(ISchedulesService svc, IMapper mapper) { _svc = svc; _mapper = mapper; }
+    public SchedulesController(ISchedulesService svc, IEmployeeLaborRegimeService laborRegimeSvc, IMapper mapper)
+    {
+        _svc = svc;
+        _laborRegimeSvc = laborRegimeSvc;
+        _mapper = mapper;
+    }
 
     /// <summary>Lista todos los registros de Schedules.</summary>
     [HttpGet]
@@ -54,6 +60,14 @@ public class SchedulesController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<SchedulesDto>(e));
     }
 
+    /// <summary>
+    /// Lista horarios paginados. Si se pasa <paramref name="employeeIds"/> (los colaboradores
+    /// a quienes se les va a cambiar el horario, no el usuario logueado), el resultado se
+    /// restringe a horarios activos cuyo régimen laboral (LOSEP/LOES/Código de Trabajo) sea
+    /// compatible: horarios universales (sin régimen asignado) más la unión de los regímenes
+    /// activos de todos los colaboradores indicados. Usado por Planificación de Cambio de
+    /// Horario para no listar todo el catálogo al filtrar por colaborador.
+    /// </summary>
     [HttpGet("paged")]
     [RequirePermission("SCHEDULES.READ")]
     public async Task<IActionResult> GetPaged(
@@ -61,6 +75,7 @@ public class SchedulesController : ControllerBase
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null,
         [FromQuery] bool? isRotating = null,
+        [FromQuery] List<int>? employeeIds = null,
         [FromQuery] string? sortBy = null,
         [FromQuery] string? sortDirection = "asc",
         CancellationToken ct = default)
@@ -71,11 +86,16 @@ public class SchedulesController : ControllerBase
         var term = search?.Trim().ToLower();
         var hasSearch = !string.IsNullOrWhiteSpace(term);
 
+        List<int>? regimeIds = null;
+        if (employeeIds is { Count: > 0 })
+            regimeIds = await _laborRegimeSvc.GetActiveRegimeIdsForEmployeesAsync(employeeIds, ct);
+
         Expression<Func<Schedules, bool>>? predicate = null;
-        if (hasSearch || isRotating.HasValue)
+        if (hasSearch || isRotating.HasValue || regimeIds is not null)
         {
             predicate = s =>
                 (!isRotating.HasValue || s.IsRotating == isRotating.Value) &&
+                (regimeIds == null || (s.IsActive && (s.LaborRegimeId == null || regimeIds.Contains(s.LaborRegimeId.Value)))) &&
                 (!hasSearch ||
                  (s.Description != null && s.Description.ToLower().Contains(term!)) ||
                  (s.WorkingDays != null && s.WorkingDays.ToLower().Contains(term!)) ||

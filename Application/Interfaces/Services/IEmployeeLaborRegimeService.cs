@@ -7,6 +7,12 @@ public interface IEmployeeLaborRegimeService
     Task<List<EmployeeLaborRegimeDto>> GetByEmployeeAsync(int employeeId, CancellationToken ct = default);
 
     /// <summary>
+    /// Unión de regímenes laborales activos entre todos los empleados dados. Un empleado
+    /// puede aportar más de uno (ej. nombramiento LOSEP + contrato Código de Trabajo).
+    /// </summary>
+    Task<List<int>> GetActiveRegimeIdsForEmployeesAsync(List<int> employeeIds, CancellationToken ct = default);
+
+    /// <summary>
     /// Agrega un nuevo régimen activo al empleado y recalcula cuál queda como principal
     /// (nombramiento gana; si ninguno es nombramiento, gana LOSEP).
     /// </summary>

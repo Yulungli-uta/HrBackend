@@ -30,6 +30,7 @@ public sealed class PersonnelActionsController : ControllerBase
     private readonly ICurrentUserService _currentUser;
     private readonly IUserAccessScopeService _accessScopeService;
     private readonly IRecordAccessGuard _accessGuard;
+    private readonly IUserActionPermissionService _permissionService;
     private readonly ILogger<PersonnelActionsController> _logger;
 
     public PersonnelActionsController(
@@ -37,13 +38,26 @@ public sealed class PersonnelActionsController : ControllerBase
         ICurrentUserService currentUser,
         IUserAccessScopeService accessScopeService,
         IRecordAccessGuard accessGuard,
+        IUserActionPermissionService permissionService,
         ILogger<PersonnelActionsController> logger)
     {
         _personnelActionService = personnelActionService;
         _currentUser            = currentUser;
         _accessScopeService     = accessScopeService;
         _accessGuard            = accessGuard;
+        _permissionService      = permissionService;
         _logger                 = logger;
+    }
+
+    /// <summary>
+    /// Usuarios con el permiso elevado de Corrección (PERSONNEL_ACTIONS.MANAGE) tienen alcance
+    /// sobre cualquier departamento — verificado en servidor contra los roles reales del token,
+    /// nunca un flag del cliente.
+    /// </summary>
+    private async Task<bool> HasManagePermissionAsync(CancellationToken ct)
+    {
+        var roles = User.FindAll(System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+        return await _permissionService.HasPermissionAsync(roles, "PERSONNEL_ACTIONS.MANAGE", ct);
     }
 
     /// <summary>Carga el detalle de una acción y valida que su empleado esté dentro del alcance del usuario. Retorna null si no existe.</summary>
@@ -51,7 +65,24 @@ public sealed class PersonnelActionsController : ControllerBase
     {
         var action = await _personnelActionService.GetDetailByIdAsync(id, ct);
         if (action is null) return null;
-        await _accessGuard.EnsureEmployeeRecordAsync(action.EmployeeId, "PERSONNEL_ACTIONS", ct);
+
+        if (await HasManagePermissionAsync(ct)) return action;
+
+        if (action.EmployeeId > 0)
+        {
+            await _accessGuard.EnsureEmployeeRecordAsync(action.EmployeeId, "PERSONNEL_ACTIONS", ct);
+        }
+        else
+        {
+            // Acción de ingreso (ej. Nombramiento) para una persona que aún no tiene registro
+            // de Empleado: EmployeeID es NULL a propósito (la acción solo referencia PersonId).
+            // No se puede resolver el departamento vía empleado, así que se usa el departamento
+            // propio de la acción (mismo criterio que Create(), línea ~156).
+            var departmentId = action.DestinationDepartmentId ?? action.OriginDepartmentId
+                ?? throw new UnauthorizedAccessException("No se pudo determinar el departamento del registro solicitado.");
+            await _accessGuard.EnsureDepartmentAsync(departmentId, "PERSONNEL_ACTIONS", ct);
+        }
+
         return action;
     }
 
@@ -223,11 +254,10 @@ public sealed class PersonnelActionsController : ControllerBase
         [FromBody] CorrectPersonnelActionRequest request,
         CancellationToken ct)
     {
-        try
-        {
-            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
-        }
-        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+        // Sin guard de departamento a propósito: la Corrección es una capacidad elevada
+        // (permiso PERSONNEL_ACTIONS.MANAGE) pensada para arreglar registros de cualquier
+        // departamento, no solo el del usuario que corrige.
+        if (await _personnelActionService.GetDetailByIdAsync(id, ct) is null) return NotFound();
 
         var correctedBy = _currentUser.EmployeeId ?? 0;
 
@@ -243,6 +273,42 @@ public sealed class PersonnelActionsController : ControllerBase
         _logger.LogInformation(
             "Acción de personal Id={ActionId} CORREGIDA por EmployeeId={UserId}. Motivo: {Reason}",
             id, correctedBy, request.Reason);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Corrige directamente el estado de una acción de personal (sin pasar por el flujo normal
+    /// de transición ni disparar sus efectos secundarios). Exige motivo obligatorio y queda
+    /// registrada en el historial de estados. Requiere el permiso elevado PERSONNEL_ACTIONS.MANAGE.
+    /// </summary>
+    [HttpPut("{id:int}/correct-status")]
+    [RequirePermission("PERSONNEL_ACTIONS.MANAGE")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CorrectStatus(
+        [FromRoute] int id,
+        [FromBody] CorrectPersonnelActionStatusRequest request,
+        CancellationToken ct)
+    {
+        // Sin guard de departamento a propósito: ver comentario en Correct().
+        if (await _personnelActionService.GetDetailByIdAsync(id, ct) is null) return NotFound();
+
+        var correctedBy = _currentUser.EmployeeId ?? 0;
+
+        try
+        {
+            await _personnelActionService.CorrectStatusAsync(id, request.NewStatus, request.Reason, correctedBy, ct);
+        }
+        catch (Exception ex) when (ex is ArgumentException or KeyNotFoundException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        _logger.LogInformation(
+            "Acción de personal Id={ActionId} ESTADO CORREGIDO a '{NewStatus}' por EmployeeId={UserId}. Motivo: {Reason}",
+            id, request.NewStatus, correctedBy, request.Reason);
 
         return NoContent();
     }

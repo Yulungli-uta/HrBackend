@@ -30,4 +30,16 @@ public class EmployeeLaborRegimeRepository : ServiceAwareEfRepository<EmployeeLa
             .Where(r => r.TypeId == laborRegimeId)
             .Select(r => r.Name)
             .FirstOrDefaultAsync(ct);
+
+    public async Task<List<int>> GetActiveRegimeIdsByEmployeeIdsAsync(List<int> employeeIds, CancellationToken ct = default)
+    {
+        if (employeeIds is null || employeeIds.Count == 0) return [];
+
+        return await _db.EmployeeLaborRegimes
+            .AsNoTracking()
+            .Where(r => employeeIds.Contains(r.EmployeeId) && r.IsActive)
+            .Select(r => r.LaborRegimeId)
+            .Distinct()
+            .ToListAsync(ct);
+    }
 }

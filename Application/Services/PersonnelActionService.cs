@@ -746,12 +746,62 @@ public sealed class PersonnelActionService : IPersonnelActionService
                 $"Transición no permitida: '{currentStatus}' → '{targetStatus}'.");
         }
 
-        await _actionRepository.UpdateStatusAsync(actionId, targetStatus, ct);
-        await WriteHistoryAsync(actionId, fromStatus: currentStatus, toStatus: targetStatus, comment, changedBy, ct);
+        await PersistStatusChangeAsync(actionId, currentStatus, targetStatus, comment, changedBy, ct);
 
         _logger.LogInformation(
             "PersonnelActionService: acción {ActionId} transicionó de '{From}' a '{To}'.",
             actionId, currentStatus, targetStatus);
+    }
+
+    /// <summary>
+    /// Núcleo compartido entre el flujo normal (<see cref="TransitionStatusAsync"/>, que valida
+    /// <see cref="AllowedTransitions"/> y dispara efectos secundarios en sus llamadores) y la
+    /// corrección manual (<see cref="CorrectStatusAsync"/>, que no valida ni dispara nada más
+    /// que esto): persiste el nuevo Status y escribe la fila de historial. No decide por sí
+    /// mismo si la transición es válida ni ejecuta efectos secundarios — eso es responsabilidad
+    /// de cada llamador.
+    /// </summary>
+    private async Task PersistStatusChangeAsync(
+        int actionId,
+        string currentStatus,
+        string targetStatus,
+        string? comment,
+        int changedBy,
+        CancellationToken ct)
+    {
+        await _actionRepository.UpdateStatusAsync(actionId, targetStatus, ct);
+        await WriteHistoryAsync(actionId, fromStatus: currentStatus, toStatus: targetStatus, comment, changedBy, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task CorrectStatusAsync(
+        int actionId,
+        string newStatus,
+        string reason,
+        int correctedBy,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Debe ingresar el motivo de la corrección.", nameof(reason));
+        if (string.IsNullOrWhiteSpace(newStatus) || !AllowedTransitions.ContainsKey(newStatus))
+            throw new ArgumentException($"Estado '{newStatus}' no es un estado válido.", nameof(newStatus));
+
+        var action = await _actionRepository.GetByIdAsync(actionId, ct)
+            ?? throw new KeyNotFoundException($"Acción de personal {actionId} no encontrada.");
+
+        if (string.Equals(action.Status, newStatus, StringComparison.OrdinalIgnoreCase))
+            return; // No-op: ya está en el estado solicitado.
+
+        // Corrección manual: a diferencia de TransitionStatusAsync, NO valida AllowedTransitions
+        // (la corrección puede necesitar ir a cualquier estado, no solo a los alcanzables desde
+        // el actual) y NO dispara ningún efecto secundario (SalaryHistory, movimiento/régimen,
+        // AD, cierre de acción vigente previa, etc.) — esos solo ocurren al crear/avanzar una
+        // acción por el flujo normal, nunca al corregir el registro de una ya existente.
+        await PersistStatusChangeAsync(actionId, action.Status, newStatus, $"CORRECCIÓN: {reason.Trim()}", correctedBy, ct);
+
+        _logger.LogInformation(
+            "PersonnelActionService: acción {ActionId} — Status CORREGIDO de '{From}' a '{To}' por EmployeeId={UserId}. Motivo: {Reason}",
+            actionId, action.Status, newStatus, correctedBy, reason);
     }
 
     private async Task WriteHistoryAsync(
@@ -889,21 +939,33 @@ public sealed class PersonnelActionService : IPersonnelActionService
         Set(r, "PROPOSED_SALARY",    d.NewRmu?.ToString("N2"));
         Set(r, "PROPOSED_BUDGET_CODE",d.DestinationBudgetCode);
 
+        // 2026-08-24: Grupo Ocupacional y Grado — ver PersonnelActionRepository.GetDetailByIdAsync.
+        Set(r, "CURRENT_OCCUPATIONAL_GROUP",  d.OriginOccupationalGroupName);
+        Set(r, "CURRENT_GRADE",               d.OriginGradeName);
+        Set(r, "PROPOSED_OCCUPATIONAL_GROUP", d.DestinationOccupationalGroupName);
+        Set(r, "PROPOSED_GRADE",              d.DestinationGradeName);
+
         // Lugar de Trabajo: mismo patrón que Proceso Institucional/Nivel de Gestión — la
         // PROPUESTA es lo que el usuario eligió manualmente en esta acción; la ACTUAL es lo
         // que quedó como propuesta en la acción anterior del empleado.
         Set(r, "CURRENT_WORKPLACE",  d.PreviousWorkplaceName);
         Set(r, "PROPOSED_WORKPLACE",d.WorkplaceName);
 
-        // 2026-08-20: la decisión de colapsar SITUACIÓN PROPUESTA a solo el nombre de la
-        // acción se basa en el TIPO de acción (ActionTypeReachesVigente=0: Comisión, Licencia,
-        // Sanción, Vulnerabilidad, Vacaciones, Cesación, etc. — no representan cambio de
-        // puesto/departamento, ver comentario en FinalizeAsync), NUNCA en si el registro
-        // tiene datos de cargo destino cargados — corregido a pedido del usuario: antes se
-        // basaba en los datos (DestinationDepartmentName/JobTitle/etc.), lo que hacía que
-        // acciones de Vacaciones con un departamento destino igual al de origen (copiado por
-        // el formulario) mostraran la grilla completa en vez de colapsar.
-        if (!d.ActionTypeReachesVigente)
+        // 2026-08-24: la decisión de colapsar SITUACIÓN PROPUESTA a solo el nombre de la
+        // acción se basa en ActionCategory (clasificación funcional del tipo de acción),
+        // NUNCA en ActionTypeReachesVigente (que es una señal de nómina/asistencia —
+        // "esta acción reemplaza el registro vigente del empleado" — no de "esta acción
+        // cambia de puesto"; ver descripción de la columna en HR.tbl_Personnel_Action_Type).
+        // Usar ReachesVigente aquí fue un bug (2026-08-24): solo 5 de 22 tipos lo tienen en
+        // true, dejando tipos con cambio real de puesto (Nombramiento Provisional,
+        // Designación, Reintegro, Cambio Administrativo, Homologación de Puesto, Promoción,
+        // Recategorización, Estímulo Económico, Ubicación Escalafonaria) colapsados por error.
+        // Tampoco se basa en si el registro tiene datos de cargo destino cargados —
+        // corregido antes a pedido del usuario: eso hacía que acciones de Vacaciones con un
+        // departamento destino igual al de origen (copiado por el formulario) mostraran la
+        // grilla completa en vez de colapsar.
+        var showsProposedFields = d.ActionCategory is "ENTRY" or "MOVEMENT" or "SALARY_CHANGE";
+        if (!showsProposedFields)
         {
             r["PROPOSED_FIELDS_DISPLAY"] = "none";
             Set(r, "PROPOSED_ACTION_LABEL", d.ActionTypeName);
@@ -949,11 +1011,14 @@ public sealed class PersonnelActionService : IPersonnelActionService
         // Detalle libre solo cuando corresponde a la casilla marcada (reutiliza Observations).
         if (cb == "CB_OTRO")
         {
-            // "Cambio de Dedicación" no tiene casilla propia en el formulario RGLOSEP — se
-            // marca OTRO y se imprime el tipo de acción como detalle en vez de las
-            // Observaciones libres (que suelen estar vacías o hablar de otra cosa).
-            var isDedicacion = d.ActionTypeName?.ToUpperInvariant().Contains("DEDICACI") ?? false;
-            Set(r, "ACTION_OTHER_DETAIL", isDedicacion ? d.ActionTypeName : d.Observations);
+            // "Cambio de Dedicación" y "Nombramiento"/"Nombramiento Provisional" no tienen
+            // casilla propia en el formulario RGLOSEP — se marca OTRO y se imprime el tipo
+            // de acción como detalle en vez de las Observaciones libres (que suelen estar
+            // vacías o hablar de otra cosa). Nombramiento agregado 2026-08-24 a pedido del
+            // usuario (antes marcaba CB_INGRESO, lo cual no correspondía).
+            var n = d.ActionTypeName?.ToUpperInvariant() ?? string.Empty;
+            var showsActionNameAsDetail = n.Contains("DEDICACI") || n.Contains("NOMBRAMIENTO");
+            Set(r, "ACTION_OTHER_DETAIL", showsActionNameAsDetail ? d.ActionTypeName : d.Observations);
         }
         if (cb == "CB_ENCARGO") Set(r, "ACTION_ENCARGO_DETAIL", d.Observations);
 
@@ -974,7 +1039,10 @@ public sealed class PersonnelActionService : IPersonnelActionService
         // abajo — revisados 2026-08-18 contra los 22 tipos reales de HR.tbl_Personnel_Action_Type.
         // Deben ir ANTES de las reglas genéricas para ganarles (ej. "Cambio de Sueldo"
         // contiene "CAMBIO", que si no fuera por esto marcaría CAMBIO ADMINISTRATIVO).
-        if (n.Contains("NOMBRAMIENTO"))                        return "CB_INGRESO";        // Nombramiento / Nombramiento Provisional
+        // 2026-08-24: a pedido del usuario, Nombramiento y Nombramiento Provisional marcan
+        // OTRO (con el tipo de acción como detalle) en vez de INGRESO — no corresponden a un
+        // ingreso nuevo a la institución en el sentido del formulario RGLOSEP.
+        if (n.Contains("NOMBRAMIENTO"))                        return "CB_OTRO";           // Nombramiento / Nombramiento Provisional
         if (n.Contains("PROMOCI"))                             return "CB_ASCENSO";        // Promoción en Categoría y Nivel
         if (n.Contains("REINTEGRO"))                           return "CB_RESTITUCION";    // Reintegro al Cargo
         if (n.Contains("RENUNCIA") || n.Contains("JUBILACI"))  return "CB_CESACION";       // Renuncia o Jubilación

@@ -15,6 +15,8 @@ public class SchedulesDto
     public string? RotationPattern { get; set; }
     public string? ScheduleCode { get; set; }
     public bool CrossesMidnight { get; set; }
+    public int? LaborRegimeId { get; set; }
+    public string? LaborRegimeName { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

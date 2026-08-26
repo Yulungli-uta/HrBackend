@@ -26,6 +26,15 @@ public interface IContractsService : IService<Contracts, int> {
 
     Task ChangeStatusAsync(int contractId, int toStatusTypeId, string? comment, CancellationToken ct);
 
+    /// <summary>
+    /// Corrige directamente el Status de un contrato a cualquier estado válido de
+    /// HR.ref_Types/CONTRACT_STATUS, sin validar <c>HR.tbl_ContractStatusTransition</c> y sin
+    /// disparar ningún efecto secundario (reversar cupo de solicitud, anular contrato padre,
+    /// etc.) — esos efectos solo ocurren en el flujo normal (<see cref="ChangeStatusAsync"/>).
+    /// Exige motivo obligatorio y queda registrada en el historial de estados.
+    /// </summary>
+    Task CorrectStatusAsync(int contractId, int toStatusTypeId, string reason, CancellationToken ct);
+
     Task<IReadOnlyList<ContractStatusHistoryDto>> GetStatusHistoryAsync(int contractId, CancellationToken ct);
 
     Task<IReadOnlyList<Contracts>> GetAddendumsAsync(int contractId, CancellationToken ct);

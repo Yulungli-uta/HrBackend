@@ -106,7 +106,9 @@ public class EntityToDtoProfile : Profile
         CreateMap<WsUtaSystem.Models.SalaryHistory, WsUtaSystem.Application.DTOs.SalaryHistory.SalaryHistoryDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.SalaryHistory, WsUtaSystem.Application.DTOs.SalaryHistory.SalaryHistoryCreateDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.SalaryHistory, WsUtaSystem.Application.DTOs.SalaryHistory.SalaryHistoryUpdateDto>().ReverseMap();
-        CreateMap<WsUtaSystem.Models.Schedules, WsUtaSystem.Application.DTOs.Schedules.SchedulesDto>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.Schedules, WsUtaSystem.Application.DTOs.Schedules.SchedulesDto>()
+            .ForMember(d => d.LaborRegimeName, opt => opt.MapFrom(s => s.LaborRegime != null ? s.LaborRegime.Name : null))
+            .ReverseMap();
         CreateMap<WsUtaSystem.Models.Schedules, WsUtaSystem.Application.DTOs.Schedules.SchedulesCreateDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.Schedules, WsUtaSystem.Application.DTOs.Schedules.SchedulesUpdateDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.Subrogations, WsUtaSystem.Application.DTOs.Subrogations.SubrogationsDto>().ReverseMap();

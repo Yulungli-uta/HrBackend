@@ -213,6 +213,34 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 .FirstOrDefaultAsync(ct)
             : null;
 
+        // 2026-08-24: Grupo Ocupacional y Grado del cargo origen/destino — Job.GroupId ->
+        // OccupationalGroup.Description (Grupo Ocupacional) -> OccupationalGroup.DegreeId ->
+        // Degree.Description (Grado). Placeholders CURRENT/PROPOSED_OCCUPATIONAL_GROUP y
+        // CURRENT/PROPOSED_GRADE existían en la plantilla pero nunca se resolvían.
+        var originGroupGrade = result.action.OriginJobId.HasValue
+            ? await (
+                from j in _db.Jobs.AsNoTracking()
+                join og in _db.OccupationalGroup.AsNoTracking() on j.GroupId equals (int?)og.GroupId into ogJoin
+                from og in ogJoin.DefaultIfEmpty()
+                join dg in _db.Degree.AsNoTracking() on og.DegreeId equals dg.DegreeId into dgJoin
+                from dg in dgJoin.DefaultIfEmpty()
+                where j.JobID == result.action.OriginJobId.Value
+                select new { og.Description, GradeDescription = dg != null ? dg.Description : null }
+            ).FirstOrDefaultAsync(ct)
+            : null;
+
+        var destGroupGrade = result.action.DestinationJobId.HasValue
+            ? await (
+                from j in _db.Jobs.AsNoTracking()
+                join og in _db.OccupationalGroup.AsNoTracking() on j.GroupId equals (int?)og.GroupId into ogJoin
+                from og in ogJoin.DefaultIfEmpty()
+                join dg in _db.Degree.AsNoTracking() on og.DegreeId equals dg.DegreeId into dgJoin
+                from dg in dgJoin.DefaultIfEmpty()
+                where j.JobID == result.action.DestinationJobId.Value
+                select new { og.Description, GradeDescription = dg != null ? dg.Description : null }
+            ).FirstOrDefaultAsync(ct)
+            : null;
+
         var generatedDocFileName = result.action.GeneratedDocumentId.HasValue
             ? await _db.GeneratedDocuments.AsNoTracking()
                 .Where(d => d.DocumentId == result.action.GeneratedDocumentId.Value)
@@ -324,7 +352,12 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             result.actionType.RequiresAdUserDisable,
             result.action.Workplace,
             workplaceName,
-            previousWorkplaceName
+            previousWorkplaceName,
+            result.actionType.ActionCategory,
+            originGroupGrade?.Description,
+            originGroupGrade?.GradeDescription,
+            destGroupGrade?.Description,
+            destGroupGrade?.GradeDescription
         );
     }
 

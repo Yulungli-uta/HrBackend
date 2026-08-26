@@ -17,8 +17,12 @@ public class Schedules : IAuditable{
   public bool IsActive { get; set; } = true;
   public string? ScheduleCode { get; set; }
   public bool CrossesMidnight { get; set; }
+  /// <summary>Régimen laboral al que aplica el horario. FK -> HR.ref_Types (Category='CONTRACT_TYPE'). NULL = aplica a cualquier régimen.</summary>
+  public int? LaborRegimeId { get; set; }
   public int? CreatedBy { get; set; }
   public DateTime? CreatedAt { get; set; }
   public int? UpdatedBy { get; set; }
   public DateTime? UpdatedAt { get; set; }
+
+  public virtual RefTypes? LaborRegime { get; set; }
 }

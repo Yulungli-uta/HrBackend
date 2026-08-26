@@ -1,4 +1,5 @@
-﻿using WsUtaSystem.Application.DTOs.Common;
+﻿using WsUtaSystem.Application.Common;
+using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.ScheduleChange;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -15,16 +16,22 @@ namespace WsUtaSystem.Application.Services
         private readonly IRefTypesService _refTypesService;
         private readonly ILogger<ScheduleChangePlanService> _logger;
         private readonly IEmployeeCurrentScheduleService _employeeCurrentScheduleService;
+        private readonly ISchedulesService _schedulesService;
+        private readonly IEmployeeLaborRegimeService _employeeLaborRegimeService;
 
         public ScheduleChangePlanService(
             IScheduleChangePlanRepository repository,
             IRefTypesService refTypesService,
             IEmployeeCurrentScheduleService employeeCurrentScheduleService,
+            ISchedulesService schedulesService,
+            IEmployeeLaborRegimeService employeeLaborRegimeService,
             ILogger<ScheduleChangePlanService> logger)
         {
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
             _refTypesService = refTypesService ?? throw new ArgumentNullException(nameof(refTypesService));
             _employeeCurrentScheduleService = employeeCurrentScheduleService ?? throw new ArgumentNullException(nameof(employeeCurrentScheduleService));
+            _schedulesService = schedulesService ?? throw new ArgumentNullException(nameof(schedulesService));
+            _employeeLaborRegimeService = employeeLaborRegimeService ?? throw new ArgumentNullException(nameof(employeeLaborRegimeService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -125,6 +132,8 @@ namespace WsUtaSystem.Application.Services
                     .Select(d => d.EmployeeID)
                     .Distinct()
                     .ToList();
+
+                await ValidateScheduleRegimeCompatibilityAsync(request.NewScheduleID, employeeIds, ct);
 
                 var currentSchedules = await _employeeCurrentScheduleService.GetByEmployeeIdsAsync(employeeIds, ct);
 
@@ -243,6 +252,27 @@ namespace WsUtaSystem.Application.Services
                 _logger.LogError(ex, "[SCP-SVC] CancelAsync ERROR planId={PlanId}", request.PlanID);
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Re-valida en servidor (no solo confiar en el filtro del listado) que el horario
+        /// elegido sea compatible con el régimen laboral real de los colaboradores incluidos:
+        /// horarios universales (LaborRegimeId NULL) siempre son válidos; de lo contrario el
+        /// régimen del horario debe estar entre la unión de regímenes activos de los
+        /// colaboradores (uno puede tener más de un régimen activo simultáneo).
+        /// </summary>
+        private async Task ValidateScheduleRegimeCompatibilityAsync(int newScheduleId, List<int> employeeIds, CancellationToken ct)
+        {
+            var schedule = await _schedulesService.GetByIdAsync(newScheduleId, ct)
+                ?? throw new KeyNotFoundException($"Horario {newScheduleId} no encontrado.");
+
+            if (schedule.LaborRegimeId is null) return;
+
+            var activeRegimeIds = await _employeeLaborRegimeService.GetActiveRegimeIdsForEmployeesAsync(employeeIds, ct);
+
+            if (!activeRegimeIds.Contains(schedule.LaborRegimeId.Value))
+                throw new BusinessRuleException(
+                    "El horario seleccionado no corresponde al régimen laboral (LOSEP/LOES/Código de Trabajo) de los colaboradores seleccionados.");
         }
 
         private void ValidateCreateRequest(CreateScheduleChangePlanRequest request)

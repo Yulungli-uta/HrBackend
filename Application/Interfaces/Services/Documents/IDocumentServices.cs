@@ -144,6 +144,15 @@ public interface IPersonnelActionService
     /// </summary>
     Task CorrectAsync(int actionId, UpdatePersonnelActionRequest request, string reason, int correctedBy, CancellationToken ct = default);
 
+    /// <summary>
+    /// Corrige directamente el <c>Status</c> de una acción de personal a cualquier estado
+    /// válido, sin validar que sea una transición alcanzable desde el estado actual y sin
+    /// disparar ningún efecto secundario (SalaryHistory, movimiento/régimen, AD, etc.) —
+    /// esos efectos solo ocurren en el flujo normal (crear/generar/firmar/finalizar/anular).
+    /// Exige motivo obligatorio y queda registrada en el historial de estados.
+    /// </summary>
+    Task CorrectStatusAsync(int actionId, string newStatus, string reason, int correctedBy, CancellationToken ct = default);
+
     /// <summary>Aprueba y ejecuta una acción de personal.</summary>
     Task<CreatePersonnelActionResponse> ApproveAsync(int actionId, ApprovePersonnelActionRequest request, int approvedBy, CancellationToken ct = default);
 

@@ -93,3 +93,9 @@ public sealed record CorrectContractRequest(
     string Reason,
     ContractsUpdateDto Data
 );
+
+/// <summary>Corrige directamente el Status de un contrato, sin pasar por el flujo normal de transición.</summary>
+public sealed record CorrectContractStatusRequest(
+    string Reason,
+    int ToStatusTypeID
+);

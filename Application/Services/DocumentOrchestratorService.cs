@@ -1,9 +1,14 @@
 ﻿using AutoMapper;
 using System.Diagnostics;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Documents;
 using WsUtaSystem.Application.DTOs.FileManagement;
 using WsUtaSystem.Application.DTOs.StoredFile;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Data;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Application.Services
@@ -23,17 +28,104 @@ namespace WsUtaSystem.Application.Services
         private readonly IStoredFileService _storedFileService;
         private readonly ILogger<DocumentOrchestratorService> _logger;
         private readonly IMapper _mapper;
+        private readonly AppDbContext _db;
+        private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly IUserActionPermissionService _permissionService;
+
+        // Estados en los que todavía se puede adjuntar archivos desde las pantallas de Nueva
+        // Acción/Nuevo Contrato (fuera de estos, el registro ya avanzó de trámite — solo debe
+        // poder visualizar lo ya cargado; ajustar documentos en ese punto es responsabilidad de
+        // la página de Corrección, ver CheckUploadBlockedAsync).
+        private static readonly HashSet<string> EditableActionStatuses =
+            new(StringComparer.OrdinalIgnoreCase) { "BORRADOR", "GENERADO", "DRAFT" };
+        private static readonly HashSet<string> EditableContractStatuses =
+            new(StringComparer.OrdinalIgnoreCase) { "BORRADOR", "GENERADO" };
+        private const string ContractStatusCategory = "CONTRACT_STATUS";
 
         public DocumentOrchestratorService(
             IFileManagementService fileManagement,
             IStoredFileService storedFileService,
             ILogger<DocumentOrchestratorService> logger,
-            IMapper mapper)
+            IMapper mapper,
+            AppDbContext db,
+            IHttpContextAccessor httpContextAccessor,
+            IUserActionPermissionService permissionService)
         {
             _fileManagement = fileManagement;
             _storedFileService = storedFileService;
             _logger = logger;
             _mapper = mapper;
+            _db = db;
+            _httpContextAccessor = httpContextAccessor;
+            _permissionService = permissionService;
+        }
+
+        /// <summary>
+        /// Null si la subida puede continuar; si no, el mensaje a devolver al cliente explicando
+        /// por qué se bloqueó. Solo se aplica a EntityType conocidos con concepto de "trámite en
+        /// curso" (PersonnelAction/HRCONTRACT); cualquier otro EntityType (hoja de vida, firmas,
+        /// certificación financiera, etc.) no tiene esta restricción y sigue igual que antes.
+        /// </summary>
+        private async Task<string?> CheckUploadBlockedAsync(string entityType, string entityId, CancellationToken ct)
+        {
+            switch (entityType)
+            {
+                case "PersonnelAction":
+                {
+                    if (!int.TryParse(entityId, out var actionId)) return null;
+
+                    var status = await _db.PersonnelActions.AsNoTracking()
+                        .Where(a => a.ActionId == actionId)
+                        .Select(a => a.Status)
+                        .FirstOrDefaultAsync(ct);
+
+                    if (status is null || EditableActionStatuses.Contains(status)) return null;
+                    if (await HasCorrectionPermissionAsync("PERSONNEL_ACTIONS.MANAGE", ct)) return null;
+
+                    return $"No se pueden adjuntar archivos: la acción está en estado '{status}'. " +
+                           "Use la página de Corrección para modificar documentos de acciones ya avanzadas.";
+                }
+
+                case "HRCONTRACT":
+                {
+                    if (!int.TryParse(entityId, out var contractId)) return null;
+
+                    var statusTypeId = await _db.Set<Contracts>().AsNoTracking()
+                        .Where(c => c.ContractID == contractId)
+                        .Select(c => (int?)c.Status)
+                        .FirstOrDefaultAsync(ct);
+
+                    if (statusTypeId is null) return null;
+
+                    var statusName = await _db.RefTypes.AsNoTracking()
+                        .Where(r => r.TypeId == statusTypeId.Value && r.Category == ContractStatusCategory)
+                        .Select(r => r.Name)
+                        .FirstOrDefaultAsync(ct);
+
+                    if (statusName is null || EditableContractStatuses.Contains(statusName)) return null;
+                    if (await HasCorrectionPermissionAsync("CONTRACTS.MANAGE", ct)) return null;
+
+                    return $"No se pueden adjuntar archivos: el contrato está en estado '{statusName}'. " +
+                           "Use la página de Corrección para modificar documentos de contratos ya avanzados.";
+                }
+
+                default:
+                    return null;
+            }
+        }
+
+        /// <summary>
+        /// Verificado en servidor contra los roles reales del token (mismo mecanismo que
+        /// RequirePermissionAttribute) — nunca un flag que mande el cliente. Los usuarios con
+        /// este permiso elevado son quienes usan la página de Corrección, así que necesitan
+        /// poder adjuntar/reemplazar documentos sin importar el estado del registro.
+        /// </summary>
+        private async Task<bool> HasCorrectionPermissionAsync(string permissionCode, CancellationToken ct)
+        {
+            var roles = _httpContextAccessor.HttpContext?.User
+                .FindAll(ClaimTypes.Role).Select(c => c.Value).ToList() ?? new List<string>();
+
+            return await _permissionService.HasPermissionAsync(roles, permissionCode, ct);
         }
 
         // (1) MISMO TIPO PARA VARIOS ARCHIVOS (BATCH)
@@ -48,6 +140,17 @@ namespace WsUtaSystem.Application.Services
                 {
                     Success = false,
                     Message = validation,
+                    Total = request.Files?.Count ?? 0
+                };
+            }
+
+            var blockedReason = await CheckUploadBlockedAsync(request.EntityType, request.EntityId, ct);
+            if (blockedReason != null)
+            {
+                return new DocumentUploadResultDto
+                {
+                    Success = false,
+                    Message = blockedReason,
                     Total = request.Files?.Count ?? 0
                 };
             }
@@ -158,6 +261,12 @@ namespace WsUtaSystem.Application.Services
                 return new DocumentUploadResultDto { Success = false, Message = validation, Total = 1 };
             }
 
+            var blockedReason = await CheckUploadBlockedAsync(request.EntityType, request.EntityId, ct);
+            if (blockedReason != null)
+            {
+                return new DocumentUploadResultDto { Success = false, Message = blockedReason, Total = 1 };
+            }
+
             if (request.File == null || request.File.Length == 0)
             {
                 return new DocumentUploadResultDto { Success = false, Message = "No se envió archivo.", Total = 0 };
@@ -252,6 +361,17 @@ namespace WsUtaSystem.Application.Services
                 {
                     Success = false,
                     Message = validation,
+                    Total = request.Items?.Count ?? 0
+                };
+            }
+
+            var blockedReason = await CheckUploadBlockedAsync(request.EntityType, request.EntityId, ct);
+            if (blockedReason != null)
+            {
+                return new DocumentUploadResultDto
+                {
+                    Success = false,
+                    Message = blockedReason,
                     Total = request.Items?.Count ?? 0
                 };
             }

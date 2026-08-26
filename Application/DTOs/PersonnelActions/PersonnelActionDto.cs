@@ -129,7 +129,22 @@ public sealed record PersonnelActionDetailDto(
     // PreviousWorkplaceName viene de la acción anterior del empleado (situación actual).
     int? Workplace,
     string? WorkplaceName,
-    string? PreviousWorkplaceName
+    string? PreviousWorkplaceName,
+
+    // 2026-08-24: clasificación funcional del tipo de acción (ENTRY, MOVEMENT,
+    // SALARY_CHANGE, LEAVE, EXIT, DISCIPLINARY, VACATION, VULNERABILITY, SCHEDULE, OTHER).
+    // Reemplaza a ActionTypeReachesVigente como señal de "esta acción cambia de puesto/
+    // sueldo" en el documento — ReachesVigente es un concepto de nómina/asistencia, no de
+    // esto (ver descripción de la columna en HR.tbl_Personnel_Action_Type).
+    string? ActionCategory,
+
+    // 2026-08-24: Grupo Ocupacional y Grado del cargo origen/destino (Job.GroupId ->
+    // OccupationalGroup -> Degree). Placeholders CURRENT/PROPOSED_OCCUPATIONAL_GROUP y
+    // CURRENT/PROPOSED_GRADE existían en la plantilla pero nunca se resolvían.
+    string? OriginOccupationalGroupName,
+    string? OriginGradeName,
+    string? DestinationOccupationalGroupName,
+    string? DestinationGradeName
 );
 
 // ── Solicitudes ──────────────────────────────────────────────────────────────────
@@ -235,6 +250,12 @@ public sealed record UpdatePersonnelActionRequest(
 public sealed record CorrectPersonnelActionRequest(
     string Reason,
     UpdatePersonnelActionRequest Data
+);
+
+/// <summary>Corrige directamente el Status de una acción, sin pasar por el flujo normal de transición.</summary>
+public sealed record CorrectPersonnelActionStatusRequest(
+    string Reason,
+    string NewStatus
 );
 
 /// <summary>Solicitud para aprobar y ejecutar una acción de personal.</summary>

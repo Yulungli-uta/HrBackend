@@ -373,11 +373,13 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
             "LOGO_URL"            => _logoService.GetLogoDataUri(),
             // Fechas del documento
             "APPROVAL_DATE"       => now.ToString("dd/MM/yyyy"),
-            "NOTIFICATION_DATE"   => now.ToString("dd/MM/yyyy"),
-            "NOTIFICATION_HOUR"   => now.ToString("HH:mm"),
-            // Firma del servidor: se asume igual al momento de generación del documento
-            "EMPLOYEE_SIGNATURE_DATE" => now.ToString("dd/MM/yyyy"),
-            "EMPLOYEE_SIGNATURE_HOUR" => now.ToString("HH:mm"),
+            // 2026-08-24: NOTIFICATION_DATE/HOUR y EMPLOYEE_SIGNATURE_DATE/HOUR dejaron de
+            // resolverse automáticamente con la fecha/hora de GENERACIÓN del documento — eso
+            // era un dato falso, ya que la notificación real al servidor y su aceptación/
+            // recepción ocurren después, en un momento que el sistema no conoce. Quedan en
+            // blanco (caen a DefaultValue vacío) para llenarse a mano en el momento real,
+            // igual que otros campos manuales de este documento (ej. LUGAR/FECHA en Posesión
+            // del Puesto). A pedido del usuario.
             // Autoridades institucionales — resueltas dinámicamente desde DepartmentAuthority;
             // si no hay autoridad activa para el rol, cae al valor estático de InstitutionalConfig.
             "AUTHORITY_NAME"             => AuthorityName("RECTORADO", "AuthorityName"),

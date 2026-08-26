@@ -21,19 +21,33 @@ public class ContractsController : ControllerBase
     private readonly ICurrentUserService _currentUser;
     private readonly IUserAccessScopeService _accessScopeService;
     private readonly IRecordAccessGuard _accessGuard;
+    private readonly IUserActionPermissionService _permissionService;
 
     public ContractsController(
         IContractsService service,
         IMapper mapper,
         ICurrentUserService currentUser,
         IUserAccessScopeService accessScopeService,
-        IRecordAccessGuard accessGuard)
+        IRecordAccessGuard accessGuard,
+        IUserActionPermissionService permissionService)
     {
         _service = service;
         _mapper = mapper;
         _currentUser = currentUser;
         _accessScopeService = accessScopeService;
         _accessGuard = accessGuard;
+        _permissionService = permissionService;
+    }
+
+    /// <summary>
+    /// Usuarios con el permiso elevado de Corrección (CONTRACTS.MANAGE) tienen alcance sobre
+    /// cualquier departamento — verificado en servidor contra los roles reales del token, nunca
+    /// un flag del cliente.
+    /// </summary>
+    private async Task<bool> HasManagePermissionAsync(CancellationToken ct)
+    {
+        var roles = User.FindAll(System.Security.Claims.ClaimTypes.Role).Select(c => c.Value).ToList();
+        return await _permissionService.HasPermissionAsync(roles, "CONTRACTS.MANAGE", ct);
     }
 
     /// <summary>Carga un contrato y valida que su departamento esté dentro del alcance del usuario. Retorna null si no existe.</summary>
@@ -41,6 +55,7 @@ public class ContractsController : ControllerBase
     {
         var entity = await _service.GetByIdAsync(id, ct);
         if (entity is null) return null;
+        if (await HasManagePermissionAsync(ct)) return entity;
         await _accessGuard.EnsureDepartmentAsync(entity.DepartmentID, "CONTRACTS", ct);
         return entity;
     }
@@ -311,17 +326,39 @@ public class ContractsController : ControllerBase
         if (request.Data.ContractID != 0 && request.Data.ContractID != id)
             return BadRequest("ContractID no coincide con la ruta.");
 
-        try
-        {
-            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
-        }
-        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+        // Sin guard de departamento a propósito: la Corrección es una capacidad elevada
+        // (permiso CONTRACTS.MANAGE) pensada para arreglar registros de cualquier
+        // departamento, no solo el del usuario que corrige.
+        if (await _service.GetByIdAsync(id, ct) is null) return NotFound();
 
         try
         {
             await _service.CorrectAsync(id, request.Data, request.Reason, ct);
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Corrige directamente el estado de un contrato (sin pasar por el flujo normal de
+    /// transición ni disparar sus efectos secundarios). Exige motivo obligatorio y queda
+    /// registrada en el historial de estados. Requiere el permiso elevado CONTRACTS.MANAGE.
+    /// </summary>
+    [HttpPut("{id:int}/correct-status")]
+    [RequirePermission("CONTRACTS.MANAGE")]
+    public async Task<IActionResult> CorrectStatus(int id, [FromBody] CorrectContractStatusRequest request, CancellationToken ct)
+    {
+        // Sin guard de departamento a propósito: ver comentario en Correct().
+        if (await _service.GetByIdAsync(id, ct) is null) return NotFound();
+
+        try
+        {
+            await _service.CorrectStatusAsync(id, request.ToStatusTypeID, request.Reason, ct);
+        }
+        catch (Exception ex) when (ex is ArgumentException or KeyNotFoundException)
         {
             return BadRequest(new { message = ex.Message });
         }

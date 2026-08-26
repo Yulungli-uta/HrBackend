@@ -22,6 +22,18 @@ public sealed class SchedulesConfiguration : IEntityTypeConfiguration<Schedules>
         e.Property(x => x.Description).HasMaxLength(120).IsRequired();
         e.Property(x => x.WorkingDays).HasMaxLength(20).IsRequired();
         e.Property(x => x.RotationPattern).HasMaxLength(120);
+
+        e.HasOne(x => x.LaborRegime)
+            .WithMany()
+            .HasForeignKey(x => x.LaborRegimeId)
+            .HasConstraintName("FK_Schedules_RefTypes_LaborRegime")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Auto-include: el nombre del régimen (LOSEP/LOES/Codigo de Trabajo) se necesita
+        // en prácticamente todo listado de horarios (página de Horarios, filtro por
+        // colaborador en Planificación de Cambio de Horario) sin tener que agregar
+        // .Include() en cada consulta existente.
+        e.Navigation(x => x.LaborRegime).AutoInclude();
     }
 }
 

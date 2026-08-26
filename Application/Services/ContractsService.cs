@@ -608,17 +608,8 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             if (!allowed)
                 throw new InvalidOperationException($"Transición no permitida: {fromStatus} -> {toStatusTypeId}");
 
-            contract.Status = toStatusTypeId;
-
             var userId = _currentUser.EmployeeId;
-            _db.ContractStatusHistories.Add(new ContractStatusHistory
-            {
-                ContractID = contractId,
-                StatusTypeID = toStatusTypeId,
-                Comment = comment,
-                ChangedBy = userId,
-                ChangedAt = DateTime.Now
-            });
+            await PersistStatusChangeAsync(contract, toStatusTypeId, comment, userId, ct);
 
             // Si se anula un contrato raíz, revertir contadores y persona de la solicitud
             var toStatusName = await _db.RefTypes
@@ -638,6 +629,61 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         });
+    }
+
+    /// <summary>
+    /// Núcleo compartido entre el flujo normal (<see cref="ChangeStatusAsync"/>, que valida
+    /// <c>HR.tbl_ContractStatusTransition</c> y dispara efectos secundarios) y la corrección
+    /// manual (<see cref="CorrectStatusAsync"/>, que no valida ni dispara nada más que esto):
+    /// persiste el nuevo Status y agrega la fila de historial (sin SaveChanges — el llamador
+    /// decide cuándo guardar/commitear).
+    /// </summary>
+    private async Task PersistStatusChangeAsync(Contracts contract, int toStatusTypeId, string? comment, int? changedBy, CancellationToken ct)
+    {
+        contract.Status = toStatusTypeId;
+
+        _db.ContractStatusHistories.Add(new ContractStatusHistory
+        {
+            ContractID = contract.ContractID,
+            StatusTypeID = toStatusTypeId,
+            Comment = comment,
+            ChangedBy = changedBy,
+            ChangedAt = DateTime.Now
+        });
+
+        await Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public async Task CorrectStatusAsync(int contractId, int toStatusTypeId, string reason, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Debe ingresar el motivo de la corrección.", nameof(reason));
+
+        var validStatus = await _db.RefTypes.AsNoTracking()
+            .AnyAsync(x => x.TypeId == toStatusTypeId && x.Category == ContractStatusCategory, ct);
+        if (!validStatus)
+            throw new ArgumentException($"TypeId {toStatusTypeId} no es un estado válido de contrato.", nameof(toStatusTypeId));
+
+        var contract = await _db.Set<Contracts>().FirstOrDefaultAsync(x => x.ContractID == contractId, ct)
+            ?? throw new KeyNotFoundException($"Contrato id={contractId} no existe.");
+
+        if (contract.Status == toStatusTypeId)
+            return; // No-op: ya está en el estado solicitado.
+
+        var fromStatus = contract.Status;
+
+        // Corrección manual: a diferencia de ChangeStatusAsync, NO valida
+        // tbl_ContractStatusTransition (la corrección puede necesitar ir a cualquier estado) y
+        // NO dispara ningún efecto secundario (reversar cupo de solicitud, anular contrato
+        // padre, etc.) — esos solo ocurren al avanzar un contrato por el flujo normal, nunca al
+        // corregir el registro de uno ya existente.
+        await PersistStatusChangeAsync(contract, toStatusTypeId, $"CORRECCIÓN: {reason.Trim()}", _currentUser.EmployeeId, ct);
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "ContractsService: contrato {ContractId} — Status CORREGIDO de '{From}' a '{To}' por EmployeeId={UserId}. Motivo: {Reason}",
+            contractId, fromStatus, toStatusTypeId, _currentUser.EmployeeId, reason);
     }
 
     /// <summary>

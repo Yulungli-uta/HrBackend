@@ -33,6 +33,9 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
         return await ToDtosAsync(items, ct);
     }
 
+    public Task<List<int>> GetActiveRegimeIdsForEmployeesAsync(List<int> employeeIds, CancellationToken ct = default)
+        => _repository.GetActiveRegimeIdsByEmployeeIdsAsync(employeeIds, ct);
+
     public async Task<EmployeeLaborRegimeDto> CreateAsync(EmployeeLaborRegimeCreateDto dto, int? changedBy, CancellationToken ct = default)
     {
         var alreadyActive = await _db.EmployeeLaborRegimes

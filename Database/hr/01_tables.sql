@@ -1635,6 +1635,35 @@ IF NOT EXISTS (
     ALTER TABLE [HR].[tbl_personnel_action_type] ADD [ReachesVigente] BIT NOT NULL DEFAULT ((0));
 GO
 
+-- 2026-08-24: documentar en BD el alcance real de ReachesVigente y de ActionCategory
+-- (el bug de esa fecha en el documento de Acción de Personal fue reutilizar
+-- ReachesVigente como si significara "cambio de puesto" — ver descripciones).
+IF NOT EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    JOIN sys.columns c ON c.object_id = ep.major_id AND c.column_id = ep.minor_id
+    WHERE ep.major_id = OBJECT_ID('HR.tbl_Personnel_Action_Type') AND c.name = 'ReachesVigente'
+)
+    EXEC sys.sp_addextendedproperty
+        @name = N'MS_Description',
+        @value = N'NO indica si esta accion representa un cambio de puesto/situacion (para eso usar ActionCategory). Es una senal de flujo de nomina/asistencia: si es 1, al cargar el documento firmado la accion transiciona automaticamente FIRMADO_CARGADO -> VIGENTE (en vez de ir manual a FINALIZADO), y VIGENTE es lo que HR.fn_ResolveEmployeeRate lee como sueldo/departamento/horario ACTUAL del empleado. Se definio (2026-07-06) solo para 5 tipos (Nombramiento, Traslado, Encargo, Cambio de Sueldo, Asistencia/Horario); el resto quedo en 0 por DEFAULT, sin evaluar si representan cambio de puesto o no. Reutilizar este campo para decidir que mostrar en el documento de Accion de Personal fue un bug (2026-08-24): varios tipos con cambio real de puesto (Nombramiento Provisional, Designacion, Reintegro, Cambio Administrativo, Homologacion de Puesto, Promocion, Recategorizacion, Estimulo Economico, Ubicacion Escalafonaria) tienen ReachesVigente=0 e igual deben mostrar la grilla completa de Situacion Propuesta.',
+        @level0type = N'SCHEMA', @level0name = N'HR',
+        @level1type = N'TABLE',  @level1name = N'tbl_Personnel_Action_Type',
+        @level2type = N'COLUMN', @level2name = N'ReachesVigente';
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.extended_properties ep
+    JOIN sys.columns c ON c.object_id = ep.major_id AND c.column_id = ep.minor_id
+    WHERE ep.major_id = OBJECT_ID('HR.tbl_Personnel_Action_Type') AND c.name = 'ActionCategory'
+)
+    EXEC sys.sp_addextendedproperty
+        @name = N'MS_Description',
+        @value = N'Clasifica la naturaleza de cada tipo de accion de personal. Valores actuales: ENTRY (ingreso/toma de posesion de un puesto), MOVEMENT (traslado/cambio de puesto o unidad), SALARY_CHANGE (cambio de sueldo/grado/categoria), SCHEDULE (cambio de horario/dedicacion), LEAVE (licencia/comision, sin cambio de puesto), EXIT (renuncia/jubilacion), DISCIPLINARY (sancion), VACATION (vacaciones), VULNERABILITY (vulnerabilidad), OTHER (generico). Esta es la senal correcta para decidir si el documento de Accion de Personal debe mostrar la grilla completa de "Situacion Propuesta" (ENTRY/MOVEMENT/SALARY_CHANGE = si) o colapsarla a solo el nombre de la accion (el resto) -- no usar ReachesVigente para esto, ver su descripcion.',
+        @level0type = N'SCHEMA', @level0name = N'HR',
+        @level1type = N'TABLE',  @level1name = N'tbl_Personnel_Action_Type',
+        @level2type = N'COLUMN', @level2name = N'ActionCategory';
+GO
+
 -- ------------------------------------------------------------
 IF OBJECT_ID('[HR].[tbl_PersonnelActions]') IS NULL
 CREATE TABLE [HR].[tbl_PersonnelActions] (
@@ -1795,6 +1824,31 @@ CREATE TABLE [HR].[tbl_ReportAudit] (
 );
 GO
 
+-- 2026-08-26: el CHECK original (autogenerado, solo 'Excel'/'PDF') nunca se actualizó al
+-- agregar soporte CSV (ReportFormat.Csv, ver Reports/Core/ReportFormat.cs) — el reporte
+-- SIIES Profesores en CSV generaba el archivo bien pero fallaba al guardar su auditoría.
+IF EXISTS (
+    SELECT 1 FROM sys.check_constraints
+    WHERE parent_object_id = OBJECT_ID('[HR].[tbl_ReportAudit]') AND name <> 'CK_ReportAudit_ReportFormat'
+    AND OBJECT_NAME(parent_object_id) = 'tbl_ReportAudit'
+)
+BEGIN
+    DECLARE @oldConstraint NVARCHAR(200) = (
+        SELECT TOP 1 cc.name FROM sys.check_constraints cc
+        JOIN sys.columns col ON col.object_id = cc.parent_object_id AND col.column_id = cc.parent_column_id
+        WHERE cc.parent_object_id = OBJECT_ID('[HR].[tbl_ReportAudit]') AND col.name = 'ReportFormat'
+        AND cc.name <> 'CK_ReportAudit_ReportFormat'
+    );
+    IF @oldConstraint IS NOT NULL
+        EXEC('ALTER TABLE [HR].[tbl_ReportAudit] DROP CONSTRAINT [' + @oldConstraint + ']');
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_ReportAudit_ReportFormat')
+    ALTER TABLE [HR].[tbl_ReportAudit]
+        ADD CONSTRAINT [CK_ReportAudit_ReportFormat] CHECK ([ReportFormat] IN ('Excel', 'PDF', 'Csv'));
+GO
+
 -- ------------------------------------------------------------
 IF OBJECT_ID('[HR].[tbl_RotationPatternDetails]') IS NULL
 CREATE TABLE [HR].[tbl_RotationPatternDetails] (
@@ -1913,6 +1967,25 @@ CREATE TABLE [HR].[tbl_Schedules] (
     [ScheduleCode] NVARCHAR(20) NULL,
     [CrossesMidnight] BIT DEFAULT ((0)) NOT NULL
 );
+GO
+
+-- 2026-08-26: régimen laboral al que aplica el horario (LOSEP/LOES/Codigo de Trabajo,
+-- HR.ref_Types Category='CONTRACT_TYPE'). NULL = horario universal, aplica a cualquier
+-- régimen. Permite filtrar el catálogo de horarios según el régimen del colaborador
+-- al planificar un cambio de horario (HR.tbl_ScheduleChangePlan).
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_Schedules]') AND name = 'LaborRegimeId'
+)
+    ALTER TABLE [HR].[tbl_Schedules] ADD [LaborRegimeId] INT NULL;
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Schedules_RefTypes_LaborRegime'
+)
+    ALTER TABLE [HR].[tbl_Schedules]
+        ADD CONSTRAINT [FK_Schedules_RefTypes_LaborRegime]
+        FOREIGN KEY ([LaborRegimeId]) REFERENCES [HR].[ref_Types] ([TypeId]);
 GO
 
 -- ------------------------------------------------------------
