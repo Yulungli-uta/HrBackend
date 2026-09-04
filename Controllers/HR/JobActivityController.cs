@@ -61,4 +61,15 @@ public class JobActivityController : ControllerBase
         await _svc.DeleteAsync(id, ct);
         return NoContent();
     }
+
+    /// <summary>Elimina la asignación de una actividad a un cargo por su llave compuesta real
+    /// (JobID + ActivitiesID) — tbl_JobActivities no tiene un Id simple, así que el DELETE
+    /// por {id:int} de arriba nunca puede aplicarle.</summary>
+    [HttpDelete("{jobId:int}/{activitiesId:int}")]
+    [RequirePermission("CATALOGS.DELETE")]
+    public async Task<IActionResult> DeleteByKeys([FromRoute] int jobId, [FromRoute] int activitiesId, CancellationToken ct)
+    {
+        var deleted = await _svc.DeleteByKeysAsync(jobId, activitiesId, ct);
+        return deleted ? NoContent() : NotFound();
+    }
 }

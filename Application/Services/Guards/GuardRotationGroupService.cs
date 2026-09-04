@@ -20,7 +20,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
     // Si se crea un cargo nuevo de guardia (ej. "Vigilante"), agregarlo aquí.
     private static readonly string[] GuardJobNames =
     {
-        "Guardia", "Guardián", "Guardián/Guardián Administrativo", "Guardias de Seguridad"
+        "Guardia", "Guardián", "Guardián/Guardián Administrativo", "Guardias de Seguridad", "Supervisor"
     };
 
     public GuardRotationGroupService(IGuardRotationGroupRepository repo, AppDbContext db)

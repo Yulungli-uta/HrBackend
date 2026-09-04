@@ -41,10 +41,19 @@ public sealed class CsvReportRenderer : IReportRenderer
             sb.AppendLine(string.Join(';', values.Select(Escape)));
         }
 
-        // UTF-8 con BOM: el instructivo pide "CSV UTF-8" y el Bloc de notas de Windows
-        // (usado en su propio manual para verificar el archivo) necesita el BOM para
-        // detectar la codificación correctamente.
-        var bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true).GetBytes(sb.ToString());
+        // UTF-8 con BOM: el instructivo pide "CSV UTF-8" y tanto el Bloc de notas de Windows
+        // como Excel necesitan el BOM para detectar la codificación correctamente (sin él,
+        // Excel asume Windows-1252 y corrompe cualquier acento/ñ — bug real detectado 2026-08-27).
+        // OJO: Encoding.GetBytes() NUNCA antepone el preamble/BOM, sin importar el valor de
+        // encoderShouldEmitUTF8Identifier — ese flag solo afecta a GetPreamble(). Hay que usar
+        // StreamWriter (que sí lo escribe automáticamente) o concatenar GetPreamble() a mano.
+        byte[] bytes;
+        using (var ms = new MemoryStream())
+        {
+            using (var writer = new StreamWriter(ms, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true), leaveOpen: true))
+                writer.Write(sb.ToString());
+            bytes = ms.ToArray();
+        }
         return Task.FromResult(bytes);
     }
 

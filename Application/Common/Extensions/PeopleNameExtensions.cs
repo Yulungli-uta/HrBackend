@@ -11,4 +11,15 @@ public static class PeopleNameExtensions
     // PersonnelActionRepository.ResolveEmployeeAsync, que la calcula aparte.
     public static string GetFullName(this People? person) =>
         person is null ? string.Empty : $"{person.LastName} {person.FirstName}".Trim();
+
+    // Un apellido + un nombre (no los dos apellidos) — para UI de espacio muy reducido
+    // (ej. celdas de tableros de turnos de Guardias) donde mostrar ambos apellidos genera
+    // ambigüedad real cuando dos personas distintas comparten los mismos dos apellidos.
+    public static string GetShortName(this People? person) =>
+        person is null ? string.Empty : $"{FirstWord(person.LastName)} {FirstWord(person.FirstName)}".Trim();
+
+    private static string FirstWord(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? string.Empty
+            : value.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
 }

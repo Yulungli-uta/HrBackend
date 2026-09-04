@@ -564,9 +564,17 @@ IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UX_tbl_personnel_
         ADD CONSTRAINT [UX_tbl_personnel_action_type_Code] UNIQUE ([Code]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_RotationPatternDetails_PatternDay')
+-- Un día del ciclo puede tener más de un horario en paralelo (ej. sábado mañana + sábado
+-- velada) — el UNIQUE original (PatternID, DayOrder) lo impedía. Se reemplaza por uno que
+-- solo bloquea el horario exacto repetido dos veces en el mismo día.
+IF EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_RotationPatternDetails_PatternDay')
     ALTER TABLE [HR].[tbl_RotationPatternDetails]
-        ADD CONSTRAINT [UQ_RotationPatternDetails_PatternDay] UNIQUE ([PatternID], [DayOrder]);
+        DROP CONSTRAINT [UQ_RotationPatternDetails_PatternDay];
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_RotationPatternDetails_PatternDayShift')
+    ALTER TABLE [HR].[tbl_RotationPatternDetails]
+        ADD CONSTRAINT [UQ_RotationPatternDetails_PatternDayShift] UNIQUE ([PatternID], [DayOrder], [ScheduleID]);
 GO
 
 IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_SCPD_PlanEmployee')

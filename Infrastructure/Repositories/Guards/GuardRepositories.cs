@@ -103,9 +103,14 @@ public class GuardShiftPlanningRepository
             .Include(p => p.Location)
             .Include(p => p.Schedule)
             .Include(p => p.Group)
+            .Include(p => p.StatusType)
             .Include(p => p.Changes.Where(c => c.IsActiveForAttendance))
                 .ThenInclude(c => c.ReplacementEmployee).ThenInclude(e => e!.People)
-            .Where(p => p.WorkDate >= filter.StartDate && p.WorkDate <= filter.EndDate);
+            .Where(p => p.WorkDate >= filter.StartDate && p.WorkDate <= filter.EndDate
+                // Igual que GetScheduleBoardAsync: excluir filas reemplazadas/obsoletas
+                // (IsActiveForAssignment=false) por una regeneración, salvo que sea justo
+                // una cancelación real, que sí debe verse (pestaña Conflictos).
+                && (p.IsActiveForAssignment || p.StatusType!.Name == "CANCELLED"));
 
         if (filter.GroupId.HasValue)       q = q.Where(p => p.GroupId == filter.GroupId);
         if (filter.LocationId.HasValue)    q = q.Where(p => p.LocationId == filter.LocationId);

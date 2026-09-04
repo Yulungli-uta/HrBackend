@@ -58,6 +58,7 @@ public record GuardShiftCalendarItemDto(
     int PlanningId,
     int EmployeeId,
     string EmployeeFullName,
+    string EmployeeShortName,
     int LocationId,
     string LocationName,
     int ScheduleId,
@@ -167,6 +168,7 @@ public record ScheduleBoardFilterDto(
 public record ScheduleBoardCellEmployeeDto(
     int EmployeeId,
     string FullName,
+    string ShortName,
     bool IsReplacement,
     int PlanningId,
     int? GroupId,

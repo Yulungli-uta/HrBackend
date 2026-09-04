@@ -25,6 +25,7 @@ public class VwSiiesProfesor
     public string? SexSiiesLabel { get; set; }
     public string? GenderSiiesLabel { get; set; }
     public string? CountryId { get; set; }
+    public string? CountryName { get; set; }
     public string? EthnicitySiiesLabel { get; set; }
     public string? IndigenousNationalitySiiesLabel { get; set; }
     public string? DisabilitySiiesLabel { get; set; }

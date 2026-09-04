@@ -10,6 +10,8 @@
         public int? SiiesTipoFuncionarioTypeId { get; set; }
         public bool PuestoJerarquicoSuperior { get; set; }
         public decimal? ReferenceSalary { get; set; }
+        /// <summary>FK -> tbl_AcademicLadder. Nulo para Jobs administrativos (esos usan GroupId).</summary>
+        public int? AcademicLadderId { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
     }

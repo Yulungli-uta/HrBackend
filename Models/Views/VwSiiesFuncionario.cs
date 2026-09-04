@@ -19,6 +19,7 @@ public class VwSiiesFuncionario
     public string? SexSiiesLabel { get; set; }
     public string? GenderSiiesLabel { get; set; }
     public string? CountryId { get; set; }
+    public string? CountryName { get; set; }
     public string? EthnicityName { get; set; }
     public string? EthnicitySiiesLabel { get; set; }
     public string? IndigenousNationalitySiiesLabel { get; set; }
@@ -38,6 +39,7 @@ public class VwSiiesFuncionario
     public bool? RegimeIsActive { get; set; }
     public bool? IngresoPorConcurso { get; set; }
     public string? RegimeDocumentType { get; set; }
+    public string? LaborRegimeName { get; set; }
     public string? RelacionIesSiiesLabel { get; set; }
     public decimal? ContractedHours { get; set; }
     public bool EmployeeIsActive { get; set; }

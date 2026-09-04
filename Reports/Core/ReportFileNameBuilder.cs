@@ -76,7 +76,7 @@ public static class ReportFileNameBuilder
     {
         ReportFormat.Pdf   => "application/pdf",
         ReportFormat.Excel => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ReportFormat.Csv   => "text/csv",
+        ReportFormat.Csv   => "text/csv; charset=utf-8",
         _                  => throw new ArgumentException($"Formato no soportado: {format}", nameof(format))
     };
 }

@@ -5,5 +5,13 @@ using WsUtaSystem.Models;
 namespace WsUtaSystem.Application.Services;
 public class JobActivityService : Service<JobActivity, int>, IJobActivityService
 {
-    public JobActivityService(IJobActivityRepository repo) : base(repo) { }
+    private readonly IJobActivityRepository _repository;
+
+    public JobActivityService(IJobActivityRepository repo) : base(repo)
+    {
+        _repository = repo;
+    }
+
+    public Task<bool> DeleteByKeysAsync(int jobId, int activitiesId, CancellationToken ct) =>
+        _repository.DeleteByKeysAsync(jobId, activitiesId, ct);
 }

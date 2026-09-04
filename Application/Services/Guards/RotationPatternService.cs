@@ -3,6 +3,7 @@ using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
 using WsUtaSystem.Data;
+using WsUtaSystem.Models;
 using WsUtaSystem.Models.Guards;
 
 namespace WsUtaSystem.Application.Services.Guards;
@@ -69,8 +70,7 @@ public class RotationPatternService : IRotationPatternService
 
     public async Task<RotationPatternDto> CreateAsync(CreateRotationPatternDto dto, CancellationToken ct)
     {
-        if (dto.Details.Count != dto.CycleDays)
-            throw new InvalidOperationException($"Se esperaban {dto.CycleDays} detalles, se recibieron {dto.Details.Count}.");
+        await ValidateDetailsCoverageAsync(dto.CycleDays, dto.Details, ct);
 
         await EnsurePatternIsNotDuplicatedAsync(null, dto.PatternCode, dto.Name, dto.CycleDays, dto.Details, ct);
 
@@ -118,8 +118,7 @@ public class RotationPatternService : IRotationPatternService
         var entity = await _repo.GetWithDetailsAsync(patternId, ct)
             ?? throw new KeyNotFoundException($"Patrón {patternId} no encontrado.");
 
-        if (dto.Details.Count != entity.CycleDays)
-            throw new InvalidOperationException($"Se esperaban {entity.CycleDays} detalles, se recibieron {dto.Details.Count}.");
+        await ValidateDetailsCoverageAsync(entity.CycleDays, dto.Details, ct);
 
         await EnsurePatternIsNotDuplicatedAsync(patternId, entity.PatternCode, entity.Name, entity.CycleDays, dto.Details, ct);
 
@@ -206,6 +205,84 @@ public class RotationPatternService : IRotationPatternService
 
     private static string BuildDetailsSignature(IEnumerable<CreateRotationPatternDetailDto> details) =>
         string.Join("|", details
-            .OrderBy(d => d.DayOrder)
+            .OrderBy(d => d.DayOrder).ThenBy(d => d.ScheduleId)
             .Select(d => $"{d.DayOrder}:{d.ScheduleId?.ToString() ?? "REST"}:{d.IsRestDay}"));
+
+    // Valida que el patrón cubra exactamente las posiciones 1..CycleDays (cada una con 1 o más
+    // horarios) y que, cuando un día tiene varios horarios en paralelo, estos no queden pegados
+    // ni se encimen entre sí (ver hallazgo: "agregar un turno más en el mismo día del patrón").
+    private async Task ValidateDetailsCoverageAsync(
+        int cycleDays, IReadOnlyCollection<CreateRotationPatternDetailDto> details, CancellationToken ct)
+    {
+        var byDay = details.GroupBy(d => d.DayOrder).ToDictionary(g => g.Key, g => g.ToList());
+
+        var missing = Enumerable.Range(1, cycleDays).Where(day => !byDay.ContainsKey(day)).ToList();
+        if (missing.Count > 0)
+            throw new InvalidOperationException($"Faltan horarios para el/los día(s) del ciclo: {string.Join(", ", missing)}.");
+
+        var outOfRange = byDay.Keys.Where(day => day < 1 || day > cycleDays).ToList();
+        if (outOfRange.Count > 0)
+            throw new InvalidOperationException($"Día(s) de ciclo fuera de rango (1-{cycleDays}): {string.Join(", ", outOfRange)}.");
+
+        var scheduleIds = new List<int>();
+
+        foreach (var (day, rows) in byDay)
+        {
+            if (rows.Count > 1)
+            {
+                if (rows.Any(r => r.IsRestDay))
+                    throw new InvalidOperationException($"El día {day} no puede combinar descanso con horarios de trabajo.");
+
+                if (rows.Any(r => r.ScheduleId is null))
+                    throw new InvalidOperationException($"El día {day} tiene un horario sin definir.");
+
+                if (rows.Select(r => r.ScheduleId).Distinct().Count() != rows.Count)
+                    throw new InvalidOperationException($"El día {day} tiene el mismo horario repetido.");
+            }
+
+            scheduleIds.AddRange(rows.Where(r => r.ScheduleId.HasValue).Select(r => r.ScheduleId!.Value));
+        }
+
+        if (scheduleIds.Count == 0) return;
+
+        var schedules = await _db.Set<Schedules>()
+            .Where(s => scheduleIds.Contains(s.ScheduleId))
+            .ToDictionaryAsync(s => s.ScheduleId, s => s, ct);
+
+        foreach (var (day, rows) in byDay)
+        {
+            var daySchedules = rows.Where(r => r.ScheduleId.HasValue).Select(r => schedules[r.ScheduleId!.Value]).ToList();
+            for (var i = 0; i < daySchedules.Count; i++)
+                for (var j = i + 1; j < daySchedules.Count; j++)
+                    if (AreBackToBackOrOverlapping(daySchedules[i], daySchedules[j]))
+                        throw new InvalidOperationException(
+                            $"El día {day} tiene horarios consecutivos o encimados ({daySchedules[i].ScheduleCode} / {daySchedules[j].ScheduleCode}). " +
+                            "Los turnos del mismo día deben dejar un descanso entre ellos.");
+        }
+    }
+
+    // Compara dos horarios del MISMO día del patrón como rangos en minutos desde las 00:00 de
+    // ese día (un turno que cruza medianoche se representa extendido más allá de 1440, ej.
+    // 23:00-07:30 = [1380, 1890)). No se debe "envolver" la comparación a ±1440: ambos horarios
+    // arrancan el mismo día de calendario, así que comparar el rango tal cual ya es correcto —
+    // envolver generaba falsos positivos (ej. Mañana 07-15:30 vs Noche 23-07:30 detectados como
+    // encimados por comparar la cola de una Noche de OTRO día contra la Mañana de este día).
+    private static bool AreBackToBackOrOverlapping(Schedules a, Schedules b)
+    {
+        var (aStart, aEnd) = ToMinuteRange(a);
+        var (bStart, bEnd) = ToMinuteRange(b);
+
+        if (bStart < aEnd && bEnd > aStart) return true;
+        if (bStart == aEnd || bEnd == aStart) return true;
+
+        return false;
+    }
+
+    private static (int start, int end) ToMinuteRange(Schedules s)
+    {
+        var start = s.EntryTime.Hour * 60 + s.EntryTime.Minute;
+        var durationMinutes = ((s.ExitTime.Hour * 60 + s.ExitTime.Minute) - start + 1440) % 1440;
+        if (durationMinutes == 0) durationMinutes = 1440;
+        return (start, start + durationMinutes);
+    }
 }

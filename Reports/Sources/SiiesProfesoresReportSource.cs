@@ -65,7 +65,14 @@ public abstract class SiiesProfesoresReportSourceBase
             .Where(v => v.IdentTypeName == identTypeName);
 
         if (filter.IncludeInactive != true)
+        {
             query = query.Where(v => v.EmployeeIsActive);
+
+            // Ver comentario equivalente en SiiesFuncionariosReportSource: Employees.IsActive
+            // no siempre refleja que el régimen laboral ya venció. NULL (sin régimen todavía)
+            // no se excluye a propósito.
+            query = query.Where(v => v.RegimeIsActive != false);
+        }
 
         if (!string.IsNullOrWhiteSpace(filter.Identification))
         {
@@ -99,8 +106,11 @@ public abstract class SiiesProfesoresReportSourceBase
             ["IDENTIFICACION"] = v.IDCard,
             ["GENERO"] = v.GenderSiiesLabel ?? "NO DISPONE",
             ["SEXO"] = v.SexSiiesLabel ?? string.Empty,
-            ["PAIS_ORIGEN"] = v.CountryId ?? string.Empty,
-            ["DISCAPACIDAD"] = v.DisabilitySiiesLabel ?? string.Empty,
+            ["PAIS_ORIGEN"] = v.CountryName ?? v.CountryId ?? string.Empty,
+            // 2026-09-03: mismo criterio que SiiesFuncionariosReportSource — p.Disability queda NULL
+            // cuando no hay discapacidad (nunca se escribió "Ninguna" literal), pero el archivo real
+            // entregado a CACES siempre trae "NINGUNA" en vez de vacío para ese caso.
+            ["DISCAPACIDAD"] = v.DisabilitySiiesLabel ?? "NINGUNA",
             ["PORCENTAJE_DISCAPACIDAD"] = v.DisabilityPercentage ?? 0,
             ["NUMERO_CONADIS"] = string.Equals(v.DisabilitySiiesLabel, "NINGUNA", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(v.DisabilitySiiesLabel)
                 ? string.Empty
@@ -111,7 +121,9 @@ public abstract class SiiesProfesoresReportSourceBase
             ["TIPO_DOCUMENTO"] = HomologateTipoDocumento(v.RegimeDocumentType),
             ["NUMERO_DOCUMENTO"] = v.DocumentNumber ?? string.Empty,
             ["CONTRATO_RELACIONADO"] = string.Empty,
-            ["INGRESO_POR_CONCURSO"] = v.IngresoPorConcurso == true ? "SI" : "NO",
+            // Decisión de exportación 2026-08-27: NULL (sin clasificar) se exporta como "SI" —
+            // solo false explícito exporta "NO" (mismo criterio que SiiesFuncionariosReportSource).
+            ["INGRESO_POR_CONCURSO"] = v.IngresoPorConcurso == false ? "NO" : "SI",
             ["RELACION_IES"] = v.RelacionIesSiiesLabel ?? string.Empty,
             ["TIPO_ESCALAFON_NOMBRAMIENTO"] = v.TipoEscalafonNombramientoSiiesLabel ?? "NO APLICA",
             ["CATEGORIA"] = v.CategoriaSiiesLabel ?? string.Empty,
@@ -130,6 +142,10 @@ public abstract class SiiesProfesoresReportSourceBase
             ["HORAS_CLASE_NIVEL_TECNICO"] = 0,
             ["HORAS_CLASE_TERCER_NIVEL"] = horasContratadas,
             ["HORAS_CLASE_CUARTO_NIVEL"] = 0,
+            // Fuera del esquema oficial CACES — se agrega al final para no alterar el orden/
+            // cantidad de las columnas oficiales (uso interno/verificación, no para la carga
+            // masiva al SIIES).
+            ["NOMBRE_COMPLETO"] = $"{v.LastName} {v.FirstName}".Trim(),
         };
     }
 
@@ -204,6 +220,8 @@ public abstract class SiiesProfesoresReportSourceBase
         new("HORAS_CLASE_NIVEL_TECNICO", "HORAS_CLASE_NIVEL_TECNICO"),
         new("HORAS_CLASE_TERCER_NIVEL", "HORAS_CLASE_TERCER_NIVEL"),
         new("HORAS_CLASE_CUARTO_NIVEL", "HORAS_CLASE_CUARTO_NIVEL"),
+        // Fuera del esquema oficial CACES — ver comentario en BuildCommonRow.
+        new("NOMBRE_COMPLETO", "NOMBRE_COMPLETO"),
     ];
 
     /// <summary>Columnas oficiales de la matriz 5.2 Profesores – Contratos IES (cédula) + 5.4 fusionadas.</summary>

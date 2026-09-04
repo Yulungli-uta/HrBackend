@@ -30,9 +30,9 @@ namespace WsUtaSystem.Reports.Sources;
 /// NUMERO_CONADIS vacío si DISCAPACIDAD=NINGUNA, y separación de nombres para pasaporte.
 /// </para>
 /// <para>
-/// Decisión documentada: INGRESO_POR_CONCURSO es obligatorio en el archivo SIIES pero en BD
-/// puede estar NULL (sin clasificar todavía). Se exporta como "NO" cuando no se ha clasificado,
-/// sin alterar el dato NULL en base de datos — es una decisión de exportación, no de negocio.
+/// Decisión documentada (actualizada 2026-08-27): INGRESO_POR_CONCURSO es obligatorio en el
+/// archivo SIIES pero en BD puede estar NULL (sin clasificar todavía). Se exporta como "SI"
+/// cuando no se ha clasificado (antes era "NO"); solo un false explícito exporta "NO".
 /// </para>
 /// </remarks>
 public sealed class SiiesFuncionariosReportSource : IReportSource
@@ -114,7 +114,16 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             .Where(v => v.IdentTypeName == identTypeName);
 
         if (filter.IncludeInactive != true)
+        {
             query = query.Where(v => v.EmployeeIsActive);
+
+            // Employees.IsActive no siempre se actualiza cuando el régimen laboral ya venció
+            // (visto en datos reales: EffectiveTo en el pasado pero IsActive todavía true).
+            // RegimeIsActive=false significa que la única fila de régimen resuelta ya no está
+            // vigente -> no es realmente un funcionario activo. NULL (sin régimen registrado
+            // todavía) no se excluye aquí a propósito, es un hueco de datos aparte.
+            query = query.Where(v => v.RegimeIsActive != false);
+        }
 
         if (!string.IsNullOrWhiteSpace(filter.Identification))
         {
@@ -140,8 +149,11 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             ["IDENTIFICACION"] = v.IDCard,
             ["GENERO"] = v.GenderSiiesLabel ?? "NO DISPONE",
             ["SEXO"] = v.SexSiiesLabel ?? string.Empty,
-            ["PAIS_ORIGEN"] = v.CountryId ?? string.Empty,
-            ["DISCAPACIDAD"] = v.DisabilitySiiesLabel ?? string.Empty,
+            ["PAIS_ORIGEN"] = v.CountryName ?? v.CountryId ?? string.Empty,
+            // 2026-09-02: p.Disability queda NULL cuando la persona no tiene discapacidad (nunca
+            // se escribió "Ninguna" literal) — el archivo real entregado a CACES siempre trae
+            // "NINGUNA" en vez de vacío para ese caso (verificado: 328 de 331 casos comparados).
+            ["DISCAPACIDAD"] = v.DisabilitySiiesLabel ?? "NINGUNA",
             ["NUMERO_CONADIS"] = sinDiscapacidad ? string.Empty : (v.CONADISCard ?? "NO REGISTRA"),
             ["PORCENTAJE_DISCAPACIDAD"] = v.DisabilityPercentage ?? 0,
             ["ETNIA"] = v.EthnicitySiiesLabel ?? "NO REGISTRA",
@@ -151,8 +163,9 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             ["RELACION_IES"] = v.RelacionIesSiiesLabel ?? string.Empty,
             ["FECHA_INICIO"] = v.EffectiveFrom,
             ["FECHA_FIN"] = v.EffectiveTo,
-            // Decisión de exportación: NULL (sin clasificar) se exporta como "NO" — ver remarks de la clase.
-            ["INGRESO_POR_CONCURSO"] = v.IngresoPorConcurso == true ? "SI" : "NO",
+            // Decisión de exportación 2026-08-27: NULL (sin clasificar) se exporta como "SI" —
+            // solo false explícito exporta "NO". Antes era al revés; ver remarks de la clase.
+            ["INGRESO_POR_CONCURSO"] = v.IngresoPorConcurso == false ? "NO" : "SI",
             ["TIPO_FUNCIONARIO"] = v.TipoFuncionarioSiiesLabel ?? string.Empty,
             ["CARGO"] = v.JobDescription ?? string.Empty,
             ["TIPO_DOCENTE_LOSEP(LOES)"] = esDocenteLoes ? (v.TipoDocenteLoesSiiesLabel ?? "NO APLICA") : "NO APLICA",
@@ -160,6 +173,11 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             ["UNIDAD_ACADEMICA"] = v.DepartmentName ?? string.Empty,
             ["PUESTO_JERARQUICO_SUPERIOR"] = v.PuestoJerarquicoSuperior ? "SI" : "NO",
             ["HORAS_LABORABLES_SEMANA"] = v.ContractedHours ?? 0,
+            // Columnas adicionales fuera del esquema oficial CACES — se agregan al final para
+            // no alterar el orden/cantidad de las columnas oficiales (uso interno/verificación,
+            // no para la carga masiva al SIIES).
+            ["NOMBRE_COMPLETO"] = $"{v.LastName} {v.FirstName}".Trim(),
+            ["REGIMEN_LABORAL"] = v.LaborRegimeName ?? string.Empty,
         };
     }
 
@@ -238,6 +256,9 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
         new("UNIDAD_ACADEMICA", "UNIDAD_ACADEMICA"),
         new("PUESTO_JERARQUICO_SUPERIOR", "PUESTO_JERARQUICO_SUPERIOR"),
         new("HORAS_LABORABLES_SEMANA", "HORAS_LABORABLES_SEMANA"),
+        // Fuera del esquema oficial CACES — ver comentario en BuildCommonRow.
+        new("NOMBRE_COMPLETO", "NOMBRE_COMPLETO"),
+        new("REGIMEN_LABORAL", "REGIMEN_LABORAL"),
     ];
 
     /// <summary>Columnas oficiales de la matriz 5.7 Funcionarios (cédula), en el orden exacto del instructivo.</summary>

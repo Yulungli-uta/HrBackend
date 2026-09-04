@@ -175,6 +175,7 @@ SELECT
     sx.[SiiesLabel]                AS [SexSiiesLabel],
     gn.[SiiesLabel]                AS [GenderSiiesLabel],
     p.[CountryId],
+    co.[CountryName],
     et.[SiiesLabel]                AS [EthnicitySiiesLabel],
     indig.[SiiesLabel]             AS [IndigenousNationalitySiiesLabel],
     sn.[SiiesLabel]                AS [DisabilitySiiesLabel],
@@ -189,14 +190,24 @@ SELECT
     -- CATEGORIA: prioridad a la columna directa; si está NULL, respaldo desde AcademicLadder.
     COALESCE(catDirecta.[SiiesLabel], la.[SiiesLabel]) AS [CategoriaSiiesLabel],
     ded.[SiiesLabel]                AS [TiempoDedicacionSiiesLabel],
-    elr.[DocumentNumber],
-    elr.[DocumentType]              AS [RegimeDocumentType],
-    elr.[EffectiveFrom],
-    elr.[EffectiveTo],
+    -- 2026-08-27: fallback a ContractCode/ActionNumber cuando elr.DocumentNumber nunca se
+    -- copió al crear el régimen — mismo criterio que vw_SiiesFuncionarios.
+    -- 2026-09-02: segundo fallback (ctrFallback/paFallback) para profesores sin ninguna fila en
+    -- tbl_EmployeeLaborRegime (210 de 213 profesores activos con NUMERO_DOCUMENTO vacío
+    -- verificados en esa condición) — mismo criterio que vw_SiiesFuncionarios.
+    COALESCE(elr.[DocumentNumber], ctr.[ContractCode], pa.[ActionNumber], ctrFallback.[ContractCode], paFallback.[ActionNumber]) AS [DocumentNumber],
+    COALESCE(elr.[DocumentType],
+        CASE WHEN ctrFallback.[ContractID] IS NOT NULL THEN 'CONTRACT'
+             WHEN paFallback.[ActionID] IS NOT NULL THEN 'PERSONNEL_ACTION' END)          AS [RegimeDocumentType],
+    -- CAST a DATE obligatorio: ver comentario equivalente en vw_SiiesFuncionarios — mezclar
+    -- date (EmployeeLaborRegime/PersonnelActions) con datetime2 (tbl_Contracts.startdate/enddate)
+    -- en un COALESCE rompe el mapeo EF Core DateOnly? con InvalidCastException.
+    COALESCE(elr.[EffectiveFrom], CAST(ctrFallback.[startdate] AS DATE), paFallback.[EffectiveDate])   AS [EffectiveFrom],
+    COALESCE(elr.[EffectiveTo], CAST(ctrFallback.[enddate] AS DATE), paFallback.[EndDate])             AS [EffectiveTo],
     elr.[IsActive]                  AS [RegimeIsActive],
     elr.[IngresoPorConcurso],
-    COALESCE(ctRel.[SiiesLabel], patRel.[SiiesLabel]) AS [RelacionIesSiiesLabel],
-    ctr.[ContractedHours],
+    COALESCE(ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel]) AS [RelacionIesSiiesLabel],
+    COALESCE(ctr.[ContractedHours], ctrFallback.[ContractedHours]) AS [ContractedHours],
     e.[IsActive]                    AS [EmployeeIsActive],
     e.[HireDate]
 FROM [HR].[tbl_Employees] e
@@ -204,9 +215,11 @@ JOIN [HR].[tbl_People] p              ON p.[PersonID] = e.[PersonID]
 LEFT JOIN [HR].[ref_Types] it          ON it.[TypeID] = p.[IdentType]
 LEFT JOIN [HR].[ref_Types] sx          ON sx.[TypeID] = p.[Sex]
 LEFT JOIN [HR].[ref_Types] gn          ON gn.[TypeID] = p.[Gender]
+LEFT JOIN [HR].[tbl_Countries] co      ON co.[CountryID] = p.[CountryId]
 LEFT JOIN [HR].[ref_Types] et          ON et.[TypeID] = p.[EthnicityTypeID]
 LEFT JOIN [HR].[ref_Types] indig       ON indig.[TypeID] = p.[IndigenousNationalityTypeId]
-LEFT JOIN [HR].[ref_Types] sn          ON sn.[TypeID] = p.[SpecialNeedsTypeID]
+-- 2026-08-27: se une por p.Disability (texto libre) — ver comentario en vw_SiiesFuncionarios.
+LEFT JOIN [HR].[ref_Types] sn          ON sn.[Category] = 'DISABILITY_TYPE' AND sn.[Name] = p.[Disability]
 LEFT JOIN [HR].[tbl_Departments] d     ON d.[DepartmentID] = e.[DepartmentID]
 OUTER APPLY (
     SELECT TOP 1 t.*
@@ -231,6 +244,28 @@ LEFT JOIN [HR].[ref_Types] ctRel              ON ctRel.[TypeID] = ct.[SiiesRelac
 LEFT JOIN [HR].[tbl_PersonnelActions] pa      ON elr.[DocumentType] = 'PERSONNEL_ACTION' AND pa.[ActionID] = elr.[SourcePersonnelActionId]
 LEFT JOIN [HR].[tbl_personnel_action_type] pat ON pat.[PersonnelActionTypeId] = pa.[ActionTypeID]
 LEFT JOIN [HR].[ref_Types] patRel             ON patRel.[TypeID] = pat.[SiiesRelacionIesTypeId]
+-- 2026-09-02: fallback directo — mismo criterio y mismos filtros de Status que vw_SiiesFuncionarios.
+OUTER APPLY (
+    SELECT TOP 1 c.*
+    FROM [HR].[tbl_Contracts] c
+    WHERE c.[PersonID] = p.[PersonID] AND c.[IsDeleted] = 0
+      AND c.[Status] IN (274, 276) -- VIGENTE, VENCIDO
+      AND elr.[DocumentNumber] IS NULL AND ctr.[ContractCode] IS NULL AND pa.[ActionNumber] IS NULL
+    ORDER BY CASE WHEN c.[Status] = 274 THEN 0 ELSE 1 END, c.[startdate] DESC
+) ctrFallback
+LEFT JOIN [HR].[tbl_contract_type] ctFallback ON ctFallback.[ContractTypeID] = ctrFallback.[ContractTypeID]
+LEFT JOIN [HR].[ref_Types] ctRelFallback      ON ctRelFallback.[TypeID] = ctFallback.[SiiesRelacionIesTypeId]
+OUTER APPLY (
+    SELECT TOP 1 pa2.*
+    FROM [HR].[tbl_PersonnelActions] pa2
+    WHERE pa2.[EmployeeID] = e.[EmployeeID] AND pa2.[IsDeleted] = 0
+      AND pa2.[Status] IN ('VIGENTE', 'FINALIZADO')
+      AND elr.[DocumentNumber] IS NULL AND ctr.[ContractCode] IS NULL AND pa.[ActionNumber] IS NULL
+      AND ctrFallback.[ContractID] IS NULL
+    ORDER BY CASE WHEN pa2.[Status] = 'VIGENTE' THEN 0 ELSE 1 END, pa2.[ActionDate] DESC
+) paFallback
+LEFT JOIN [HR].[tbl_personnel_action_type] patFallback ON patFallback.[PersonnelActionTypeId] = paFallback.[ActionTypeID]
+LEFT JOIN [HR].[ref_Types] patRelFallback               ON patRelFallback.[TypeID] = patFallback.[SiiesRelacionIesTypeId]
 WHERE e.[IsDeleted] = 0 AND ts.[TeacherStructureID] IS NOT NULL;
 GO
 
