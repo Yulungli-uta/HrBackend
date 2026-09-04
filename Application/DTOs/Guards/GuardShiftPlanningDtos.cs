@@ -35,6 +35,20 @@ public record CreateGuardShiftPlanningDto(
     string? Notes
 );
 
+// Réplica de una asignación manual en la misma fecha/día de la semana durante N semanas
+// consecutivas a partir de StartDate (StartDate cuenta como la primera semana).
+public record CreateRecurringGuardShiftPlanningDto(
+    int EmployeeId,
+    int? GroupId,
+    int LocationId,
+    DateOnly StartDate,
+    int ScheduleId,
+    int RepeatWeeks,
+    int PlanningSourceTypeId,
+    int StatusTypeId,
+    string? Notes
+);
+
 public record GenerateGuardShiftPlanningRequestDto(
     int GroupId,
     DateOnly StartDate,
@@ -149,6 +163,7 @@ public record GeneratePreviewResponseDto(
     int DoubleShiftConflicts,
     int OverlapConflicts,
     int MissingLocation,
+    int SpecialRuleOverrideConflicts,
     List<GeneratePreviewItemDto> Items
 );
 

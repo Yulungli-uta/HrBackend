@@ -42,6 +42,21 @@ public class GuardShiftPlanningController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.PlanningId }, created);
     }
 
+    /// <summary>Crea la misma asignación manual repetida semanalmente durante N semanas.</summary>
+    [HttpPost("create-recurring")]
+    [RequirePermission("GUARDS.CREATE")]
+    public async Task<IActionResult> CreateRecurring([FromBody] CreateRecurringGuardShiftPlanningDto dto, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await _svc.CreateRecurringAsync(dto, ct));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     /// <summary>Genera planificación automática para un grupo y rango de fechas (flujo legado).</summary>
     [HttpPost("generate")]
     [RequirePermission("GUARDS.CREATE")]

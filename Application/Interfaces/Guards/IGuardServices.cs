@@ -70,6 +70,13 @@ public interface IGuardShiftPlanningService
     Task<GuardReadinessCheckDto> GetReadinessCheckAsync(DateOnly targetDate, CancellationToken ct);
     Task<GuardShiftPlanningDetailDto?> GetPlanningDetailAsync(int planningId, CancellationToken ct);
     Task<GuardShiftPlanningDto> CreateAsync(CreateGuardShiftPlanningDto dto, CancellationToken ct);
+    /// <summary>
+    /// Crea la misma asignación manual repetida semanalmente (mismo día de la semana que
+    /// StartDate) durante RepeatWeeks semanas. Cada fecha se valida por separado — las que
+    /// tengan un conflicto bloqueante se omiten y quedan registradas en el resultado, sin
+    /// afectar a las demás.
+    /// </summary>
+    Task<GuardShiftPlanningResultDto> CreateRecurringAsync(CreateRecurringGuardShiftPlanningDto dto, CancellationToken ct);
     Task<GuardShiftPlanningResultDto> GenerateAsync(GenerateGuardShiftPlanningRequestDto dto, CancellationToken ct);
     Task<GeneratePreviewResponseDto> GeneratePreviewAsync(GeneratePreviewRequestDto dto, CancellationToken ct);
     Task<GuardShiftPlanningResultDto> GenerateConfirmAsync(GeneratePreviewRequestDto dto, CancellationToken ct);
