@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
@@ -359,11 +360,15 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<LatenessSummaryReportDto>> GetLatenessSummaryDataAsync(
+    public async Task<PagedResult<LatenessSummaryReportDto>> GetLatenessSummaryDataAsync(
         ReportFilterDto filter,
+        int page,
+        int pageSize,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
 
         var startDate = filter.StartDate.HasValue
             ? DateOnly.FromDateTime(filter.StartDate.Value)
@@ -393,6 +398,15 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
         if (!string.IsNullOrWhiteSpace(filter.Identification))
             query = query.Where(x => x.ved.IDCard == filter.Identification);
 
+        // Búsqueda parcial por cédula o nombre (caja de búsqueda de la pantalla de resumen)
+        if (!string.IsNullOrWhiteSpace(filter.SearchText))
+        {
+            var term = filter.SearchText.Trim();
+            query = query.Where(x =>
+                x.ved.IDCard.Contains(term)
+                || (x.ved.LastName + " " + x.ved.FirstName).Contains(term));
+        }
+
         // Filtro opcional por régimen laboral — mismo criterio que GetFoodSubsidySummaryDataAsync:
         // prioriza EmployeeLaborRegime activo; si el empleado no tiene ninguno, cae a
         // EmployeeType legacy en vez de excluirlo en silencio.
@@ -405,7 +419,7 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
                     && x.ved.EmployeeType == regimeId));
         }
 
-        var grouped = await query
+        var groupedQuery = query
             .GroupBy(x => new
             {
                 x.calc.EmployeeId,
@@ -423,11 +437,23 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
                 ContractType     = g.Key.ContractType,
                 LateDaysCount    = g.Count(),
                 TotalMinutesLate = g.Sum(x => x.calc.TardinessMin)
-            })
+            });
+
+        var totalCount = await groupedQuery.LongCountAsync(ct);
+
+        var pageItems = await groupedQuery
             .OrderByDescending(r => r.LateDaysCount)
             .ThenBy(r => r.FullName)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync(ct);
 
-        return grouped.AsReadOnly();
+        return new PagedResult<LatenessSummaryReportDto>
+        {
+            Items = pageItems,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount
+        };
     }
 }

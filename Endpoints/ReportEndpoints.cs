@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Reports;
@@ -355,14 +356,16 @@ public static class ReportEndpoints
         group.MapPost("/lateness-summary", async (
             [FromBody] ReportFilterDto filter,
             [FromServices] IAttendanceCalculationsReportService attendanceReportService,
-            CancellationToken ct) =>
+            CancellationToken ct,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20) =>
         {
-            var data = await attendanceReportService.GetLatenessSummaryDataAsync(filter, ct);
+            var data = await attendanceReportService.GetLatenessSummaryDataAsync(filter, page, pageSize, ct);
             return Results.Ok(data);
         })
         .WithName("GetLatenessSummary")
-        .WithSummary("Conteo de días con atraso por empleado en el rango de fechas indicado")
-        .Produces<IReadOnlyList<LatenessSummaryReportDto>>(StatusCodes.Status200OK, "application/json");
+        .WithSummary("Conteo de días con atraso por empleado en el rango de fechas indicado (paginado, admite SearchText por cédula/nombre)")
+        .Produces<PagedResult<LatenessSummaryReportDto>>(StatusCodes.Status200OK, "application/json");
 
         // ==================== AUDITORÍA ====================
 

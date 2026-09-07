@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
@@ -155,22 +156,26 @@ public sealed class AttendanceCalculationsReportService : IAttendanceCalculation
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<LatenessSummaryReportDto>> GetLatenessSummaryDataAsync(
+    public async Task<PagedResult<LatenessSummaryReportDto>> GetLatenessSummaryDataAsync(
         ReportFilterDto filter,
+        int page,
+        int pageSize,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(filter);
 
         _logger.LogInformation(
-            "Generando resumen de atrasos. Período: {Start} - {End} | DeptId: {DeptId} | RegimeId: {RegimeId}",
+            "Generando resumen de atrasos. Período: {Start} - {End} | DeptId: {DeptId} | RegimeId: {RegimeId} | Búsqueda: {Search} | Página: {Page}/{PageSize}",
             filter.StartDate?.ToString("yyyy-MM-dd") ?? "N/A",
             filter.EndDate?.ToString("yyyy-MM-dd")   ?? "N/A",
             filter.DepartmentId?.ToString()  ?? "Todas",
-            filter.LaborRegimeId?.ToString() ?? "Todos");
+            filter.LaborRegimeId?.ToString() ?? "Todos",
+            filter.SearchText ?? "N/A",
+            page, pageSize);
 
-        var data = await _repository.GetLatenessSummaryDataAsync(filter, ct);
+        var data = await _repository.GetLatenessSummaryDataAsync(filter, page, pageSize, ct);
 
-        _logger.LogInformation("Resumen de atrasos generado. Total empleados: {Count}", data.Count);
+        _logger.LogInformation("Resumen de atrasos generado. Total empleados: {Count}", data.TotalCount);
 
         return data;
     }

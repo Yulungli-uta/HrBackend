@@ -31,6 +31,14 @@ public record ReportFilterDto
     public string? Identification { get; init; }
 
     /// <summary>
+    /// Búsqueda parcial por cédula o nombre completo (contiene, no exacta). A diferencia
+    /// de <see cref="Identification"/> (match exacto de un solo empleado), este campo es
+    /// para pantallas con caja de búsqueda tipo "Buscar por nombre o cédula…". Por ahora
+    /// solo lo usa el resumen de atrasos (GetLatenessSummaryDataAsync). Null o vacío = todos.
+    /// </summary>
+    public string? SearchText { get; init; }
+
+    /// <summary>
     /// Si es <c>true</c>, el PDF generado rota el texto de las cabeceras 90° (útil para
     /// reportes con muchas columnas angostas, ej. SIIES). Null o <c>false</c> = horizontal
     /// (comportamiento por defecto).

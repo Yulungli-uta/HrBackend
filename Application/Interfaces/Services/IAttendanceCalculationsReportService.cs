@@ -1,3 +1,4 @@
+using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 
@@ -70,9 +71,13 @@ public interface IAttendanceCalculationsReportService
     /// Obtiene el conteo de días con atraso por empleado (una fila por empleado) para el
     /// período y filtros indicados — usado por la pantalla de resumen de atrasos.
     /// </summary>
-    /// <param name="filter">Filtros del reporte.</param>
+    /// <param name="filter">Filtros del reporte (incluye SearchText para cédula/nombre parcial).</param>
+    /// <param name="page">Número de página (base 1).</param>
+    /// <param name="pageSize">Registros por página.</param>
     /// <param name="ct">Token de cancelación.</param>
-    Task<IReadOnlyList<LatenessSummaryReportDto>> GetLatenessSummaryDataAsync(
+    Task<PagedResult<LatenessSummaryReportDto>> GetLatenessSummaryDataAsync(
         ReportFilterDto filter,
+        int page,
+        int pageSize,
         CancellationToken ct = default);
 }

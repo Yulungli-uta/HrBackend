@@ -1,3 +1,4 @@
+using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 
@@ -94,10 +95,14 @@ public interface IAttendanceCalculationsReportRepository
     /// </summary>
     /// <param name="filter">
     /// Filtros del reporte: StartDate, EndDate, DepartmentId, EmployeeId, Identification
-    /// (cédula) y LaborRegimeId (todos opcionales).
+    /// (cédula), SearchText (cédula o nombre, parcial) y LaborRegimeId (todos opcionales).
     /// </param>
+    /// <param name="page">Número de página (base 1).</param>
+    /// <param name="pageSize">Registros por página.</param>
     /// <param name="ct">Token de cancelación.</param>
-    Task<IReadOnlyList<LatenessSummaryReportDto>> GetLatenessSummaryDataAsync(
+    Task<PagedResult<LatenessSummaryReportDto>> GetLatenessSummaryDataAsync(
         ReportFilterDto filter,
+        int page,
+        int pageSize,
         CancellationToken ct = default);
 }
