@@ -166,6 +166,25 @@ public class GuardRotationGroupsController : ControllerBase
         }
     }
 
+    [HttpPut("{id:int}/patterns/{groupPatternId:int}")]
+    [RequirePermission("GUARDS.UPDATE")]
+    public async Task<IActionResult> UpdatePattern(int id, int groupPatternId, [FromBody] UpdateGroupPatternDto dto, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _svc.UpdateGroupPatternAsync(id, groupPatternId, dto, ct);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
     [HttpDelete("{id:int}/patterns/{groupPatternId:int}")]
     [RequirePermission("GUARDS.UPDATE")]
     public async Task<IActionResult> RemovePattern(int id, int groupPatternId, CancellationToken ct)

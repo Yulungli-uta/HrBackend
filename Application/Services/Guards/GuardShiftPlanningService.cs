@@ -540,22 +540,32 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
                 : "No hay grupos de rotación con empleados activos."
         ));
 
-        // 2. Grupos activos tienen patrón de rotación para la fecha
-        var groupsTotal = await _db.GuardRotationGroups.CountAsync(ct);
-        var groupsWithPattern = await _db.GuardGroupRotationPatterns
+        // 2. Grupos ACTIVOS tienen patrón de rotación para la fecha. Los grupos inactivos se
+        // excluyen de este chequeo — nunca se usan para generar turnos (ver ResolveGroupsAsync),
+        // así que contarlos aquí solo infla el "faltan X grupos" con grupos irrelevantes.
+        var activeGroupNames = await _db.GuardRotationGroups
+            .Where(g => g.IsActive)
+            .Select(g => new { g.GroupId, g.Name })
+            .ToListAsync(ct);
+
+        var groupIdsWithPattern = await _db.GuardGroupRotationPatterns
             .Where(gp => gp.IsActive && gp.ValidFrom <= targetDate && (gp.ValidTo == null || gp.ValidTo >= targetDate))
             .Select(gp => gp.GroupId)
             .Distinct()
-            .CountAsync(ct);
+            .ToListAsync(ct);
 
-        var patternOk = groupsTotal > 0 && groupsWithPattern == groupsTotal;
+        var groupsTotal = activeGroupNames.Count;
+        var groupsMissingPattern = activeGroupNames.Where(g => !groupIdsWithPattern.Contains(g.GroupId)).ToList();
+        var groupsWithPattern = groupsTotal - groupsMissingPattern.Count;
+
+        var patternOk = groupsTotal > 0 && groupsMissingPattern.Count == 0;
         items.Add(new GuardReadinessItemDto(
             "GROUPS_WITH_PATTERN",
             "Grupos con patrón de rotación activo",
             patternOk,
             patternOk
-                ? $"Todos los grupos ({groupsWithPattern}) tienen patrón activo para la fecha."
-                : $"{groupsWithPattern} de {groupsTotal} grupo(s) tienen patrón activo. Asigna patrón a los grupos restantes."
+                ? $"Todos los grupos activos ({groupsWithPattern}) tienen patrón vigente para la fecha."
+                : $"{groupsWithPattern} de {groupsTotal} grupo(s) activo(s) tienen patrón vigente. Falta asignar o renovar el patrón de: {string.Join(", ", groupsMissingPattern.Select(g => g.Name))}."
         ));
 
         // 3. Existe un periodo de rotación de ubicaciones activo que cubra la fecha

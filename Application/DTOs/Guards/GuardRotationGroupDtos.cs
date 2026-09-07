@@ -135,3 +135,11 @@ public record AssignPatternToGroupDto(
     DateOnly? ValidTo,
     string? Notes
 );
+
+public record UpdateGroupPatternDto(
+    int PatternId,
+    DateOnly StartCycleDate,
+    DateOnly ValidFrom,
+    DateOnly? ValidTo,
+    string? Notes
+);

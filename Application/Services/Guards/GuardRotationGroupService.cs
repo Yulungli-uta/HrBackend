@@ -436,6 +436,52 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         );
     }
 
+    public async Task<GuardGroupRotationPatternDto> UpdateGroupPatternAsync(int groupId, int groupPatternId, UpdateGroupPatternDto dto, CancellationToken ct)
+    {
+        var entity = await _db.GuardGroupRotationPatterns
+            .FirstOrDefaultAsync(gp => gp.GroupPatternId == groupPatternId && gp.GroupId == groupId, ct)
+            ?? throw new KeyNotFoundException("Asignación de patrón no encontrada.");
+
+        var pattern = await _db.RotationPatterns
+            .FirstOrDefaultAsync(p => p.PatternId == dto.PatternId && p.IsActive, ct)
+            ?? throw new KeyNotFoundException($"Patrón {dto.PatternId} no encontrado o inactivo.");
+
+        // Mismo chequeo de cruce de fechas que al asignar, pero excluyendo esta misma fila
+        // (si no, una edición que no cambia nada chocaría consigo misma).
+        var overlappingAssignment = await _db.GuardGroupRotationPatterns
+            .Include(gp => gp.Group)
+            .Where(gp => gp.PatternId == dto.PatternId
+                         && gp.GroupId != groupId
+                         && gp.IsActive
+                         && gp.Group != null
+                         && gp.Group.IsActive
+                         && gp.ValidFrom <= (dto.ValidTo ?? DateOnly.MaxValue)
+                         && (gp.ValidTo ?? DateOnly.MaxValue) >= dto.ValidFrom)
+            .OrderBy(gp => gp.ValidFrom)
+            .FirstOrDefaultAsync(ct);
+
+        if (overlappingAssignment is not null)
+        {
+            var groupName = overlappingAssignment.Group?.Name ?? $"Grupo {overlappingAssignment.GroupId}";
+            throw new InvalidOperationException(
+                $"El patron '{pattern.Name}' ya esta vigente en el grupo '{groupName}' para un rango de fechas que se cruza.");
+        }
+
+        entity.PatternId = dto.PatternId;
+        entity.StartCycleDate = dto.StartCycleDate;
+        entity.ValidFrom = dto.ValidFrom;
+        entity.ValidTo = dto.ValidTo;
+        entity.Notes = dto.Notes;
+
+        await _db.SaveChangesAsync(ct);
+
+        return new GuardGroupRotationPatternDto(
+            entity.GroupPatternId, entity.GroupId, entity.PatternId,
+            pattern.Name, pattern.PatternCode,
+            entity.StartCycleDate, entity.ValidFrom, entity.ValidTo, entity.IsActive, entity.Notes
+        );
+    }
+
     public async Task RemovePatternFromGroupAsync(int groupId, int groupPatternId, CancellationToken ct)
     {
         var entity = await _db.GuardGroupRotationPatterns

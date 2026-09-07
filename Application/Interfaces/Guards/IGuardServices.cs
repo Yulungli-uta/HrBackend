@@ -27,6 +27,7 @@ public interface IGuardRotationGroupService
     Task<List<LocationGroupDetailDto>> GetByLocationKeyAsync(string locationKey, CancellationToken ct);
     Task<List<GuardGroupRotationPatternDto>> GetGroupPatternsAsync(int groupId, CancellationToken ct);
     Task<GuardGroupRotationPatternDto> AssignPatternToGroupAsync(int groupId, AssignPatternToGroupDto dto, CancellationToken ct);
+    Task<GuardGroupRotationPatternDto> UpdateGroupPatternAsync(int groupId, int groupPatternId, UpdateGroupPatternDto dto, CancellationToken ct);
     Task RemovePatternFromGroupAsync(int groupId, int groupPatternId, CancellationToken ct);
     Task<List<GuardRotationGroupDto>> GetGeneralGroupsAsync(CancellationToken ct);
     Task<List<GuardRotationGroupWithSubgroupsDto>> GetGeneralGroupsWithSubgroupsAsync(CancellationToken ct);
