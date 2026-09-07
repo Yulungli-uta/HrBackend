@@ -399,10 +399,20 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
                 g => g.OrderByDescending(a => a.Period!.StartDate).First()
             );
 
+        // Una reasignación puntual (un solo turno, un solo día) es más específica que la
+        // asignación individual de ubicación del empleado (todo el periodo) — debe ganar ella.
+        // Sin este chequeo, el tablero mostraba siempre la ubicación general del empleado
+        // aunque ese turno puntual ya hubiera sido reasignado a otra ubicación (hallazgo real
+        // 2026-09-07: reasignación de Carvajal Segundo invisible en "Por ubicación").
+        var reassignTypeId = await _db.Set<RefTypes>()
+            .Where(r => r.Category == "GUARD_CHANGE_TYPE" && r.Name == "REASSIGNMENT")
+            .Select(r => r.TypeId).FirstOrDefaultAsync(ct);
+
         // Función para resolver la ubicación efectiva de un planning (sub-ubicación o la del planning)
         (int id, string name, string? code, int? parentId, string? parentName) EffectiveLocation(GuardShiftPlanning p)
         {
-            if (empLocationLookup.TryGetValue(p.EmployeeId, out var empAssign))
+            var hasActiveReassignment = reassignTypeId != 0 && p.Changes.Any(c => c.ChangeTypeId == reassignTypeId);
+            if (!hasActiveReassignment && empLocationLookup.TryGetValue(p.EmployeeId, out var empAssign))
                 return (empAssign.LocationId, empAssign.Location?.LocationName ?? "", empAssign.Location?.LocationCode,
                         empAssign.Location?.ParentLocationId, empAssign.Location?.Parent?.LocationName);
             return (p.LocationId, p.Location?.LocationName ?? "", p.Location?.LocationCode,

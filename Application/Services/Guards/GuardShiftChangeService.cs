@@ -228,6 +228,8 @@ public class GuardShiftChangeService : IGuardShiftChangeService
             PlanningId = planning.PlanningId,
             OriginalEmployeeId = planning.EmployeeId,
             OriginalScheduleId = planning.ScheduleId,
+            OriginalWorkDate = planning.WorkDate,
+            OriginalLocationId = planning.LocationId,
             NewScheduleId = dto.NewScheduleId,
             NewWorkDate = dto.NewWorkDate,
             NewLocationId = dto.NewLocationId,
@@ -247,6 +249,52 @@ public class GuardShiftChangeService : IGuardShiftChangeService
         planning.AllowDoubleShift = isSpecialGroup;
 
         await _db.GuardShiftChanges.AddAsync(change, ct);
+        await _db.SaveChangesAsync(ct);
+
+        var reloaded = await _db.GuardShiftChanges
+            .Include(c => c.Planning)
+            .Include(c => c.OriginalEmployee).ThenInclude(e => e!.People)
+            .Include(c => c.OriginalSchedule)
+            .Include(c => c.NewSchedule)
+            .Include(c => c.NewLocation)
+            .Include(c => c.ChangeType)
+            .Include(c => c.StatusType)
+            .FirstAsync(c => c.ShiftChangeId == change.ShiftChangeId, ct);
+
+        return MapToDto(reloaded);
+    }
+
+    public async Task<GuardShiftChangeDto> RevertReassignmentAsync(int shiftChangeId, CancellationToken ct)
+    {
+        var change = await _db.GuardShiftChanges
+            .Include(c => c.ChangeType)
+            .Include(c => c.Planning)
+            .FirstOrDefaultAsync(c => c.ShiftChangeId == shiftChangeId, ct)
+            ?? throw new KeyNotFoundException($"Cambio {shiftChangeId} no encontrado.");
+
+        if (change.ChangeType?.Name != "REASSIGNMENT")
+            throw new InvalidOperationException("Solo se pueden deshacer cambios de tipo reasignación.");
+
+        if (!change.IsActiveForAttendance)
+            throw new InvalidOperationException("Esta reasignación ya no está activa (fue reemplazada por otro cambio o ya se deshizo).");
+
+        if (change.OriginalWorkDate is null || change.OriginalLocationId is null)
+            throw new InvalidOperationException(
+                "Esta reasignación se hizo antes de que el sistema guardara la fecha/ubicación original — no se puede deshacer automáticamente. Corrígela manualmente con una nueva reasignación.");
+
+        var planning = change.Planning
+            ?? throw new KeyNotFoundException($"Planificación {change.PlanningId} no encontrada.");
+
+        var isSpecialGroup = planning.GroupId.HasValue
+            && await _db.GuardRotationGroups.Where(g => g.GroupId == planning.GroupId).Select(g => g.IsSpecial).FirstOrDefaultAsync(ct);
+
+        planning.WorkDate = change.OriginalWorkDate.Value;
+        planning.LocationId = change.OriginalLocationId.Value;
+        planning.ScheduleId = change.OriginalScheduleId;
+        planning.AllowDoubleShift = isSpecialGroup;
+
+        change.IsActiveForAttendance = false;
+
         await _db.SaveChangesAsync(ct);
 
         var reloaded = await _db.GuardShiftChanges

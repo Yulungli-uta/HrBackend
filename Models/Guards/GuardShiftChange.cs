@@ -9,6 +9,8 @@ public class GuardShiftChange : IAuditable
     public int OriginalEmployeeId { get; set; }
     public int? ReplacementEmployeeId { get; set; }
     public int OriginalScheduleId { get; set; }
+    public DateOnly? OriginalWorkDate { get; set; }
+    public int? OriginalLocationId { get; set; }
     public int? NewScheduleId { get; set; }
     public DateOnly? NewWorkDate { get; set; }
     public int? NewLocationId { get; set; }

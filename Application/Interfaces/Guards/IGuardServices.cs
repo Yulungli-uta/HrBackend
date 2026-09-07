@@ -110,6 +110,7 @@ public interface IGuardShiftChangeService
     /// <summary>Reasigna el turno del mismo guardia titular a otra fecha/horario/ubicación. Aplicación
     /// inmediata (sin aprobación); queda registrado como GuardShiftChange tipo REASSIGNMENT.</summary>
     Task<GuardShiftChangeDto> ReassignAsync(CreateGuardShiftReassignmentDto dto, CancellationToken ct);
+    Task<GuardShiftChangeDto> RevertReassignmentAsync(int shiftChangeId, CancellationToken ct);
 }
 
 public interface IEmployeeAvailabilityService

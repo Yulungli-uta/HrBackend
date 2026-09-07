@@ -63,3 +63,26 @@ IF NOT EXISTS (SELECT 1 FROM [HR].[ref_Types] WHERE [Category] = 'GUARD_CHANGE_T
 INSERT INTO [HR].[ref_Types] ([Category], [Name], [Description], [IsActive])
 VALUES ('GUARD_CHANGE_TYPE', 'REASSIGNMENT', 'Reasignación del mismo guardia a otra fecha/horario/ubicación', 1);
 GO
+
+-- 6) Deshacer reasignación (2026-09-07) --------------------------------------
+-- ReassignAsync sobrescribe WorkDate/LocationID/ScheduleID directamente en la
+-- misma fila de HR.tbl_GuardShiftPlanning; hasta ahora solo se guardaba el
+-- horario original (OriginalScheduleID), así que la fecha/ubicación de antes
+-- de reasignar se perdía para siempre. Estas dos columnas permiten un botón
+-- real de "Deshacer reasignación" (hallazgo real: reasignación de Carvajal
+-- Segundo sin forma de revertir la ubicación anterior).
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_GuardShiftChanges]') AND name = 'OriginalWorkDate')
+ALTER TABLE [HR].[tbl_GuardShiftChanges]
+    ADD [OriginalWorkDate] DATE NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_GuardShiftChanges]') AND name = 'OriginalLocationID')
+ALTER TABLE [HR].[tbl_GuardShiftChanges]
+    ADD [OriginalLocationID] INT NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_GuardShiftChanges_OriginalLocation')
+ALTER TABLE [HR].[tbl_GuardShiftChanges]
+    ADD CONSTRAINT [FK_GuardShiftChanges_OriginalLocation]
+    FOREIGN KEY ([OriginalLocationID]) REFERENCES [HR].[tbl_GuardServiceLocations] ([LocationID]);
+GO

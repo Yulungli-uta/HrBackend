@@ -300,6 +300,8 @@ public sealed class GuardShiftChangeConfiguration : IEntityTypeConfiguration<Gua
         e.Property(x => x.OriginalEmployeeId).HasColumnName("OriginalEmployeeID");
         e.Property(x => x.ReplacementEmployeeId).HasColumnName("ReplacementEmployeeID");
         e.Property(x => x.OriginalScheduleId).HasColumnName("OriginalScheduleID");
+        e.Property(x => x.OriginalWorkDate).HasColumnName("OriginalWorkDate");
+        e.Property(x => x.OriginalLocationId).HasColumnName("OriginalLocationID");
         e.Property(x => x.NewScheduleId).HasColumnName("NewScheduleID");
         e.Property(x => x.NewWorkDate).HasColumnName("NewWorkDate");
         e.Property(x => x.NewLocationId).HasColumnName("NewLocationID");
