@@ -61,6 +61,38 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             .ToListAsync(ct);
     }
 
+    // A diferencia de GetEligibleEmployeesAsync (filtra por cargo/puesto — candidatos para
+    // AGREGAR a un grupo), este filtra por pertenencia REAL y activa a algún grupo de
+    // rotación (cualquiera, incluido "Supervisor" — es un grupo más, no una categoría
+    // aparte). Pensado para pantallas donde solo debe aparecer personal que YA es guardia o
+    // supervisor activo: Planificación de Vacaciones, Reglas Especiales, Disponibilidad.
+    public async Task<List<EligibleEmployeeDto>> GetActiveGroupEmployeesAsync(string? search, CancellationToken ct)
+    {
+        var query = _db.Set<WsUtaSystem.Models.Employees>()
+            .AsNoTracking()
+            .Include(e => e.People)
+            .Where(e => e.IsActive && _db.Set<GuardRotationGroupEmployee>()
+                .Any(ge => ge.EmployeeId == e.EmployeeId && ge.IsActive && ge.Group!.IsActive));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(e =>
+                (e.People!.LastName + " " + e.People.FirstName).ToLower().Contains(term) ||
+                (e.People.IdCard != null && e.People.IdCard.ToLower().Contains(term)));
+        }
+
+        return await query
+            .OrderBy(e => e.People!.LastName).ThenBy(e => e.People!.FirstName)
+            .Take(20)
+            .Select(e => new EligibleEmployeeDto(
+                e.EmployeeId,
+                e.People!.LastName + " " + e.People.FirstName,
+                e.People.IdCard,
+                e.Email ?? e.People.Email))
+            .ToListAsync(ct);
+    }
+
     public async Task<List<GuardRotationGroupDto>> GetAllAsync(CancellationToken ct) =>
         await _db.GuardRotationGroups
             .OrderBy(g => g.Name)
@@ -126,6 +158,9 @@ public class GuardRotationGroupService : IGuardRotationGroupService
 
     public async Task<GuardRotationGroupDto> CreateAsync(CreateGuardRotationGroupDto dto, CancellationToken ct)
     {
+        if (!dto.ConfirmDuplicateColor)
+            await EnsureColorNotDuplicatedAsync(null, dto.ColorCode, ct);
+
         var entity = new GuardRotationGroup
         {
             GroupCode = dto.GroupCode,
@@ -157,6 +192,10 @@ public class GuardRotationGroupService : IGuardRotationGroupService
     {
         var entity = await _db.GuardRotationGroups.FirstOrDefaultAsync(g => g.GroupId == groupId, ct)
             ?? throw new KeyNotFoundException($"Grupo {groupId} no encontrado.");
+
+        if (!dto.ConfirmDuplicateColor)
+            await EnsureColorNotDuplicatedAsync(groupId, dto.ColorCode, ct);
+
         entity.GroupCode = dto.GroupCode;
         entity.Name = dto.Name;
         entity.Description = dto.Description;
@@ -178,6 +217,29 @@ public class GuardRotationGroupService : IGuardRotationGroupService
 
         return await GetByIdAsync(groupId, ct)
             ?? throw new InvalidOperationException("Error al recuperar el grupo actualizado.");
+    }
+
+    // Previene la colisión de colores en el origen (crear/editar) en vez de dejar que el
+    // tablero de planificación la resuelva en silencio sustituyendo el color por uno de
+    // respaldo (hallazgo real 2026-09-07). Solo advierte — el usuario puede confirmar que
+    // quiere el mismo color de todas formas (ConfirmDuplicateColor=true); en ese caso el
+    // tablero debe mostrar el color configurado tal cual, sin sustituirlo.
+    private async Task EnsureColorNotDuplicatedAsync(int? currentGroupId, string? colorCode, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(colorCode)) return;
+
+        var normalized = colorCode.Trim().ToLowerInvariant();
+        var conflicting = await _db.GuardRotationGroups
+            .Where(g => g.IsActive
+                        && (!currentGroupId.HasValue || g.GroupId != currentGroupId.Value)
+                        && g.ColorCode != null
+                        && g.ColorCode.ToLower() == normalized)
+            .Select(g => g.Name)
+            .FirstOrDefaultAsync(ct);
+
+        if (conflicting is not null)
+            throw new InvalidOperationException(
+                $"El color '{colorCode}' ya lo está usando el grupo activo '{conflicting}'. Si quieres usarlo de todas formas, confirma la advertencia.");
     }
 
     public async Task<GuardRotationGroupDto> DuplicateAsync(int baseGroupId, DuplicateGuardRotationGroupDto dto, CancellationToken ct)

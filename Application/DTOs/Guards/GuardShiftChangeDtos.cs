@@ -44,7 +44,24 @@ public record CreateGuardShiftReassignmentDto(
     DateOnly NewWorkDate,
     int NewLocationId,
     int NewScheduleId,
-    string Reason
+    string Reason,
+    bool OverrideConflict = false
+);
+
+/// <summary>
+/// Repite la misma reasignación (mismo desplazamiento de fecha/ubicación/horario) durante
+/// varias semanas: para cada semana busca el turno activo del mismo empleado en la fecha
+/// original equivalente (+7*n días desde el turno de <see cref="PlanningId"/>) y le aplica
+/// la reasignación. Si esa semana no tiene turno activo en la fecha original, se omite.
+/// </summary>
+public record CreateRecurringGuardShiftReassignmentDto(
+    int PlanningId,
+    DateOnly NewWorkDate,
+    int NewLocationId,
+    int NewScheduleId,
+    string Reason,
+    int RepeatWeeks,
+    bool OverrideConflict = false
 );
 
 public record ApproveGuardShiftChangeDto(

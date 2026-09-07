@@ -63,6 +63,14 @@ public class GuardShiftChangesController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("reassignment/recurring")]
+    [RequirePermission("GUARDS.CREATE")]
+    public async Task<IActionResult> ReassignRecurring([FromBody] CreateRecurringGuardShiftReassignmentDto dto, CancellationToken ct)
+    {
+        var result = await _svc.ReassignRecurringAsync(dto, ct);
+        return Ok(result);
+    }
+
     [HttpPost("{id:int}/revert")]
     [RequirePermission("GUARDS.CREATE")]
     public async Task<IActionResult> RevertReassignment(int id, CancellationToken ct)

@@ -22,6 +22,15 @@ public class GuardRotationGroupsController : ControllerBase
     public async Task<IActionResult> GetEligibleEmployees([FromQuery] string? search, CancellationToken ct) =>
         Ok(await _svc.GetEligibleEmployeesAsync(search, ct));
 
+    /// <summary>Empleados con membresía activa en algún grupo de rotación (guardia o
+    /// supervisor — Supervisor es un grupo más). Para pantallas que solo deben ofrecer
+    /// personal que YA es guardia/supervisor activo: Vacaciones, Reglas Especiales,
+    /// Disponibilidad.</summary>
+    [HttpGet("active-group-employees")]
+    [RequirePermission("GUARDS.READ")]
+    public async Task<IActionResult> GetActiveGroupEmployees([FromQuery] string? search, CancellationToken ct) =>
+        Ok(await _svc.GetActiveGroupEmployeesAsync(search, ct));
+
     [HttpGet("paged")]
     [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetPaged(

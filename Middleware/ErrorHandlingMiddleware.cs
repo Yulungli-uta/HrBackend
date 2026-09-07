@@ -41,6 +41,12 @@ public class ErrorHandlingMiddleware
         }
         if (ex is DbUpdateException dbex2)
             return new ProblemDetails { Title = "No se pudo completar la operación", Detail = dbex2.InnerException?.Message ?? dbex2.Message, Status = StatusCodes.Status400BadRequest };
+        // Rechazo de una regla de negocio (ej. "ya tiene otro turno", "no se puede reasignar
+        // un turno cancelado") — es el tipo de excepción que se lanza en toda la aplicación
+        // para este propósito. Sin este caso caía al genérico y salía como 500 en vez de un
+        // mensaje claro (hallazgo real: reasignación de guardias 2026-09-07).
+        if (ex is InvalidOperationException ioex)
+            return new ProblemDetails { Title = "No se puede completar la operación", Detail = ioex.Message, Status = StatusCodes.Status409Conflict };
         return new ProblemDetails { Title = "Error inesperado", Detail = ex.Message, Status = StatusCodes.Status500InternalServerError };
     }
 }

@@ -191,11 +191,92 @@ public class GuardShiftChangeService : IGuardShiftChangeService
             .FirstOrDefaultAsync(p => p.PlanningId == dto.PlanningId, ct)
             ?? throw new KeyNotFoundException($"Planificación {dto.PlanningId} no encontrada.");
 
+        var change = await ApplyReassignmentAsync(
+            planning, dto.NewWorkDate, dto.NewLocationId, dto.NewScheduleId, dto.Reason, dto.OverrideConflict, ct);
+
+        await _db.SaveChangesAsync(ct);
+
+        var reloaded = await _db.GuardShiftChanges
+            .Include(c => c.Planning)
+            .Include(c => c.OriginalEmployee).ThenInclude(e => e!.People)
+            .Include(c => c.OriginalSchedule)
+            .Include(c => c.NewSchedule)
+            .Include(c => c.NewLocation)
+            .Include(c => c.ChangeType)
+            .Include(c => c.StatusType)
+            .FirstAsync(c => c.ShiftChangeId == change.ShiftChangeId, ct);
+
+        return MapToDto(reloaded);
+    }
+
+    public async Task<GuardShiftPlanningResultDto> ReassignRecurringAsync(CreateRecurringGuardShiftReassignmentDto dto, CancellationToken ct)
+    {
+        if (dto.RepeatWeeks < 1 || dto.RepeatWeeks > 52)
+            throw new InvalidOperationException("La cantidad de semanas a repetir debe estar entre 1 y 52.");
+
+        var firstPlanning = await _db.GuardShiftPlannings
+            .Include(p => p.Schedule)
+            .FirstOrDefaultAsync(p => p.PlanningId == dto.PlanningId, ct)
+            ?? throw new KeyNotFoundException($"Planificación {dto.PlanningId} no encontrada.");
+
+        var employeeId = firstPlanning.EmployeeId;
+        var originalBaseDate = firstPlanning.WorkDate;
+
+        int generated = 0, skipped = 0, errors = 0;
+        var messages = new List<string>();
+
+        for (var week = 0; week < dto.RepeatWeeks; week++)
+        {
+            var originalDateForWeek = originalBaseDate.AddDays(7 * week);
+            var newDateForWeek = dto.NewWorkDate.AddDays(7 * week);
+
+            try
+            {
+                GuardShiftPlanning? planning = week == 0
+                    ? firstPlanning
+                    : await _db.GuardShiftPlannings
+                        .Include(p => p.Schedule)
+                        .FirstOrDefaultAsync(p => p.EmployeeId == employeeId
+                            && p.WorkDate == originalDateForWeek
+                            && p.IsActiveForAssignment, ct);
+
+                if (planning is null)
+                {
+                    skipped++;
+                    messages.Add($"  {originalDateForWeek:dd/MM/yyyy}: omitido — el empleado no tiene un turno activo esa fecha.");
+                    continue;
+                }
+
+                await ApplyReassignmentAsync(
+                    planning, newDateForWeek, dto.NewLocationId, dto.NewScheduleId, dto.Reason, dto.OverrideConflict, ct);
+                await _db.SaveChangesAsync(ct);
+                generated++;
+            }
+            catch (Exception ex)
+            {
+                errors++;
+                messages.Add($"  {originalDateForWeek:dd/MM/yyyy}: error — {ex.Message}");
+            }
+        }
+
+        messages.Insert(0, $"Reasignación recurrente: {generated} de {dto.RepeatWeeks} semana(s) aplicadas, {skipped} omitidas, {errors} errores.");
+        return new GuardShiftPlanningResultDto(generated, skipped, errors, messages);
+    }
+
+    // Aplica una reasignación sobre una fila de planificación ya cargada (con Schedule
+    // incluido): valida, cierra el cambio activo previo de ese turno si existe, y crea el
+    // nuevo GuardShiftChange + sobrescribe la planificación. No llama SaveChangesAsync —
+    // el llamador decide cuándo guardar (una vez para la reasignación simple, una vez por
+    // semana para la recurrente, así una semana fallida no revierte las anteriores).
+    private async Task<GuardShiftChange> ApplyReassignmentAsync(
+        GuardShiftPlanning planning, DateOnly newWorkDate, int newLocationId, int newScheduleId,
+        string reason, bool overrideConflict, CancellationToken ct)
+    {
         if (!planning.IsActiveForAssignment)
             throw new InvalidOperationException("No se puede reasignar un turno cancelado.");
 
         var validateReq = new ValidateGuardAssignmentRequestDto(
-            planning.EmployeeId, dto.NewLocationId, dto.NewWorkDate, dto.NewScheduleId, planning.PlanningId, false);
+            planning.EmployeeId, newLocationId, newWorkDate, newScheduleId, planning.PlanningId, overrideConflict);
         var validation = await _validationService.ValidateAsync(validateReq, ct);
 
         if (validation.HasBlockingErrors)
@@ -230,38 +311,29 @@ public class GuardShiftChangeService : IGuardShiftChangeService
             OriginalScheduleId = planning.ScheduleId,
             OriginalWorkDate = planning.WorkDate,
             OriginalLocationId = planning.LocationId,
-            NewScheduleId = dto.NewScheduleId,
-            NewWorkDate = dto.NewWorkDate,
-            NewLocationId = dto.NewLocationId,
+            NewScheduleId = newScheduleId,
+            NewWorkDate = newWorkDate,
+            NewLocationId = newLocationId,
             ChangeTypeId = reassignTypeId,
             StatusTypeId = approvedTypeId,
             IsActiveForAttendance = true,
-            Reason = dto.Reason,
+            Reason = reason,
             RequestedBy = _currentUser.EmployeeId,
             RequestedAt = DateTime.UtcNow,
             ApprovedBy = _currentUser.EmployeeId,
             ApprovedAt = DateTime.UtcNow
         };
 
-        planning.WorkDate = dto.NewWorkDate;
-        planning.LocationId = dto.NewLocationId;
-        planning.ScheduleId = dto.NewScheduleId;
-        planning.AllowDoubleShift = isSpecialGroup;
+        planning.WorkDate = newWorkDate;
+        planning.LocationId = newLocationId;
+        planning.ScheduleId = newScheduleId;
+        // isSpecialGroup mantiene el comportamiento de doble turno del grupo; overrideConflict
+        // cubre la reasignación puntual ya validada (sin jornada continua real) — ambos motivos
+        // exceptúan esta fila del índice único de doble turno activo (ver 02_constraints.sql).
+        planning.AllowDoubleShift = isSpecialGroup || overrideConflict;
 
         await _db.GuardShiftChanges.AddAsync(change, ct);
-        await _db.SaveChangesAsync(ct);
-
-        var reloaded = await _db.GuardShiftChanges
-            .Include(c => c.Planning)
-            .Include(c => c.OriginalEmployee).ThenInclude(e => e!.People)
-            .Include(c => c.OriginalSchedule)
-            .Include(c => c.NewSchedule)
-            .Include(c => c.NewLocation)
-            .Include(c => c.ChangeType)
-            .Include(c => c.StatusType)
-            .FirstAsync(c => c.ShiftChangeId == change.ShiftChangeId, ct);
-
-        return MapToDto(reloaded);
+        return change;
     }
 
     public async Task<GuardShiftChangeDto> RevertReassignmentAsync(int shiftChangeId, CancellationToken ct)

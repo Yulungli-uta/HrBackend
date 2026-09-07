@@ -69,7 +69,8 @@ public record CreateGuardRotationGroupDto(
     int? ParentGroupId,
     int? GroupLevelTypeId,
     string? ColorCode,
-    bool IsSpecial
+    bool IsSpecial,
+    bool ConfirmDuplicateColor = false
 );
 
 public record UpdateGuardRotationGroupDto(
@@ -80,7 +81,8 @@ public record UpdateGuardRotationGroupDto(
     int? ParentGroupId,
     int? GroupLevelTypeId,
     string? ColorCode,
-    bool IsSpecial
+    bool IsSpecial,
+    bool ConfirmDuplicateColor = false
 );
 
 /// <summary>Crea un grupo nuevo copiando configuración (y empleados activos) de un grupo base.</summary>

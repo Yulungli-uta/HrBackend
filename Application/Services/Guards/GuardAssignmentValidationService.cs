@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Guards;
@@ -94,12 +95,32 @@ public class GuardAssignmentValidationService : IGuardAssignmentValidationServic
         if (hasDoubleShift)
         {
             var isSpecialGroup = await _groupRepo.IsEmployeeInSpecialGroupAsync(dto.EmployeeId, dto.WorkDate, ct);
-            if (!dto.AllowDoubleShiftOverride && !isSpecialGroup)
+
+            // Con AllowDoubleShiftOverride=true (ej. reasignación puntual) el segundo turno
+            // solo se permite si de verdad hay descanso entre ambos — "otro turno ese día" ya
+            // no es motivo de bloqueo por sí solo, jornada continua sí lo sigue siendo siempre.
+            bool? isRealOverlap = null;
+            if (dto.AllowDoubleShiftOverride && !isSpecialGroup)
+            {
+                var newSchedule = await _db.Schedules.FirstOrDefaultAsync(s => s.ScheduleId == dto.ScheduleId, ct);
+                var conflicting = await _db.Set<GuardShiftPlanning>()
+                    .Include(p => p.Schedule)
+                    .Where(p => p.EmployeeId == dto.EmployeeId && p.WorkDate == dto.WorkDate && p.IsActiveForAssignment
+                        && (dto.PlanningId == null || p.PlanningId != dto.PlanningId))
+                    .ToListAsync(ct);
+                isRealOverlap = newSchedule is not null && conflicting.Any(p =>
+                    p.Schedule is not null && ScheduleOverlapHelper.AreBackToBackOrOverlapping(newSchedule, p.Schedule));
+            }
+
+            if (isRealOverlap == true)
+                results.Add(("DOUBLE_SHIFT", "FAILED", "BLOCKING",
+                    $"Jornada continua: el nuevo turno se encima o queda pegado sin descanso con otro turno del empleado el {dto.WorkDate:dd/MM/yyyy}."));
+            else if (!dto.AllowDoubleShiftOverride && !isSpecialGroup)
                 results.Add(("DOUBLE_SHIFT", "FAILED", "BLOCKING", $"El empleado ya tiene un turno asignado el {dto.WorkDate:dd/MM/yyyy}."));
             else if (isSpecialGroup)
                 results.Add(("DOUBLE_SHIFT", "OVERRIDDEN", "WARNING", $"Doble turno permitido: el empleado pertenece a un grupo especial ({dto.WorkDate:dd/MM/yyyy})."));
             else
-                results.Add(("DOUBLE_SHIFT", "OVERRIDDEN", "WARNING", $"Doble turno exceptuado para el {dto.WorkDate:dd/MM/yyyy}."));
+                results.Add(("DOUBLE_SHIFT", "OVERRIDDEN", "WARNING", $"Doble turno exceptuado para el {dto.WorkDate:dd/MM/yyyy}: se verificó que hay descanso suficiente entre ambos turnos."));
         }
 
         // 3. Verificar bloqueos (permisos, vacaciones, manual)

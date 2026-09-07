@@ -239,6 +239,94 @@ public class GuardLocationRotationService : IGuardLocationRotationService
         await _db.SaveChangesAsync(ct);
     }
 
+    // ─── Cobertura ──────────────────────────────────────────────────────────
+
+    public async Task<GuardLocationCoverageResponseDto> GetPeriodCoverageAsync(int periodId, CancellationToken ct)
+    {
+        var period = await _db.GuardLocationRotationPeriods
+            .Where(p => p.LocationRotationPeriodId == periodId)
+            .Select(p => new { p.LocationRotationPeriodId, p.Name })
+            .FirstOrDefaultAsync(ct)
+            ?? throw new KeyNotFoundException($"Periodo de rotación {periodId} no encontrado.");
+
+        var memberships = await _db.Set<GuardRotationGroupEmployee>()
+            .AsNoTracking()
+            .Include(ge => ge.Employee).ThenInclude(e => e!.People)
+            .Include(ge => ge.Group)
+            .Where(ge => ge.IsActive && ge.Group!.IsActive)
+            .Select(ge => new
+            {
+                ge.EmployeeId,
+                FullName = ge.Employee!.People!.LastName + " " + ge.Employee.People.FirstName,
+                ge.GroupId,
+                GroupName = ge.Group!.Name
+            })
+            .ToListAsync(ct);
+
+        var assignments = (await _assignmentRepo.GetByPeriodAsync(periodId, ct))
+            .Where(a => a.IsActive)
+            .ToList();
+
+        // Puede haber más de una asignación activa para el mismo empleado/grupo (dato
+        // duplicado, no debería pasar pero pasa) — se toma la más reciente en vez de
+        // fallar, para que la cobertura nunca truene por datos inconsistentes.
+        var individualByEmployee = assignments
+            .Where(a => a.EmployeeId is not null)
+            .GroupBy(a => a.EmployeeId!.Value)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.LocationRotationAssignmentId).First());
+        var groupAssignment = assignments
+            .Where(a => a.GroupId is not null)
+            .GroupBy(a => a.GroupId!.Value)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.LocationRotationAssignmentId).First());
+
+        var people = new List<GuardLocationCoveragePersonDto>();
+        foreach (var m in memberships)
+        {
+            GuardLocationRotationAssignment? resolved = null;
+            string source = "UNASSIGNED";
+
+            if (individualByEmployee.TryGetValue(m.EmployeeId, out var indiv))
+            {
+                resolved = indiv;
+                source = "INDIVIDUAL";
+            }
+            else if (groupAssignment.TryGetValue(m.GroupId, out var viaGroup))
+            {
+                resolved = viaGroup;
+                source = "GROUP";
+            }
+
+            people.Add(new GuardLocationCoveragePersonDto(
+                m.EmployeeId, m.FullName, m.GroupId, m.GroupName,
+                resolved?.LocationId, resolved?.Location?.LocationName, resolved?.Location?.LocationCode,
+                source));
+        }
+
+        var byLocation = people
+            .Where(p => p.LocationId is not null)
+            .GroupBy(p => new { p.LocationId, p.LocationName, p.LocationCode })
+            .OrderBy(g => g.Key.LocationName)
+            .Select(g => new GuardLocationCoverageLocationDto(
+                g.Key.LocationId!.Value, g.Key.LocationName!, g.Key.LocationCode,
+                g.OrderBy(p => p.FullName).ToList()))
+            .ToList();
+
+        var byGroup = people
+            .GroupBy(p => new { p.GroupId, p.GroupName })
+            .OrderBy(g => g.Key.GroupName)
+            .Select(g => new GuardLocationCoverageGroupDto(
+                g.Key.GroupId, g.Key.GroupName,
+                g.OrderBy(p => p.FullName).ToList()))
+            .ToList();
+
+        var unassigned = people
+            .Where(p => p.LocationId is null)
+            .OrderBy(p => p.FullName)
+            .ToList();
+
+        return new GuardLocationCoverageResponseDto(period.LocationRotationPeriodId, period.Name, byLocation, byGroup, unassigned);
+    }
+
     private static GuardLocationRotationAssignmentDto MapAssignmentToDto(GuardLocationRotationAssignment a) =>
         new(
             a.LocationRotationAssignmentId,

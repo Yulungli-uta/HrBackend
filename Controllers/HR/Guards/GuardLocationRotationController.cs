@@ -62,6 +62,14 @@ public class GuardLocationRotationController : ControllerBase
     public async Task<IActionResult> GetAssignmentsByPeriod(int periodId, CancellationToken ct) =>
         Ok(await _svc.GetAssignmentsByPeriodAsync(periodId, ct));
 
+    /// <summary>Cobertura del periodo: guardias/supervisores activos con su ubicación
+    /// resuelta (individual &gt; grupo), agrupada por ubicación y por grupo, más los
+    /// que quedaron sin asignar.</summary>
+    [HttpGet("periods/{periodId:int}/coverage")]
+    [RequirePermission("GUARDS.READ")]
+    public async Task<IActionResult> GetPeriodCoverage(int periodId, CancellationToken ct) =>
+        Ok(await _svc.GetPeriodCoverageAsync(periodId, ct));
+
     [HttpGet("assignments/by-employee/{employeeId:int}")]
     [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetAssignmentsByEmployee(int employeeId, CancellationToken ct) =>
