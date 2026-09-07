@@ -357,4 +357,77 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
 
         return grouped.AsReadOnly();
     }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<LatenessSummaryReportDto>> GetLatenessSummaryDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        var startDate = filter.StartDate.HasValue
+            ? DateOnly.FromDateTime(filter.StartDate.Value)
+            : DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+
+        var endDate = filter.EndDate.HasValue
+            ? DateOnly.FromDateTime(filter.EndDate.Value)
+            : DateOnly.FromDateTime(DateTime.Today);
+
+        var query = from calc in _db.AttendanceCalculations.AsNoTracking()
+                    join ved in _db.vwEmployeeDetails.AsNoTracking()
+                        on calc.EmployeeId equals ved.EmployeeID
+                    where calc.WorkDate >= startDate
+                       && calc.WorkDate <= endDate
+                       && (calc.MinutesLate > 0 || calc.TardinessMin > 0)
+                    select new { calc, ved };
+
+        // Filtro opcional por empleado
+        if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
+            query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
+
+        // Filtro opcional por dependencia
+        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
+            query = query.Where(x => x.ved.DepartmentID == filter.DepartmentId.Value);
+
+        // Filtro opcional por cédula exacta
+        if (!string.IsNullOrWhiteSpace(filter.Identification))
+            query = query.Where(x => x.ved.IDCard == filter.Identification);
+
+        // Filtro opcional por régimen laboral — mismo criterio que GetFoodSubsidySummaryDataAsync:
+        // prioriza EmployeeLaborRegime activo; si el empleado no tiene ninguno, cae a
+        // EmployeeType legacy en vez de excluirlo en silencio.
+        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
+        {
+            var regimeId = filter.LaborRegimeId.Value;
+            query = query.Where(x =>
+                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
+                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
+                    && x.ved.EmployeeType == regimeId));
+        }
+
+        var grouped = await query
+            .GroupBy(x => new
+            {
+                x.calc.EmployeeId,
+                x.ved.IDCard,
+                FullName = x.ved.LastName + " " + x.ved.FirstName,
+                x.ved.Department,
+                x.ved.ContractType
+            })
+            .Select(g => new LatenessSummaryReportDto
+            {
+                EmployeeId       = g.Key.EmployeeId,
+                IdCard           = g.Key.IDCard,
+                FullName         = g.Key.FullName,
+                DepartmentName   = g.Key.Department,
+                ContractType     = g.Key.ContractType,
+                LateDaysCount    = g.Count(),
+                TotalMinutesLate = g.Sum(x => x.calc.TardinessMin)
+            })
+            .OrderByDescending(r => r.LateDaysCount)
+            .ThenBy(r => r.FullName)
+            .ToListAsync(ct);
+
+        return grouped.AsReadOnly();
+    }
 }

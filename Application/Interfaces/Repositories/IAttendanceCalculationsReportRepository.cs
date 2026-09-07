@@ -85,4 +85,19 @@ public interface IAttendanceCalculationsReportRepository
     Task<IReadOnlyList<FoodSubsidySummaryReportDto>> GetFoodSubsidySummaryDataAsync(
         ReportFilterDto filter,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene el conteo de días con atraso por empleado (una fila por empleado) en el
+    /// rango de fechas indicado, para la pantalla de resumen de atrasos. Mismo criterio de
+    /// "día con atraso" que <see cref="GetLatenessDataAsync"/> (MinutesLate &gt; 0 o
+    /// TardinessMin &gt; 0). Solo incluye empleados con al menos un día con atraso.
+    /// </summary>
+    /// <param name="filter">
+    /// Filtros del reporte: StartDate, EndDate, DepartmentId, EmployeeId, Identification
+    /// (cédula) y LaborRegimeId (todos opcionales).
+    /// </param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<LatenessSummaryReportDto>> GetLatenessSummaryDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
 }

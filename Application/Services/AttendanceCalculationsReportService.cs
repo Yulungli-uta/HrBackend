@@ -154,6 +154,27 @@ public sealed class AttendanceCalculationsReportService : IAttendanceCalculation
         return result;
     }
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<LatenessSummaryReportDto>> GetLatenessSummaryDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        _logger.LogInformation(
+            "Generando resumen de atrasos. Período: {Start} - {End} | DeptId: {DeptId} | RegimeId: {RegimeId}",
+            filter.StartDate?.ToString("yyyy-MM-dd") ?? "N/A",
+            filter.EndDate?.ToString("yyyy-MM-dd")   ?? "N/A",
+            filter.DepartmentId?.ToString()  ?? "Todas",
+            filter.LaborRegimeId?.ToString() ?? "Todos");
+
+        var data = await _repository.GetLatenessSummaryDataAsync(filter, ct);
+
+        _logger.LogInformation("Resumen de atrasos generado. Total empleados: {Count}", data.Count);
+
+        return data;
+    }
+
     private async Task<decimal> GetParameterDecimalAsync(string name, decimal defaultValue, CancellationToken ct)
     {
         var list = await _parametersRepository.GetByNameAsync(name, ct);

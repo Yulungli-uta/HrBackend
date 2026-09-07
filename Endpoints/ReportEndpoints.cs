@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Reports;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Security;
 using WsUtaSystem.Reports.Abstractions;
 using WsUtaSystem.Reports.Core;
@@ -344,6 +346,23 @@ public static class ReportEndpoints
         .WithName("DownloadAttendancesumaryExcel")
         .WithSummary("Descarga del reporte de attendancesumary en Excel")
         .Produces<FileResult>(StatusCodes.Status200OK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+        // ==================== ATRASOS — RESUMEN EN PANTALLA (JSON, no PDF/Excel) ====================
+        // A diferencia de los demás endpoints de este archivo, este NO genera un archivo: la
+        // pantalla de resumen de atrasos necesita el conteo por empleado renderizado en una
+        // tabla interactiva, no un documento para descargar.
+
+        group.MapPost("/lateness-summary", async (
+            [FromBody] ReportFilterDto filter,
+            [FromServices] IAttendanceCalculationsReportService attendanceReportService,
+            CancellationToken ct) =>
+        {
+            var data = await attendanceReportService.GetLatenessSummaryDataAsync(filter, ct);
+            return Results.Ok(data);
+        })
+        .WithName("GetLatenessSummary")
+        .WithSummary("Conteo de días con atraso por empleado en el rango de fechas indicado")
+        .Produces<IReadOnlyList<LatenessSummaryReportDto>>(StatusCodes.Status200OK, "application/json");
 
         // ==================== AUDITORÍA ====================
 
