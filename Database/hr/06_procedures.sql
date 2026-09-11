@@ -4716,7 +4716,19 @@ CREATE OR ALTER PROCEDURE HR.sp_ProcessAttendanceBaseDay
     @ExitTime TIME = NULL,
     @HasLunch BIT = NULL,
     @LunchStartT TIME = NULL,
-    @LunchEndT TIME = NULL
+    @LunchEndT TIME = NULL,
+    -- 2026-09-09: turno doble de guardias (mismo guardia, 2 jornadas el mismo
+    -- WorkDate) y horarios especiales de empleados (sustituto/maternidad/
+    -- lactancia/otro, ver HR.tbl_EmployeeSpecialSchedules).
+    @JourneyNumber INT = 1,
+    @EmployeeSpecialScheduleId INT = NULL,
+    -- Capa la ventana de captura de picadas (+/-4h) para que no cruce hacia la
+    -- jornada vecina cuando el mismo guardia tiene 2 turnos el mismo día
+    -- (hallazgo real: con turnos cercanos, las ventanas de +/-4h se traslapan
+    -- y una picada suelta podría contarse en ambas jornadas). NULL = sin tope,
+    -- comportamiento igual que siempre para todo el resto del personal.
+    @WindowStartCap DATETIME2 = NULL,
+    @WindowEndCap DATETIME2 = NULL
 )
 AS
 BEGIN
@@ -4744,11 +4756,11 @@ BEGIN
           - Los minutos de gracia se leen desde HR.tbl_Parameters.
     **********************************************************************/
 
-    /* 
+    /*
        Si el horario ya fue precargado por HR.sp_ProcessAttendanceRunDate,
        se usa directamente. Si no, se hace fallback a la consulta original.
     */
-    IF @ScheduleID IS NULL
+    IF @ScheduleID IS NULL AND @EntryTime IS NULL
     BEGIN
         SELECT TOP 1
             @ScheduleID  = es.ScheduleID,
@@ -4766,7 +4778,7 @@ BEGIN
         ORDER BY es.ValidFrom DESC, es.EmpScheduleID DESC;
     END;
 
-    IF @ScheduleID IS NULL
+    IF @EntryTime IS NULL
         RETURN;
 
     DECLARE
@@ -4845,6 +4857,13 @@ BEGIN
     DECLARE
         @WindowStart DATETIME2 = DATEADD(HOUR, -4, @ShiftStart),
         @WindowEnd   DATETIME2 = DATEADD(HOUR,  4, @ShiftEnd);
+
+    -- Turno doble: no dejar que la ventana de un guardia se meta en el turno
+    -- real de la otra jornada del mismo día (ver nota del parámetro arriba).
+    IF (@WindowStartCap IS NOT NULL AND @WindowStart < @WindowStartCap)
+        SET @WindowStart = @WindowStartCap;
+    IF (@WindowEndCap IS NOT NULL AND @WindowEnd > @WindowEndCap)
+        SET @WindowEnd = @WindowEndCap;
 
     DROP TABLE IF EXISTS #Punches;
     DROP TABLE IF EXISTS #Segments;
@@ -5168,9 +5187,10 @@ BEGIN
         SET @FoodSubsidy = 0;
 
     MERGE HR.tbl_AttendanceCalculations AS T
-    USING (SELECT @EmployeeID AS EmployeeID, @WorkDate AS WorkDate) AS S
+    USING (SELECT @EmployeeID AS EmployeeID, @WorkDate AS WorkDate, @JourneyNumber AS JourneyNumber) AS S
        ON T.EmployeeID = S.EmployeeID
       AND T.WorkDate   = S.WorkDate
+      AND T.JourneyNumber = S.JourneyNumber
     WHEN MATCHED THEN
         UPDATE SET
             FirstPunchIn = @FirstIn,
@@ -5213,6 +5233,7 @@ BEGIN
             FoodSubsidy = @FoodSubsidy,
 
             AppliedScheduleID = @ScheduleID,
+            EmployeeSpecialScheduleId = @EmployeeSpecialScheduleId,
             ScheduledEntryTime = @EntryTime,
             ScheduledExitTime = @ExitTime,
             ScheduledLunchStart = @LunchStartT,
@@ -5227,7 +5248,7 @@ BEGIN
     WHEN NOT MATCHED THEN
         INSERT
         (
-            EmployeeID, WorkDate, FirstPunchIn, LastPunchOut,
+            EmployeeID, WorkDate, JourneyNumber, FirstPunchIn, LastPunchOut,
             TotalWorkedMinutes, RegularMinutes, OvertimeMinutes, DetectedOvertimeMinutes,
             NightMinutes, HolidayMinutes,
             RequiredMinutes, ScheduledWorkedMin, OffScheduleMin, AbsentMinutes,
@@ -5238,13 +5259,13 @@ BEGIN
             JustificationApply, HasPermission, HasVacation,
             HasJustification, HasMedicalLeave, HasManualAdjustment,
             FoodSubsidy,
-            AppliedScheduleID, ScheduledEntryTime, ScheduledExitTime,
+            AppliedScheduleID, EmployeeSpecialScheduleId, ScheduledEntryTime, ScheduledExitTime,
             ScheduledLunchStart, ScheduledLunchEnd, ScheduledHasLunchBreak, ScheduledMinutes,
             Status, CalculatedAt, CalculationVersion, CalculationSource, CreatedAt
         )
         VALUES
         (
-            @EmployeeID, @WorkDate, @FirstIn, @LastOut,
+            @EmployeeID, @WorkDate, @JourneyNumber, @FirstIn, @LastOut,
             @TotalWorkedMinutes, @RegularMinutes, @OvertimeMinutes, @OvertimeMinutes,
             @NightMinutes, @HolidayMinutes,
             @RequiredMin, CAST(@InsideMinutes AS INT), @OffScheduleMin, @AbsentMinutes,
@@ -5255,7 +5276,7 @@ BEGIN
             0, 0, 0,
             0, 0, 0,
             @FoodSubsidy,
-            @ScheduleID, @EntryTime, @ExitTime,
+            @ScheduleID, @EmployeeSpecialScheduleId, @EntryTime, @ExitTime,
             @LunchStartT, @LunchEndT, ISNULL(@HasLunch, 0), @RequiredMin,
             'Approved', GETDATE(), 1, 'System', GETDATE()
         );
@@ -5869,11 +5890,12 @@ GO
 
 /*-------- HR.sp_ProcessAttendanceFinalizeDay----------*/
 
-CREATE   PROCEDURE HR.sp_ProcessAttendanceFinalizeDay
+CREATE OR ALTER PROCEDURE HR.sp_ProcessAttendanceFinalizeDay
 (
     @EmployeeID INT,
     @WorkDate   DATE,
-    @ContractType NVARCHAR(100) = NULL
+    @ContractType NVARCHAR(100) = NULL,
+    @JourneyNumber INT = 1
 )
 AS
 BEGIN
@@ -5904,7 +5926,8 @@ BEGIN
         @RequiredMinutes = RequiredMinutes
     FROM HR.tbl_AttendanceCalculations
     WHERE EmployeeID = @EmployeeID
-      AND WorkDate = @WorkDate;
+      AND WorkDate = @WorkDate
+      AND JourneyNumber = @JourneyNumber;
 
     IF (@ContractType = N'Código Trabajo' AND ISNULL(@RegularMinutes,0) + ISNULL(@TardinessMin,0) >= ISNULL(@RequiredMinutes,0))
         SET @FoodSubsidy = 1;
@@ -5940,7 +5963,8 @@ BEGIN
         CalculationSource = 'System',
         UpdatedAt = GETDATE()
     WHERE EmployeeID = @EmployeeID
-      AND WorkDate = @WorkDate;
+      AND WorkDate = @WorkDate
+      AND JourneyNumber = @JourneyNumber;
 END;
 
 GO
@@ -5991,10 +6015,11 @@ GO
 
 /*------ HR.sp_ProcessAttendanceJustificationsDay----------*/
 
-CREATE   PROCEDURE HR.sp_ProcessAttendanceJustificationsDay
+CREATE OR ALTER PROCEDURE HR.sp_ProcessAttendanceJustificationsDay
 (
     @EmployeeID INT,
-    @WorkDate   DATE
+    @WorkDate   DATE,
+    @JourneyNumber INT = 1
 )
 AS
 BEGIN
@@ -6008,7 +6033,12 @@ BEGIN
           diario del empleado.
 
       RESPONSABILIDADES:
-          - Calcular minutos justificados
+          - Calcular minutos justificados (por solapamiento de horario contra
+            la jornada de esta fila — 2026-09-09: antes sumaba la justificación
+            completa del día sin comparar contra ningún horario, lo que
+            duplicaba el monto cuando el mismo guardia tiene 2 jornadas el
+            mismo día; ahora usa el mismo criterio de solapamiento que ya usa
+            sp_ProcessAttendanceLeavesDay para permisos/vacaciones)
           - Marcar JustificationApply y HasJustification
           - Reducir tardanza neta
           - Reducir ausencia cuando corresponda
@@ -6018,39 +6048,120 @@ BEGIN
         @ScheduledMinutes INT,
         @MinutesLate INT,
         @TardinessMin INT,
-        @AbsentMinutes INT;
+        @AbsentMinutes INT,
+        @EntryTime TIME,
+        @ExitTime TIME,
+        @HasLunch BIT,
+        @LunchStartT TIME,
+        @LunchEndT TIME;
 
     SELECT
         @ScheduledMinutes = ScheduledMinutes,
         @MinutesLate = MinutesLate,
         @TardinessMin = TardinessMin,
-        @AbsentMinutes = AbsentMinutes
+        @AbsentMinutes = AbsentMinutes,
+        @EntryTime = ScheduledEntryTime,
+        @ExitTime = ScheduledExitTime,
+        @HasLunch = ScheduledHasLunchBreak,
+        @LunchStartT = ScheduledLunchStart,
+        @LunchEndT = ScheduledLunchEnd
     FROM HR.tbl_AttendanceCalculations
     WHERE EmployeeID = @EmployeeID
-      AND WorkDate = @WorkDate;
+      AND WorkDate = @WorkDate
+      AND JourneyNumber = @JourneyNumber;
 
     IF @ScheduledMinutes IS NULL
         RETURN;
 
+    DECLARE
+        @DayStart   DATETIME2 = CAST(@WorkDate AS DATETIME2),
+        @ShiftStart DATETIME2,
+        @ShiftEnd   DATETIME2,
+        @LunchStart DATETIME2 = NULL,
+        @LunchEnd   DATETIME2 = NULL;
+
+    IF @EntryTime IS NOT NULL AND @ExitTime IS NOT NULL
+    BEGIN
+        SET @ShiftStart = DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS TIME), @EntryTime), @DayStart);
+
+        IF (@ExitTime <= @EntryTime)
+            SET @ShiftEnd = DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS TIME), @ExitTime), DATEADD(DAY, 1, @DayStart));
+        ELSE
+            SET @ShiftEnd = DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS TIME), @ExitTime), @DayStart);
+
+        IF (@HasLunch = 1 AND @LunchStartT IS NOT NULL AND @LunchEndT IS NOT NULL)
+        BEGIN
+            SET @LunchStart = DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS TIME), @LunchStartT), @DayStart);
+            SET @LunchEnd   = DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS TIME), @LunchEndT), @DayStart);
+
+            IF (@LunchEndT <= @LunchStartT)
+                SET @LunchEnd = DATEADD(DAY, 1, @LunchEnd);
+        END;
+    END;
+
     DECLARE @JustificationMinutes INT = 0;
 
+    -- Solo se puede prorratear por solapamiento cuando el turno de esta
+    -- jornada quedó resuelto (@ShiftStart/@ShiftEnd no nulos). Dentro de la
+    -- ventana [StartDate,EndDate] de la justificación se solapa contra
+    -- [@ShiftStart,@ShiftEnd] igual que Vacaciones/Permisos, restando el
+    -- almuerzo si cae dentro del solape.
+    ;WITH JustificationWindows AS
+    (
+        SELECT
+            OverlapStart = CASE WHEN j.StartDate > @ShiftStart THEN j.StartDate ELSE @ShiftStart END,
+            OverlapEnd   = CASE WHEN j.EndDate   < @ShiftEnd   THEN j.EndDate   ELSE @ShiftEnd   END
+        FROM HR.tbl_PunchJustifications j
+        WHERE j.EmployeeID = @EmployeeID
+          AND j.Status IN ('APPROVED','APPLIED')
+          AND j.StartDate IS NOT NULL
+          AND j.EndDate IS NOT NULL
+          AND @ShiftStart IS NOT NULL
+          AND j.StartDate < @ShiftEnd
+          AND j.EndDate   > @ShiftStart
+
+        UNION ALL
+
+        -- Caso sin ventana de horas (solo HoursRequested, sin StartDate/EndDate
+        -- utilizables): no hay forma de saber a qué jornada corresponde, se
+        -- asigna completa a la Jornada 1 (mismo criterio que "sin dato" ya
+        -- usado en el resto de esta implementación), nunca se duplica en la
+        -- Jornada 2+.
+        SELECT
+            OverlapStart = @ShiftStart,
+            OverlapEnd   = DATEADD(MINUTE, CAST(ROUND(j.HoursRequested * 60.0, 0) AS INT), @ShiftStart)
+        FROM HR.tbl_PunchJustifications j
+        WHERE j.EmployeeID = @EmployeeID
+          AND j.Status IN ('APPROVED','APPLIED')
+          AND j.HoursRequested IS NOT NULL
+          AND (j.StartDate IS NULL OR j.EndDate IS NULL)
+          AND @ShiftStart IS NOT NULL
+          AND @JourneyNumber = 1
+          AND (
+                CAST(j.JustificationDate AS DATE) = @WorkDate
+             OR CAST(j.StartDate AS DATE) = @WorkDate
+             OR CAST(j.EndDate AS DATE) = @WorkDate
+              )
+    )
     SELECT
         @JustificationMinutes = ISNULL(SUM(
             CASE
-                WHEN j.HoursRequested IS NOT NULL THEN CAST(ROUND(j.HoursRequested * 60.0, 0) AS INT)
-                WHEN j.StartDate IS NOT NULL AND j.EndDate IS NOT NULL AND j.EndDate > j.StartDate
-                    THEN DATEDIFF(MINUTE, j.StartDate, j.EndDate)
-                ELSE 0
+                WHEN OverlapEnd <= OverlapStart THEN 0
+                ELSE DATEDIFF(MINUTE, OverlapStart, OverlapEnd)
+                     - CASE
+                           WHEN @HasLunch = 1
+                                AND @LunchStart IS NOT NULL
+                                AND @LunchEnd IS NOT NULL
+                                AND OverlapStart < @LunchEnd
+                                AND OverlapEnd > @LunchStart
+                               THEN DATEDIFF(MINUTE,
+                                     CASE WHEN OverlapStart > @LunchStart THEN OverlapStart ELSE @LunchStart END,
+                                     CASE WHEN OverlapEnd   < @LunchEnd   THEN OverlapEnd   ELSE @LunchEnd END)
+                           ELSE 0
+                       END
             END
         ), 0)
-    FROM HR.tbl_PunchJustifications j
-    WHERE j.EmployeeID = @EmployeeID
-      AND j.Status IN ('APPROVED','APPLIED')
-      AND (
-            CAST(j.JustificationDate AS DATE) = @WorkDate
-         OR CAST(j.StartDate AS DATE) = @WorkDate
-         OR CAST(j.EndDate AS DATE) = @WorkDate
-          );
+    FROM JustificationWindows;
 
     IF @JustificationMinutes < 0 SET @JustificationMinutes = 0;
     IF @JustificationMinutes > @ScheduledMinutes SET @JustificationMinutes = @ScheduledMinutes;
@@ -6096,7 +6207,8 @@ BEGIN
         AbsentMinutes = @NewAbsent,
         UpdatedAt = GETDATE()
     WHERE EmployeeID = @EmployeeID
-      AND WorkDate = @WorkDate;
+      AND WorkDate = @WorkDate
+      AND JourneyNumber = @JourneyNumber;
 END;
 
 GO
@@ -6107,7 +6219,8 @@ GO
 CREATE OR ALTER PROCEDURE HR.sp_ProcessAttendanceLeavesDay
 (
     @EmployeeID INT,
-    @WorkDate   DATE
+    @WorkDate   DATE,
+    @JourneyNumber INT = 1
 )
 AS
 BEGIN
@@ -6153,7 +6266,8 @@ BEGIN
         @AbsentMinutes = AbsentMinutes
     FROM HR.tbl_AttendanceCalculations
     WHERE EmployeeID = @EmployeeID
-      AND WorkDate = @WorkDate;
+      AND WorkDate = @WorkDate
+      AND JourneyNumber = @JourneyNumber;
 
     IF @EntryTime IS NULL OR @ExitTime IS NULL
         RETURN;
@@ -6381,7 +6495,8 @@ BEGIN
         AbsentMinutes = @AbsentMinutes,
         UpdatedAt = GETDATE()
     WHERE EmployeeID = @EmployeeID
-      AND WorkDate = @WorkDate;
+      AND WorkDate = @WorkDate
+      AND JourneyNumber = @JourneyNumber;
 END;
 
 GO
@@ -6397,7 +6512,8 @@ CREATE OR ALTER PROCEDURE HR.sp_ProcessAttendancePlanningDay
     -- Fase 4 punto 4.5: forwardeado a sp_ProcessTimePlanningForEmployeeDay
     -- para guardias (horario resuelto vía tbl_GuardShiftPlanning).
     @OverrideEntryTime TIME = NULL,
-    @OverrideExitTime  TIME = NULL
+    @OverrideExitTime  TIME = NULL,
+    @JourneyNumber     INT = 1
 )
 AS
 BEGIN
@@ -6419,7 +6535,8 @@ BEGIN
          @WorkDate          = @WorkDate,
          @Debug             = @Debug,
          @OverrideEntryTime = @OverrideEntryTime,
-         @OverrideExitTime  = @OverrideExitTime;
+         @OverrideExitTime  = @OverrideExitTime,
+         @JourneyNumber     = @JourneyNumber;
 END;
 
 GO
@@ -6448,10 +6565,11 @@ GO
 -- [sp_ProcessAttendanceRecoveryDay]
 
 /*------ HR.sp_ProcessAttendanceRecoveryDay---------*/
-CREATE   PROCEDURE HR.sp_ProcessAttendanceRecoveryDay
+CREATE OR ALTER PROCEDURE HR.sp_ProcessAttendanceRecoveryDay
 (
     @EmployeeID INT,
-    @WorkDate   DATE
+    @WorkDate   DATE,
+    @JourneyNumber INT = 1
 )
 AS
 BEGIN
@@ -6484,7 +6602,8 @@ BEGIN
         @AbsentMinutes = AbsentMinutes
     FROM HR.tbl_AttendanceCalculations
     WHERE EmployeeID = @EmployeeID
-      AND WorkDate = @WorkDate;
+      AND WorkDate = @WorkDate
+      AND JourneyNumber = @JourneyNumber;
 
     IF @RecoveredMinutes < 0 SET @RecoveredMinutes = 0;
     IF @AbsentMinutes IS NULL SET @AbsentMinutes = 0;
@@ -6498,7 +6617,8 @@ BEGIN
                         END,
         UpdatedAt = GETDATE()
     WHERE EmployeeID = @EmployeeID
-      AND WorkDate = @WorkDate;
+      AND WorkDate = @WorkDate
+      AND JourneyNumber = @JourneyNumber;
 END;
 
 GO
@@ -6659,18 +6779,24 @@ BEGIN
         SELECT
             es.EmployeeID,
             es.ScheduleID,
-            s.EntryTime,
-            s.ExitTime,
-            s.HasLunchBreak,
-            s.LunchStart,
-            s.LunchEnd,
+            es.EmployeeSpecialScheduleId,
+            -- 2026-09-09: ScheduleID puede ser NULL cuando el empleado tiene
+            -- horario especial (ver tbl_EmployeeSpecialSchedules); COALESCE
+            -- resuelve el horario efectivo desde cualquiera de las 2 fuentes.
+            COALESCE(s.EntryTime, ss.EntryTime) AS EntryTime,
+            COALESCE(s.ExitTime, ss.ExitTime) AS ExitTime,
+            COALESCE(s.HasLunchBreak, ss.HasLunchBreak) AS HasLunchBreak,
+            COALESCE(s.LunchStart, ss.LunchStart) AS LunchStart,
+            COALESCE(s.LunchEnd, ss.LunchEnd) AS LunchEnd,
             ROW_NUMBER() OVER (
                 PARTITION BY es.EmployeeID
                 ORDER BY es.ValidFrom DESC, es.EmpScheduleID DESC
             ) AS rn
         FROM HR.tbl_EmployeeSchedules es
-        INNER JOIN HR.tbl_Schedules s
+        LEFT JOIN HR.tbl_Schedules s
             ON s.ScheduleID = es.ScheduleID
+        LEFT JOIN HR.tbl_EmployeeSpecialSchedules ss
+            ON ss.EmployeeSpecialScheduleId = es.EmployeeSpecialScheduleId
         WHERE es.ValidFrom <= @WorkDate
           AND (es.ValidTo IS NULL OR es.ValidTo >= @WorkDate)
     )
@@ -6678,6 +6804,7 @@ BEGIN
         e.EmployeeID,
         ved.ContractType,
         cs.ScheduleID,
+        cs.EmployeeSpecialScheduleId,
         cs.EntryTime,
         cs.ExitTime,
         cs.HasLunchBreak,
@@ -6707,6 +6834,7 @@ BEGIN
         @EmployeeID INT,
         @ContractType NVARCHAR(100),
         @ScheduleID INT,
+        @EmployeeSpecialScheduleId INT,
         @EntryTime TIME,
         @ExitTime TIME,
         @HasLunch BIT,
@@ -6725,6 +6853,7 @@ BEGIN
             @EmployeeID = EmployeeID,
             @ContractType = ContractType,
             @ScheduleID = ScheduleID,
+            @EmployeeSpecialScheduleId = EmployeeSpecialScheduleId,
             @EntryTime = EntryTime,
             @ExitTime = ExitTime,
             @HasLunch = HasLunchBreak,
@@ -6749,7 +6878,8 @@ BEGIN
                  @ExitTime     = @ExitTime,
                  @HasLunch     = @HasLunch,
                  @LunchStartT  = @LunchStartT,
-                 @LunchEndT    = @LunchEndT;
+                 @LunchEndT    = @LunchEndT,
+                 @EmployeeSpecialScheduleId = @EmployeeSpecialScheduleId;
 
             EXEC HR.sp_ProcessAttendanceLeavesDay
                  @EmployeeID = @EmployeeID,
@@ -6763,10 +6893,18 @@ BEGIN
                  @EmployeeID = @EmployeeID,
                  @WorkDate   = @WorkDate;
 
+            -- 2026-09-09: antes NUNCA se pasaba @OverrideEntryTime/@OverrideExitTime
+            -- para empleados normales (solo para guardias) — sp_ProcessTimePlanningForEmployeeDay
+            -- reresolvía el horario internamente desde tbl_EmployeeSchedules, lo cual
+            -- fallaba en silencio (horas extra en 0) para empleados con horario especial,
+            -- ya que su ScheduleID es NULL. Pasar siempre el horario ya resuelto lo corrige
+            -- para todos los casos sin cambiar el resultado de los que sí tenían catálogo.
             EXEC HR.sp_ProcessAttendancePlanningDay
-                 @EmployeeID = @EmployeeID,
-                 @WorkDate   = @WorkDate,
-                 @Debug      = @Debug;
+                 @EmployeeID        = @EmployeeID,
+                 @WorkDate          = @WorkDate,
+                 @Debug             = @Debug,
+                 @OverrideEntryTime = @EntryTime,
+                 @OverrideExitTime  = @ExitTime;
 
             EXEC HR.sp_ProcessAttendanceFinalizeDay
                  @EmployeeID   = @EmployeeID,
@@ -6868,7 +7006,8 @@ CREATE OR ALTER PROCEDURE HR.sp_ProcessTimePlanningForEmployeeDay
     -- que no usan tbl_EmployeeSchedules). Si vienen poblados, se usan directo y
     -- se omite la resolución interna por EmpSched más abajo.
     @OverrideEntryTime TIME = NULL,
-    @OverrideExitTime  TIME = NULL
+    @OverrideExitTime  TIME = NULL,
+    @JourneyNumber     INT = 1
 )
 AS
 BEGIN
@@ -6893,9 +7032,10 @@ BEGIN
         FROM HR.tbl_AttendanceCalculations ac
         WHERE ac.EmployeeID = @EmployeeID
           AND ac.WorkDate   = @WorkDate
+          AND ac.JourneyNumber = @JourneyNumber
     )
     BEGIN
-        IF @Debug = 1 
+        IF @Debug = 1
             PRINT 'No existe registro en HR.tbl_AttendanceCalculations para este empleado y fecha. Se aborta.';
         RETURN;
     END;
@@ -6946,13 +7086,14 @@ BEGIN
         SET OvertimeMinutes  = 0,
             RecoveryExecutedMinutes = 0
         WHERE EmployeeID = @EmployeeID
-          AND WorkDate   = @WorkDate;
+          AND WorkDate   = @WorkDate
+          AND JourneyNumber = @JourneyNumber;
 
         RETURN;
     END;
 
     IF @Debug = 1
-        PRINT 'Horario normal detectado: ' 
+        PRINT 'Horario normal detectado: '
               + CONVERT(VARCHAR(8), @EntryTime, 108) 
               + ' - ' 
               + CONVERT(VARCHAR(8), @ExitTime, 108);
@@ -7004,7 +7145,8 @@ BEGIN
         SET OvertimeMinutes  = 0,
             RecoveryExecutedMinutes = 0
         WHERE EmployeeID = @EmployeeID
-          AND WorkDate   = @WorkDate;
+          AND WorkDate   = @WorkDate
+          AND JourneyNumber = @JourneyNumber;
 
         RETURN;
     END;
@@ -7044,7 +7186,8 @@ BEGIN
         SET OvertimeMinutes  = 0,
             RecoveryExecutedMinutes = 0
         WHERE EmployeeID = @EmployeeID
-          AND WorkDate   = @WorkDate;
+          AND WorkDate   = @WorkDate
+          AND JourneyNumber = @JourneyNumber;
 
         RETURN;
     END;
@@ -7068,18 +7211,20 @@ BEGIN
         @LastPunchOut = ac.LastPunchOut
     FROM HR.tbl_AttendanceCalculations ac
     WHERE ac.EmployeeID = @EmployeeID
-      AND ac.WorkDate   = @WorkDate;
+      AND ac.WorkDate   = @WorkDate
+      AND ac.JourneyNumber = @JourneyNumber;
 
     IF @FirstPunchIn IS NULL OR @LastPunchOut IS NULL
     BEGIN
-        IF @Debug = 1 
+        IF @Debug = 1
             PRINT 'No hay FirstPunchIn o LastPunchOut para este día. No se consideran minutos ejecutados en planificación.';
 
         UPDATE HR.tbl_AttendanceCalculations
         SET OvertimeMinutes   = 0,
             RecoveryExecutedMinutes  = 0
         WHERE EmployeeID = @EmployeeID
-          AND WorkDate   = @WorkDate;
+          AND WorkDate   = @WorkDate
+          AND JourneyNumber = @JourneyNumber;
 
         RETURN;
     END;
@@ -7174,7 +7319,8 @@ BEGIN
         SET OvertimeMinutes  = 0,
             RecoveryExecutedMinutes = 0
         WHERE EmployeeID = @EmployeeID
-          AND WorkDate   = @WorkDate;
+          AND WorkDate   = @WorkDate
+          AND JourneyNumber = @JourneyNumber;
 
         RETURN;
     END;
@@ -7243,7 +7389,8 @@ BEGIN
     SET OvertimeMinutes         = @TotalOvertimeMin,
         RecoveryExecutedMinutes = @TotalRecoveryMin
     WHERE EmployeeID = @EmployeeID
-      AND WorkDate   = @WorkDate;
+      AND WorkDate   = @WorkDate
+      AND JourneyNumber = @JourneyNumber;
 
     IF @Debug = 1
         PRINT 'Actualizados OvertimeMinutes y RecoveryExecutedMinutes en HR.tbl_AttendanceCalculations.';

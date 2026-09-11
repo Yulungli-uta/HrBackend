@@ -185,6 +185,7 @@ public record ScheduleBoardCellEmployeeDto(
     string FullName,
     string ShortName,
     bool IsReplacement,
+    bool IsReassigned,
     int PlanningId,
     int? GroupId,
     string? GroupName,

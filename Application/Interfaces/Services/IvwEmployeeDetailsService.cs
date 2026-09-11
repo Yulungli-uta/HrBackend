@@ -38,11 +38,14 @@ namespace WsUtaSystem.Application.Interfaces.Services
             int pageSize,
             CancellationToken ct = default);
 
-        /// <summary>Retorna un resultado paginado de empleados con filtro de búsqueda.</summary>
+        /// <summary>Retorna un resultado paginado de empleados con filtro de búsqueda.
+        /// <paramref name="onlySpecialSchedule"/>: true = solo horarios especiales
+        /// (sustituto/maternidad/lactancia/otro), false = solo catálogo, null = todos.</summary>
         Task<PagedResult<VwEmployeeDetails>> GetPagedAsync(
             string? search,
             int page,
             int pageSize,
+            bool? onlySpecialSchedule = null,
             CancellationToken ct = default);
 
         Task<IEnumerable<VwEmployeeDetails>> GetSubordinatesByBossIdAsync( 

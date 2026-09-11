@@ -71,4 +71,10 @@ public class AttendanceCalculations
     public int? OriginalEmployeeId { get; set; }
     public int? EffectiveEmployeeId { get; set; }
     public bool IsReplacement { get; set; }
+
+    /// <summary>Número de jornada del día (1 = única/primera, 2+ = turno doble de guardias). Junto con EmployeeID+WorkDate forma la clave única real de la tabla.</summary>
+    public int JourneyNumber { get; set; } = 1;
+    /// <summary>Horario especial aplicado ese día (sustituto/maternidad/lactancia/otro), si el empleado no usa el catálogo normal de Schedules ese día.</summary>
+    public int? EmployeeSpecialScheduleId { get; set; }
+    public virtual EmployeeSpecialSchedule? EmployeeSpecialSchedule { get; set; }
 }

@@ -157,6 +157,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
             string? search,
             int page,
             int pageSize,
+            bool? onlySpecialSchedule = null,
             CancellationToken ct = default)
         {
             // 1. Empezamos con la consulta base
@@ -180,6 +181,11 @@ namespace WsUtaSystem.Infrastructure.Repositories
                         e.IDCard.ToLower().Contains(w) ||
                         (e.Email != null && e.Email.ToLower().Contains(w)));
                 }
+            }
+
+            if (onlySpecialSchedule.HasValue)
+            {
+                query = query.Where(e => e.IsSpecialSchedule == onlySpecialSchedule.Value);
             }
 
             // 3. Contamos antes de ordenar (es más eficiente)
@@ -378,12 +384,15 @@ namespace WsUtaSystem.Infrastructure.Repositories
             var total = await Query().CountAsync(ct);
             var withSchedule = await Query()
                 .CountAsync(e => e.ScheduleID != null || !string.IsNullOrEmpty(e.Schedule), ct);
+            var specialSchedules = await Query()
+                .CountAsync(e => e.IsSpecialSchedule, ct);
 
             return new ScheduleCoverageStatsDto
             {
                 Total = total,
                 WithSchedule = withSchedule,
-                WithoutSchedule = total - withSchedule
+                WithoutSchedule = total - withSchedule,
+                SpecialSchedules = specialSchedules
             };
         }
     }

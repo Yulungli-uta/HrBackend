@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Data;
 using WsUtaSystem.Infrastructure.Repositories;
 using WsUtaSystem.Models;
 
@@ -12,14 +13,14 @@ namespace WsUtaSystem.Application.Services;
 public class EmployeeSchedulesService : Service<EmployeeSchedules, int>, IEmployeeSchedulesService
 {
     private readonly IEmployeeSchedulesRepository _repository;
-    private readonly DbContext _dbContext; // Necesitas inyectar tu DbContext
-    //private readonly ApplicationDbContext _dbContext;
+    private readonly AppDbContext _dbContext;
 
     public EmployeeSchedulesService(
-        IEmployeeSchedulesRepository repo) : base(repo)
+        IEmployeeSchedulesRepository repo,
+        AppDbContext dbContext) : base(repo)
     {
         _repository = repo;
-        //_dbContext = dbContext;
+        _dbContext = dbContext;
     }
 
     public Task<IEnumerable<EmployeeSchedules>> FindByEmployeeIdAsync(int id, CancellationToken ct)
@@ -36,7 +37,7 @@ public class EmployeeSchedulesService : Service<EmployeeSchedules, int>, IEmploy
             var maxDate = new DateOnly(9999, 12, 31);
             var currentDate = DateOnly.FromDateTime(DateTime.Now);
 
-            // Validar cancelaci�n temprana
+            // Validar cancelaci�n temprana
             ct.ThrowIfCancellationRequested();
 
             // Buscar horarios del empleado
@@ -70,11 +71,35 @@ public class EmployeeSchedulesService : Service<EmployeeSchedules, int>, IEmploy
         }
         catch (OperationCanceledException ex)
         {
-            throw new Exception($"La operaci�n fue cancelada: {ex.Message}", ex);
+            throw new Exception($"La operaci�n fue cancelada: {ex.Message}", ex);
         }
         catch (Exception ex)
         {
             throw new Exception($"Error al actualizar horario del empleado: {ex.Message}", ex);
         }
+    }
+
+    public async Task<IEnumerable<EmployeeSchedules>> UpdateEmployeeSchedulerWithSpecial(
+        EmployeeSchedules employeeSchedules,
+        EmployeeSpecialSchedule specialSchedule,
+        CancellationToken ct)
+    {
+        if (specialSchedule is null)
+            throw new ArgumentNullException(nameof(specialSchedule));
+
+        // 2026-09-10: EmployeeId es obligatorio en tbl_EmployeeSpecialSchedules
+        // desde ahora (antes la relación era solo indirecta vía
+        // EmployeeSchedules.EmployeeSpecialScheduleId).
+        specialSchedule.EmployeeId = employeeSchedules.EmployeeId;
+        specialSchedule.CreatedAt = DateTime.Now;
+        _dbContext.Set<EmployeeSpecialSchedule>().Add(specialSchedule);
+        await _dbContext.SaveChangesAsync(ct);
+
+        // El horario especial recién creado reemplaza al ScheduleId de catálogo
+        // (CK_EmployeeSchedules_ScheduleOrSpecial exige que solo uno vaya lleno).
+        employeeSchedules.ScheduleId = null;
+        employeeSchedules.EmployeeSpecialScheduleId = specialSchedule.EmployeeSpecialScheduleId;
+
+        return await UpdateEmployeeScheduler(employeeSchedules, ct);
     }
 }

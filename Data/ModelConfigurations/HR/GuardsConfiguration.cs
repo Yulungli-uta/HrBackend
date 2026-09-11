@@ -495,19 +495,6 @@ public sealed class GuardAssignmentValidationConfiguration : IEntityTypeConfigur
 
 // ─── Entidades nuevas ────────────────────────────────────────────────────────
 
-public sealed class GuardSettingConfiguration : IEntityTypeConfiguration<GuardSetting>
-{
-    public void Configure(EntityTypeBuilder<GuardSetting> e)
-    {
-        e.ToTable("tbl_GuardSettings", "HR");
-        e.HasKey(x => x.SettingKey);
-        e.Property(x => x.SettingKey).HasMaxLength(100);
-        e.Property(x => x.SettingValue).HasMaxLength(500).IsRequired();
-        e.Property(x => x.Description).HasMaxLength(500);
-        e.Property(x => x.UpdatedAt).HasDefaultValueSql("GETDATE()");
-    }
-}
-
 public sealed class GuardLocationRotationPeriodConfiguration : IEntityTypeConfiguration<GuardLocationRotationPeriod>
 {
     public void Configure(EntityTypeBuilder<GuardLocationRotationPeriod> e)

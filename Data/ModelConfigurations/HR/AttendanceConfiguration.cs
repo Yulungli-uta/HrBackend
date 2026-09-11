@@ -46,6 +46,39 @@ public sealed class EmployeeSchedulesConfiguration : IEntityTypeConfiguration<Em
         e.Property(x => x.EmpScheduleId).HasColumnName("EmpScheduleID");
         e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
         e.Property(x => x.ScheduleId).HasColumnName("ScheduleID");
+
+        // 2026-09-09: ScheduleId y EmployeeSpecialScheduleId son mutuamente
+        // excluyentes (CK_EmployeeSchedules_ScheduleOrSpecial a nivel de BD).
+        e.HasOne(x => x.EmployeeSpecialSchedule)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeSpecialScheduleId)
+            .HasConstraintName("FK_EmployeeSchedules_SpecialSchedule")
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public sealed class EmployeeSpecialSchedulesConfiguration : IEntityTypeConfiguration<EmployeeSpecialSchedule>
+{
+    public void Configure(EntityTypeBuilder<EmployeeSpecialSchedule> e)
+    {
+        e.ToTable("tbl_EmployeeSpecialSchedules", "HR");
+        e.HasKey(x => x.EmployeeSpecialScheduleId);
+        e.Property(x => x.EmployeeId).HasColumnName("EmployeeID");
+        e.Property(x => x.Reason).HasMaxLength(500);
+        e.Property(x => x.DocumentReference).HasMaxLength(200);
+        e.Property(x => x.RowVersion).IsRowVersion();
+
+        e.HasOne(x => x.CaseType)
+            .WithMany()
+            .HasForeignKey(x => x.CaseTypeId)
+            .HasConstraintName("FK_EmployeeSpecialSchedules_CaseType")
+            .OnDelete(DeleteBehavior.Restrict);
+
+        e.HasOne(x => x.Employee)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeId)
+            .HasConstraintName("FK_EmployeeSpecialSchedules_Employee")
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -104,6 +137,13 @@ public sealed class AttendanceCalculationsConfiguration : IEntityTypeConfigurati
         e.Property(x => x.OriginalEmployeeId).HasColumnName("OriginalEmployeeID");
         e.Property(x => x.EffectiveEmployeeId).HasColumnName("EffectiveEmployeeID");
         e.Property(x => x.IsReplacement).HasDefaultValue(false);
+        e.Property(x => x.JourneyNumber).HasDefaultValue(1);
+
+        e.HasOne(x => x.EmployeeSpecialSchedule)
+            .WithMany()
+            .HasForeignKey(x => x.EmployeeSpecialScheduleId)
+            .HasConstraintName("FK_AttendanceCalculations_SpecialSchedule")
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 

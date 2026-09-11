@@ -185,10 +185,13 @@ SELECT
     d.[Name]                       AS [DepartmentName],
     ts.[TeacherStructureID],
     ts.[WeeklyClassHours],
-    escal.[SiiesLabel]             AS [TipoEscalafonNombramientoSiiesLabel],
+    -- 2026-09-11: cuando no hay TeacherStructure (profesor ocasional, ver mas abajo) se
+    -- respalda a "No Aplica" -- los ocasionales no tienen escalafon.
+    COALESCE(escal.[SiiesLabel], CASE WHEN ts.[TeacherStructureID] IS NULL AND ocasionalDocente.[ContractID] IS NOT NULL THEN escalNoAplicaDefault.[SiiesLabel] END) AS [TipoEscalafonNombramientoSiiesLabel],
     nivel.[SiiesLabel]             AS [NivelSiiesLabel],
-    -- CATEGORIA: prioridad a la columna directa; si está NULL, respaldo desde AcademicLadder.
-    COALESCE(catDirecta.[SiiesLabel], la.[SiiesLabel]) AS [CategoriaSiiesLabel],
+    -- CATEGORIA: prioridad a la columna directa; si está NULL, respaldo desde AcademicLadder;
+    -- si tampoco (profesor ocasional sin TeacherStructure), respaldo a "Ocasional".
+    COALESCE(catDirecta.[SiiesLabel], la.[SiiesLabel], CASE WHEN ocasionalDocente.[ContractID] IS NOT NULL THEN catOcasionalDefault.[SiiesLabel] END) AS [CategoriaSiiesLabel],
     ded.[SiiesLabel]                AS [TiempoDedicacionSiiesLabel],
     -- 2026-08-27: fallback a ContractCode/ActionNumber cuando elr.DocumentNumber nunca se
     -- copió al crear el régimen — mismo criterio que vw_SiiesFuncionarios.
@@ -209,7 +212,13 @@ SELECT
     COALESCE(ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel]) AS [RelacionIesSiiesLabel],
     COALESCE(ctr.[ContractedHours], ctrFallback.[ContractedHours]) AS [ContractedHours],
     e.[IsActive]                    AS [EmployeeIsActive],
-    e.[HireDate]
+    e.[HireDate],
+    -- 2026-09-11: período académico más reciente con distributivo real cargado (visible
+    -- directo en la vista, sin pasar por fn_SiiesProfesoresHoras). Mismo criterio de
+    -- "más reciente" que usa esa función cuando @PeriodCode es NULL.
+    latestPeriod.[PeriodCode]       AS [LatestPeriodCode],
+    latestPeriod.[PeriodStart]      AS [LatestPeriodStart],
+    latestPeriod.[PeriodEnd]        AS [LatestPeriodEnd]
 FROM [HR].[tbl_Employees] e
 JOIN [HR].[tbl_People] p              ON p.[PersonID] = e.[PersonID]
 LEFT JOIN [HR].[ref_Types] it          ON it.[TypeID] = p.[IdentType]
@@ -222,6 +231,12 @@ LEFT JOIN [HR].[ref_Types] indig       ON indig.[TypeID] = p.[IndigenousNational
 LEFT JOIN [HR].[ref_Types] sn          ON sn.[Category] = 'DISABILITY_TYPE' AND sn.[Name] = p.[Disability]
 LEFT JOIN [HR].[tbl_Departments] d     ON d.[DepartmentID] = e.[DepartmentID]
 OUTER APPLY (
+    SELECT TOP 1 a.[PeriodCode], a.[PeriodStart], a.[PeriodEnd]
+    FROM [HR].[tbl_AcademicHoursDistribution] a
+    WHERE a.[IDCard] = p.[IDCard]
+    ORDER BY a.[PeriodEnd] DESC
+) latestPeriod
+OUTER APPLY (
     SELECT TOP 1 t.*
     FROM [HR].[tbl_TeacherStructure] t
     WHERE t.[EmployeeID] = e.[EmployeeID]
@@ -232,6 +247,43 @@ LEFT JOIN [HR].[ref_Types] nivel       ON nivel.[TypeID] = ts.[SiiesNivelTypeId]
 LEFT JOIN [HR].[ref_Types] catDirecta  ON catDirecta.[TypeID] = ts.[SiiesCategoriaTypeId]
 LEFT JOIN [HR].[tbl_AcademicLadder] la ON la.[LadderID] = ts.[LadderID]
 LEFT JOIN [HR].[ref_Types] ded         ON ded.[TypeID] = ts.[DedicationTypeID]
+-- 2026-09-11: profesores OCASIONALES (nunca tienen fila en tbl_TeacherStructure -- esa
+-- tabla es solo para Titulares, confirmado con el usuario). Se identifican por tener un
+-- contrato de tipo "Profesor/a Ocasional" o "Técnico Docente" (con o sin Delegación) --
+-- criterio confirmado explícitamente con el usuario 2026-09-11. "Técnico de Laboratorio"
+-- queda fuera a propósito (va al reporte de Funcionarios, no a Profesores).
+-- 2026-09-11 (ajuste): un ADENDUM por sí solo no dice de qué contrato es -- se resuelve
+-- via tbl_Contracts.ParentID (contrato padre). Un ADENDUM cuenta solo si su padre es
+-- Profesor Ocasional/Técnico Docente -- esto excluye correctamente las ~75 adendas cuyo
+-- padre es Técnico de Laboratorio (confirmado con datos reales antes de aplicar).
+OUTER APPLY (
+    SELECT TOP 1 c2.*
+    FROM [HR].[tbl_Contracts] c2
+    INNER JOIN [HR].[tbl_contract_type] ct2 ON ct2.[ContractTypeID] = c2.[ContractTypeID]
+    WHERE c2.[PersonID] = p.[PersonID] AND c2.[IsDeleted] = 0
+      AND (
+            ct2.[Name] LIKE N'CONTRATO PROFESOR/A OCASIONAL%'
+         OR ct2.[Name] LIKE N'CONTRATO TÉCNICO DOCENTE%'
+         OR (
+              ct2.[Name] LIKE N'ADENDUM%'
+              AND EXISTS (
+                  SELECT 1
+                  FROM [HR].[tbl_Contracts] parentC
+                  INNER JOIN [HR].[tbl_contract_type] parentCt ON parentCt.[ContractTypeID] = parentC.[ContractTypeID]
+                  WHERE parentC.[ContractID] = c2.[ParentID]
+                    AND (
+                          parentCt.[Name] LIKE N'CONTRATO PROFESOR/A OCASIONAL%'
+                       OR parentCt.[Name] LIKE N'CONTRATO TÉCNICO DOCENTE%'
+                        )
+              )
+            )
+          )
+    ORDER BY c2.[startdate] DESC
+) ocasionalDocente
+LEFT JOIN [HR].[ref_Types] catOcasionalDefault
+    ON catOcasionalDefault.[Category] = 'SIIES_CATEGORIA_DOCENTE' AND catOcasionalDefault.[Name] = N'Ocasional'
+LEFT JOIN [HR].[ref_Types] escalNoAplicaDefault
+    ON escalNoAplicaDefault.[Category] = 'SIIES_TIPO_ESCALAFON_NOMBRAMIENTO' AND escalNoAplicaDefault.[Name] = N'No Aplica'
 OUTER APPLY (
     SELECT TOP 1 r.*
     FROM [HR].[tbl_EmployeeLaborRegime] r
@@ -266,15 +318,85 @@ OUTER APPLY (
 ) paFallback
 LEFT JOIN [HR].[tbl_personnel_action_type] patFallback ON patFallback.[PersonnelActionTypeId] = paFallback.[ActionTypeID]
 LEFT JOIN [HR].[ref_Types] patRelFallback               ON patRelFallback.[TypeID] = patFallback.[SiiesRelacionIesTypeId]
-WHERE e.[IsDeleted] = 0 AND ts.[TeacherStructureID] IS NOT NULL;
+-- 2026-09-11: antes exigia TeacherStructure (solo Titulares). Ahora tambien entran
+-- los profesores ocasionales identificados por tipo de contrato (ver OUTER APPLY
+-- ocasionalDocente arriba).
+WHERE e.[IsDeleted] = 0
+  AND (
+        ts.[TeacherStructureID] IS NOT NULL
+     OR ocasionalDocente.[ContractID] IS NOT NULL
+      );
 GO
 
--- 7) Vista HR.vw_SiiesFormacionProfesional (matriz 5.5, depende de empleados con TeacherStructure) --
+-- 6.1) Función de tabla HR.fn_SiiesProfesoresHoras (matriz 5.4, Distribución de Horas)
+-- --------------------------------------------------------------------------------
+-- 2026-09-10: reemplaza el placeholder de horas en 0 (ver vw_SiiesProfesores original,
+-- que nunca tuvo columnas de horas por actividad) con datos reales de
+-- HR.tbl_AcademicHoursDistribution (cargados desde el sistema "UTA Mático",
+-- servidor 10.102.12.3, ajeno a HrBackend — carga por lotes, ver Database/hr/
+-- 22_academic_hours_distribution.sql).
+--
+-- Se usa una FUNCIÓN DE TABLA (no una vista plana) porque una vista no acepta
+-- parámetros y las horas dependen del período académico (un profesor puede
+-- tener filas para el período 47 y para el 48, con horas distintas en cada
+-- una) — vw_SiiesProfesores debe seguir devolviendo una sola fila por
+-- profesor, así que el período no puede resolverse dentro de esa vista sin
+-- arriesgar filas duplicadas.
+--
+-- @PeriodCode = NULL (por defecto): todos los profesores, cada uno con su
+-- período más reciente disponible (mismo comportamiento que tenía el
+-- placeholder: siempre devuelve algo). @PeriodCode = '47'/'48'/...: filtra
+-- exacto a ese período Y RESTRINGE la lista a quienes tuvieron distributivo
+-- cargado ese período específico — mismo criterio de "filtrar de verdad" ya
+-- usado en HR.fn_SiiesFormacionProfesional, confirmado con el usuario
+-- 2026-09-11 (la primera versión solo cambiaba las columnas de horas sin
+-- reducir la lista de profesores, lo cual generó confusión).
+CREATE OR ALTER FUNCTION [HR].[fn_SiiesProfesoresHoras] (@PeriodCode VARCHAR(10) = NULL)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT
+        v.*,
+        ahd.[PeriodCode]           AS [HoursPeriodCode],
+        ahd.[PeriodStart]          AS [HoursPeriodStart],
+        ahd.[PeriodEnd]            AS [HoursPeriodEnd],
+        ahd.[TotalHours],
+        ahd.[ClassHours],
+        ahd.[ManagementHours],
+        ahd.[ResearchHours],
+        ahd.[OtherActivitiesHours],
+        ahd.[TutoringHours],
+        ahd.[OutreachHours]
+    FROM [HR].[vw_SiiesProfesores] v
+    OUTER APPLY (
+        SELECT TOP 1 a.*
+        FROM [HR].[tbl_AcademicHoursDistribution] a
+        WHERE a.[IDCard] = v.[IDCard]
+          AND (@PeriodCode IS NULL OR a.[PeriodCode] = @PeriodCode)
+        ORDER BY a.[PeriodEnd] DESC
+    ) ahd
+    WHERE @PeriodCode IS NULL
+       OR EXISTS (
+            SELECT 1
+            FROM [HR].[tbl_AcademicHoursDistribution] a2
+            WHERE a2.[IDCard] = v.[IDCard] AND a2.[PeriodCode] = @PeriodCode
+          )
+);
+GO
+
+-- 7) Vista HR.vw_SiiesFormacionProfesional (matriz 5.5) ------------------------
+-- 2026-09-11: cambiada de INNER JOIN sobre tbl_EducationLevels (tabla ancla) a LEFT JOIN
+-- desde HR.vw_SiiesProfesores. Antes, si el profesor no tenía ningún título cargado en
+-- tbl_EducationLevels (hoy: 0 de los 224 Titulares), ni su identificación aparecía y el
+-- reporte quedaba completamente vacío. Ahora aparecen TODOS los profesores (mismo criterio
+-- que vw_SiiesProfesores: Titulares + Ocasionales), con los campos de título en NULL cuando
+-- no los tienen cargados — visible para que RRHH sepa a quién le falta esa información.
 CREATE OR ALTER VIEW [HR].[vw_SiiesFormacionProfesional] AS
 SELECT
-    e.[EmployeeID],
-    p.[IDCard],
-    it.[Name]           AS [IdentTypeName],
+    v.[EmployeeID],
+    v.[IDCard],
+    v.[IdentTypeName],
     inst.[CountryID]     AS [InstitutionCountryId],
     inst.[Name]          AS [InstitutionName],
     nivelCat.[SiiesLabel] AS [NivelSiiesLabel],
@@ -282,14 +404,40 @@ SELECT
     el.[Title]            AS [NombreTitulo],
     ka.[SiiesCode]        AS [CampoDetalladoSiiesCode],
     el.[SenescytRegistrationNumber],
-    el.[EndDate]          AS [FechaObtuvoTitulo]
-FROM [HR].[tbl_EducationLevels] el
-JOIN [HR].[tbl_People] p                ON p.[PersonID] = el.[PersonID]
-JOIN [HR].[tbl_Employees] e             ON e.[PersonID] = p.[PersonID] AND e.[IsDeleted] = 0
-JOIN [HR].[tbl_TeacherStructure] ts     ON ts.[EmployeeID] = e.[EmployeeID]
-LEFT JOIN [HR].[ref_Types] it            ON it.[TypeID] = p.[IdentType]
+    el.[EndDate]          AS [FechaObtuvoTitulo],
+    -- 2026-09-11: mismo período visible directo en la vista, ver comentario en
+    -- vw_SiiesProfesores.
+    v.[LatestPeriodCode],
+    v.[LatestPeriodStart],
+    v.[LatestPeriodEnd]
+FROM [HR].[vw_SiiesProfesores] v
+LEFT JOIN [HR].[tbl_EducationLevels] el  ON el.[PersonID] = v.[PersonID]
 LEFT JOIN [HR].[tbl_Institutions] inst   ON inst.[InstitutionID] = el.[InstitutionID]
 LEFT JOIN [HR].[ref_Types] nivelCat      ON nivelCat.[TypeID] = el.[EducationLevelTypeID]
 LEFT JOIN [HR].[ref_Types] grado         ON grado.[TypeID] = el.[SiiesGradoTypeId]
 LEFT JOIN [HR].[tbl_KnowledgeArea] ka    ON ka.[id] = el.[KnowledgeAreaId];
+GO
+
+-- 7.1) Función de tabla HR.fn_SiiesFormacionProfesional (filtro de período académico)
+-- --------------------------------------------------------------------------------
+-- 2026-09-11: mismo patrón que HR.fn_SiiesProfesoresHoras — una VIEW no acepta
+-- parámetros. @PeriodCode = NULL (por defecto) devuelve todos los profesores igual
+-- que vw_SiiesFormacionProfesional sin filtrar. @PeriodCode = '47'/'48' restringe
+-- la lista a quienes tuvieron actividad real ese período en
+-- HR.tbl_AcademicHoursDistribution (mismo criterio de "período" que el resto del
+-- reporte SIIES Profesores).
+CREATE OR ALTER FUNCTION [HR].[fn_SiiesFormacionProfesional] (@PeriodCode VARCHAR(10) = NULL)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT v.*
+    FROM [HR].[vw_SiiesFormacionProfesional] v
+    WHERE @PeriodCode IS NULL
+       OR EXISTS (
+            SELECT 1
+            FROM [HR].[tbl_AcademicHoursDistribution] a
+            WHERE a.[IDCard] = v.[IDCard] AND a.[PeriodCode] = @PeriodCode
+          )
+);
 GO

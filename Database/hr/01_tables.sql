@@ -1131,15 +1131,10 @@ CREATE TABLE [HR].[tbl_GuardServiceLocations] (
 GO
 
 -- ------------------------------------------------------------
-IF OBJECT_ID('[HR].[tbl_GuardSettings]') IS NULL
-CREATE TABLE [HR].[tbl_GuardSettings] (
-    [SettingKey] NVARCHAR(100) NOT NULL,
-    [SettingValue] NVARCHAR(500) NOT NULL,
-    [Description] NVARCHAR(500) NULL,
-    [UpdatedBy] INT NULL,
-    [UpdatedAt] DATETIME2 DEFAULT (getdate()) NULL
-);
-GO
+-- tbl_GuardSettings: eliminada 2026-09-10, sus 2 parámetros
+-- (MINIMUM_REST_HOURS/MINIMUM_REST_SEVERITY) migraron a HR.tbl_Parameters
+-- (ver hrbackend-parameters-centralization-convention) y
+-- GuardAssignmentValidationService ya no lee esta tabla.
 
 -- ------------------------------------------------------------
 IF OBJECT_ID('[HR].[tbl_GuardShiftChanges]') IS NULL

@@ -12,7 +12,9 @@
         public bool IsActive { get; set; }
 
         public int EmpScheduleId { get; set; }
-        public int ScheduleId { get; set; }
+        public int? ScheduleId { get; set; }
+        public int? EmployeeSpecialScheduleId { get; set; }
+        public bool IsSpecialSchedule { get; set; }
         public DateOnly ValidFrom { get; set; }
         public DateOnly? ValidTo { get; set; }
         public DateTime ScheduleAssignedAt { get; set; }

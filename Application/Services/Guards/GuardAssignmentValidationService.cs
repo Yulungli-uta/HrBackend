@@ -150,9 +150,12 @@ public class GuardAssignmentValidationService : IGuardAssignmentValidationServic
         // 4. Verificar descanso mínimo entre turnos consecutivos
         if (schedule is not null)
         {
-            var restSettings = await _db.Set<GuardSetting>()
-                .Where(s => s.SettingKey == "MINIMUM_REST_HOURS" || s.SettingKey == "MINIMUM_REST_SEVERITY")
-                .ToDictionaryAsync(s => s.SettingKey, s => s.SettingValue, ct);
+            // Parámetros escalares centralizados en HR.tbl_Parameters ("Parámetros del
+            // Sistema"), no en una tabla propia del módulo de Guardias — ver convención en
+            // memoria del proyecto.
+            var restSettings = await _db.Parameters
+                .Where(p => p.IsActive && (p.Name == "MINIMUM_REST_HOURS" || p.Name == "MINIMUM_REST_SEVERITY"))
+                .ToDictionaryAsync(p => p.Name, p => p.Pvalues ?? "", ct);
 
             if (restSettings.TryGetValue("MINIMUM_REST_HOURS", out var minRestStr) &&
                 double.TryParse(minRestStr, out var minRestHours))

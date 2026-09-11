@@ -63,6 +63,9 @@ public sealed class VwEmployeeDetailsConfiguration : IEntityTypeConfiguration<Vw
         e.Property(x => x.ImmediateBossID).HasColumnName("ImmediateBossID");
         e.Property(x => x.ScheduleID).HasColumnName("ScheduleID");
         e.Property(x => x.Schedule).HasColumnName("Schedule");
+        e.Property(x => x.EmployeeSpecialScheduleId).HasColumnName("EmployeeSpecialScheduleId");
+        e.Property(x => x.IsSpecialSchedule).HasColumnName("IsSpecialSchedule");
+        e.Property(x => x.SpecialScheduleCaseType).HasColumnName("SpecialScheduleCaseType");
         e.Property(x => x.JobId).HasColumnName("JobID");
         e.Property(x => x.DepartmentID).HasColumnName("DepartmentID");        
         e.Property(x => x.Department).HasColumnName("Department");
@@ -181,6 +184,8 @@ public sealed class VwEmployeeCurrentScheduleConfiguration : IEntityTypeConfigur
 
         builder.Property(x => x.EmpScheduleId).HasColumnName("EmpScheduleID");
         builder.Property(x => x.ScheduleId).HasColumnName("ScheduleID");
+        builder.Property(x => x.EmployeeSpecialScheduleId).HasColumnName("EmployeeSpecialScheduleId");
+        builder.Property(x => x.IsSpecialSchedule).HasColumnName("IsSpecialSchedule");
         builder.Property(x => x.ValidFrom).HasColumnType("date");
         builder.Property(x => x.ValidTo).HasColumnType("date");
         builder.Property(x => x.ScheduleAssignedAt).HasColumnName("ScheduleAssignedAt");

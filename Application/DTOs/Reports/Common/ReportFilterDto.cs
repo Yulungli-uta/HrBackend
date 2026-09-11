@@ -79,6 +79,13 @@ public record ReportFilterDto
     public int? GroupId { get; init; }
 
     /// <summary>
+    /// Filtra por período académico (ej. "47", "48" — HR.tbl_AcademicHoursDistribution.PeriodCode).
+    /// Usado por el reporte SIIES Profesores para la matriz 5.4 (Distribución de Horas).
+    /// Null o vacío = usa el período más reciente disponible por cada profesor.
+    /// </summary>
+    public string? PeriodCode { get; init; }
+
+    /// <summary>
     /// Filtra acciones de personal por categoría funcional.
     /// Valores: MOVEMENT, ENTRY, ECONOMIC, LEAVE, DISCIPLINARY, EXIT.
     /// Null o vacío = todas las categorías.

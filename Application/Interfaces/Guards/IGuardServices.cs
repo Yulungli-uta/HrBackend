@@ -160,14 +160,14 @@ public interface IGuardEmployeeSpecialRuleService
 public interface IGuardVacationService
 {
     Task<List<GuardVacationPlanDto>> GetPlansByEmployeeAsync(int employeeId, int? year, CancellationToken ct);
-    Task<PagedResult<GuardVacationPlanDto>> GetPlansPagedAsync(int page, int pageSize, int? year, string? status, int? employeeId, DateOnly? startDate, DateOnly? endDate, CancellationToken ct);
+    Task<PagedResult<GuardVacationPlanDto>> GetPlansPagedAsync(int page, int pageSize, int? year, string? status, int? employeeId, DateOnly? startDate, DateOnly? endDate, string? search, CancellationToken ct);
     Task<GuardVacationPlanDto?> GetPlanByIdAsync(int planId, CancellationToken ct);
     Task<GuardVacationPlanDto> CreatePlanAsync(CreateGuardVacationPlanDto dto, CancellationToken ct);
     Task<GuardVacationPlanDto> UpdatePlanAsync(int planId, UpdateGuardVacationPlanDto dto, CancellationToken ct);
     Task<GuardVacationPlanDto> ApprovePlanAsync(int planId, ApproveGuardVacationPlanDto dto, CancellationToken ct);
     Task<GuardVacationPlanDto> RejectPlanAsync(int planId, RejectGuardVacationPlanDto dto, CancellationToken ct);
     Task<List<GuardVacationRequestDto>> GetRequestsByEmployeeAsync(int employeeId, CancellationToken ct);
-    Task<PagedResult<GuardVacationRequestDto>> GetRequestsPagedAsync(int page, int pageSize, string? status, int? employeeId, DateOnly? startDate, DateOnly? endDate, CancellationToken ct);
+    Task<PagedResult<GuardVacationRequestDto>> GetRequestsPagedAsync(int page, int pageSize, string? status, int? employeeId, DateOnly? startDate, DateOnly? endDate, string? search, CancellationToken ct);
     Task<GuardVacationRequestDto?> GetRequestByIdAsync(int requestId, CancellationToken ct);
     Task<GuardVacationRequestDto> CreateChangeDatesRequestAsync(CreateChangeDatesRequestDto dto, CancellationToken ct);
     Task<GuardVacationRequestDto> CreateAccumulateRequestAsync(CreateAccumulateRequestDto dto, CancellationToken ct);

@@ -35,11 +35,14 @@ namespace WsUtaSystem.Application.Interfaces.Repositories
             int pageSize,
             CancellationToken ct = default);
 
-        /// <summary>Retorna un resultado paginado de empleados con filtro de búsqueda por nombre, apellido o cédula.</summary>
+        /// <summary>Retorna un resultado paginado de empleados con filtro de búsqueda por nombre, apellido o cédula.
+        /// <paramref name="onlySpecialSchedule"/>: true = solo empleados con horario especial
+        /// (sustituto/maternidad/lactancia/otro), false = solo horario de catálogo, null = todos.</summary>
         Task<PagedResult<VwEmployeeDetails>> GetPagedAsync(
             string? search,
             int page,
             int pageSize,
+            bool? onlySpecialSchedule = null,
             CancellationToken ct = default);
 
         /*Report source*/

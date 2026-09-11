@@ -30,11 +30,12 @@ public class GuardVacationPlansController : ControllerBase
         [FromQuery] int? employeeId = null,
         [FromQuery] DateOnly? startDate = null,
         [FromQuery] DateOnly? endDate = null,
+        [FromQuery] string? search = null,
         CancellationToken ct = default)
     {
         if (page < 1) page = 1;
         if (pageSize < 1 || pageSize > 100) pageSize = 20;
-        return Ok(await _svc.GetPlansPagedAsync(page, pageSize, year, status, employeeId, startDate, endDate, ct));
+        return Ok(await _svc.GetPlansPagedAsync(page, pageSize, year, status, employeeId, startDate, endDate, search, ct));
     }
 
     [HttpGet("{id:int}")]

@@ -29,13 +29,16 @@ namespace WsUtaSystem.Reports.Sources;
 /// comportamiento esperado, no es un error.
 /// </para>
 /// <para>
-/// Regla de HORAS acordada explícitamente (no existe distributivo de horas por actividad en
-/// el sistema): HORAS_CLASE_TERCER_NIVEL = horas contratadas del contrato vigente
-/// (mismo <c>ContractedHours</c> que ya usa Funcionarios para HORAS_LABORABLES_SEMANA).
-/// HORAS_CLASE = igual al mismo valor (cumple la regla del instructivo: HORAS_CLASE = suma
-/// de sus 3 subniveles). El resto de columnas de horas (nivel técnico, cuarto nivel, tutoría,
-/// administrativas, investigación, vinculación, otras actividades) = 0, porque no hay ningún
-/// dato real para desglosarlas por separado.
+/// Regla de HORAS (actualizada 2026-09-10): se consulta vía
+/// <c>HR.fn_SiiesProfesoresHoras(@PeriodCode)</c> — no <c>HR.vw_SiiesProfesores</c> directo —
+/// que agrega el distributivo real de horas académicas (<c>HR.tbl_AcademicHoursDistribution</c>,
+/// cargado desde el sistema "UTA Mático", servidor 10.102.12.3, ajeno a HrBackend) por período
+/// académico. <see cref="ReportFilterDto.PeriodCode"/> selecciona el período; null = el más
+/// reciente disponible por profesor. Si el profesor no tiene distributivo cargado para ese
+/// período (hoy: todos los "Profesor Titular", el distributivo cargado hasta ahora es de
+/// personal con horas de docencia ocasional), se mantiene el fallback anterior: horas
+/// contratadas del contrato vigente como aproximación de HORAS_CLASE/HORAS_CLASE_TERCER_NIVEL.
+/// El resto de columnas de horas sin fuente real (nivel técnico, cuarto nivel) siguen en 0.
 /// </para>
 /// <para>
 /// TIPO_DOCUMENTO: el sistema solo distingue internamente <c>DocumentType</c> = "CONTRACT" o
@@ -60,11 +63,25 @@ public abstract class SiiesProfesoresReportSourceBase
 
     protected async Task<List<VwSiiesProfesor>> GetTeachersAsync(string identTypeName, ReportFilterDto filter, CancellationToken ct)
     {
+        // 2026-09-10: HR.fn_SiiesProfesoresHoras(@PeriodCode) en vez de la vista directa —
+        // agrega el distributivo real de horas (HR.tbl_AcademicHoursDistribution) por período
+        // académico. Toda la lógica de unión/período vive en la función SQL; aquí solo se
+        // reenvía el parámetro que llega del filtro del reporte. NULL = período más reciente
+        // disponible por profesor (mismo comportamiento por defecto de siempre).
+        var periodCode = string.IsNullOrWhiteSpace(filter.PeriodCode) ? null : filter.PeriodCode.Trim();
         var query = _db.vwSiiesProfesores
+            .FromSqlInterpolated($"SELECT * FROM HR.fn_SiiesProfesoresHoras({periodCode})")
             .AsNoTracking()
             .Where(v => v.IdentTypeName == identTypeName);
 
-        if (filter.IncludeInactive != true)
+        // 2026-09-11: el filtro de "activo hoy" solo tiene sentido cuando se pide el listado
+        // general (sin período). Si se pidió un período específico, lo relevante es si el
+        // profesor estuvo activo EN ESE PERÍODO — y eso ya lo garantiza
+        // fn_SiiesProfesoresHoras(@PeriodCode) (solo trae a quien tiene distributivo real
+        // cargado ese período). Aplicar además "empleado activo hoy" excluía en silencio a
+        // profesores cuyo contrato ya venció pero que sí dieron clases en el período
+        // consultado — un reporte histórico no debe filtrar por el estado actual.
+        if (filter.IncludeInactive != true && periodCode is null)
         {
             query = query.Where(v => v.EmployeeIsActive);
 
@@ -95,9 +112,13 @@ public abstract class SiiesProfesoresReportSourceBase
     {
         var esIndigena = string.Equals(v.EthnicitySiiesLabel, IndigenaLabel, StringComparison.OrdinalIgnoreCase);
 
-        // HORAS: no existe distributivo real — se usa la horas contratada como HORAS_CLASE_TERCER_NIVEL
-        // y como HORAS_CLASE total; el resto de categorías queda en 0 (ver remarks de la clase).
+        // 2026-09-10: HORAS ahora vienen del distributivo real (HR.tbl_AcademicHoursDistribution,
+        // vía HR.fn_SiiesProfesoresHoras) cuando el profesor tiene esa información cargada. Si no
+        // la tiene (hoy es el caso de todos los "Profesor Titular" — el distributivo cargado hasta
+        // ahora es de personal con horas de docencia ocasional, ver hallazgo de esta sesión), se
+        // mantiene el fallback anterior: horas contratadas como aproximación de HORAS_CLASE.
         var horasContratadas = v.ContractedHours ?? 0;
+        var horasClase = v.ClassHours ?? (int)horasContratadas;
 
         return new Dictionary<string, object?>
         {
@@ -133,14 +154,14 @@ public abstract class SiiesProfesoresReportSourceBase
             ["FECHA_FIN"] = v.EffectiveTo,
             ["NIVEL"] = v.NivelSiiesLabel ?? string.Empty,
             ["UNIDAD_ACADEMICA"] = v.DepartmentName ?? string.Empty,
-            ["HORAS_CLASE"] = horasContratadas,
-            ["HORAS_TUTORIA"] = 0,
-            ["HORAS_ADMINISTRATIVAS"] = 0,
-            ["HORAS_INVESTIGACION"] = 0,
-            ["HORAS_VINCULACION"] = 0,
-            ["HORAS_OTRAS_ACTIVIDADES"] = 0,
+            ["HORAS_CLASE"] = horasClase,
+            ["HORAS_TUTORIA"] = v.TutoringHours ?? 0,
+            ["HORAS_ADMINISTRATIVAS"] = v.ManagementHours ?? 0,
+            ["HORAS_INVESTIGACION"] = v.ResearchHours ?? 0,
+            ["HORAS_VINCULACION"] = v.OutreachHours ?? 0,
+            ["HORAS_OTRAS_ACTIVIDADES"] = v.OtherActivitiesHours ?? 0,
             ["HORAS_CLASE_NIVEL_TECNICO"] = 0,
-            ["HORAS_CLASE_TERCER_NIVEL"] = horasContratadas,
+            ["HORAS_CLASE_TERCER_NIVEL"] = horasClase,
             ["HORAS_CLASE_CUARTO_NIVEL"] = 0,
             // Fuera del esquema oficial CACES — se agrega al final para no alterar el orden/
             // cantidad de las columnas oficiales (uso interno/verificación, no para la carga

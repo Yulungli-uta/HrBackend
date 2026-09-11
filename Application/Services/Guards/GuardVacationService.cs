@@ -37,7 +37,7 @@ public class GuardVacationService : IGuardVacationService
         return items.Select(MapPlanToDto).ToList();
     }
 
-    public async Task<PagedResult<GuardVacationPlanDto>> GetPlansPagedAsync(int page, int pageSize, int? year, string? status, int? employeeId, DateOnly? startDate, DateOnly? endDate, CancellationToken ct)
+    public async Task<PagedResult<GuardVacationPlanDto>> GetPlansPagedAsync(int page, int pageSize, int? year, string? status, int? employeeId, DateOnly? startDate, DateOnly? endDate, string? search, CancellationToken ct)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
@@ -53,11 +53,20 @@ public class GuardVacationService : IGuardVacationService
         if (employeeId.HasValue) q = q.Where(p => p.EmployeeId == employeeId.Value);
         if (startDate.HasValue)  q = q.Where(p => p.PlannedStartDate >= startDate.Value);
         if (endDate.HasValue)    q = q.Where(p => p.PlannedEndDate   <= endDate.Value);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            q = q.Where(p =>
+                (p.Employee!.People!.LastName + " " + p.Employee.People.FirstName).ToLower().Contains(term) ||
+                (p.Employee.People.IdCard != null && p.Employee.People.IdCard.ToLower().Contains(term)));
+        }
 
         var total = await q.LongCountAsync(ct);
         var items = await q
             .OrderByDescending(p => p.VacationYear)
             .ThenBy(p => p.PlannedStartDate)
+            .ThenBy(p => p.Employee!.People!.LastName)
+            .ThenBy(p => p.Employee!.People!.FirstName)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
@@ -112,11 +121,15 @@ public class GuardVacationService : IGuardVacationService
     public async Task<GuardVacationPlanDto> UpdatePlanAsync(int planId, UpdateGuardVacationPlanDto dto, CancellationToken ct)
     {
         var entity = await _db.GuardVacationPlans
+            .Include(p => p.StatusType)
             .FirstOrDefaultAsync(p => p.GuardVacationPlanId == planId, ct)
             ?? throw new KeyNotFoundException($"Plan de vacaciones {planId} no encontrado.");
 
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede actualizar planes de vacaciones.");
+
+        if (entity.StatusType?.Name != "PLANNED")
+            throw new InvalidOperationException($"Solo se pueden editar planes en estado PLANNED. Estado actual: {entity.StatusType?.Name}");
 
         entity.PlannedStartDate = dto.PlannedStartDate;
         entity.PlannedEndDate = dto.PlannedEndDate;
@@ -226,7 +239,7 @@ public class GuardVacationService : IGuardVacationService
         return items.Select(MapRequestToDto).ToList();
     }
 
-    public async Task<PagedResult<GuardVacationRequestDto>> GetRequestsPagedAsync(int page, int pageSize, string? status, int? employeeId, DateOnly? startDate, DateOnly? endDate, CancellationToken ct)
+    public async Task<PagedResult<GuardVacationRequestDto>> GetRequestsPagedAsync(int page, int pageSize, string? status, int? employeeId, DateOnly? startDate, DateOnly? endDate, string? search, CancellationToken ct)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
@@ -243,10 +256,19 @@ public class GuardVacationService : IGuardVacationService
         if (employeeId.HasValue) q = q.Where(r => r.EmployeeId == employeeId.Value);
         if (startDate.HasValue)  q = q.Where(r => r.OriginalStartDate >= startDate.Value);
         if (endDate.HasValue)    q = q.Where(r => r.OriginalEndDate   <= endDate.Value);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            q = q.Where(r =>
+                (r.Employee!.People!.LastName + " " + r.Employee.People.FirstName).ToLower().Contains(term) ||
+                (r.Employee.People.IdCard != null && r.Employee.People.IdCard.ToLower().Contains(term)));
+        }
 
         var total = await q.LongCountAsync(ct);
         var items = await q
-            .OrderByDescending(r => r.RequestedAt)
+            .OrderBy(r => r.OriginalStartDate)
+            .ThenBy(r => r.Employee!.People!.LastName)
+            .ThenBy(r => r.Employee!.People!.FirstName)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);

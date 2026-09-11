@@ -100,7 +100,10 @@ BEGIN
         ISNULL(gsc.ReplacementEmployeeId, gsp.EmployeeId)        AS EffectiveEmployeeId,
         -- Horario: si el cambio tiene NewScheduleId se usa ese, si no el del turno
         ISNULL(gsc.NewScheduleId, gsp.ScheduleId)                AS EffectiveScheduleId,
-        CASE WHEN gsc.ShiftChangeId IS NOT NULL THEN 1 ELSE 0 END AS IsReplacement,
+        -- 2026-09-09: antes marcaba IsReplacement=1 con CUALQUIER cambio activo,
+        -- incluida una REASSIGNMENT (mismo guardia, solo cambia día/horario/ubicación).
+        -- Ahora solo es "reemplazo" si el cambio trae un empleado distinto cubriendo.
+        CASE WHEN gsc.ReplacementEmployeeId IS NOT NULL THEN 1 ELSE 0 END AS IsReplacement,
         gsc.ShiftChangeId,
         s.EntryTime,
         s.ExitTime,

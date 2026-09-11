@@ -16,9 +16,13 @@ namespace WsUtaSystem.Reports.Sources;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Requiere que el empleado tenga registro en HR.tbl_TeacherStructure (INNER JOIN en la
-/// vista HR.vw_SiiesFormacionProfesional) — vacío hasta que se complete la carga masiva
-/// planeada por separado; hasta entonces este reporte no devuelve filas.
+/// 2026-09-11: se consulta vía HR.fn_SiiesFormacionProfesional(@PeriodCode) — no la vista
+/// directa — misma <see cref="ReportFilterDto.PeriodCode"/> que SiiesProfesoresReportSource;
+/// null = todos los profesores (Titulares + Ocasionales, mismo criterio que
+/// HR.vw_SiiesProfesores) sin importar el período. Antes exigía HR.tbl_TeacherStructure vía
+/// INNER JOIN sobre tbl_EducationLevels, lo que dejaba el reporte completamente vacío (0
+/// títulos cargados hoy) — ahora siempre aparece la identificación del profesor, con los
+/// campos de título en blanco cuando no los tiene cargados.
 /// </para>
 /// <para>
 /// CODIGO_IES_ESTUDIO queda siempre vacío (decisión institucional diferida — no hay campo
@@ -58,7 +62,13 @@ public sealed class SiiesFormacionProfesionalReportSource : IReportSource
             .Select(p => p.Pvalues)
             .FirstOrDefaultAsync(context.RequestAborted) ?? string.Empty;
 
-        var query = _db.vwSiiesFormacionProfesional.AsNoTracking();
+        // 2026-09-11: HR.fn_SiiesFormacionProfesional(@PeriodCode) en vez de la vista directa
+        // -- filtra la lista a quienes tuvieron actividad real ese período (misma lógica de
+        // período que SiiesProfesoresReportSource). NULL = todos, sin filtrar.
+        var periodCode = string.IsNullOrWhiteSpace(filter.PeriodCode) ? null : filter.PeriodCode.Trim();
+        var query = _db.vwSiiesFormacionProfesional
+            .FromSqlInterpolated($"SELECT * FROM HR.fn_SiiesFormacionProfesional({periodCode})")
+            .AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(filter.Identification))
         {

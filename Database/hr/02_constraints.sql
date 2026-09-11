@@ -252,11 +252,6 @@ IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK_GuardServiceLo
         ADD CONSTRAINT [PK_GuardServiceLocations] PRIMARY KEY CLUSTERED ([LocationID]);
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK_GuardSettings')
-    ALTER TABLE [HR].[tbl_GuardSettings]
-        ADD CONSTRAINT [PK_GuardSettings] PRIMARY KEY CLUSTERED ([SettingKey]);
-GO
-
 IF NOT EXISTS (SELECT 1 FROM sys.key_constraints WHERE name = 'PK_GuardShiftChanges')
     ALTER TABLE [HR].[tbl_GuardShiftChanges]
         ADD CONSTRAINT [PK_GuardShiftChanges] PRIMARY KEY CLUSTERED ([ShiftChangeID]);

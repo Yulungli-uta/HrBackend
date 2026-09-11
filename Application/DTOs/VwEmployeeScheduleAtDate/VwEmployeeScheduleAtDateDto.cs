@@ -4,7 +4,8 @@ namespace WsUtaSystem.Application.DTOs.VwEmployeeScheduleAtDate
     {
         public int EmployeeId { get; set; }
         public DateTime D { get; set; }
-        public int ScheduleId { get; set; }
+        public int? ScheduleId { get; set; }
+        public int? EmployeeSpecialScheduleId { get; set; }
         public string? ScheduleName { get; set; }
         public TimeSpan? EntryTime { get; set; }
         public TimeSpan? ExitTime { get; set; }

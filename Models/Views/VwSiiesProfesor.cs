@@ -56,4 +56,23 @@ public class VwSiiesProfesor
     // ── Vienen de tbl_Employees (tabla ancla del FROM): nunca nulas ──
     public bool EmployeeIsActive { get; set; }
     public DateOnly HireDate { get; set; }
+
+    // ── 2026-09-11: período académico más reciente con distributivo real cargado, visible
+    // directo en la vista (sin pasar por fn_SiiesProfesoresHoras). ──
+    public string? LatestPeriodCode { get; set; }
+    public DateOnly? LatestPeriodStart { get; set; }
+    public DateOnly? LatestPeriodEnd { get; set; }
+
+    // ── Solo pobladas cuando se consulta vía HR.fn_SiiesProfesoresHoras (no vw_SiiesProfesores
+    // directo): distributivo real de horas académicas, HR.tbl_AcademicHoursDistribution. ──
+    public string? HoursPeriodCode { get; set; }
+    public DateOnly? HoursPeriodStart { get; set; }
+    public DateOnly? HoursPeriodEnd { get; set; }
+    public int? TotalHours { get; set; }
+    public int? ClassHours { get; set; }
+    public int? ManagementHours { get; set; }
+    public int? ResearchHours { get; set; }
+    public int? OtherActivitiesHours { get; set; }
+    public int? TutoringHours { get; set; }
+    public int? OutreachHours { get; set; }
 }

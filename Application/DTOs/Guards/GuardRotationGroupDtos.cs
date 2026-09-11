@@ -21,7 +21,11 @@ public record GuardRotationGroupDto(
     string? GroupLevelTypeName,
     string? ColorCode,
     int SubgroupCount,
-    bool IsSpecial
+    bool IsSpecial,
+    // 2026-09-10: aviso no bloqueante de solapamiento de membresía (GROUP_OVERLAP) —
+    // poblado solo en la respuesta de Duplicate cuando algún miembro copiado ya
+    // pertenece activamente a otro grupo. Null/vacío = sin avisos.
+    List<string>? OverlapWarnings
 );
 
 public record GuardRotationGroupWithSubgroupsDto(
@@ -102,7 +106,10 @@ public record GuardRotationGroupEmployeeDto(
     DateOnly ValidFrom,
     DateOnly? ValidTo,
     bool IsActive,
-    string? Notes
+    string? Notes,
+    // 2026-09-10: aviso no bloqueante de solapamiento de membresía — poblado
+    // cuando el empleado ya pertenece activamente a otro grupo de rotación.
+    string? OverlapWarning
 );
 
 public record AssignEmployeeToRotationGroupDto(

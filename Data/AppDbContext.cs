@@ -78,6 +78,7 @@ public class AppDbContext : DbContext
 
     public DbSet<Schedules> Schedules => Set<Schedules>();
     public DbSet<EmployeeSchedules> EmployeeSchedules => Set<EmployeeSchedules>();
+    public DbSet<EmployeeSpecialSchedule> EmployeeSpecialSchedules => Set<EmployeeSpecialSchedule>();
     public DbSet<AttendancePunches> AttendancePunches => Set<AttendancePunches>();
     public DbSet<PunchJustifications> PunchJustifications => Set<PunchJustifications>();
     public DbSet<AttendanceCalculations> AttendanceCalculations => Set<AttendanceCalculations>();
@@ -199,7 +200,6 @@ public class AppDbContext : DbContext
     public DbSet<GuardShiftChange> GuardShiftChanges => Set<GuardShiftChange>();
     public DbSet<EmployeeAvailabilityBlock> EmployeeAvailabilityBlocks => Set<EmployeeAvailabilityBlock>();
     public DbSet<GuardAssignmentValidation> GuardAssignmentValidations => Set<GuardAssignmentValidation>();
-    public DbSet<GuardSetting> GuardSettings => Set<GuardSetting>();
     public DbSet<GuardLocationRotationPeriod> GuardLocationRotationPeriods => Set<GuardLocationRotationPeriod>();
     public DbSet<GuardLocationRotationAssignment> GuardLocationRotationAssignments => Set<GuardLocationRotationAssignment>();
     public DbSet<GuardEmployeeSpecialRule> GuardEmployeeSpecialRules => Set<GuardEmployeeSpecialRule>();
@@ -214,6 +214,7 @@ public class AppDbContext : DbContext
     public DbSet<VwEmployeeDetails> vwEmployeeDetails { get; set; }
     public DbSet<VwSiiesFuncionario> vwSiiesFuncionarios { get; set; } = null!;
     public DbSet<VwSiiesProfesor> vwSiiesProfesores { get; set; } = null!;
+    public DbSet<AcademicHoursDistribution> AcademicHoursDistributions => Set<AcademicHoursDistribution>();
     public DbSet<VwSiiesFormacionProfesional> vwSiiesFormacionProfesional { get; set; } = null!;
     public DbSet<VwEmployeeScheduleAtDate> VwEmployeeScheduleAtDate { get; set; }
     public DbSet<VwPunchDay> VwPunchDay { get; set; }

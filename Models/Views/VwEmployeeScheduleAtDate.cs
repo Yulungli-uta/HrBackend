@@ -4,7 +4,10 @@ namespace WsUtaSystem.Models.Views
     {
         public int EmployeeId { get; set; }
         public DateTime D { get; set; }
-        public int ScheduleId { get; set; }
+        /// <summary>Nulo cuando el horario vigente es un caso especial (ver
+        /// EmployeeSpecialScheduleId) en vez de uno del catálogo.</summary>
+        public int? ScheduleId { get; set; }
+        public int? EmployeeSpecialScheduleId { get; set; }
         public string? ScheduleName { get; set; }
         public TimeSpan? EntryTime { get; set; }
         public TimeSpan? ExitTime { get; set; }

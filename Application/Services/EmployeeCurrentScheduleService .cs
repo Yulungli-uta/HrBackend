@@ -52,6 +52,8 @@ namespace WsUtaSystem.Application.Services
                 IsActive = entity.IsActive,
                 EmpScheduleId = entity.EmpScheduleId,
                 ScheduleId = entity.ScheduleId,
+                EmployeeSpecialScheduleId = entity.EmployeeSpecialScheduleId,
+                IsSpecialSchedule = entity.IsSpecialSchedule,
                 ValidFrom = entity.ValidFrom,
                 ValidTo = entity.ValidTo,
                 ScheduleAssignedAt = entity.ScheduleAssignedAt,

@@ -29,6 +29,29 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         _db = db;
     }
 
+    // 2026-09-10: control de GROUP_OVERLAP en el momento de crear la membresía (asignar
+    // o duplicar), en vez de solo detectarlo despues en la vista previa de generacion de
+    // turnos (GuardShiftPlanningService). No bloquea -- el usuario confirmo que solo
+    // quiere una notificacion; el guardia SI queda agregado al grupo nuevo.
+    private async Task<string?> GetOverlapWarningAsync(int employeeId, int excludeGroupId, CancellationToken ct)
+    {
+        var otherGroupNames = await _db.GuardRotationGroupEmployees
+            .Where(ge => ge.EmployeeId == employeeId
+                      && ge.IsActive
+                      && ge.GroupId != excludeGroupId
+                      && ge.Group!.IsActive
+                      && (ge.ValidTo == null || ge.ValidTo >= DateOnly.FromDateTime(DateTime.Today)))
+            .Select(ge => ge.Group!.Name)
+            .Distinct()
+            .ToListAsync(ct);
+
+        if (otherGroupNames.Count == 0) return null;
+
+        return $"Este guardia ya está activo en {(otherGroupNames.Count == 1 ? "el grupo" : "los grupos")} "
+             + string.Join(", ", otherGroupNames)
+             + " — revisa si la doble membresía es correcta.";
+    }
+
     public async Task<List<EligibleEmployeeDto>> GetEligibleEmployeesAsync(string? search, CancellationToken ct)
     {
         var query = _db.Set<WsUtaSystem.Models.Employees>()
@@ -103,7 +126,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 g.ParentGroup == null ? null : g.ParentGroup.Name,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
-                g.Subgroups.Count(s => s.IsActive), g.IsSpecial))
+                g.Subgroups.Count(s => s.IsActive), g.IsSpecial, null))
             .ToListAsync(ct);
 
     public async Task<PagedResult<GuardRotationGroupDto>> GetPagedAsync(int page, int pageSize, string? search, CancellationToken ct)
@@ -131,7 +154,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 g.ParentGroup == null ? null : g.ParentGroup.Name,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
-                g.Subgroups.Count(s => s.IsActive), g.IsSpecial))
+                g.Subgroups.Count(s => s.IsActive), g.IsSpecial, null))
             .ToListAsync(ct);
 
         return new PagedResult<GuardRotationGroupDto>
@@ -153,7 +176,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 g.ParentGroup == null ? null : g.ParentGroup.Name,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
-                g.Subgroups.Count(s => s.IsActive), g.IsSpecial))
+                g.Subgroups.Count(s => s.IsActive), g.IsSpecial, null))
             .FirstOrDefaultAsync(ct);
 
     public async Task<GuardRotationGroupDto> CreateAsync(CreateGuardRotationGroupDto dto, CancellationToken ct)
@@ -246,6 +269,8 @@ public class GuardRotationGroupService : IGuardRotationGroupService
     {
         var baseGroup = await _db.GuardRotationGroups
             .Include(g => g.Employees.Where(e => e.IsActive))
+                .ThenInclude(ge => ge.Employee)
+                    .ThenInclude(e => e!.People)
             .FirstOrDefaultAsync(g => g.GroupId == baseGroupId, ct)
             ?? throw new KeyNotFoundException($"Grupo {baseGroupId} no encontrado.");
 
@@ -287,8 +312,21 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         }
         await _db.SaveChangesAsync(ct);
 
-        return await GetByIdAsync(newGroup.GroupId, ct)
+        // Aviso no bloqueante: todo miembro copiado que siga activo en el grupo base (o en
+        // cualquier otro grupo) queda igual agregado al grupo nuevo, pero se informa para
+        // que RRHH revise si la doble membresía es intencional.
+        var overlapWarnings = new List<string>();
+        foreach (var emp in baseGroup.Employees)
+        {
+            var warning = await GetOverlapWarningAsync(emp.EmployeeId, newGroup.GroupId, ct);
+            if (warning is not null)
+                overlapWarnings.Add($"{emp.Employee?.People?.GetFullName() ?? $"EmployeeId {emp.EmployeeId}"}: {warning}");
+        }
+
+        var created = await GetByIdAsync(newGroup.GroupId, ct)
             ?? throw new InvalidOperationException("Error al recuperar el grupo duplicado.");
+
+        return overlapWarnings.Count == 0 ? created : created with { OverlapWarnings = overlapWarnings };
     }
 
     public async Task<List<GuardRotationGroupEmployeeDto>> GetEmployeesAsync(int groupId, CancellationToken ct)
@@ -300,7 +338,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             e.GroupEmployeeId, e.GroupId, group.Name, e.EmployeeId,
             e.Employee?.People.GetFullName() ?? string.Empty,
             e.Employee?.People?.IdCard,
-            e.ValidFrom, e.ValidTo, e.IsActive, e.Notes
+            e.ValidFrom, e.ValidTo, e.IsActive, e.Notes, null
         )).ToList();
     }
 
@@ -326,11 +364,14 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         await _db.GuardRotationGroupEmployees.AddAsync(entity, ct);
         await _db.SaveChangesAsync(ct);
 
+        var overlapWarning = await GetOverlapWarningAsync(dto.EmployeeId, groupId, ct);
+
         return new GuardRotationGroupEmployeeDto(
             entity.GroupEmployeeId, groupId, group.Name, dto.EmployeeId,
             employee.People.GetFullName(),
             employee.People?.IdCard,
-            entity.ValidFrom, entity.ValidTo, entity.IsActive, entity.Notes
+            entity.ValidFrom, entity.ValidTo, entity.IsActive, entity.Notes,
+            overlapWarning
         );
     }
 
@@ -567,7 +608,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 null, null,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
-                g.Subgroups.Count(s => s.IsActive), g.IsSpecial))
+                g.Subgroups.Count(s => s.IsActive), g.IsSpecial, null))
             .ToListAsync(ct);
 
     public async Task<List<GuardRotationGroupWithSubgroupsDto>> GetGeneralGroupsWithSubgroupsAsync(CancellationToken ct) =>
@@ -590,7 +631,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                     s.Employees.Count(e => e.IsActive),
                     g.GroupId, g.Name,
                     s.GroupLevelType == null ? null : s.GroupLevelType.Name, s.ColorCode,
-                    0, s.IsSpecial
+                    0, s.IsSpecial, null
                 )).ToList(),
                 g.IsSpecial
             ))
@@ -607,6 +648,6 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 g.ParentGroup == null ? null : g.ParentGroup.Name,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
-                g.Subgroups.Count(s => s.IsActive), g.IsSpecial))
+                g.Subgroups.Count(s => s.IsActive), g.IsSpecial, null))
             .ToListAsync(ct);
 }

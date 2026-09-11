@@ -271,7 +271,17 @@ LEFT JOIN HR.tbl_Cantons ca ON p.CantonID = ca.CantonID
 GO
 
 -- [vw_EmployeeCurrentSchedule]
-CREATE   VIEW HR.vw_EmployeeCurrentSchedule
+-- 2026-09-10: igual que vw_EmployeeDetails, se cambia el JOIN a tbl_Schedules
+-- de INNER a LEFT y se agrega resolucion desde tbl_EmployeeSpecialSchedules
+-- via COALESCE. Antes, con INNER JOIN, los empleados con horario especial
+-- (ScheduleID NULL) quedaban TOTALMENTE EXCLUIDOS de esta vista -- peor que
+-- "Sin Horario": ni siquiera aparecian. Esto afectaba a
+-- ScheduleChangePlanService (guarda PreviousScheduleID/PreviousEmpScheduleID
+-- al crear un plan de cambio de horario -- para esos empleados quedaba NULL
+-- en silencio). Los campos exclusivos de catalogo sin equivalente en la
+-- tabla especial (WorkingDays, RequiredHoursPerDay, IsRotating) usan un
+-- valor de reemplazo seguro para no romper el mapeo a columnas no-nullable.
+CREATE OR ALTER VIEW HR.vw_EmployeeCurrentSchedule
 AS
 SELECT
     e.EmployeeID,
@@ -285,26 +295,30 @@ SELECT
 
     es.EmpScheduleID,
     es.ScheduleID,
+    es.EmployeeSpecialScheduleId,
+    CAST(CASE WHEN es.EmployeeSpecialScheduleId IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS IsSpecialSchedule,
     es.ValidFrom,
     es.ValidTo,
     es.CreatedAt  AS ScheduleAssignedAt,
     es.CreatedBy  AS ScheduleAssignedBy,
 
-    s.Description AS ScheduleDescription,
-    s.EntryTime,
-    s.ExitTime,
-    s.WorkingDays,
-    s.RequiredHoursPerDay,
-    s.HasLunchBreak,
-    s.LunchStart,
-    s.LunchEnd,
-    s.IsRotating,
+    ISNULL(s.Description, 'Horario Especial') AS ScheduleDescription,
+    COALESCE(s.EntryTime, ss.EntryTime) AS EntryTime,
+    COALESCE(s.ExitTime, ss.ExitTime) AS ExitTime,
+    ISNULL(s.WorkingDays, 'N/A') AS WorkingDays,
+    ISNULL(s.RequiredHoursPerDay, 0) AS RequiredHoursPerDay,
+    COALESCE(s.HasLunchBreak, ss.HasLunchBreak) AS HasLunchBreak,
+    COALESCE(s.LunchStart, ss.LunchStart) AS LunchStart,
+    COALESCE(s.LunchEnd, ss.LunchEnd) AS LunchEnd,
+    ISNULL(s.IsRotating, 0) AS IsRotating,
     s.RotationPattern
 FROM HR.tbl_Employees e
 INNER JOIN HR.tbl_EmployeeSchedules es
     ON es.EmployeeID = e.EmployeeID
-INNER JOIN HR.tbl_Schedules s
+LEFT JOIN HR.tbl_Schedules s
     ON s.ScheduleID = es.ScheduleID
+LEFT JOIN HR.tbl_EmployeeSpecialSchedules ss
+    ON ss.EmployeeSpecialScheduleId = es.EmployeeSpecialScheduleId
 WHERE
     e.IsActive = 1
     AND es.ValidFrom <= CAST(GETDATE() AS DATE)
@@ -312,34 +326,52 @@ WHERE
 GO
 
 -- [vw_EmployeeDetails]
-CREATE   VIEW HR.vw_EmployeeDetails AS
-SELECT 
+-- 2026-09-10: se agrega resolución de horario especial (ver
+-- HR.tbl_EmployeeSpecialSchedules / Database/hr/21_journey_number_and_special_schedules.sql)
+-- vía COALESCE, sin quitar nada — antes los empleados con horario especial
+-- aparecían como "Sin Horario" en esta vista (Schedule/ScheduleID solo
+-- resolvían desde HR.tbl_Schedules) tanto en el listado como en las
+-- estadísticas de cobertura. También se agregan EmployeeSpecialScheduleId,
+-- IsSpecialSchedule y SpecialScheduleCaseType para poder filtrar/listar
+-- específicamente los casos especiales.
+CREATE OR ALTER VIEW HR.vw_EmployeeDetails AS
+SELECT
     e.EmployeeID      AS EmployeeID,
-    p.FirstName, 
-    p.LastName, 
-    p.IDCard, 
+    p.FirstName,
+    p.LastName,
+    p.IDCard,
     e.Email,
 	  p.Email           AS PersonnelEmail,
 	  e.ImmediateBossID,
     e.EmployeeType    AS EmployeeType,
     rt.Name           AS ContractType,
     e.JobID,
-    j.Description     AS JobName,           
+    j.Description     AS JobName,
     es_current.ScheduleID AS ScheduleID,
-    CAST(ts.EntryTime AS VARCHAR(5)) + ' - ' + CAST(ts.ExitTime AS VARCHAR(5)) AS Schedule,
+    es_current.EmployeeSpecialScheduleId AS EmployeeSpecialScheduleId,
+    -- CAST explícito: sin él, SQL Server tipa "CASE WHEN...THEN 1 ELSE 0 END" como INT
+    -- (no BIT), y EF Core revienta con InvalidCastException al mapear a bool.
+    CAST(CASE WHEN es_current.EmployeeSpecialScheduleId IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS IsSpecialSchedule,
+    sct.Name AS SpecialScheduleCaseType,
+    CASE
+        WHEN COALESCE(ts.EntryTime, ss.EntryTime) IS NOT NULL AND COALESCE(ts.ExitTime, ss.ExitTime) IS NOT NULL
+            THEN CAST(COALESCE(ts.EntryTime, ss.EntryTime) AS VARCHAR(5)) + ' - ' + CAST(COALESCE(ts.ExitTime, ss.ExitTime) AS VARCHAR(5))
+        ELSE NULL
+    END AS Schedule,
 	d.DepartmentID,
     d.Name            AS Department,
-    1.00              AS BaseSalary,
+    sh_latest.NewSalary AS BaseSalary,
     e.HireDate
 FROM HR.tbl_People p
-JOIN HR.tbl_Employees e ON e.PersonID = p.PersonID	
+JOIN HR.tbl_Employees e ON e.PersonID = p.PersonID
 LEFT JOIN HR.tbl_Departments d ON d.DepartmentID = e.DepartmentID
-LEFT JOIN HR.ref_Types rt ON rt.TypeID = e.EmployeeType 
+LEFT JOIN HR.ref_Types rt ON rt.TypeID = e.EmployeeType
                           AND rt.Category = 'CONTRACT_TYPE'
 LEFT JOIN HR.tbl_jobs j ON j.JobID = e.JobID
 OUTER APPLY (
     SELECT TOP 1
         es.ScheduleID,
+        es.EmployeeSpecialScheduleId,
         es.ValidFrom,
         es.ValidTo
     FROM HR.tbl_EmployeeSchedules es
@@ -347,6 +379,8 @@ OUTER APPLY (
     ORDER BY es.ValidFrom DESC, es.EmpScheduleID DESC
 ) es_current
 LEFT JOIN HR.tbl_Schedules ts ON ts.ScheduleID = es_current.ScheduleID
+LEFT JOIN HR.tbl_EmployeeSpecialSchedules ss ON ss.EmployeeSpecialScheduleId = es_current.EmployeeSpecialScheduleId
+LEFT JOIN HR.ref_Types sct ON sct.TypeID = ss.CaseTypeId
 OUTER APPLY (
     -- Último sueldo del empleado en HR.tbl_SalaryHistory, sin importar si el
     -- documento fuente fue un Contrato (Código de Trabajo) o una Acción de
@@ -430,11 +464,28 @@ OUTER APPLY (
 GO
 
 -- [vw_EmployeeScheduleAtDate]
-CREATE   VIEW HR.vw_EmployeeScheduleAtDate AS
-SELECT es.EmployeeID, c.D, s.*
+-- 2026-09-10: mismo fix que vw_EmployeeCurrentSchedule -- JOIN a tbl_Schedules
+-- cambiado de INNER a LEFT + resolucion desde tbl_EmployeeSpecialSchedules,
+-- para que los empleados con horario especial no queden excluidos del rango
+-- de fechas consultado. "s.*" se reemplaza por columnas explicitas porque ya
+-- no se puede resolver todo desde una sola tabla.
+CREATE OR ALTER VIEW HR.vw_EmployeeScheduleAtDate AS
+SELECT
+    es.EmployeeID,
+    c.D,
+    es.ScheduleID,
+    es.EmployeeSpecialScheduleId,
+    ISNULL(s.Description, 'Horario Especial') AS ScheduleName,
+    COALESCE(s.EntryTime, ss.EntryTime) AS EntryTime,
+    COALESCE(s.ExitTime, ss.ExitTime) AS ExitTime,
+    ISNULL(s.RequiredHoursPerDay, 0) AS RequiredHoursPerDay,
+    COALESCE(s.HasLunchBreak, ss.HasLunchBreak) AS HasLunchBreak,
+    COALESCE(s.LunchStart, ss.LunchStart) AS LunchStart,
+    COALESCE(s.LunchEnd, ss.LunchEnd) AS LunchEnd
 FROM HR.tbl_EmployeeSchedules es
-JOIN HR.tbl_Schedules s ON s.ScheduleID = es.ScheduleID
-JOIN HR.vw_Calendar c     ON c.D BETWEEN es.ValidFrom AND ISNULL(es.ValidTo,'2099-12-31');
+LEFT JOIN HR.tbl_Schedules s ON s.ScheduleID = es.ScheduleID
+LEFT JOIN HR.tbl_EmployeeSpecialSchedules ss ON ss.EmployeeSpecialScheduleId = es.EmployeeSpecialScheduleId
+JOIN HR.vw_Calendar c ON c.D BETWEEN es.ValidFrom AND ISNULL(es.ValidTo,'2099-12-31');
 GO
 
 -- [vw_Job_Activities]

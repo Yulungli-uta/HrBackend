@@ -60,7 +60,9 @@ public class EmployeeSchedulesController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<EmployeeSchedulesDto>(e));
     }
 
-    /// <summary>Crea un nuevo registro con control de temporalidad.</summary>
+    /// <summary>Crea un nuevo registro con control de temporalidad. Si viene un
+    /// horario especial (Special*) en vez de ScheduleId, crea primero la fila
+    /// en HR.tbl_EmployeeSpecialSchedules y enlaza el nuevo horario a ella.</summary>
     [HttpPost]
     [RequirePermission("SCHEDULES.CREATE")]
     public async Task<IActionResult> Create([FromBody] EmployeeSchedulesCreateDto dto, CancellationToken ct)
@@ -70,7 +72,31 @@ public class EmployeeSchedulesController : ControllerBase
             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, cts.Token);
             var employeeSchedule = _mapper.Map<EmployeeSchedules>(dto);
-            var result = await _svc.UpdateEmployeeScheduler(employeeSchedule, linkedCts.Token);
+
+            IEnumerable<EmployeeSchedules> result;
+            if (dto.SpecialEntryTime is not null && dto.SpecialExitTime is not null && dto.SpecialCaseTypeId is not null)
+            {
+                var specialSchedule = new EmployeeSpecialSchedule
+                {
+                    EntryTime = dto.SpecialEntryTime.Value,
+                    ExitTime = dto.SpecialExitTime.Value,
+                    HasLunchBreak = dto.SpecialHasLunchBreak ?? false,
+                    LunchStart = dto.SpecialLunchStart,
+                    LunchEnd = dto.SpecialLunchEnd,
+                    CaseTypeId = dto.SpecialCaseTypeId.Value,
+                    Reason = dto.SpecialReason,
+                    DocumentReference = dto.SpecialDocumentReference,
+                    RequiresApproval = dto.SpecialRequiresApproval,
+                    IsActive = true,
+                    CreatedBy = dto.CreatedBy
+                };
+                result = await _svc.UpdateEmployeeSchedulerWithSpecial(employeeSchedule, specialSchedule, linkedCts.Token);
+            }
+            else
+            {
+                result = await _svc.UpdateEmployeeScheduler(employeeSchedule, linkedCts.Token);
+            }
+
             return Ok(new
             {
                 success = true,

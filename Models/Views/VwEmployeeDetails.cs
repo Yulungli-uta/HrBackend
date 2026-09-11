@@ -23,6 +23,14 @@ namespace WsUtaSystem.Models.Views
         public int? ScheduleID { get; set; }
         [Column("Schedule")]
         public string? Schedule { get; set; }
+        /// <summary>Poblado solo cuando el horario vigente es un caso especial
+        /// (sustituto/maternidad/lactancia/otro) en vez de uno del catálogo.</summary>
+        [Column("EmployeeSpecialScheduleId")]
+        public int? EmployeeSpecialScheduleId { get; set; }
+        [Column("IsSpecialSchedule")]
+        public bool IsSpecialSchedule { get; set; }
+        [Column("SpecialScheduleCaseType")]
+        public string? SpecialScheduleCaseType { get; set; }
         [Column("ImmediateBossID")]
         public int? ImmediateBossID { get; set; }
         public int? DepartmentID { get; set; }

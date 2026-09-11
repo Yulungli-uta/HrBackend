@@ -437,11 +437,19 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
                 var employees = dayPlannings.Select(p =>
                 {
                     var activeChange = p.Changes.FirstOrDefault(c => c.IsActiveForAttendance);
+                    // 2026-09-09: antes IsReplacement era "¿hay algún cambio activo?", lo que
+                    // incluía reasignaciones del mismo guardia (solo cambia día/horario/
+                    // ubicación) como si fueran un reemplazo real con otro guardia. Ahora se
+                    // distingue: IsReplacement solo si el cambio trae otro empleado cubriendo;
+                    // IsReassigned si el cambio es del mismo guardia (badge "M" en el tablero).
+                    var isReplacement = activeChange?.ReplacementEmployeeId is not null;
+                    var isReassigned = activeChange is not null && activeChange.ReplacementEmployeeId is null;
                     return new ScheduleBoardCellEmployeeDto(
                         p.EmployeeId,
                         p.Employee?.People.GetFullName() ?? string.Empty,
                         p.Employee?.People.GetShortName() ?? string.Empty,
-                        activeChange is not null,
+                        isReplacement,
+                        isReassigned,
                         p.PlanningId,
                         p.GroupId,
                         p.Group?.Name,
