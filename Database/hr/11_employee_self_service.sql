@@ -377,3 +377,119 @@ Se extiende el presente certificado a solicitud del/la interesado/a, para los fi
         (@HistTemplateID, 'DTH_DIRECTOR_TITLE', 'Cargo Director DTH', 'SYSTEM', 0, 8);
 END
 GO
+
+-- ============================================================
+-- [2026-09-17] Fix de performance del panel de autoservicio ("/", home tras
+-- login): EmployeeSelfServiceService.GetSummaryAsync hacia ~9 idas y vueltas
+-- secuenciales a SQL Server (Permissions/Vacations/TimeBalances/Certificados/
+-- SolicitudesInternas/UltimaMarcacion/Justificaciones), varias trayendo el
+-- historial completo del empleado solo para ordenar/contar/recortar a 5 en
+-- memoria en C#. Este SP devuelve todo en UNA sola ida y vuelta (multiples
+-- result sets), con TOP N y COUNT(*) resueltos por el motor SQL usando los
+-- indices ya existentes (IX_Permissions_Employee_Status_Dates,
+-- IX_Vacations_Employee_Status_Dates, IX_PunchJustifications_Employee_Status,
+-- IX_AttendancePunches_Employee_PunchTime, IX_EmployeeCertificateRequests_Employee,
+-- IX_EmployeeInternalRequests_Employee -- ver Database/hr/03_indexes.sql).
+--
+-- Paridad de comportamiento con el codigo C# que reemplaza (no se corrigen
+-- inconsistencias existentes, solo se optimiza el acceso a datos):
+--   - Permisos "pendientes": cuenta TODO el historial (Status='Pending'),
+--     igual que antes.
+--   - Solicitudes internas "pendientes": el codigo original solo contaba
+--     dentro de las 5 mas recientes (no el total real) -- por eso este SP
+--     NO trae un conteo aparte; el conteo se sigue calculando en C# sobre
+--     las 5 filas devueltas, para no cambiar el comportamiento actual.
+--   - tbl_Vacations tiene soft-delete (ISoftDeletable/IsDeleted) filtrado
+--     automaticamente por EF en cualquier consulta LINQ -- como este SP la
+--     bypassea, se replica manualmente con "AND IsDeleted = 0".
+--   - TimeBalances es multi-regimen (PK compuesta EmployeeID+LaborRegimeId);
+--     se replica el mismo criterio de TimeBalancesRepository.GetByIdAsync
+--     (TOP 1 ORDER BY LaborRegimeId ASC) para elegir el regimen "principal".
+--
+-- Seguridad: @EmployeeID siempre lo resuelve el backend desde el JWT via
+-- ICurrentUserService (RequireEmployeeId() en EmployeeSelfServiceController),
+-- nunca llega desde el cliente -- este SP no cambia ese contrato, solo el
+-- acceso a datos detras de el.
+-- ============================================================
+
+CREATE OR ALTER PROCEDURE [HR].[sp_GetEmployeeSelfServiceSummary]
+    @EmployeeID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 1) Saldo de vacaciones (regimen "principal", ver nota arriba)
+    SELECT TOP (1) [VacationAvailableMin]
+    FROM [HR].[tbl_TimeBalances]
+    WHERE [EmployeeID] = @EmployeeID
+    ORDER BY [LaborRegimeId] ASC;
+
+    -- 2) Permisos recientes (top 5)
+    SELECT TOP (5)
+        [PermissionID]     AS [PermissionId],
+        [PermissionTypeID] AS [PermissionTypeId],
+        [StartDate],
+        [EndDate],
+        [Status],
+        [HourTaken],
+        [Justification]
+    FROM [HR].[tbl_Permissions]
+    WHERE [EmployeeID] = @EmployeeID
+    ORDER BY COALESCE([CreatedAt], [StartDate]) DESC;
+
+    -- 3) Permisos pendientes (total real, no solo entre los 5 recientes)
+    SELECT COUNT(*)
+    FROM [HR].[tbl_Permissions]
+    WHERE [EmployeeID] = @EmployeeID AND [Status] = 'Pending';
+
+    -- 4) Vacaciones recientes (top 5) -- soft-delete replicado manualmente
+    SELECT TOP (5)
+        [VacationID] AS [VacationId],
+        [StartDate],
+        [EndDate],
+        [DaysGranted],
+        [DaysTaken],
+        [Status]
+    FROM [HR].[tbl_Vacations]
+    WHERE [EmployeeID] = @EmployeeID AND [IsDeleted] = 0
+    ORDER BY [CreatedAt] DESC;
+
+    -- 5) Certificados recientes (top 5, sin total -- el resumen no lo usa)
+    SELECT TOP (5)
+        [RequestID]           AS [RequestId],
+        [EmployeeID]          AS [EmployeeId],
+        [CertificateType],
+        [Purpose],
+        [Status],
+        [GeneratedDocumentID] AS [GeneratedDocumentId],
+        [CreatedAt],
+        [IssuedAt]
+    FROM [HR].[tbl_EmployeeCertificateRequests]
+    WHERE [EmployeeID] = @EmployeeID
+    ORDER BY [CreatedAt] DESC;
+
+    -- 6) Solicitudes internas recientes (top 5, sin total -- ver nota de paridad arriba)
+    SELECT TOP (5)
+        [RequestID] AS [RequestId],
+        [RequestType],
+        [Subject],
+        [Status],
+        [CreatedAt]
+    FROM [HR].[tbl_EmployeeInternalRequests]
+    WHERE [EmployeeID] = @EmployeeID
+    ORDER BY [CreatedAt] DESC;
+
+    -- 7) Ultima marcacion
+    SELECT TOP (1)
+        [PunchTime],
+        [PunchType]
+    FROM [HR].[tbl_AttendancePunches]
+    WHERE [EmployeeID] = @EmployeeID
+    ORDER BY [PunchTime] DESC;
+
+    -- 8) Justificaciones pendientes (total real)
+    SELECT COUNT(*)
+    FROM [HR].[tbl_PunchJustifications]
+    WHERE [EmployeeID] = @EmployeeID AND [Status] = 'PENDING';
+END
+GO

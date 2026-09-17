@@ -14,11 +14,30 @@ public class PeopleController : ControllerBase
 {
     private readonly IPeopleService _svc;
     private readonly IMapper _mapper;
+    private readonly IHrDinardapClient _dinardap;
 
-    public PeopleController(IPeopleService svc, IMapper mapper)
+    public PeopleController(IPeopleService svc, IMapper mapper, IHrDinardapClient dinardap)
     {
         _svc = svc;
         _mapper = mapper;
+        _dinardap = dinardap;
+    }
+
+    /// <summary>
+    /// Consulta Registro Civil (DINARDAP) por cédula para auto-rellenar el formulario de
+    /// creación de Persona. 200 con el objeto (aunque tenga campos en null - la persona
+    /// simplemente no tiene ese dato) cuando el servicio respondió; 503 cuando no se pudo
+    /// consultar en absoluto (red, DINARDAP caído, permiso) - el frontend usa esa distinción
+    /// para decidir si bloquea campo por campo o deja todo editable.
+    /// </summary>
+    [HttpGet("dinardap-lookup/{cedula}")]
+    [RequirePermission("DINARDAP_HR.READ")]
+    public async Task<IActionResult> DinardapLookup([FromRoute] string cedula, CancellationToken ct)
+    {
+        var data = await _dinardap.ConsultarRegistroCivilAsync(cedula, ct);
+        return data is null
+            ? StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "DINARDAP no disponible en este momento." })
+            : Ok(data);
     }
 
     /// <summary>Lista todos los registros de People.</summary>

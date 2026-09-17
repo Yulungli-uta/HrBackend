@@ -25,6 +25,9 @@ public class FamilyBurdenController : ControllerBase
         _mapper = mapper;
         _currentUser = currentUser;
     }
+    // Nota: el auto-relleno de Registro Civil (DINARDAP) para el dependiente usa
+    // GET /people/dinardap-lookup/{cedula} (PeopleController) - misma consulta exacta que
+    // para crear una Persona, no se duplica el endpoint aquí.
 
     /// <summary>Lista todos los registros de FamilyBurden. Requiere rol de RRHH/administración.</summary>
     [HttpGet]

@@ -19,11 +19,47 @@ public class EducationLevelsController : ControllerBase
     private readonly IEducationLevelsService _svc;
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUser;
-    public EducationLevelsController(IEducationLevelsService svc, IMapper mapper, ICurrentUserService currentUser)
+    private readonly IEducationLevelSyncService _sync;
+    public EducationLevelsController(
+        IEducationLevelsService svc, IMapper mapper, ICurrentUserService currentUser, IEducationLevelSyncService sync)
     {
         _svc = svc;
         _mapper = mapper;
         _currentUser = currentUser;
+        _sync = sync;
+    }
+
+    /// <summary>
+    /// Previsualiza la sincronización con SENESCYT (vía DINARDAP) para una persona: cuántos
+    /// títulos hay, cuántos ya están registrados y cuántos se crearían. No persiste nada.
+    /// </summary>
+    [HttpGet("person/{personId:int}/senescyt-sync/preview")]
+    [RequirePermission("DINARDAP_HR.READ")]
+    public async Task<IActionResult> PreviewSenescytSync([FromRoute] int personId, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await _sync.PreviewAsync(personId, ct));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>Confirma la sincronización: crea únicamente los títulos que no existían todavía.</summary>
+    [HttpPost("person/{personId:int}/senescyt-sync/confirm")]
+    [RequirePermission("DINARDAP_HR.READ")]
+    public async Task<IActionResult> ConfirmSenescytSync([FromRoute] int personId, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await _sync.ConfirmAsync(personId, ct));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
     }
 
     /// <summary>Lista todos los registros de EducationLevels. Requiere rol de RRHH/administración.</summary>
@@ -107,6 +143,12 @@ public class EducationLevelsController : ControllerBase
             Location = dto.Location,
             Score = dto.Score,
             SenescytRegistrationNumber = dto.SenescytRegistrationNumber,
+            SiiesGradoTypeId = dto.SiiesGradoTypeId,
+            SenescytGraduationDate = dto.SenescytGraduationDate,
+            SenescytRegistrationDate = dto.SenescytRegistrationDate,
+            SenescytType = dto.SenescytType,
+            // Manual siempre en este endpoint - el sincronizador con DINARDAP no pasa por aquí.
+            Source = "Manual",
         };
 
         if (!ElevatedRoles.Any(User.IsInRole))
@@ -139,6 +181,14 @@ public class EducationLevelsController : ControllerBase
             return Forbid403("No puede editar registros de formación académica de otra persona.");
 
         var entityObj = _mapper.Map<EducationLevels>(dto);
+        // El DTO de edición manual no expone Source/*Original a propósito - SetValues (usado
+        // por el UpdateAsync genérico) sobreescribe TODO lo ausente del DTO con el default de
+        // la clase, así que sin esto un título sincronizado perdería su marca de origen y el
+        // texto crudo de DINARDAP en cualquier edición manual. Mismo patrón de bug ya visto
+        // antes en este proyecto con SetValues genérico (Jobs/JobActivity).
+        entityObj.Source = current.Source;
+        entityObj.SenescytNivelNombreOriginal = current.SenescytNivelNombreOriginal;
+        entityObj.InstitutionNameOriginal = current.InstitutionNameOriginal;
         await _svc.UpdateAsync(id, entityObj, ct);
         return NoContent();
     }

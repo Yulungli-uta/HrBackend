@@ -337,6 +337,10 @@ GO
 CREATE OR ALTER VIEW HR.vw_EmployeeDetails AS
 SELECT
     e.EmployeeID      AS EmployeeID,
+    -- [2026-09-17] PersonID ya estaba disponible vía el JOIN de abajo; se agrega al SELECT
+    -- para que frontend/backend dejen de pagar una segunda consulta (EmpleadosAPI.get /
+    -- IEmployeesService.GetByIdAsync) solo para resolver este valor.
+    p.PersonID,
     p.FirstName,
     p.LastName,
     p.IDCard,

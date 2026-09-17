@@ -18,6 +18,14 @@
 --    marcado como pendiente (ver decisión institucional #3 del análisis).
 -- 5) HR.vw_SiiesProfesores: vista de solo lectura, mismo patrón que
 --    vw_SiiesFuncionarios.
+-- 6) [2026-09-16] Integración DINARDAP (WsUtaDinardap.Api): corrige la
+--    numeración de ACADEMIC_LEVEL (NIVEL_1 tenía "TERCER NIVEL" mal puesto,
+--    ver sección 8 al final), migra los 30 registros existentes (fixtures
+--    QA, no producción) al nivel correcto, y agrega a tbl_EducationLevels
+--    las columnas que hacen falta para guardar todo lo que devuelve
+--    DINARDAP (fechas de grado/registro SENESCYT, tipo, nivel original,
+--    origen del registro) + índice único filtrado en
+--    SenescytRegistrationNumber.
 --
 -- Decisión de datos ya acordada (no requiere código adicional, solo
 -- documentar): HORAS_CLASE_TERCER_NIVEL = Contracts.ContractedHours del
@@ -161,6 +169,27 @@ IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_
     ALTER TABLE [HR].[tbl_KnowledgeArea] ADD [SiiesCode] NVARCHAR(20) NULL;
 GO
 
+-- 5.1) Homologación SiiesRelacionIesTypeId sobre 4 tipos de contrato sin mapear ----------
+-- 2026-09-11: huecos de catálogo encontrados al revisar por qué 200 profesores activos
+-- salían con RELACION_IES vacía en el reporte SIIES -- sus hermanos (con/sin "(DELEGACIÓN)")
+-- ya estaban mapeados, estos 4 quedaron fuera del UPDATE original. Valores confirmados con
+-- el usuario 2026-09-11 siguiendo el mismo patrón que sus hermanos ya mapeados.
+UPDATE ct
+SET ct.[SiiesRelacionIesTypeId] = rt.[TypeID]
+FROM [HR].[tbl_contract_type] ct
+CROSS JOIN (SELECT [TypeID] FROM [HR].[ref_Types] WHERE [Category] = 'SIIES_RELACION_IES' AND [Name] = N'Contrato con relación de dependencia') rt
+WHERE ct.[Name] IN (N'CONTRATO TÉCNICO DOCENTE DCF', N'CONTRATO TÉCNICO DE LABORATORIO 1', N'CONTRATO TÉCNICO DE LABORATORIO1')
+  AND ct.[SiiesRelacionIesTypeId] IS NULL;
+GO
+
+UPDATE ct
+SET ct.[SiiesRelacionIesTypeId] = rt.[TypeID]
+FROM [HR].[tbl_contract_type] ct
+CROSS JOIN (SELECT [TypeID] FROM [HR].[ref_Types] WHERE [Category] = 'SIIES_RELACION_IES' AND [Name] = N'Contrato sin relación de dependencia') rt
+WHERE ct.[Name] = N'CONTRATO POR SERVICIOS OCASIONALES'
+  AND ct.[SiiesRelacionIesTypeId] IS NULL;
+GO
+
 -- 6) Vista HR.vw_SiiesProfesores -----------------------------------------------
 CREATE OR ALTER VIEW [HR].[vw_SiiesProfesores] AS
 SELECT
@@ -209,7 +238,23 @@ SELECT
     COALESCE(elr.[EffectiveTo], CAST(ctrFallback.[enddate] AS DATE), paFallback.[EndDate])             AS [EffectiveTo],
     elr.[IsActive]                  AS [RegimeIsActive],
     elr.[IngresoPorConcurso],
-    COALESCE(ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel]) AS [RelacionIesSiiesLabel],
+    -- 2026-09-11: si el documento resuelto es una Acción de Personal (no Contrato) y su tipo
+    -- de acción no tiene RelacionIes mapeada (ej. Promoción/Recategorización/Reintegro -- son
+    -- modificaciones administrativas posteriores, no el acto fundacional Nombramiento/
+    -- Designación/Nombramiento Provisional, únicos 3 tipos mapeados a propósito), se asume
+    -- "Nombramiento" por decisión explícita del usuario: si está vinculado por Acción de
+    -- Personal, es porque su relación con la IES es de nombramiento.
+    COALESCE(
+        ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel],
+        -- 2026-09-11: si el contrato resuelto es un ADENDUM/PRORROGA/RENOVACIÓN (modificación,
+        -- no tiene RelacionIes propia a propósito), se sube por ParentID hasta el contrato base
+        -- (ctRelChainType, definido más abajo) -- decisión explícita del usuario.
+        ctRelChainType.[SiiesLabel],
+        CASE WHEN COALESCE(elr.[DocumentType],
+                CASE WHEN ctrFallback.[ContractID] IS NOT NULL THEN 'CONTRACT'
+                     WHEN paFallback.[ActionID] IS NOT NULL THEN 'PERSONNEL_ACTION' END) = 'PERSONNEL_ACTION'
+             THEN relIesNombramientoDefault.[SiiesLabel] END
+    ) AS [RelacionIesSiiesLabel],
     COALESCE(ctr.[ContractedHours], ctrFallback.[ContractedHours]) AS [ContractedHours],
     e.[IsActive]                    AS [EmployeeIsActive],
     e.[HireDate],
@@ -307,6 +352,21 @@ OUTER APPLY (
 ) ctrFallback
 LEFT JOIN [HR].[tbl_contract_type] ctFallback ON ctFallback.[ContractTypeID] = ctrFallback.[ContractTypeID]
 LEFT JOIN [HR].[ref_Types] ctRelFallback      ON ctRelFallback.[TypeID] = ctFallback.[SiiesRelacionIesTypeId]
+-- 2026-09-11: cadena ParentID para RELACION_IES cuando el contrato resuelto (ctr o
+-- ctrFallback) es un ADENDUM/PRORROGA/RENOVACIÓN -- sube hasta 2 niveles (cadena real
+-- observada en datos: adenda -> adenda -> contrato base) buscando el primer ancestro cuyo
+-- tipo de contrato sí tenga SiiesRelacionIesTypeId mapeado. Decisión explícita del usuario.
+OUTER APPLY (
+    SELECT TOP 1 COALESCE(ctSelf.[SiiesRelacionIesTypeId], ctParent.[SiiesRelacionIesTypeId], ctGrandparent.[SiiesRelacionIesTypeId]) AS [SiiesRelacionIesTypeId]
+    FROM [HR].[tbl_Contracts] cSelf
+    LEFT JOIN [HR].[tbl_contract_type] ctSelf        ON ctSelf.[ContractTypeID] = cSelf.[ContractTypeID]
+    LEFT JOIN [HR].[tbl_Contracts] cParent           ON cParent.[ContractID] = cSelf.[ParentID]
+    LEFT JOIN [HR].[tbl_contract_type] ctParent      ON ctParent.[ContractTypeID] = cParent.[ContractTypeID]
+    LEFT JOIN [HR].[tbl_Contracts] cGrandparent      ON cGrandparent.[ContractID] = cParent.[ParentID]
+    LEFT JOIN [HR].[tbl_contract_type] ctGrandparent ON ctGrandparent.[ContractTypeID] = cGrandparent.[ContractTypeID]
+    WHERE cSelf.[ContractID] = COALESCE(ctr.[ContractID], ctrFallback.[ContractID])
+) ctRelChain
+LEFT JOIN [HR].[ref_Types] ctRelChainType ON ctRelChainType.[TypeID] = ctRelChain.[SiiesRelacionIesTypeId]
 OUTER APPLY (
     SELECT TOP 1 pa2.*
     FROM [HR].[tbl_PersonnelActions] pa2
@@ -318,6 +378,10 @@ OUTER APPLY (
 ) paFallback
 LEFT JOIN [HR].[tbl_personnel_action_type] patFallback ON patFallback.[PersonnelActionTypeId] = paFallback.[ActionTypeID]
 LEFT JOIN [HR].[ref_Types] patRelFallback               ON patRelFallback.[TypeID] = patFallback.[SiiesRelacionIesTypeId]
+-- 2026-09-11: default de RELACION_IES = "Nombramiento" cuando el documento resuelto es Acción
+-- de Personal y su tipo no tiene mapeo propio (ver comentario junto a RelacionIesSiiesLabel).
+LEFT JOIN [HR].[ref_Types] relIesNombramientoDefault
+    ON relIesNombramientoDefault.[Category] = 'SIIES_RELACION_IES' AND relIesNombramientoDefault.[Name] = N'Nombramiento'
 -- 2026-09-11: antes exigia TeacherStructure (solo Titulares). Ahora tambien entran
 -- los profesores ocasionales identificados por tipo de contrato (ver OUTER APPLY
 -- ocasionalDocente arriba).
@@ -392,30 +456,74 @@ GO
 -- reporte quedaba completamente vacío. Ahora aparecen TODOS los profesores (mismo criterio
 -- que vw_SiiesProfesores: Titulares + Ocasionales), con los campos de título en NULL cuando
 -- no los tienen cargados — visible para que RRHH sepa a quién le falta esa información.
+--
+-- [2026-09-16, reescrita] Dos problemas encontrados al verificar el reporte tras la
+-- sincronización DINARDAP (ver sección 8): (1) traía UNA FILA POR TÍTULO de
+-- tbl_EducationLevels, duplicando profesores con más de un título cargado — se agrega
+-- ROW_NUMBER() para quedarse solo con el título de MAYOR nivel/grado por profesor
+-- (Doctorado > Maestría > Especialista(Salud) > Diplomado > Tercer Nivel > sin
+-- clasificar > sin título), una sola fila por EmployeeID, decisión explícita del
+-- usuario. (2) FECHA_OBTUVO_TITULO leía [EndDate] (fecha fin de estudios, 0/3409
+-- registros la tienen) en vez de [SenescytGraduationDate] (fecha de grado real que
+-- llegó de DINARDAP, 2333/3409 la tienen) — corregido con COALESCE, [EndDate] queda
+-- de respaldo para registros manuales antiguos. NOMBRES_IES ahora cae a
+-- [InstitutionNameOriginal] cuando no hay [InstitutionID] catalogado (caso DINARDAP:
+-- institución no obligatoria, ver 8.3b) — antes quedaba en blanco aunque el título sí
+-- tuviera institución. PAIS_ESTUDIO sigue en blanco sin institución catalogada:
+-- DINARDAP no informa país en el detalle del título, no hay fuente real de la que
+-- tomarlo (mismo criterio que CODIGO_IES_ESTUDIO, no se inventa el dato).
 CREATE OR ALTER VIEW [HR].[vw_SiiesFormacionProfesional] AS
+WITH [Titulos] AS (
+    SELECT
+        v.[EmployeeID], v.[IDCard], v.[IdentTypeName],
+        v.[LatestPeriodCode], v.[LatestPeriodStart], v.[LatestPeriodEnd],
+        el.[EducationID],
+        inst.[CountryID]                                     AS [InstitutionCountryId],
+        COALESCE(inst.[Name], el.[InstitutionNameOriginal])  AS [InstitutionName],
+        nivelCat.[Name]                                      AS [NivelName],
+        nivelCat.[SiiesLabel]                                AS [NivelSiiesLabel],
+        grado.[Name]                                         AS [GradoName],
+        grado.[SiiesLabel]                                   AS [GradoSiiesLabel],
+        el.[Title]                                           AS [NombreTitulo],
+        ka.[SiiesCode]                                        AS [CampoDetalladoSiiesCode],
+        el.[SenescytRegistrationNumber],
+        COALESCE(el.[SenescytGraduationDate], el.[SenescytRegistrationDate], el.[EndDate])  AS [FechaObtuvoTitulo]
+    FROM [HR].[vw_SiiesProfesores] v
+    LEFT JOIN [HR].[tbl_EducationLevels] el  ON el.[PersonID] = v.[PersonID]
+    LEFT JOIN [HR].[tbl_Institutions] inst   ON inst.[InstitutionID] = el.[InstitutionID]
+    LEFT JOIN [HR].[ref_Types] nivelCat      ON nivelCat.[TypeID] = el.[EducationLevelTypeID]
+    LEFT JOIN [HR].[ref_Types] grado         ON grado.[TypeID] = el.[SiiesGradoTypeId]
+    LEFT JOIN [HR].[tbl_KnowledgeArea] ka    ON ka.[id] = el.[KnowledgeAreaId]
+),
+[Ranked] AS (
+    SELECT *,
+        ROW_NUMBER() OVER (
+            PARTITION BY [EmployeeID]
+            ORDER BY
+                CASE WHEN [NivelName] IS NULL THEN 99
+                     WHEN [NivelName] = 'NIVEL_4' THEN 1
+                     WHEN [NivelName] = 'NIVEL_3' THEN 2
+                     ELSE 3 END,
+                CASE [GradoName]
+                     WHEN 'Doctor (Ph.D)' THEN 1
+                     WHEN 'Maestría o Equivalente' THEN 2
+                     WHEN 'Especialista Área Salud' THEN 3
+                     WHEN 'Especialista' THEN 3
+                     WHEN 'Diploma Superior' THEN 4
+                     ELSE 5 END,
+                [FechaObtuvoTitulo] DESC,
+                [EducationID] DESC
+        ) AS [Rn]
+    FROM [Titulos]
+)
 SELECT
-    v.[EmployeeID],
-    v.[IDCard],
-    v.[IdentTypeName],
-    inst.[CountryID]     AS [InstitutionCountryId],
-    inst.[Name]          AS [InstitutionName],
-    nivelCat.[SiiesLabel] AS [NivelSiiesLabel],
-    grado.[SiiesLabel]    AS [GradoSiiesLabel],
-    el.[Title]            AS [NombreTitulo],
-    ka.[SiiesCode]        AS [CampoDetalladoSiiesCode],
-    el.[SenescytRegistrationNumber],
-    el.[EndDate]          AS [FechaObtuvoTitulo],
-    -- 2026-09-11: mismo período visible directo en la vista, ver comentario en
-    -- vw_SiiesProfesores.
-    v.[LatestPeriodCode],
-    v.[LatestPeriodStart],
-    v.[LatestPeriodEnd]
-FROM [HR].[vw_SiiesProfesores] v
-LEFT JOIN [HR].[tbl_EducationLevels] el  ON el.[PersonID] = v.[PersonID]
-LEFT JOIN [HR].[tbl_Institutions] inst   ON inst.[InstitutionID] = el.[InstitutionID]
-LEFT JOIN [HR].[ref_Types] nivelCat      ON nivelCat.[TypeID] = el.[EducationLevelTypeID]
-LEFT JOIN [HR].[ref_Types] grado         ON grado.[TypeID] = el.[SiiesGradoTypeId]
-LEFT JOIN [HR].[tbl_KnowledgeArea] ka    ON ka.[id] = el.[KnowledgeAreaId];
+    [EmployeeID], [IDCard], [IdentTypeName],
+    [InstitutionCountryId], [InstitutionName],
+    [NivelSiiesLabel], [GradoSiiesLabel], [NombreTitulo],
+    [CampoDetalladoSiiesCode], [SenescytRegistrationNumber], [FechaObtuvoTitulo],
+    [LatestPeriodCode], [LatestPeriodStart], [LatestPeriodEnd]
+FROM [Ranked]
+WHERE [Rn] = 1;
 GO
 
 -- 7.1) Función de tabla HR.fn_SiiesFormacionProfesional (filtro de período académico)
@@ -426,18 +534,246 @@ GO
 -- la lista a quienes tuvieron actividad real ese período en
 -- HR.tbl_AcademicHoursDistribution (mismo criterio de "período" que el resto del
 -- reporte SIIES Profesores).
+--
+-- [2026-09-16] Con @PeriodCode también se filtra por FECHA — regla explícita del
+-- usuario: "si en el periodo todavía no ha adquirido el título no debería aparecer".
+-- Se calcula la fecha de corte del período (MAX([PeriodEnd]) de
+-- tbl_AcademicHoursDistribution para ese código) y solo cuentan títulos con
+-- COALESCE([SenescytGraduationDate],[EndDate]) <= esa fecha; títulos con fecha
+-- desconocida (ambas columnas NULL) quedan fuera del filtro por período específico
+-- porque no se puede confirmar que ya existían — no se inventa el dato. Sin
+-- @PeriodCode (NULL) no hay corte de fecha, igual que antes. La deduplicación
+-- (mayor nivel por profesor, ver vista) se recalcula completa DENTRO del período,
+-- porque el título más alto vigente hoy puede no haber existido todavía en un
+-- período histórico, y en ese caso debe ganar el siguiente más alto que sí existía.
 CREATE OR ALTER FUNCTION [HR].[fn_SiiesFormacionProfesional] (@PeriodCode VARCHAR(10) = NULL)
 RETURNS TABLE
 AS
 RETURN
 (
-    SELECT v.*
-    FROM [HR].[vw_SiiesFormacionProfesional] v
-    WHERE @PeriodCode IS NULL
-       OR EXISTS (
-            SELECT 1
-            FROM [HR].[tbl_AcademicHoursDistribution] a
-            WHERE a.[IDCard] = v.[IDCard] AND a.[PeriodCode] = @PeriodCode
-          )
+    SELECT * FROM [HR].[vw_SiiesFormacionProfesional] WHERE @PeriodCode IS NULL
+
+    UNION ALL
+
+    SELECT
+        [EmployeeID], [IDCard], [IdentTypeName],
+        [InstitutionCountryId], [InstitutionName],
+        [NivelSiiesLabel], [GradoSiiesLabel], [NombreTitulo],
+        [CampoDetalladoSiiesCode], [SenescytRegistrationNumber], [FechaObtuvoTitulo],
+        [LatestPeriodCode], [LatestPeriodStart], [LatestPeriodEnd]
+    FROM (
+        SELECT *,
+            ROW_NUMBER() OVER (
+                PARTITION BY [EmployeeID]
+                ORDER BY
+                    CASE WHEN [NivelName] IS NULL THEN 99
+                         WHEN [NivelName] = 'NIVEL_4' THEN 1
+                         WHEN [NivelName] = 'NIVEL_3' THEN 2
+                         ELSE 3 END,
+                    CASE [GradoName]
+                         WHEN 'Doctor (Ph.D)' THEN 1
+                         WHEN 'Maestría o Equivalente' THEN 2
+                         WHEN 'Especialista Área Salud' THEN 3
+                         WHEN 'Especialista' THEN 3
+                         WHEN 'Diploma Superior' THEN 4
+                         ELSE 5 END,
+                    [FechaObtuvoTitulo] DESC,
+                    [EducationID] DESC
+            ) AS [Rn]
+        FROM (
+            SELECT
+                v.[EmployeeID], v.[IDCard], v.[IdentTypeName],
+                v.[LatestPeriodCode], v.[LatestPeriodStart], v.[LatestPeriodEnd],
+                el.[EducationID],
+                inst.[CountryID]                                     AS [InstitutionCountryId],
+                COALESCE(inst.[Name], el.[InstitutionNameOriginal])  AS [InstitutionName],
+                nivelCat.[Name]                                      AS [NivelName],
+                nivelCat.[SiiesLabel]                                AS [NivelSiiesLabel],
+                grado.[Name]                                         AS [GradoName],
+                grado.[SiiesLabel]                                   AS [GradoSiiesLabel],
+                el.[Title]                                           AS [NombreTitulo],
+                ka.[SiiesCode]                                        AS [CampoDetalladoSiiesCode],
+                el.[SenescytRegistrationNumber],
+                COALESCE(el.[SenescytGraduationDate], el.[SenescytRegistrationDate], el.[EndDate])  AS [FechaObtuvoTitulo]
+            FROM [HR].[vw_SiiesProfesores] v
+            LEFT JOIN [HR].[tbl_EducationLevels] el
+                ON el.[PersonID] = v.[PersonID]
+               AND COALESCE(el.[SenescytGraduationDate], el.[SenescytRegistrationDate], el.[EndDate]) <= (
+                        SELECT MAX(a.[PeriodEnd])
+                        FROM [HR].[tbl_AcademicHoursDistribution] a
+                        WHERE a.[PeriodCode] = @PeriodCode
+                   )
+            LEFT JOIN [HR].[tbl_Institutions] inst   ON inst.[InstitutionID] = el.[InstitutionID]
+            LEFT JOIN [HR].[ref_Types] nivelCat      ON nivelCat.[TypeID] = el.[EducationLevelTypeID]
+            LEFT JOIN [HR].[ref_Types] grado         ON grado.[TypeID] = el.[SiiesGradoTypeId]
+            LEFT JOIN [HR].[tbl_KnowledgeArea] ka    ON ka.[id] = el.[KnowledgeAreaId]
+            WHERE @PeriodCode IS NOT NULL
+              AND EXISTS (
+                    SELECT 1 FROM [HR].[tbl_AcademicHoursDistribution] a2
+                    WHERE a2.[IDCard] = v.[IDCard] AND a2.[PeriodCode] = @PeriodCode
+                  )
+        ) [x]
+    ) [y]
+    WHERE [Rn] = 1
 );
 GO
+
+-- ============================================================
+-- 8) [2026-09-16] Integración DINARDAP — historial académico real vía
+--    HR.tbl_EducationLevels (analizado y aprobado por el usuario en la
+--    misma sesión que el proyecto DatosDINARDAP/WsUtaDinardap.Api).
+--
+-- 8.1) ACADEMIC_LEVEL: corrige la incoherencia de numeración detectada en
+--      vivo — NIVEL_1 tenía el SiiesLabel "TERCER NIVEL" mientras
+--      NIVEL_3/NIVEL_4 estaban vacíos, sin un solo registro real usándolos
+--      (confirmado: los 30 registros existentes de tbl_EducationLevels son
+--      fixtures de QA, no datos de producción). Se mueve "TERCER NIVEL" a
+--      NIVEL_3 y se agrega "CUARTO NIVEL" a NIVEL_4 — coherente con
+--      SIIES_NIVEL (mismos nombres) y con el nivel numérico 2/3/4 que ya
+--      calcula WsUtaDinardap.Api.TitulosPackageHandler.ClasificarNivel.
+--      NIVEL_1 queda sin SiiesLabel (huérfano, NO se borra ni desactiva).
+--      NIVEL_2 queda sin usar por ahora.
+-- 8.2) Migra los 30 registros existentes (fixtures QA) a NIVEL_3/NIVEL_4
+--      según su Title real, coherente con 8.1. Bajo riesgo: datos de
+--      prueba, no producción real.
+-- 8.3) tbl_EducationLevels: 5 columnas nuevas para capturar todo lo que
+--      devuelve DINARDAP y que hoy no tiene dónde guardarse:
+--      - SenescytGraduationDate / SenescytRegistrationDate: fechaGrado /
+--        fechaRegistro de DINARDAP. Conceptos DISTINTOS de StartDate/
+--        EndDate (fechas de inicio/fin de ESTUDIO) — confirmado en vivo
+--        que pueden diferir por meses/años del fin de estudios.
+--      - SenescytType: Nacional/Extranjero (campo "tipo" de DINARDAP).
+--      - SenescytNivelNombreOriginal: texto crudo del nivel tal como lo
+--        manda DINARDAP (ej. "Tercer Nivel Técnico Superior"), para no
+--        perder trazabilidad si el clasificador se corrige después.
+--      - Source: 'Manual' (default) o 'Dinardap' — gobierna el bloqueo
+--        por campo en el formulario de HrFrontend.
+--      - InstitutionNameOriginal: nombre libre de la institución tal como
+--        lo manda DINARDAP (ej. "ARIZONA STATE UNIVERSITY") — el catálogo
+--        HR.tbl_Institutions hoy solo tiene 12 filas (casi todas fixtures
+--        QA, todas de Ecuador) y exige Tipo+País+Provincia+Cantón NOT
+--        NULL, dato que DINARDAP no manda para universidades extranjeras.
+--        Decisión del usuario 2026-09-16: InstitutionID deja de ser
+--        obligatorio (8.3b) y el nombre siempre se guarda como texto,
+--        se resuelva o no contra el catálogo.
+-- 8.3b) InstitutionID pasa a NULLABLE (antes NOT NULL) — un título
+--       sincronizado sin institución catalogada igual se guarda completo,
+--       con InstitutionID en null e InstitutionNameOriginal con el
+--       nombre real. La FK (FK_EducationLevels_Institution) no se toca,
+--       ya admite NULL sola.
+-- 8.4) Índice único FILTRADO en SenescytRegistrationNumber (solo WHERE NOT
+--      NULL, porque no todos los registros manuales lo tienen) para que
+--      sincronizar dos veces nunca duplique el mismo título.
+--
+-- Solo aditivo / idempotente. Ninguna columna ni fila existente se
+-- elimina; StartDate/EndDate no se tocan.
+-- ============================================================
+
+-- 8.1) Corrección de ACADEMIC_LEVEL --------------------------------------
+UPDATE [HR].[ref_Types] SET [SiiesLabel] = NULL WHERE [Category] = 'ACADEMIC_LEVEL' AND [Name] = N'NIVEL_1' AND [SiiesLabel] IS NOT NULL;
+UPDATE [HR].[ref_Types] SET [SiiesLabel] = N'TERCER NIVEL' WHERE [Category] = 'ACADEMIC_LEVEL' AND [Name] = N'NIVEL_3';
+UPDATE [HR].[ref_Types] SET [SiiesLabel] = N'CUARTO NIVEL' WHERE [Category] = 'ACADEMIC_LEVEL' AND [Name] = N'NIVEL_4';
+GO
+
+-- 8.2) Migración de los 30 registros existentes (fixtures QA) ------------
+DECLARE @Nivel3 INT = (SELECT [TypeID] FROM [HR].[ref_Types] WHERE [Category] = 'ACADEMIC_LEVEL' AND [Name] = N'NIVEL_3');
+DECLARE @Nivel4 INT = (SELECT [TypeID] FROM [HR].[ref_Types] WHERE [Category] = 'ACADEMIC_LEVEL' AND [Name] = N'NIVEL_4');
+
+UPDATE [HR].[tbl_EducationLevels]
+    SET [EducationLevelTypeID] = @Nivel4
+    WHERE ([Title] LIKE N'Doctorado%' OR [Title] LIKE N'Maestria%')
+      AND [EducationLevelTypeID] <> @Nivel4;
+
+UPDATE [HR].[tbl_EducationLevels]
+    SET [EducationLevelTypeID] = @Nivel3
+    WHERE [Title] LIKE N'Ingeniero%'
+      AND [EducationLevelTypeID] <> @Nivel3;
+GO
+
+-- 8.3) Columnas nuevas en tbl_EducationLevels -----------------------------
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_EducationLevels]') AND name = 'SenescytGraduationDate')
+    ALTER TABLE [HR].[tbl_EducationLevels] ADD [SenescytGraduationDate] DATE NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_EducationLevels]') AND name = 'SenescytRegistrationDate')
+    ALTER TABLE [HR].[tbl_EducationLevels] ADD [SenescytRegistrationDate] DATE NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_EducationLevels]') AND name = 'SenescytType')
+    ALTER TABLE [HR].[tbl_EducationLevels] ADD [SenescytType] NVARCHAR(20) NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_EducationLevels]') AND name = 'SenescytNivelNombreOriginal')
+    ALTER TABLE [HR].[tbl_EducationLevels] ADD [SenescytNivelNombreOriginal] NVARCHAR(200) NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_EducationLevels]') AND name = 'Source')
+    ALTER TABLE [HR].[tbl_EducationLevels] ADD [Source] NVARCHAR(20) NOT NULL CONSTRAINT [DF_EducationLevels_Source] DEFAULT ('Manual');
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_EducationLevels_Source')
+    ALTER TABLE [HR].[tbl_EducationLevels]
+        ADD CONSTRAINT [CK_EducationLevels_Source] CHECK ([Source] IN ('Manual', 'Dinardap'));
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_EducationLevels]') AND name = 'InstitutionNameOriginal')
+    ALTER TABLE [HR].[tbl_EducationLevels] ADD [InstitutionNameOriginal] NVARCHAR(200) NULL;
+GO
+
+-- 8.3b) InstitutionID pasa a nullable (ver nota arriba) ------------------
+IF EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_EducationLevels]') AND name = 'InstitutionID' AND is_nullable = 0
+)
+    ALTER TABLE [HR].[tbl_EducationLevels] ALTER COLUMN [InstitutionID] INT NULL;
+GO
+
+-- 8.4) Índice único filtrado en (PersonID, SenescytRegistrationNumber) ---
+-- [2026-09-16, corregido tras la sincronización masiva real] Originalmente el índice era
+-- solo sobre SenescytRegistrationNumber (global) - asumía que ese número es único en TODO
+-- el sistema. Falso: DINARDAP devolvió el mismo número "858192970" (formato distinto al
+-- típico "1010-13-1222798", parece un valor de relleno) para ~510 personas reales distintas,
+-- bloqueando el INSERT de todas menos la primera con "Cannot insert duplicate key". Lo único
+-- que en realidad había que evitar es duplicar el MISMO título para la MISMA persona - el
+-- índice compuesto por persona es la unicidad correcta.
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_EducationLevels_SenescytRegistrationNumber' AND object_id = OBJECT_ID('[HR].[tbl_EducationLevels]'))
+    DROP INDEX [UQ_EducationLevels_SenescytRegistrationNumber] ON [HR].[tbl_EducationLevels];
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_EducationLevels_Person_SenescytRegistrationNumber' AND object_id = OBJECT_ID('[HR].[tbl_EducationLevels]'))
+    CREATE UNIQUE INDEX [UQ_EducationLevels_Person_SenescytRegistrationNumber]
+        ON [HR].[tbl_EducationLevels] ([PersonID], [SenescytRegistrationNumber])
+        WHERE [SenescytRegistrationNumber] IS NOT NULL;
+GO
+
+-- 8.5) [2026-09-16, encontrado en vivo durante la sincronización masiva real]
+-- Title NVARCHAR(150) truncaba títulos reales largos (ej. maestrías con nombre
+-- compuesto de más de 150 caracteres: "MASTER UNIVERSITARIO EN SISTEMAS
+-- INTEGRADOS DE GESTION DE LA PREVENCION DE RIESGOS LABORALES, LA CALIDAD Y EL
+-- MEDIO AMBIENTE"), tumbando el INSERT para esas personas. Se amplía a 500.
+IF EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('[HR].[tbl_EducationLevels]') AND name = 'Title' AND max_length < 1000
+)
+    ALTER TABLE [HR].[tbl_EducationLevels] ALTER COLUMN [Title] NVARCHAR(500) NOT NULL;
+GO
+
+-- ============================================================
+-- 9) [2026-09-16] Corrección HR.vw_SiiesFormacionProfesional / fn_SiiesFormacionProfesional
+--    (matriz 5.5) — verificación pedida por el usuario tras la sincronización masiva.
+-- ============================================================
+-- Verificado contra datos reales (HR.fn_SiiesFormacionProfesional(NULL), 3421 filas
+-- antes de este fix): FECHA_OBTUVO_TITULO 100% vacío ([EndDate] nunca se llena,
+-- 0/3409), NOMBRES_IES/PAIS_ESTUDIO vacíos en 3379/3409 registros sin InstitutionID
+-- catalogado, y filas duplicadas por profesor (una por cada título en
+-- tbl_EducationLevels) — la vista/función se habían escrito el 2026-09-11, antes de
+-- las columnas DINARDAP agregadas en la sección 8 de este mismo archivo (2026-09-16),
+-- y nunca se actualizaron. Ambos objetos quedaron redefinidos más arriba (secciones 7
+-- y 7.1): una sola fila por profesor con el título de mayor nivel/grado, fechas
+-- correctas con COALESCE(SenescytGraduationDate, EndDate), fallback de nombre de
+-- institución a InstitutionNameOriginal, y corte por fecha de período cuando se pide
+-- @PeriodCode explícito. PAIS_ESTUDIO y CODIGO_SUBAREA_CONOCIMIENTO_ESPECIFICO_UNESCO
+-- siguen vacíos a propósito (sin fuente real todavía, ver comentario en
+-- SiiesFormacionProfesionalReportSource.cs) — no se inventa el dato.
+-- No requiere cambio en SiiesFormacionProfesionalReportSource.cs: sigue llamando
+-- HR.fn_SiiesFormacionProfesional(@PeriodCode) igual que antes, solo cambió el SQL.

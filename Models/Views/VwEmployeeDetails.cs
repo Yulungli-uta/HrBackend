@@ -6,7 +6,8 @@ namespace WsUtaSystem.Models.Views
     public class VwEmployeeDetails
     {
  
-        public int EmployeeID { get; set; }     
+        public int EmployeeID { get; set; }
+        public int PersonID { get; set; }
         public string FirstName { get; set; } = string.Empty;
         public string LastName { get; set; } = string.Empty;     
         public string IDCard { get; set; } = string.Empty;   

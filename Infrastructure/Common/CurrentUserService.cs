@@ -12,7 +12,6 @@ public sealed class CurrentUserService : ICurrentUserService
 {
     private readonly IHttpContextAccessor _http;
     private readonly IvwEmployeeDetailsService _employeeDetails;
-    private readonly IEmployeesService _employeesService;
     private readonly ILogger<CurrentUserService> _logger;
     private readonly IMemoryCache _memoryCache;
     private readonly TimeSpan _employeeCacheDuration;
@@ -23,12 +22,10 @@ public sealed class CurrentUserService : ICurrentUserService
 
 
     public CurrentUserService(IHttpContextAccessor http, IvwEmployeeDetailsService employeeDetails,
-        IEmployeesService employeesService,
         ILogger<CurrentUserService> logger, IMemoryCache memoryCache, IConfiguration configuration)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _employeeDetails = employeeDetails ?? throw new ArgumentNullException(nameof(employeeDetails));
-        _employeesService = employeesService ?? throw new ArgumentNullException(nameof(employeesService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _memoryCache = memoryCache ?? throw new ArgumentNullException(nameof(memoryCache));
         _employeeCacheDuration = EmployeeDetailsCache.GetDuration(configuration);
@@ -189,11 +186,14 @@ public sealed class CurrentUserService : ICurrentUserService
         var myId = EmployeeId;
         if (myId is null || myId <= 0) return null;
 
-        var employee = await _employeesService.GetByIdAsync(myId.Value, ct);
-        if (employee is null) return null;
+        // vw_EmployeeDetails ya trae PersonID (ver Database/hr/04_views.sql) — se reutiliza el
+        // mismo caché de 2 niveles (por-request + memoria) que ya usan LoadBossAsync/
+        // GetEmployeeTypeAsync, en vez de una consulta aparte a IEmployeesService.
+        var me = await GetMeDetailsAsync(myId.Value, ct);
+        if (me is null) return null;
 
-        if (ctx is not null) ctx.Items[PersonIdCacheKey] = employee.PersonID;
-        return employee.PersonID;
+        if (ctx is not null) ctx.Items[PersonIdCacheKey] = me.PersonID;
+        return me.PersonID;
     }
 
     private CurrentBossInfo? TryGetBossFromCache()

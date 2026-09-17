@@ -56,11 +56,17 @@ public sealed class EducationLevelsConfiguration : IEntityTypeConfiguration<Educ
         e.Property(x => x.PersonId).HasColumnName("PersonID");
         e.Property(x => x.EducationLevelTypeId).HasColumnName("EducationLevelTypeID");
         e.Property(x => x.InstitutionId).HasColumnName("InstitutionID");
-        e.Property(x => x.Title).HasMaxLength(150).IsRequired();
+        // 500 (antes 150) - títulos reales de DINARDAP (maestrías con nombre compuesto) lo
+        // superaban y tumbaban el INSERT con truncamiento SQL. Ver Database/hr/16_siies_profesores.sql sección 8.5.
+        e.Property(x => x.Title).HasMaxLength(500).IsRequired();
         e.Property(x => x.Specialty).HasMaxLength(100);
         e.Property(x => x.Grade).HasMaxLength(50);
         e.Property(x => x.Location).HasMaxLength(100);
         e.Property(x => x.SenescytRegistrationNumber).HasMaxLength(50);
+        e.Property(x => x.SenescytType).HasMaxLength(20);
+        e.Property(x => x.SenescytNivelNombreOriginal).HasMaxLength(200);
+        e.Property(x => x.InstitutionNameOriginal).HasMaxLength(200);
+        e.Property(x => x.Source).HasMaxLength(20).IsRequired();
     }
 }
 

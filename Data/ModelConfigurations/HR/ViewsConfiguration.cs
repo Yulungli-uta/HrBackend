@@ -53,6 +53,7 @@ public sealed class VwEmployeeDetailsConfiguration : IEntityTypeConfiguration<Vw
         e.ToView("vw_EmployeeDetails", "HR");
         e.HasNoKey();
         e.Property(x => x.EmployeeID).HasColumnName("EmployeeID");
+        e.Property(x => x.PersonID).HasColumnName("PersonID");
         e.Property(x => x.FirstName).HasColumnName("FirstName");
         e.Property(x => x.LastName).HasColumnName("LastName");
         e.Property(x => x.IDCard).HasColumnName("IDCard");

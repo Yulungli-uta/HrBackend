@@ -66,6 +66,16 @@ public static class QuartzConfiguration
                 .UsingJobData("PeriodCode", "")
                 .UsingJobData("PreviousPeriod", ""));
 
+            // 3b. Sincronización SENESCYT/DINARDAP — manual/bajo demanda (no hay cron fijo
+            // todavía: el usuario no ha confirmado la periodicidad deseada). Registrado
+            // "durable" para poder dispararlo desde /scheduled-jobs/dinardap-senescyt-sync/run
+            // sin necesitar un trigger fijo; agregar un WithCronSchedule aquí el día que se
+            // decida una frecuencia automática.
+            var dinardapSenescytKey = new JobKey("DinardapSenescytSyncJob");
+            q.AddJob<DinardapSenescytSyncJob>(opts => opts
+                .WithIdentity(dinardapSenescytKey)
+                .StoreDurably());
+
             // 4. Acreditacion de vacaciones - Día 1 del mes a las 00:30
             var accrueVacation = new JobKey("MonthlyAccrueVacationBalanceJob");
             q.AddJob<DailyAccrueVacationBalance>(opts => opts.WithIdentity(accrueVacation));

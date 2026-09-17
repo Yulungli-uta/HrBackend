@@ -11,7 +11,7 @@ public class EducationLevelWithDocumentCreateDto
 {
     public int PersonId { get; set; }
     public int EducationLevelTypeId { get; set; }
-    public int InstitutionId { get; set; }
+    public int? InstitutionId { get; set; }
     public string Title { get; set; } = null!;
     public string? Specialty { get; set; }
     public DateOnly? StartDate { get; set; }
@@ -20,6 +20,11 @@ public class EducationLevelWithDocumentCreateDto
     public string? Location { get; set; }
     public decimal? Score { get; set; }
     public string? SenescytRegistrationNumber { get; set; }
+    /// <summary>Solo aplica cuando EducationLevelTypeId es Cuarto Nivel.</summary>
+    public int? SiiesGradoTypeId { get; set; }
+    public DateOnly? SenescytGraduationDate { get; set; }
+    public DateOnly? SenescytRegistrationDate { get; set; }
+    public string? SenescytType { get; set; }
 
     /// <summary>Archivo opcional (título/certificado). Si se omite, se crea el registro sin adjunto.</summary>
     public IFormFile? File { get; set; }

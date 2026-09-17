@@ -714,6 +714,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEmployeeInternalRequestRepository, WsUtaSystem.Infrastructure.Repositories.EmployeeInternalRequestRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmployeeInternalRequestService, WsUtaSystem.Application.Services.EmployeeInternalRequestService>();
 
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEmployeeSelfServiceRepository, WsUtaSystem.Infrastructure.Repositories.EmployeeSelfServiceRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEmployeeSelfServiceService, WsUtaSystem.Application.Services.EmployeeSelfServiceService>();
 
         // ── Módulo: Régimen laboral por empleado (EmployeeLaborRegime) ──────────
@@ -1013,6 +1014,20 @@ public static class ServiceCollectionExtensions
         // Origen de datos de matrícula: cambiar a ApiStudentEnrollmentSource cuando la API esté lista
         services.AddScoped<IStudentEnrollmentSource, DbStudentEnrollmentSource>();
         services.AddScoped<IStudentEnrollmentSyncService, StudentEnrollmentSyncService>();
+
+        // Integración DINARDAP (WsUtaDinardap.Api) - 2026-09-16. Reusa el mismo JWT de cuenta
+        // de servicio ya configurado arriba (AuthService:ServiceAccount) vía
+        // IEmployeeProvisioningClient.GetServiceTokenAsync().
+        var dinardapUrl = configuration["Dinardap:ApiUrl"] ?? string.Empty;
+        services.AddHttpClient<IHrDinardapClient, HrDinardapClient>(client =>
+        {
+            if (!string.IsNullOrWhiteSpace(dinardapUrl) && dinardapUrl != "VARIABLE_DE_ENTORNO")
+                client.BaseAddress = new Uri(dinardapUrl.TrimEnd('/') + "/");
+
+            client.Timeout = TimeSpan.FromSeconds(30);
+        });
+        services.AddScoped<IEducationLevelClassifierService, EducationLevelClassifierService>();
+        services.AddScoped<IEducationLevelSyncService, EducationLevelSyncService>();
 
         return services;
     }

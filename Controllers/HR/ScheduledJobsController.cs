@@ -16,18 +16,56 @@ public class ScheduledJobsController : ControllerBase
     private readonly IContractExpirationService _contractExpiration;
     private readonly IStudentEnrollmentSyncService _studentSync;
     private readonly IEmployeeProvisioningClient _provisioningClient;
+    private readonly IEducationLevelSyncService _educationLevelSync;
     private readonly ILogger<ScheduledJobsController> _logger;
 
     public ScheduledJobsController(
         IContractExpirationService contractExpiration,
         IStudentEnrollmentSyncService studentSync,
         IEmployeeProvisioningClient provisioningClient,
+        IEducationLevelSyncService educationLevelSync,
         ILogger<ScheduledJobsController> logger)
     {
         _contractExpiration  = contractExpiration  ?? throw new ArgumentNullException(nameof(contractExpiration));
         _studentSync         = studentSync         ?? throw new ArgumentNullException(nameof(studentSync));
         _provisioningClient  = provisioningClient  ?? throw new ArgumentNullException(nameof(provisioningClient));
+        _educationLevelSync  = educationLevelSync  ?? throw new ArgumentNullException(nameof(educationLevelSync));
         _logger              = logger              ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    /// <summary>
+    /// Ejecución manual de la sincronización SENESCYT/DINARDAP: sin personId, recorre todos
+    /// los empleados activos; con personId, sincroniza solo esa persona (mismo resultado que
+    /// el botón "Sincronizar" individual de Formación Académica, expuesto también aquí para
+    /// quien prefiera dispararlo desde el panel de Trabajos Programados).
+    /// </summary>
+    [HttpPost("dinardap-senescyt-sync/run")]
+    [RequirePermission("SCHEDULED_JOBS.MANAGE")]
+    public async Task<IActionResult> RunDinardapSenescytSync([FromQuery] int? personId, CancellationToken ct)
+    {
+        _logger.LogInformation(
+            "Ejecución manual sincronización SENESCYT/DINARDAP. PersonId={PersonId} Usuario={User}",
+            personId, User.Identity?.Name ?? "desconocido");
+
+        if (personId.HasValue)
+        {
+            var resultado = await _educationLevelSync.ConfirmAsync(personId.Value, ct);
+            return Ok(new
+            {
+                success = true,
+                message = $"Sincronización completada para 1 persona: {resultado.TitulosCreados} título(s) nuevo(s), {resultado.TitulosOmitidos} ya existente(s).",
+                resultado,
+            });
+        }
+
+        var bulkResult = await _educationLevelSync.SyncActiveEmployeesAsync(ct);
+        return Ok(new
+        {
+            success = true,
+            message = $"Sincronización masiva completada: {bulkResult.PersonasProcesadas} persona(s) procesada(s), " +
+                       $"{bulkResult.PersonasConError} con error (omitida y continuada), {bulkResult.TitulosCreadosTotal} título(s) nuevo(s) en total.",
+            bulkResult,
+        });
     }
 
     /// <summary>
