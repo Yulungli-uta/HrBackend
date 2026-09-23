@@ -109,7 +109,7 @@ public class LocalJwtValidationService : ITokenValidationService
         if (_cache.TryGetValue<IEnumerable<SecurityKey>>(JwksCacheKey, out var cached) && cached is not null)
             return cached;
 
-        var client = _httpClientFactory.CreateClient();
+        var client = _httpClientFactory.CreateClient("RepositoryUtaInternal");
         client.Timeout = TimeSpan.FromSeconds(10);
 
         var response = await client.GetAsync(_jwksUrl);

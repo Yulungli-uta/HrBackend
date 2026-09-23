@@ -1051,6 +1051,18 @@ public static class ServiceCollectionExtensions
         // HttpClient para llamadas al servicio externo de autenticación/validación
         services.AddHttpClient();
 
+        // Cliente nombrado para llamadas internas a RepositoryUta (validate-token, JWKS,
+        // permisos efectivos). ConnectTimeout corto evita que la primera conexión de un
+        // proceso recién iniciado se quede esperando varios segundos si "localhost" resuelve
+        // primero a IPv6 (::1) y ese intento no responde (patrón conocido de .NET/Windows con
+        // dual-stack) — sin esto, el timeout general de 10s del propio servicio absorbía casi
+        // todo ese tiempo antes de caer al intento IPv4 que sí funciona.
+        services.AddHttpClient("RepositoryUtaInternal")
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                ConnectTimeout = TimeSpan.FromSeconds(3),
+            });
+
         // Servicio de validación de tokens JWT: "Remote" (default, valida contra RepositoryUta
         // por request) o "Local" (valida la firma RS256 localmente usando JWKS cacheado).
         services.AddScoped<WsUtaSystem.Infrastructure.Services.ITokenValidationService>(sp =>

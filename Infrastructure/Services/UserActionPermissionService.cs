@@ -62,7 +62,7 @@ public class UserActionPermissionService : IUserActionPermissionService
 
         try
         {
-            var client = _httpClientFactory.CreateClient();
+            var client = _httpClientFactory.CreateClient("RepositoryUtaInternal");
             client.Timeout = TimeSpan.FromSeconds(10);
 
             var query = string.Join('&', roles.Select(r => $"roles={Uri.EscapeDataString(r)}"));

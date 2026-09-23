@@ -106,7 +106,7 @@ public class TokenValidationService : ITokenValidationService
             if (_enableLogging)
                 _logger.LogInformation("Validating token against auth service at {Url}", _authServiceUrl);
             //Console.WriteLine($"******************** enviando a validar token url: {_authServiceUrl}");
-            var client = _httpClientFactory.CreateClient();
+            var client = _httpClientFactory.CreateClient("RepositoryUtaInternal");
             client.Timeout = TimeSpan.FromSeconds(10);
 
             var request = new
