@@ -230,6 +230,16 @@ GO
 -- (NACIONALIDAD según Etnia, TIPO_DOCENTE_LOES según TIPO_FUNCIONARIO, formato de
 -- fecha, separación de nombres para pasaporte) se resuelven en el IReportSource
 -- (C#), no aquí — la vista solo joinea y expone los valores crudos/homologados.
+--
+-- [2026-09-21] IMPORTANTE: esta vista solo sirve para "quien esta vigente HOY" (su
+-- cascada OUTER APPLY ya elige la fila vigente al momento de consultar, antes de
+-- cualquier filtro externo). El filtro de fecha desde/hasta del reporte SIIES
+-- Funcionarios (busqueda historica real: quien estuvo vigente en un rango pasado,
+-- este o no activo hoy) NO usa esta vista - usa una consulta SQL parametrizada
+-- aparte en SiiesFuncionariosReportSource.GetEmployeesVigentesEnRangoAsync, que
+-- replica la MISMA cascada de aqui abajo pero evaluada contra el rango en vez de
+-- GETDATE(). Si tocas la cascada (joins, exclusiones de Status, TIPO_FUNCIONARIO),
+-- replica el mismo cambio alla tambien.
 CREATE OR ALTER VIEW [HR].[vw_SiiesFuncionarios] AS
 SELECT
     e.[EmployeeID],

@@ -63,6 +63,13 @@ public abstract class SiiesProfesoresReportSourceBase
 
     protected async Task<List<VwSiiesProfesor>> GetTeachersAsync(string identTypeName, ReportFilterDto filter, CancellationToken ct)
     {
+        // [2026-09-21] Fecha desde/hasta: busqueda historica real, mismo requisito que
+        // SiiesFuncionariosReportSource (aparece aunque el contrato ya no este vigente, si
+        // trabajo dentro del rango). Ver GetTeachersVigentesEnRangoAsync para el por que no
+        // se reescribe el cascade completo de vw_SiiesProfesores para esto.
+        if (filter.StartDate.HasValue && filter.EndDate.HasValue)
+            return await GetTeachersVigentesEnRangoAsync(identTypeName, filter, ct);
+
         // 2026-09-10: HR.fn_SiiesProfesoresHoras(@PeriodCode) en vez de la vista directa —
         // agrega el distributivo real de horas (HR.tbl_AcademicHoursDistribution) por período
         // académico. Toda la lógica de unión/período vive en la función SQL; aquí solo se
@@ -98,6 +105,45 @@ public abstract class SiiesProfesoresReportSourceBase
         }
 
         return await query.ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// [2026-09-21] En vez de reescribir el cascade completo de HR.vw_SiiesProfesores (escalafón
+    /// docente, profesores ocasionales por tipo de contrato, cadena de ParentID para
+    /// RELACION_IES, etc. - mucho más grande que el de vw_SiiesFuncionarios) en SQL parametrizado,
+    /// se traduce el rango de fechas a los períodos académicos que se solapan
+    /// (<see cref="SiiesAcademicPeriodHelper"/>) y se reutiliza HR.fn_SiiesProfesoresHoras
+    /// (@PeriodCode) — que YA elige por distributivo de horas cargado en ese período, no por
+    /// estado actual del contrato — una vez por período que califique. Si el mismo profesor
+    /// aparece en más de un período dentro del rango, se conserva el del período más reciente
+    /// (los períodos ya llegan ordenados por PeriodEnd DESC desde el helper).
+    /// </summary>
+    private async Task<List<VwSiiesProfesor>> GetTeachersVigentesEnRangoAsync(string identTypeName, ReportFilterDto filter, CancellationToken ct)
+    {
+        var periodCodes = await SiiesAcademicPeriodHelper.GetOverlappingPeriodCodesAsync(_db, filter.StartDate!.Value, filter.EndDate!.Value, ct);
+
+        var byEmployee = new Dictionary<int, VwSiiesProfesor>();
+        foreach (var periodCode in periodCodes)
+        {
+            var periodRows = await _db.vwSiiesProfesores
+                .FromSqlInterpolated($"SELECT * FROM HR.fn_SiiesProfesoresHoras({periodCode})")
+                .AsNoTracking()
+                .Where(v => v.IdentTypeName == identTypeName)
+                .ToListAsync(ct);
+
+            foreach (var row in periodRows)
+                byEmployee.TryAdd(row.EmployeeID, row); // primer periodo visto para este empleado = el mas reciente
+        }
+
+        IEnumerable<VwSiiesProfesor> results = byEmployee.Values;
+
+        if (!string.IsNullOrWhiteSpace(filter.Identification))
+        {
+            var identification = filter.Identification.Trim();
+            results = results.Where(v => v.IDCard == identification);
+        }
+
+        return results.ToList();
     }
 
     private static string HomologateTipoDocumento(string? regimeDocumentType) => regimeDocumentType switch

@@ -18,7 +18,12 @@ public class VwSiiesFormacionProfesional
     public int EmployeeID { get; set; }
     public string IDCard { get; set; } = null!;
     public string? IdentTypeName { get; set; }
-    public string? InstitutionCountryId { get; set; }
+
+    /// <summary>Código SIIES de la IES (=InstitutionID), solo cuando es nacional. CODIGO_IES_ESTUDIO.</summary>
+    public int? InstitutionSiiesCode { get; set; }
+
+    /// <summary>Nombre del país de estudio (PAIS_ESTUDIO) - el instructivo exige el nombre, no un código. Renombrado 2026-09-19 (antes InstitutionCountryId, traía por error el código interno).</summary>
+    public string? PaisEstudio { get; set; }
     public string? InstitutionName { get; set; }
     public string? NivelSiiesLabel { get; set; }
     public string? GradoSiiesLabel { get; set; }

@@ -466,51 +466,82 @@ GO
 -- usuario. (2) FECHA_OBTUVO_TITULO leía [EndDate] (fecha fin de estudios, 0/3409
 -- registros la tienen) en vez de [SenescytGraduationDate] (fecha de grado real que
 -- llegó de DINARDAP, 2333/3409 la tienen) — corregido con COALESCE, [EndDate] queda
--- de respaldo para registros manuales antiguos. NOMBRES_IES ahora cae a
--- [InstitutionNameOriginal] cuando no hay [InstitutionID] catalogado (caso DINARDAP:
--- institución no obligatoria, ver 8.3b) — antes quedaba en blanco aunque el título sí
--- tuviera institución. PAIS_ESTUDIO sigue en blanco sin institución catalogada:
--- DINARDAP no informa país en el detalle del título, no hay fuente real de la que
--- tomarlo (mismo criterio que CODIGO_IES_ESTUDIO, no se inventa el dato).
+-- de respaldo para registros manuales antiguos.
+--
+-- [2026-09-18, sección 10] Reescrita otra vez tras poblar HR.tbl_Institutions con el
+-- catálogo oficial de 378 IES (antes tenía solo 12 filas de prueba QA) y crear el
+-- catálogo dedicado ref_Types.SIIES_UNESCO_SUBAREA (antes se leía de
+-- tbl_KnowledgeArea.SiiesCode, catálogo con otra codificación, siempre vacío para
+-- esto). Reglas del instructivo CACES v2S aplicadas ahora de verdad:
+--   - CODIGO_IES_ESTUDIO: sale de [HR].[tbl_Institutions].[SiiesInstitutionCode], NO
+--     de InstitutionID. [2026-09-19] separado a pedido del usuario: aunque hoy
+--     coinciden en las 378 filas sembradas del catálogo oficial (se usó
+--     IDENTITY_INSERT para que InstitutionID = código CACES), son conceptos
+--     distintos — InstitutionID es la identidad interna (PK autogenerada para
+--     instituciones creadas a mano desde la pantalla de Instituciones, sin relación
+--     con ningún código real), SiiesInstitutionCode es el código oficial CACES/SIIES,
+--     nullable, solo se llena cuando se conoce. Antes quedaba siempre vacío (nunca
+--     había catálogo real).
+--   - NOMBRES_IES: el instructivo pide dejarlo en blanco para IES nacionales (se
+--     identifican solo por su código) y llenarlo solo para IES internacionales —
+--     antes se llenaba siempre como simplificación, ya no hace falta esa
+--     simplificación porque CODIGO_IES_ESTUDIO sí se resuelve.
+--   - PAIS_ESTUDIO: COALESCE(nombre de CountryOfStudyId, nombre del país de la
+--     institución catalogada) — el instructivo exige el NOMBRE del país (Ver Anexo
+--     Países del instructivo: solo tiene NOMBRE/NACIONALIDAD, sin código alguno),
+--     por eso se resuelve hasta CountryName y no se deja el código interno.
+--     [2026-09-19] corregido: la primera versión traía CountryID (ej. '001') en vez
+--     del nombre ('ECUADOR') — columna renombrada de InstitutionCountryId a
+--     PaisEstudio para que el nombre no sugiera que es un código.
+--   - CODIGO_SUBAREA_CONOCIMIENTO_ESPECIFICO_UNESCO: ref_Types.SIIES_UNESCO_SUBAREA
+--     vía UnescoSubareaTypeId, no tbl_KnowledgeArea (deliberadamente separado, ver
+--     sección 10 más abajo — misma codificación CACES, no la de Publicaciones).
 CREATE OR ALTER VIEW [HR].[vw_SiiesFormacionProfesional] AS
 WITH [Titulos] AS (
     SELECT
         v.[EmployeeID], v.[IDCard], v.[IdentTypeName],
         v.[LatestPeriodCode], v.[LatestPeriodStart], v.[LatestPeriodEnd],
         el.[EducationID],
-        inst.[CountryID]                                     AS [InstitutionCountryId],
-        COALESCE(inst.[Name], el.[InstitutionNameOriginal])  AS [InstitutionName],
-        nivelCat.[Name]                                      AS [NivelName],
-        nivelCat.[SiiesLabel]                                AS [NivelSiiesLabel],
-        grado.[Name]                                         AS [GradoName],
-        grado.[SiiesLabel]                                   AS [GradoSiiesLabel],
-        el.[Title]                                           AS [NombreTitulo],
-        ka.[SiiesCode]                                        AS [CampoDetalladoSiiesCode],
+        inst.[SiiesInstitutionCode]                                AS [InstitutionSiiesCode],
+        COALESCE(paisEstudio.[CountryName], paisInstitucion.[CountryName]) AS [PaisEstudio],
+        -- [2026-09-21] Antes se apagaba el nombre a proposito cuando habia codigo (regla de
+        -- "mutua exclusividad" del instructivo, ver comentario en
+        -- SiiesFormacionProfesionalReportSource.cs) - decision explicita del usuario: el
+        -- nombre debe aparecer siempre. Con codigo (institucion catalogada), se trae el
+        -- nombre real de tbl_Institutions; sin codigo (extranjera), sigue usando el nombre
+        -- libre como hasta ahora.
+        COALESCE(inst.[Name], el.[InstitutionNameOriginal]) AS [InstitutionName],
+        nivelCat.[Name]                                            AS [NivelName],
+        nivelCat.[SiiesLabel]                                      AS [NivelSiiesLabel],
+        nivelCat.[SortOrder]                                       AS [NivelSortOrder],
+        grado.[Name]                                               AS [GradoName],
+        grado.[SiiesLabel]                                         AS [GradoSiiesLabel],
+        grado.[SortOrder]                                          AS [GradoSortOrder],
+        el.[Title]                                                 AS [NombreTitulo],
+        unesco.[Name]                                              AS [CampoDetalladoSiiesCode],
         el.[SenescytRegistrationNumber],
         COALESCE(el.[SenescytGraduationDate], el.[SenescytRegistrationDate], el.[EndDate])  AS [FechaObtuvoTitulo]
     FROM [HR].[vw_SiiesProfesores] v
     LEFT JOIN [HR].[tbl_EducationLevels] el  ON el.[PersonID] = v.[PersonID]
     LEFT JOIN [HR].[tbl_Institutions] inst   ON inst.[InstitutionID] = el.[InstitutionID]
+    LEFT JOIN [HR].[tbl_Countries] paisEstudio ON paisEstudio.[CountryID] = el.[CountryOfStudyId]
+    LEFT JOIN [HR].[tbl_Countries] paisInstitucion ON paisInstitucion.[CountryID] = inst.[CountryID]
     LEFT JOIN [HR].[ref_Types] nivelCat      ON nivelCat.[TypeID] = el.[EducationLevelTypeID]
     LEFT JOIN [HR].[ref_Types] grado         ON grado.[TypeID] = el.[SiiesGradoTypeId]
-    LEFT JOIN [HR].[tbl_KnowledgeArea] ka    ON ka.[id] = el.[KnowledgeAreaId]
+    LEFT JOIN [HR].[ref_Types] unesco        ON unesco.[TypeID] = el.[UnescoSubareaTypeId]
 ),
 [Ranked] AS (
+    -- [2026-09-19] Jerarquia movida de CASE WHEN hardcodeado a ref_Types.SortOrder
+    -- (ACADEMIC_LEVEL y SIIES_GRADO) -- si se agrega un nivel/grado nuevo al catalogo
+    -- en el futuro, solo hace falta ponerle su SortOrder (mayor = mas alto), sin tocar
+    -- esta vista. NULL (sin clasificar) queda de ultimo por diseno de SQL Server:
+    -- ORDER BY ... DESC deja los NULL al final.
     SELECT *,
         ROW_NUMBER() OVER (
             PARTITION BY [EmployeeID]
             ORDER BY
-                CASE WHEN [NivelName] IS NULL THEN 99
-                     WHEN [NivelName] = 'NIVEL_4' THEN 1
-                     WHEN [NivelName] = 'NIVEL_3' THEN 2
-                     ELSE 3 END,
-                CASE [GradoName]
-                     WHEN 'Doctor (Ph.D)' THEN 1
-                     WHEN 'Maestría o Equivalente' THEN 2
-                     WHEN 'Especialista Área Salud' THEN 3
-                     WHEN 'Especialista' THEN 3
-                     WHEN 'Diploma Superior' THEN 4
-                     ELSE 5 END,
+                [NivelSortOrder] DESC,
+                [GradoSortOrder] DESC,
                 [FechaObtuvoTitulo] DESC,
                 [EducationID] DESC
         ) AS [Rn]
@@ -518,7 +549,7 @@ WITH [Titulos] AS (
 )
 SELECT
     [EmployeeID], [IDCard], [IdentTypeName],
-    [InstitutionCountryId], [InstitutionName],
+    [InstitutionSiiesCode], [PaisEstudio], [InstitutionName],
     [NivelSiiesLabel], [GradoSiiesLabel], [NombreTitulo],
     [CampoDetalladoSiiesCode], [SenescytRegistrationNumber], [FechaObtuvoTitulo],
     [LatestPeriodCode], [LatestPeriodStart], [LatestPeriodEnd]
@@ -557,7 +588,7 @@ RETURN
 
     SELECT
         [EmployeeID], [IDCard], [IdentTypeName],
-        [InstitutionCountryId], [InstitutionName],
+        [InstitutionSiiesCode], [PaisEstudio], [InstitutionName],
         [NivelSiiesLabel], [GradoSiiesLabel], [NombreTitulo],
         [CampoDetalladoSiiesCode], [SenescytRegistrationNumber], [FechaObtuvoTitulo],
         [LatestPeriodCode], [LatestPeriodStart], [LatestPeriodEnd]
@@ -566,17 +597,8 @@ RETURN
             ROW_NUMBER() OVER (
                 PARTITION BY [EmployeeID]
                 ORDER BY
-                    CASE WHEN [NivelName] IS NULL THEN 99
-                         WHEN [NivelName] = 'NIVEL_4' THEN 1
-                         WHEN [NivelName] = 'NIVEL_3' THEN 2
-                         ELSE 3 END,
-                    CASE [GradoName]
-                         WHEN 'Doctor (Ph.D)' THEN 1
-                         WHEN 'Maestría o Equivalente' THEN 2
-                         WHEN 'Especialista Área Salud' THEN 3
-                         WHEN 'Especialista' THEN 3
-                         WHEN 'Diploma Superior' THEN 4
-                         ELSE 5 END,
+                    [NivelSortOrder] DESC,
+                    [GradoSortOrder] DESC,
                     [FechaObtuvoTitulo] DESC,
                     [EducationID] DESC
             ) AS [Rn]
@@ -585,14 +607,19 @@ RETURN
                 v.[EmployeeID], v.[IDCard], v.[IdentTypeName],
                 v.[LatestPeriodCode], v.[LatestPeriodStart], v.[LatestPeriodEnd],
                 el.[EducationID],
-                inst.[CountryID]                                     AS [InstitutionCountryId],
-                COALESCE(inst.[Name], el.[InstitutionNameOriginal])  AS [InstitutionName],
-                nivelCat.[Name]                                      AS [NivelName],
-                nivelCat.[SiiesLabel]                                AS [NivelSiiesLabel],
-                grado.[Name]                                         AS [GradoName],
-                grado.[SiiesLabel]                                   AS [GradoSiiesLabel],
-                el.[Title]                                           AS [NombreTitulo],
-                ka.[SiiesCode]                                        AS [CampoDetalladoSiiesCode],
+                inst.[SiiesInstitutionCode]                                AS [InstitutionSiiesCode],
+                COALESCE(paisEstudio.[CountryName], paisInstitucion.[CountryName]) AS [PaisEstudio],
+                -- 2026-09-21: mismo cambio que en vw_SiiesFormacionProfesional (ver ese
+                -- comentario) - el nombre debe aparecer siempre, con o sin codigo.
+                COALESCE(inst.[Name], el.[InstitutionNameOriginal]) AS [InstitutionName],
+                nivelCat.[Name]                                            AS [NivelName],
+                nivelCat.[SiiesLabel]                                      AS [NivelSiiesLabel],
+                nivelCat.[SortOrder]                                       AS [NivelSortOrder],
+                grado.[Name]                                               AS [GradoName],
+                grado.[SiiesLabel]                                         AS [GradoSiiesLabel],
+                grado.[SortOrder]                                          AS [GradoSortOrder],
+                el.[Title]                                                 AS [NombreTitulo],
+                unesco.[Name]                                              AS [CampoDetalladoSiiesCode],
                 el.[SenescytRegistrationNumber],
                 COALESCE(el.[SenescytGraduationDate], el.[SenescytRegistrationDate], el.[EndDate])  AS [FechaObtuvoTitulo]
             FROM [HR].[vw_SiiesProfesores] v
@@ -604,9 +631,11 @@ RETURN
                         WHERE a.[PeriodCode] = @PeriodCode
                    )
             LEFT JOIN [HR].[tbl_Institutions] inst   ON inst.[InstitutionID] = el.[InstitutionID]
+            LEFT JOIN [HR].[tbl_Countries] paisEstudio ON paisEstudio.[CountryID] = el.[CountryOfStudyId]
+            LEFT JOIN [HR].[tbl_Countries] paisInstitucion ON paisInstitucion.[CountryID] = inst.[CountryID]
             LEFT JOIN [HR].[ref_Types] nivelCat      ON nivelCat.[TypeID] = el.[EducationLevelTypeID]
             LEFT JOIN [HR].[ref_Types] grado         ON grado.[TypeID] = el.[SiiesGradoTypeId]
-            LEFT JOIN [HR].[tbl_KnowledgeArea] ka    ON ka.[id] = el.[KnowledgeAreaId]
+            LEFT JOIN [HR].[ref_Types] unesco        ON unesco.[TypeID] = el.[UnescoSubareaTypeId]
             WHERE @PeriodCode IS NOT NULL
               AND EXISTS (
                     SELECT 1 FROM [HR].[tbl_AcademicHoursDistribution] a2
@@ -777,3 +806,111 @@ GO
 -- SiiesFormacionProfesionalReportSource.cs) — no se inventa el dato.
 -- No requiere cambio en SiiesFormacionProfesionalReportSource.cs: sigue llamando
 -- HR.fn_SiiesFormacionProfesional(@PeriodCode) igual que antes, solo cambió el SQL.
+
+-- ============================================================
+-- 10) [2026-09-18] Backfill de Formación Académica para profesores sin fila en
+--     HR.tbl_Employees, detectado al comparar el archivo oficial "Profesores-
+--     Formacion Profesional (Terminado) 2526.xlsx" contra HR.tbl_EducationLevels.
+-- ============================================================
+-- Hallazgo: de 683 profesores del archivo, 31 no tienen NINGUNA fila en
+-- HR.tbl_Employees (solo existen en HR.tbl_People) -- DinardapSenescytSyncJob solo
+-- sincroniza "empleados activos" (EducationLevelSyncService.SyncActiveEmployeesAsync),
+-- así que nunca los procesa. Se cargan a mano desde el archivo oficial, con
+-- Source='Manual' porque no vino de una llamada viva al servicio DINARDAP en esta
+-- sesión. Las otras 130 personas que aparecen en el archivo con Employee.IsActive=0
+-- quedan fuera de este backfill a propósito -- mismo problema de fondo (alcance del
+-- job), pero el usuario pidió resolver primero el subconjunto sin fila de Employee.
+--
+-- Columnas nuevas: el archivo trae 3 campos que HR.tbl_EducationLevels no tenía
+-- dónde guardar:
+--   - CountryOfStudy: país de estudio, texto crudo (PAIS_ESTUDIO). Mismo patrón que
+--     InstitutionNameOriginal (sección 8) -- no hay catálogo de países ligado aquí.
+--   - UnescoSubareaCodeOriginal: CODIGO_SUBAREA_CONOCIMIENTO_ESPECIFICO_UNESCO
+--     (ej. "81-16A"). Es un dato EXCLUSIVO del reporte SIIES, sin ninguna relación
+--     con HR.tbl_KnowledgeArea (catálogo de áreas de conocimiento de uso interno,
+--     con codificación tipo ISCED "01".."10" -- formatos incompatibles, verificado
+--     que no hay mapeo entre ambos hoy). Se guarda como texto crudo, sin resolver
+--     contra ningún catálogo.
+--   - InstitutionSiiesCodeTypeId: CODIGO_IES_ESTUDIO, resuelto contra la nueva
+--     categoría ref_Types 'SIIES_INSTITUTION_CODE' -- Name=código, SiiesLabel=nombre
+--     de la IES, código y nombre atados al MISMO registro de catálogo (decisión
+--     explícita del usuario, en vez de repetir el nombre como texto suelto). Sin FK
+--     física, mismo patrón que SiiesGradoTypeId/KnowledgeAreaId (sección 8). Solo
+--     aplica a instituciones ecuatorianas -- DINARDAP/SIIES no asigna este código a
+--     instituciones extranjeras (13 de las 31 filas quedan NULL aquí a propósito).
+--     HR.tbl_Institutions NO se usó para esto: solo tiene 12 filas y son fixtures de
+--     QA, no un catálogo real de instituciones.
+--
+-- Verificado end-to-end tras la carga: 31 filas insertadas, EducationLevelTypeID
+-- siempre NIVEL_4 (2022, las 31 son Cuarto Nivel según el archivo), SiiesGradoTypeId
+-- resuelto por texto de GRADO (2192 Maestría / 2191 Doctor Ph.D / 2196 Especialista
+-- Área Salud), InstitutionSiiesCodeTypeId resuelto en 18/31 (instituciones
+-- ecuatorianas), NULL en las 13 extranjeras restantes -- consistente con que el
+-- propio archivo oficial tampoco trae ese código para instituciones extranjeras.
+-- ============================================================
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_EducationLevels]') AND name = 'CountryOfStudy')
+    ALTER TABLE [HR].[tbl_EducationLevels] ADD [CountryOfStudy] NVARCHAR(100) NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_EducationLevels]') AND name = 'UnescoSubareaCodeOriginal')
+    ALTER TABLE [HR].[tbl_EducationLevels] ADD [UnescoSubareaCodeOriginal] NVARCHAR(20) NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_EducationLevels]') AND name = 'InstitutionSiiesCodeTypeId')
+    ALTER TABLE [HR].[tbl_EducationLevels] ADD [InstitutionSiiesCodeTypeId] INT NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM [HR].[ref_Types] WHERE [Category] = 'SIIES_INSTITUTION_CODE')
+BEGIN
+    INSERT INTO [HR].[ref_Types] (Category, Name, SiiesLabel, IsActive, CreatedAt) VALUES
+        ('SIIES_INSTITUTION_CODE', N'1010', N'UNIVERSIDAD TECNICA DE AMBATO', 1, GETDATE()),
+        ('SIIES_INSTITUTION_CODE', N'1042', N'UNIVERSIDAD REGIONAL AUTONOMA DE LOS ANDES', 1, GETDATE()),
+        ('SIIES_INSTITUTION_CODE', N'1051', N'UNIVERSIDAD TECNOLOGICA ISRAEL', 1, GETDATE()),
+        ('SIIES_INSTITUTION_CODE', N'1031', N'UNIVERSIDAD TECNICA PARTICULAR DE LOJA', 1, GETDATE()),
+        ('SIIES_INSTITUTION_CODE', N'1027', N'PONTIFICIA UNIVERSIDAD CATOLICA DEL ECUADOR', 1, GETDATE()),
+        ('SIIES_INSTITUTION_CODE', N'1005', N'UNIVERSIDAD CENTRAL DEL ECUADOR', 1, GETDATE()),
+        ('SIIES_INSTITUTION_CODE', N'1006', N'UNIVERSIDAD DE GUAYAQUIL', 1, GETDATE());
+END
+GO
+
+-- Las 31 filas, resueltas por cédula contra el archivo oficial (PersonID literal,
+-- no se resuelve por cédula en este script porque son personas sin fila de
+-- Employee -- no hay forma segura de re-derivar el PersonID por otro criterio):
+INSERT INTO [HR].[tbl_EducationLevels]
+  ([PersonID],[EducationLevelTypeID],[Title],[SenescytRegistrationNumber],[SiiesGradoTypeId],
+   [SenescytGraduationDate],[InstitutionNameOriginal],[CountryOfStudy],[UnescoSubareaCodeOriginal],
+   [InstitutionSiiesCodeTypeId],[Source],[CreatedAt])
+VALUES
+(185127, 2022, N'MAGISTER EN REDES Y TELECOMUNICACIONES', N'1010-09-695656', 2192, '2008-12-11', N'UNIVERSIDAD TECNICA DE AMBATO', N'ECUADOR', N'81-16A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1010'), N'Manual', GETDATE()),
+(231005, 2022, N'MAGISTER EJECUTIVO EN DIRECCION DE EMPRESAS CON ENFASIS EN GERENCIA ESTRATEGICA', N'1042-07-662878', 2192, '2007-05-18', N'UNIVERSIDAD REGIONAL AUTONOMA DE LOS ANDES', N'ECUADOR', N'3-14A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1042'), N'Manual', GETDATE()),
+(184253, 2022, N'MAGISTER EN GESTION DE LA PRODUCCION AGROINDUSTRIAL', N'1010-14-86048569', 2192, '2014-05-27', N'UNIVERSIDAD TECNICA DE AMBATO', N'ECUADOR', N'3-14A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1010'), N'Manual', GETDATE()),
+(179870, 2022, N'MAGISTER EN SISTEMAS INFORMATICOS EDUCATIVOS', N'1051-10-704455', 2192, '2009-07-25', N'UNIVERSIDAD TECNOLOGICA ISRAEL', N'ECUADOR', N'2-12A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1051'), N'Manual', GETDATE()),
+(171585, 2022, N'MAGISTER EN DOCENCIA Y CURRICULO PARA LA EDUCACION SUPERIOR', N'1010-10-706227', 2192, '2009-12-10', N'UNIVERSIDAD TECNICA DE AMBATO', N'ECUADOR', N'2-12A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1010'), N'Manual', GETDATE()),
+(166382, 2022, N'MAGISTER EN TECNOLOGIA DE LA INFORMACION Y MULTIMEDIA EDUCATIVA', N'1010-06-655698', 2192, '2006-03-17', N'UNIVERSIDAD TECNICA DE AMBATO', N'ECUADOR', N'1-16A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1010'), N'Manual', GETDATE()),
+(233493, 2022, N'MAGISTER EN DOCENCIA Y CURRICULO PARA LA EDUCACION SUPERIOR', N'1010-11-723146', 2192, '2010-06-03', N'UNIVERSIDAD TECNICA DE AMBATO', N'ECUADOR', N'1-11A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1010'), N'Manual', GETDATE()),
+(182458, 2022, N'DOCTORA PROGRAMA DE FORMACION INICIAL Y PERMANENTE DE PROFESIONALES DE LA EDUCACION E INNOVACION EDUCATIVA', N'7201 R-15-24837', 2191, '2015-05-27', N'UNIVERSIDAD COMPLUTENSE DE MADRID', N'ESPAÑA', N'2-11A', NULL, N'Manual', GETDATE()),
+(191811, 2022, N'DOCTORA DENTRO DEL PROGRAMA DE FORMACION INICIAL Y PERMANENTE DE PROFESIONALES DE LA EDUCACION E INNOVACION EDUCATIVA', N'72419601', 2191, '2016-04-01', N'UNIVERSIDAD COMPLUTENSE DE MADRID', N'ESPAÑA', N'2-11A', NULL, N'Manual', GETDATE()),
+(208812, 2022, N'DOCTOR EN HUMANIDADES Y ARTES CON MENCION EN CIENCIAS DE LA EDUCACION', N'0321238388', 2191, '2024-08-06', N'UNIVERSIDAD NACIONAL DE ROSARIO', N'ARGENTINA', N'1-11A', NULL, N'Manual', GETDATE()),
+(205300, 2022, N'ESPECIALISTA DE PRIMER GRADO EN INMUNOLOGIA', N'CU-12-2922', 2196, '2012-07-23', N'INSTITUTO SUPERIOR DE CIENCIAS MEDICAS DE LA HABANA', N'CUBA', N'1-9A', NULL, N'Manual', GETDATE()),
+(235528, 2022, N'MAGISTER EN GERENCIA DE SALUD PARA EL DESARROLLO LOCAL', N'1031-14-86047031', 2192, '2014-03-26', N'UNIVERSIDAD TECNICA PARTICULAR DE LOJA', N'ECUADOR', N'1-9A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1031'), N'Manual', GETDATE()),
+(227453, 2022, N'ESPECIALISTA DE PRIMER GRADO EN HISTOLOGIA', N'CU-13-4793', 2196, '2013-06-14', N'INSTITUTO SUPERIOR DE CIENCIAS MEDICAS DE LA HABANA', N'CUBA', N'1-9A', NULL, N'Manual', GETDATE()),
+(184225, 2022, N'MAGISTER EN SALUD PUBLICA', N'1042-10-719356', 2192, '2010-10-20', N'UNIVERSIDAD REGIONAL AUTONOMA DE LOS ANDES', N'ECUADOR', N'1-9A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1042'), N'Manual', GETDATE()),
+(197142, 2022, N'MASTER UNIVERSITARIO EN PSICOLOGIA DE LA SALUD', N'7683R-13-10766', 2192, '2013-07-04', N'UNIVERSIDAD DE MALAGA', N'ESPAÑA', N'1-9A', NULL, N'Manual', GETDATE()),
+(224309, 2022, N'MAGISTER EN GESTION DE LOS SERVICIOS HOSPITALARIOS', N'1042-10-710230', 2192, '2010-03-24', N'UNIVERSIDAD REGIONAL AUTONOMA DE LOS ANDES', N'ECUADOR', N'1-9A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1042'), N'Manual', GETDATE()),
+(235873, 2022, N'MAGISTER EN GERENCIA DE INSTITUCIONES DE SALUD', N'1010-15-86062632', 2192, '2015-06-02', N'UNIVERSIDAD TECNICA DE AMBATO', N'ECUADOR', N'1-9A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1010'), N'Manual', GETDATE()),
+(224220, 2022, N'MAGISTER EN GESTION DE LOS SERVICIOS HOSPITALARIOS', N'1042-10-710237', 2192, '2010-03-24', N'UNIVERSIDAD REGIONAL AUTONOMA DE LOS ANDES', N'ECUADOR', N'1-9A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1042'), N'Manual', GETDATE()),
+(189280, 2022, N'DOCTOR DENTRO DEL PROGRAMA DE DOCTORADO EN TECNOLOGIAS DE LA INFORMACION Y LAS COMUNICACIÓN', N'7241187989', 2191, '2021-12-01', N'UNIVERSIDAD REY JUAN CARLOS ', N'ESPAÑA', N'1-6A', NULL, N'Manual', GETDATE()),
+(197237, 2022, N'MAGISTER EN BIOETICA', N'1010-2024-3009416', 2192, '2024-11-17', N'UNIVERSIDAD TECNICA DE AMBATO', N'ECUADOR', N'1-9A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1010'), N'Manual', GETDATE()),
+(161867, 2022, N'MAGISTER EN TERAPIA MANUAL ORTOPEDICA', N'4202-15-44915', 2192, '2014-09-09', N'UNIVERSIDAD ANDRES BELLO', N'CHILE', N'1-9A', NULL, N'Manual', GETDATE()),
+(165961, 2022, N'MAGISTER EN PREVENCION Y ASISTENCIA DE LAS DROGADEPENDENCIAS', N'1005R-09-4650', 2192, '2007-05-17', N'UNIVERSIDAD DEL SALVADOR BUENOS AIRES', N'ARGENTINA', N'1-9A', NULL, N'Manual', GETDATE()),
+(216863, 2022, N'DOCTORA DENTRO DEL PROGRAMA DE DOCTORADO EN BIOMEDICINA', N'7241214161', 2191, '2023-06-23', N'UNIVERSIDAD DE BARCELONA ', N'ESPAÑA', N'1-9A', NULL, N'Manual', GETDATE()),
+(192095, 2022, N'DOCTOR EN CIENCIAS DE LA SALUD', N'8622248978', 2191, '2025-03-24', N'UNIVERSIDAD DE ZULIA ', N'VENEZUELA', N'1-9A', NULL, N'Manual', GETDATE()),
+(207198, 2022, N'MAGISTER EN GERENCIA DE SALUD PARA EL DESARROLLO LOCAL', N'1031-13-86034830', 2192, '2013-03-22', N'UNIVERSIDAD TECNICA PARTICULAR DE LOJA', N'ECUADOR', N'1-9A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1031'), N'Manual', GETDATE()),
+(161868, 2022, N'MAGISTER EN PSICOLOGIA CLINICA MENCIÓN EN PSICOTERAPIA INFANTIL Y DE ADOLESCENTES', N'1027-2021-2392352', 2192, '2021-10-07', N'PONTIFICIA UNIVERSIDAD CATOLICA DEL ECUADOR', N'ECUADOR', N'1-9A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1027'), N'Manual', GETDATE()),
+(211578, 2022, N'MASTER EN ENDOCRINOLOGIA AVANZADA', N'10455 R-15-53035', 2192, '2015-09-22', N'UNIVERSIDAD DE ALCALA', N'ESPAÑA', N'1-9A', NULL, N'Manual', GETDATE()),
+(197416, 2022, N'ESPECIALISTA EN PEDIATRIA', N'1005-04-551335', 2196, '2004-12-10', N'UNIVERSIDAD CENTRAL DEL ECUADOR', N'ECUADOR', N'1-9A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1005'), N'Manual', GETDATE()),
+(207860, 2022, N'MASTER UNIVERSITARIO EN MICROBIOLOGIA AVANZADA ESPECIALIDAD EN MICROBIOLOGIA SANITARIA', N'724184849', 2192, '2016-07-25', N'UNIVERSITAT DE BARCELONA', N'ESPAÑA', N'1-9A', NULL, N'Manual', GETDATE()),
+(217121, 2022, N'ESPECIALISTA EN MEDICINA INTERNA', N'1006-14-5001', 2196, '2014-06-22', N'UNIVERSIDAD DE GUAYAQUIL', N'ECUADOR', N'1-9A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1006'), N'Manual', GETDATE()),
+(186002, 2022, N'ESPECIALISTA EN CIRUGIA GENERAL', N'1005-08-678557', 2196, '2008-07-21', N'UNIVERSIDAD CENTRAL DEL ECUADOR', N'ECUADOR', N'1-9A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1005'), N'Manual', GETDATE());
+GO
