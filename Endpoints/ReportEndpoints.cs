@@ -367,6 +367,24 @@ public static class ReportEndpoints
         .WithSummary("Conteo de días con atraso por empleado en el rango de fechas indicado (paginado, admite SearchText por cédula/nombre)")
         .Produces<PagedResult<LatenessSummaryReportDto>>(StatusCodes.Status200OK, "application/json");
 
+        // ==================== NOVEDADES DE ASISTENCIA — PANTALLA EN VIVO (JSON, no PDF/Excel) ====================
+        // Mismo criterio que /lateness-summary: la pantalla de novedades consulta directo,
+        // no genera un documento descargable.
+
+        group.MapPost("/attendance-novelties-summary", async (
+            [FromBody] ReportFilterDto filter,
+            [FromServices] IAttendanceCalculationsReportService attendanceReportService,
+            CancellationToken ct,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20) =>
+        {
+            var data = await attendanceReportService.GetAttendanceNoveltiesSummaryAsync(filter, page, pageSize, ct);
+            return Results.Ok(data);
+        })
+        .WithName("GetAttendanceNoveltiesSummary")
+        .WithSummary("Novedades de asistencia (una fila por jornada+tipo) en el rango de fechas indicado, paginado, admite SearchText por cédula/nombre y NoveltyType")
+        .Produces<PagedResult<AttendanceNoveltyReportDto>>(StatusCodes.Status200OK, "application/json");
+
         // ==================== AUDITORÍA ====================
 
         group.MapGet("/audits", async (

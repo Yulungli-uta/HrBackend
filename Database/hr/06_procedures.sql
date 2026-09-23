@@ -4728,7 +4728,16 @@ CREATE OR ALTER PROCEDURE HR.sp_ProcessAttendanceBaseDay
     -- y una picada suelta podría contarse en ambas jornadas). NULL = sin tope,
     -- comportamiento igual que siempre para todo el resto del personal.
     @WindowStartCap DATETIME2 = NULL,
-    @WindowEndCap DATETIME2 = NULL
+    @WindowEndCap DATETIME2 = NULL,
+    -- 2026-09-22: cuando viene en 1, pone RequiredMinutes en 0 en fin de
+    -- semana/feriado (evita la "ausencia fantasma" de 480 min en sábados y
+    -- domingos para personal de horario fijo). Default 0 = comportamiento
+    -- exacto de siempre. Solo lo activa sp_ProcessAttendanceRunDate (personal
+    -- de horario fijo); sp_ProcessGuardAttendanceDate NUNCA lo pasa — para
+    -- guardias, BaseDay solo se invoca cuando ya existe un turno real
+    -- planificado ese día (GuardShiftPlanning), así que fin de semana no
+    -- implica "no laborable" para ellos.
+    @SuppressRequiredOnNonWorkday BIT = 0
 )
 AS
 BEGIN
@@ -4841,6 +4850,12 @@ BEGIN
                        END;
 
     IF @RequiredMin < 0 SET @RequiredMin = 0;
+
+    -- 2026-09-22: fin de semana/feriado sin turno real planificado (guardias
+    -- nunca llegan aquí en ese caso, ver comentario del parámetro) = no
+    -- laborable, no se exige nada ni se genera ausencia.
+    IF (@SuppressRequiredOnNonWorkday = 1 AND (@IsWeekend = 1 OR @IsHoliday = 1))
+        SET @RequiredMin = 0;
 
     DECLARE
         @RequiredMorningMin   INT = 0,
@@ -6879,7 +6894,8 @@ BEGIN
                  @HasLunch     = @HasLunch,
                  @LunchStartT  = @LunchStartT,
                  @LunchEndT    = @LunchEndT,
-                 @EmployeeSpecialScheduleId = @EmployeeSpecialScheduleId;
+                 @EmployeeSpecialScheduleId = @EmployeeSpecialScheduleId,
+                 @SuppressRequiredOnNonWorkday = 1;
 
             EXEC HR.sp_ProcessAttendanceLeavesDay
                  @EmployeeID = @EmployeeID,

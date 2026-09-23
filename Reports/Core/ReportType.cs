@@ -101,5 +101,23 @@ public enum ReportType
     /// por el porcentaje parametrizado en HR.tbl_Parameters (SENIORITY_SUBSIDY_PERCENT) y por
     /// los años completos de antigüedad (Employees.SeniorityDate, o HireDate si no tiene).
     /// </summary>
-    SeniorityBonusSummary = 29
+    SeniorityBonusSummary = 29,
+
+    /// <summary>
+    /// Reporte de subsidio de alimentación por jornada trabajada: una fila por jornada
+    /// calificada (HR.tbl_AttendanceCalculations.FoodSubsidy = 1), con fecha y horario,
+    /// ordenada por nombre de empleado — no es un agregado. Complementa a
+    /// <see cref="FoodSubsidySummary"/> (una fila por empleado con el total de días del
+    /// período) con el detalle de cada jornada individual — principalmente para guardias
+    /// con turno doble, donde cada jornada del día puede caer en un horario distinto.
+    /// </summary>
+    FoodSubsidyBySchedule = 30,
+
+    /// <summary>
+    /// Reporte de novedades de asistencia para todo el personal: ausencia injustificada,
+    /// picada sin captura confiable, atraso, salida anticipada, ajuste manual, horas fuera
+    /// de horario, recuperación aplicada y reemplazo de guardia. Una fila por (jornada, tipo
+    /// de novedad) — la misma jornada puede repetirse si tiene varias novedades a la vez.
+    /// </summary>
+    AttendanceNovelties = 31
 }

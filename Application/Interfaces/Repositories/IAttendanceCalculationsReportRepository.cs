@@ -88,6 +88,53 @@ public interface IAttendanceCalculationsReportRepository
         CancellationToken ct = default);
 
     /// <summary>
+    /// Obtiene el consolidado de jornadas que calificaron para el subsidio de alimentación
+    /// (<c>FoodSubsidy = 1</c>) en el rango de fechas indicado, agrupado por
+    /// (empleado, horario aplicado) — sin fecha individual, una fila por cada horario
+    /// distinto que el empleado cumplió. Ordenado por nombre de empleado. Mismos filtros
+    /// opcionales que <see cref="GetFoodSubsidySummaryDataAsync"/>.
+    /// </summary>
+    /// <param name="filter">
+    /// Filtros del reporte: StartDate, EndDate, DepartmentId, EmployeeId,
+    /// Identification (cédula) y LaborRegimeId (todos opcionales).
+    /// </param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<FoodSubsidyByScheduleReportDto>> GetFoodSubsidyByScheduleDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene las novedades de asistencia (ausencia injustificada, picada sin captura
+    /// confiable, atraso, salida anticipada, ajuste manual, horas fuera de horario,
+    /// recuperación aplicada, reemplazo de guardia) en el rango de fechas indicado, para
+    /// todo el personal. Una fila por (jornada, tipo de novedad) — la misma jornada puede
+    /// repetirse si tiene varias novedades a la vez.
+    /// </summary>
+    /// <param name="filter">
+    /// Filtros del reporte: StartDate, EndDate, DepartmentId, EmployeeId,
+    /// Identification (cédula) y LaborRegimeId (todos opcionales).
+    /// </param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<AttendanceNoveltyReportDto>> GetAttendanceNoveltiesDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Igual detección que <see cref="GetAttendanceNoveltiesDataAsync"/>, pero paginada y
+    /// con soporte de <c>SearchText</c> (cédula/nombre parcial) y <c>NoveltyType</c>
+    /// (filtrar por un solo tipo) — usado por la pantalla interactiva de novedades.
+    /// </summary>
+    /// <param name="filter">Filtros del reporte (incluye SearchText y NoveltyType).</param>
+    /// <param name="page">Número de página (base 1).</param>
+    /// <param name="pageSize">Registros por página.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<PagedResult<AttendanceNoveltyReportDto>> GetAttendanceNoveltiesSummaryAsync(
+        ReportFilterDto filter,
+        int page,
+        int pageSize,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Obtiene el conteo de días con atraso por empleado (una fila por empleado) en el
     /// rango de fechas indicado, para la pantalla de resumen de atrasos. Mismo criterio de
     /// "día con atraso" que <see cref="GetLatenessDataAsync"/> (MinutesLate &gt; 0 o

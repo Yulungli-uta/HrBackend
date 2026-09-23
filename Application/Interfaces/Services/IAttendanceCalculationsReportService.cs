@@ -68,6 +68,42 @@ public interface IAttendanceCalculationsReportService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Obtiene el reporte de subsidio de alimentación agrupado por empleado y horario
+    /// trabajado (sin fecha individual): jornadas calificadas por cada horario distinto
+    /// que el empleado cumplió en el período, multiplicadas por el valor diario
+    /// parametrizado (<c>FOOD_SUBSIDY_DAILY_VALUE</c>). Ordenado por nombre de empleado.
+    /// </summary>
+    /// <param name="filter">Filtros del reporte.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<FoodSubsidyByScheduleReportDto>> GetFoodSubsidyByScheduleDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene el reporte de novedades de asistencia para el período y filtros indicados,
+    /// para todo el personal.
+    /// </summary>
+    /// <param name="filter">Filtros del reporte.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<AttendanceNoveltyReportDto>> GetAttendanceNoveltiesDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Igual que <see cref="GetAttendanceNoveltiesDataAsync"/> pero paginado, para la
+    /// pantalla interactiva de novedades (con SearchText y NoveltyType).
+    /// </summary>
+    /// <param name="filter">Filtros del reporte (incluye SearchText y NoveltyType).</param>
+    /// <param name="page">Número de página (base 1).</param>
+    /// <param name="pageSize">Registros por página.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<PagedResult<AttendanceNoveltyReportDto>> GetAttendanceNoveltiesSummaryAsync(
+        ReportFilterDto filter,
+        int page,
+        int pageSize,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Obtiene el conteo de días con atraso por empleado (una fila por empleado) para el
     /// período y filtros indicados — usado por la pantalla de resumen de atrasos.
     /// </summary>

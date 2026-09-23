@@ -39,6 +39,13 @@ public record ReportFilterDto
     public string? SearchText { get; init; }
 
     /// <summary>
+    /// Filtra la pantalla de novedades de asistencia por un tipo específico (ej.
+    /// "UNJUSTIFIED_ABSENCE", "LATE_ARRIVAL") — ver <c>AttendanceNoveltyReportDto.NoveltyType</c>
+    /// para los valores válidos. Null o vacío = todos los tipos.
+    /// </summary>
+    public string? NoveltyType { get; init; }
+
+    /// <summary>
     /// Si es <c>true</c>, el PDF generado rota el texto de las cabeceras 90° (útil para
     /// reportes con muchas columnas angostas, ej. SIIES). Null o <c>false</c> = horizontal
     /// (comportamiento por defecto).

@@ -156,6 +156,89 @@ public sealed class AttendanceCalculationsReportService : IAttendanceCalculation
     }
 
     /// <inheritdoc/>
+    public async Task<IReadOnlyList<FoodSubsidyByScheduleReportDto>> GetFoodSubsidyByScheduleDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        _logger.LogInformation(
+            "Generando reporte de subsidio de alimentación por horario. Período: {Start} - {End} | DeptId: {DeptId} | EmployeeId: {EmpId} | Cédula: {IdCard} | RegimeId: {RegimeId}",
+            filter.StartDate?.ToString("yyyy-MM-dd") ?? "N/A",
+            filter.EndDate?.ToString("yyyy-MM-dd")   ?? "N/A",
+            filter.DepartmentId?.ToString()   ?? "Todas",
+            filter.EmployeeId?.ToString()     ?? "Todos",
+            filter.Identification             ?? "Todas",
+            filter.LaborRegimeId?.ToString()  ?? "Todos");
+
+        var unitValue = await GetParameterDecimalAsync(FoodSubsidyDailyValueParam, FoodSubsidyDailyValueDefault, ct);
+        var data = await _repository.GetFoodSubsidyByScheduleDataAsync(filter, ct);
+
+        var result = data
+            .Select(r => r with
+            {
+                UnitValue  = unitValue,
+                TotalValue = r.JourneysCount * unitValue
+            })
+            .ToList();
+
+        _logger.LogInformation(
+            "Reporte de subsidio de alimentación por horario generado. Total filas (empleado+horario): {Count} | Valor diario: {UnitValue}",
+            result.Count, unitValue);
+
+        return result;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<AttendanceNoveltyReportDto>> GetAttendanceNoveltiesDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        _logger.LogInformation(
+            "Generando reporte de novedades de asistencia. Período: {Start} - {End} | DeptId: {DeptId} | EmployeeId: {EmpId} | Cédula: {IdCard} | RegimeId: {RegimeId}",
+            filter.StartDate?.ToString("yyyy-MM-dd") ?? "N/A",
+            filter.EndDate?.ToString("yyyy-MM-dd")   ?? "N/A",
+            filter.DepartmentId?.ToString()   ?? "Todas",
+            filter.EmployeeId?.ToString()     ?? "Todos",
+            filter.Identification             ?? "Todas",
+            filter.LaborRegimeId?.ToString()  ?? "Todos");
+
+        var data = await _repository.GetAttendanceNoveltiesDataAsync(filter, ct);
+
+        _logger.LogInformation("Reporte de novedades de asistencia generado. Total novedades: {Count}", data.Count);
+
+        return data;
+    }
+
+    /// <inheritdoc/>
+    public async Task<PagedResult<AttendanceNoveltyReportDto>> GetAttendanceNoveltiesSummaryAsync(
+        ReportFilterDto filter,
+        int page,
+        int pageSize,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        _logger.LogInformation(
+            "Generando resumen de novedades de asistencia. Período: {Start} - {End} | DeptId: {DeptId} | RegimeId: {RegimeId} | Búsqueda: {Search} | Tipo: {Type} | Página: {Page}/{PageSize}",
+            filter.StartDate?.ToString("yyyy-MM-dd") ?? "N/A",
+            filter.EndDate?.ToString("yyyy-MM-dd")   ?? "N/A",
+            filter.DepartmentId?.ToString()  ?? "Todas",
+            filter.LaborRegimeId?.ToString() ?? "Todos",
+            filter.SearchText ?? "N/A",
+            filter.NoveltyType ?? "Todos",
+            page, pageSize);
+
+        var data = await _repository.GetAttendanceNoveltiesSummaryAsync(filter, page, pageSize, ct);
+
+        _logger.LogInformation("Resumen de novedades de asistencia generado. Total: {Count}", data.TotalCount);
+
+        return data;
+    }
+
+    /// <inheritdoc/>
     public async Task<PagedResult<LatenessSummaryReportDto>> GetLatenessSummaryDataAsync(
         ReportFilterDto filter,
         int page,

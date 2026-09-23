@@ -76,6 +76,8 @@ public static class ReportTypeMapper
             ["siies-formacion-profesional"] = ReportType.SiiesFormacionProfesional,
 
             ["food-subsidy-summary"] = ReportType.FoodSubsidySummary,
+            ["food-subsidy-by-schedule"] = ReportType.FoodSubsidyBySchedule,
+            ["attendance-novelties"] = ReportType.AttendanceNovelties,
             ["family-subsidy-summary"] = ReportType.FamilySubsidySummary,
             ["seniority-bonus-summary"] = ReportType.SeniorityBonusSummary,
         };

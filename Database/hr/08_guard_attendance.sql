@@ -19,6 +19,17 @@
     sp_ProcessAttendanceRunDate excluye del loop a todos los empleados que tienen
     al menos un GuardShiftPlanning activo en la fecha, por lo que un guardia
     que coincidentalmente tenga EmployeeSchedule nunca se procesa dos veces.
+
+  2026-09-21: sincronizado con la definición real en producción (este archivo había
+  quedado desactualizado desde el fix de turno doble del 2026-09-09 — nunca pasaba
+  @JourneyNumber a los sub-SP, pese a que el comentario de 21_journey_number_and_
+  special_schedules.sql decía que sí lo hacía). Además se amplía el cálculo de
+  turno vecino (PrevShiftEndDT/NextShiftStartDT) para que también considere el
+  último turno del día calendario anterior y el primero del día siguiente, no solo
+  los turnos del mismo @WorkDate — antes, un turno nocturno que termina de
+  madrugada del día siguiente y un turno que empieza esa misma tarde no se veían
+  entre sí (cada @WorkDate se procesa en una corrida aislada de este SP), así que
+  sus ventanas de captura de picadas (+/-4h) podían traslaparse sin ningún tope.
 */
 -- Fase 4 (2026-07-03): forzar sesión correcta antes de compilar el SP, mismo
 -- motivo documentado en 06_procedures.sql (evita el error 1934/QUOTED_IDENTIFIER
@@ -89,46 +100,86 @@ BEGIN
 
     /* =========================================================
        3. TURNOS DEL DÍA: GuardShiftPlanning activos + cambio
-          activo si existe
+          activo si existe.
+          2026-09-09: turno doble — un mismo guardia (EffectiveEmployeeId)
+          puede tener 2+ turnos el mismo WorkDate (ej. grupo especial
+          mañana+noche). Se numera cada turno (JourneyNumber, por hora de
+          inicio) y se calcula el inicio/fin del turno VECINO inmediato
+          (anterior/siguiente) para capar la ventana de captura de picadas
+          de sp_ProcessAttendanceBaseDay y que no se traslape con el turno
+          vecino (las ventanas de +/-4h sí pueden traslaparse aunque los
+          turnos reales no).
+          2026-09-21: RawWide trae turnos de WorkDate-1..WorkDate+1 (no solo
+          @WorkDate) únicamente para que Prev/NextShift también vean turnos
+          de días calendario vecinos (ej. turno nocturno que cruza medianoche
+          seguido de un turno esa misma tarde del día siguiente). JourneyNumber
+          y RowNum se calculan DESPUÉS de filtrar a WorkDate=@WorkDate, así que
+          siguen numerando solo los turnos del día que se está procesando —
+          nada cambia para el caso normal de un único turno por día.
        ========================================================= */
     DROP TABLE IF EXISTS #GuardShifts;
 
+    ;WITH RawWide AS
+    (
+        SELECT
+            gsp.PlanningId,
+            gsp.WorkDate,
+            gsp.EmployeeId                                            AS OriginalEmployeeId,
+            -- Si hay cambio activo, el que trabaja es el reemplazo
+            ISNULL(gsc.ReplacementEmployeeId, gsp.EmployeeId)        AS EffectiveEmployeeId,
+            -- Horario: si el cambio tiene NewScheduleId se usa ese, si no el del turno
+            ISNULL(gsc.NewScheduleId, gsp.ScheduleId)                AS EffectiveScheduleId,
+            -- 2026-09-09: antes marcaba IsReplacement=1 con CUALQUIER cambio activo,
+            -- incluida una REASSIGNMENT (mismo guardia, solo cambia día/horario/ubicación).
+            -- Ahora solo es "reemplazo" si el cambio trae un empleado distinto cubriendo.
+            CASE WHEN gsc.ReplacementEmployeeId IS NOT NULL THEN 1 ELSE 0 END AS IsReplacement,
+            gsc.ShiftChangeId,
+            s.EntryTime,
+            s.ExitTime,
+            s.HasLunchBreak,
+            s.LunchStart,
+            s.LunchEnd,
+            ved.ContractType,
+            DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS TIME), s.EntryTime), CAST(gsp.WorkDate AS DATETIME2)) AS ShiftStartDT,
+            CASE WHEN s.ExitTime <= s.EntryTime
+                 THEN DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS TIME), s.ExitTime), DATEADD(DAY, 1, CAST(gsp.WorkDate AS DATETIME2)))
+                 ELSE DATEADD(SECOND, DATEDIFF(SECOND, CAST('00:00:00' AS TIME), s.ExitTime), CAST(gsp.WorkDate AS DATETIME2))
+            END AS ShiftEndDT
+        FROM HR.tbl_GuardShiftPlanning gsp
+        -- Cambio activo para este turno (máximo 1 por turno)
+        LEFT JOIN HR.tbl_GuardShiftChanges gsc
+            ON  gsc.PlanningId           = gsp.PlanningId
+            AND gsc.IsActiveForAttendance = 1
+        -- Horario efectivo
+        JOIN HR.tbl_Schedules s
+            ON s.ScheduleID = ISNULL(gsc.NewScheduleId, gsp.ScheduleId)
+        -- Tipo de contrato del empleado efectivo (para subsidio alimentación)
+        LEFT JOIN HR.vw_EmployeeDetails ved
+            ON ved.EmployeeID = ISNULL(gsc.ReplacementEmployeeId, gsp.EmployeeId)
+        -- 2026-09-21: antes era "WHERE gsp.WorkDate = @WorkDate" — se amplía a
+        -- +/-1 día calendario solo para poder calcular PrevShiftEndDT/NextShiftStartDT
+        -- correctamente en los bordes del día procesado (ver comentario arriba).
+        WHERE gsp.WorkDate BETWEEN DATEADD(DAY, -1, @WorkDate) AND DATEADD(DAY, 1, @WorkDate)
+          AND gsp.IsActiveForAssignment = 1
+          AND (@FilterEmployeeID IS NULL
+               OR gsp.EmployeeId = @FilterEmployeeID
+               OR ISNULL(gsc.ReplacementEmployeeId, gsp.EmployeeId) = @FilterEmployeeID)
+    ),
+    WithNeighbors AS
+    (
+        SELECT
+            *,
+            LAG(ShiftEndDT)    OVER (PARTITION BY EffectiveEmployeeId ORDER BY ShiftStartDT, PlanningId) AS PrevShiftEndDT,
+            LEAD(ShiftStartDT) OVER (PARTITION BY EffectiveEmployeeId ORDER BY ShiftStartDT, PlanningId) AS NextShiftStartDT
+        FROM RawWide
+    )
     SELECT
-        gsp.PlanningId,
-        gsp.EmployeeId                                            AS OriginalEmployeeId,
-        -- Si hay cambio activo, el que trabaja es el reemplazo
-        ISNULL(gsc.ReplacementEmployeeId, gsp.EmployeeId)        AS EffectiveEmployeeId,
-        -- Horario: si el cambio tiene NewScheduleId se usa ese, si no el del turno
-        ISNULL(gsc.NewScheduleId, gsp.ScheduleId)                AS EffectiveScheduleId,
-        -- 2026-09-09: antes marcaba IsReplacement=1 con CUALQUIER cambio activo,
-        -- incluida una REASSIGNMENT (mismo guardia, solo cambia día/horario/ubicación).
-        -- Ahora solo es "reemplazo" si el cambio trae un empleado distinto cubriendo.
-        CASE WHEN gsc.ReplacementEmployeeId IS NOT NULL THEN 1 ELSE 0 END AS IsReplacement,
-        gsc.ShiftChangeId,
-        s.EntryTime,
-        s.ExitTime,
-        s.HasLunchBreak,
-        s.LunchStart,
-        s.LunchEnd,
-        ved.ContractType,
-        ROW_NUMBER() OVER (ORDER BY gsp.PlanningId) AS RowNum
+        *,
+        ROW_NUMBER() OVER (PARTITION BY EffectiveEmployeeId ORDER BY ShiftStartDT, PlanningId) AS JourneyNumber,
+        ROW_NUMBER() OVER (ORDER BY PlanningId) AS RowNum
     INTO #GuardShifts
-    FROM HR.tbl_GuardShiftPlanning gsp
-    -- Cambio activo para este turno (máximo 1 por turno)
-    LEFT JOIN HR.tbl_GuardShiftChanges gsc
-        ON  gsc.PlanningId           = gsp.PlanningId
-        AND gsc.IsActiveForAttendance = 1
-    -- Horario efectivo
-    JOIN HR.tbl_Schedules s
-        ON s.ScheduleID = ISNULL(gsc.NewScheduleId, gsp.ScheduleId)
-    -- Tipo de contrato del empleado efectivo (para subsidio alimentación)
-    LEFT JOIN HR.vw_EmployeeDetails ved
-        ON ved.EmployeeID = ISNULL(gsc.ReplacementEmployeeId, gsp.EmployeeId)
-    WHERE gsp.WorkDate            = @WorkDate
-      AND gsp.IsActiveForAssignment = 1
-      AND (@FilterEmployeeID IS NULL
-           OR gsp.EmployeeId = @FilterEmployeeID
-           OR ISNULL(gsc.ReplacementEmployeeId, gsp.EmployeeId) = @FilterEmployeeID);
+    FROM WithNeighbors
+    WHERE WorkDate = @WorkDate;
 
     IF NOT EXISTS (SELECT 1 FROM #GuardShifts)
     BEGIN
@@ -153,7 +204,10 @@ BEGIN
         @HasLunch         BIT,
         @LunchStartT      TIME,
         @LunchEndT        TIME,
-        @ContractType     NVARCHAR(100);
+        @ContractType     NVARCHAR(100),
+        @JourneyNumber    INT,
+        @WindowStartCap   DATETIME2,
+        @WindowEndCap     DATETIME2;
 
     SELECT @MaxRow = MAX(RowNum) FROM #GuardShifts;
     IF @MaxRow IS NULL SET @MaxRow = 0;
@@ -172,40 +226,49 @@ BEGIN
             @HasLunch         = HasLunchBreak,
             @LunchStartT      = LunchStart,
             @LunchEndT        = LunchEnd,
-            @ContractType     = ContractType
+            @ContractType     = ContractType,
+            @JourneyNumber    = JourneyNumber,
+            @WindowStartCap   = PrevShiftEndDT,
+            @WindowEndCap     = NextShiftStartDT
         FROM #GuardShifts WHERE RowNum = @Row;
 
         BEGIN TRY
             /* 4a. Calcular asistencia base usando el horario del turno rotativo */
             EXEC HR.sp_ProcessAttendanceBaseDay
-                @EmployeeID   = @EffectiveEmpId,
-                @WorkDate     = @WorkDate,
-                @GraceMin     = @GraceMin,
-                @OTMin        = @OTMin,
-                @NightStart   = @NightStart,
-                @NightEnd     = @NightEnd,
-                @ContractType = @ContractType,
-                @IsHoliday    = @IsHoliday,
-                @IsWeekend    = @IsWeekend,
-                @ScheduleID   = @EffectiveSchedId,
-                @EntryTime    = @EntryTime,
-                @ExitTime     = @ExitTime,
-                @HasLunch     = @HasLunch,
-                @LunchStartT  = @LunchStartT,
-                @LunchEndT    = @LunchEndT;
+                @EmployeeID      = @EffectiveEmpId,
+                @WorkDate        = @WorkDate,
+                @GraceMin        = @GraceMin,
+                @OTMin           = @OTMin,
+                @NightStart      = @NightStart,
+                @NightEnd        = @NightEnd,
+                @ContractType    = @ContractType,
+                @IsHoliday       = @IsHoliday,
+                @IsWeekend       = @IsWeekend,
+                @ScheduleID      = @EffectiveSchedId,
+                @EntryTime       = @EntryTime,
+                @ExitTime        = @ExitTime,
+                @HasLunch        = @HasLunch,
+                @LunchStartT     = @LunchStartT,
+                @LunchEndT       = @LunchEndT,
+                @JourneyNumber   = @JourneyNumber,
+                @WindowStartCap  = @WindowStartCap,
+                @WindowEndCap    = @WindowEndCap;
 
             /* 4b. Aplicar novedades: permisos, vacaciones, justificaciones, recuperación */
             EXEC HR.sp_ProcessAttendanceLeavesDay
                 @EmployeeID = @EffectiveEmpId,
-                @WorkDate   = @WorkDate;
+                @WorkDate   = @WorkDate,
+                @JourneyNumber = @JourneyNumber;
 
             EXEC HR.sp_ProcessAttendanceJustificationsDay
                 @EmployeeID = @EffectiveEmpId,
-                @WorkDate   = @WorkDate;
+                @WorkDate   = @WorkDate,
+                @JourneyNumber = @JourneyNumber;
 
             EXEC HR.sp_ProcessAttendanceRecoveryDay
                 @EmployeeID = @EffectiveEmpId,
-                @WorkDate   = @WorkDate;
+                @WorkDate   = @WorkDate,
+                @JourneyNumber = @JourneyNumber;
 
             /* 4b-bis. Fase 4 punto 4.5: consolidar horas extra/recuperación
                planificadas hacia HR.tbl_Overtime. Antes de este fix, los
@@ -220,12 +283,14 @@ BEGIN
                 @WorkDate          = @WorkDate,
                 @Debug             = @Debug,
                 @OverrideEntryTime = @EntryTime,
-                @OverrideExitTime  = @ExitTime;
+                @OverrideExitTime  = @ExitTime,
+                @JourneyNumber     = @JourneyNumber;
 
             EXEC HR.sp_ProcessAttendanceFinalizeDay
                 @EmployeeID   = @EffectiveEmpId,
                 @WorkDate     = @WorkDate,
-                @ContractType = @ContractType;
+                @ContractType = @ContractType,
+                @JourneyNumber = @JourneyNumber;
 
             /* 4c. Anotar los campos específicos de guardias en el registro de cálculo */
             UPDATE HR.tbl_AttendanceCalculations
@@ -236,7 +301,8 @@ BEGIN
                 EffectiveEmployeeID  = @EffectiveEmpId,
                 IsReplacement        = @IsRepl
             WHERE EmployeeID = @EffectiveEmpId
-              AND WorkDate   = @WorkDate;
+              AND WorkDate   = @WorkDate
+              AND JourneyNumber = @JourneyNumber;
 
             /* 4d. Actualizar estado del turno:
                    COMPLETED  si hay al menos una picada válida (TotalWorkedMinutes > 0)
@@ -246,13 +312,17 @@ BEGIN
                todavía no ocurre) marcaba ABSENT a un guardia que ni siquiera
                ha llegado su turno — confirmado con la prueba controlada de
                PlanEmployeeID, donde 50 guardias reales quedaron ABSENT por
-               error al reprocesar 2026-07-15 antes de que llegara la fecha. */
+               error al reprocesar 2026-07-15 antes de que llegara la fecha.
+               2026-09-09: el SELECT ahora filtra también por JourneyNumber
+               — con turno doble, sin este filtro el SELECT era ambiguo entre
+               las 2 filas del día y podía tomar el TotalWorked de la jornada
+               equivocada. */
             IF @WorkDate <= CAST(GETDATE() AS DATE)
             BEGIN
                 DECLARE @TotalWorked INT = 0;
                 SELECT @TotalWorked = ISNULL(TotalWorkedMinutes, 0)
                 FROM HR.tbl_AttendanceCalculations
-                WHERE EmployeeID = @EffectiveEmpId AND WorkDate = @WorkDate;
+                WHERE EmployeeID = @EffectiveEmpId AND WorkDate = @WorkDate AND JourneyNumber = @JourneyNumber;
 
                 UPDATE HR.tbl_GuardShiftPlanning
                 SET StatusTypeId = CASE WHEN @TotalWorked > 0 THEN @StatusCompleted ELSE @StatusAbsent END,
