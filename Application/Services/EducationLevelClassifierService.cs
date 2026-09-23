@@ -66,8 +66,14 @@ public sealed class EducationLevelClassifierService : IEducationLevelClassifierS
             "Tercer Nivel o Pregrado" => nivel3,
             "Educación Superior de Grado o Tercer Nivel" => nivel3,
             "Tercer Nivel Técnico Superior" => nivel3,
+            // [2026-09-19] 3 variantes reales de DINARDAP encontradas en producción (430
+            // registros atascados en NIVEL_1 antes de este fix, ver Database/hr sección 12):
+            "TERCER_NIVEL" => nivel3,
+            "Tercer Nivel Tecnológico Superior" => nivel3,
+            "Tercer Nivel Tecnológico Superior Universitario" => nivel3,
             "Cuarto Nivel o Posgrado" => nivel4,
             "CUARTO_NIVEL" => nivel4,
+            "Educación Superior de Posgrado o Cuarto Nivel" => nivel4,
             _ => null,
         };
 
@@ -100,9 +106,15 @@ public sealed class EducationLevelClassifierService : IEducationLevelClassifierS
         var cuartoNivelConfirmado = nivelTexto.Contains("CUARTO", StringComparison.OrdinalIgnoreCase);
 
         string? gradoNombre = null;
-        if (cuartoNivelConfirmado && (titulo.Contains("DOCTOR")))
+        // [2026-09-19] "DOUTOR" (portugués) agregado - 2 títulos reales en producción sin
+        // clasificar por esto (programas brasileños vía DINARDAP).
+        if (cuartoNivelConfirmado && (titulo.Contains("DOCTOR") || titulo.Contains("DOUTOR")))
             gradoNombre = GradoDoctorPhD;
-        else if (titulo.Contains("MAGISTER") || titulo.Contains("MASTER") || titulo.Contains("MAESTRIA") || titulo.Contains("MAESTRÍA"))
+        // [2026-09-19] "MAESTRA" (femenino, no es substring de MAESTRIA), "MÉSTER" (variante
+        // con tilde) y "MESTRE" (portugués) agregados - mismo motivo que DOUTOR arriba.
+        else if (titulo.Contains("MAGISTER") || titulo.Contains("MASTER") || titulo.Contains("MAESTRIA") ||
+                 titulo.Contains("MAESTRÍA") || titulo.Contains("MAESTRA") || titulo.Contains("MÉSTER") ||
+                 titulo.Contains("MESTRE"))
             gradoNombre = GradoMaestria;
         else if (titulo.Contains("ESPECIALISTA"))
             gradoNombre = (titulo.Contains("SALUD") || titulo.Contains("MEDIC") || titulo.Contains("CLINIC"))

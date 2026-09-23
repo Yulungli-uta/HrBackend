@@ -19,15 +19,20 @@ public class EducationLevels : IAuditable{
   public DateOnly? StartDate{get;set;}
   public DateOnly? EndDate{get;set;}
   public string? Grade{get;set;}
-  public string? Location{get;set;}
   public decimal? Score{get;set;}
   public string? SenescytRegistrationNumber { get; set; }
 
   /// <summary>FK -> ref_Types (Category='SIIES_GRADO'). Solo aplica cuando el nivel del título es CUARTO NIVEL.</summary>
   public int? SiiesGradoTypeId { get; set; }
 
-  /// <summary>FK -> tbl_KnowledgeArea. Campo detallado UNESCO del título (SIIES CODIGO_SUBAREA_CONOCIMIENTO_ESPECIFICO_UNESCO).</summary>
+  /// <summary>FK -> tbl_KnowledgeArea. Área de conocimiento interna (selector de Publicaciones) - NO es la subárea SIIES, ver UnescoSubareaTypeId.</summary>
   public int? KnowledgeAreaId { get; set; }
+
+  /// <summary>FK -> tbl_Countries. País donde se obtuvo el título (SIIES PAIS_ESTUDIO). DINARDAP no lo informa - solo carga manual.</summary>
+  public string? CountryOfStudyId { get; set; }
+
+  /// <summary>FK -> ref_Types (Category='SIIES_UNESCO_SUBAREA'). Campo detallado UNESCO/ISCED-F del título (SIIES CODIGO_SUBAREA_CONOCIMIENTO_ESPECIFICO_UNESCO). DINARDAP no lo informa - solo carga manual.</summary>
+  public int? UnescoSubareaTypeId { get; set; }
 
   // ---- Integración DINARDAP (2026-09-16) ----------------------------------
 

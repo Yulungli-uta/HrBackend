@@ -15,4 +15,7 @@ public interface IEducationLevelsService : IService<EducationLevels, int>
         IFormFile? file,
         int? documentTypeId,
         CancellationToken ct);
+
+    /// <summary>Ver IEducationLevelsRepository.GetActiveProfessorStatsAsync.</summary>
+    Task<IReadOnlyList<(int EmployeeId, int? DepartmentId, string? Nivel, string? Grado)>> GetActiveProfessorStatsAsync(CancellationToken ct = default);
 }

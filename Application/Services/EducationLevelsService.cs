@@ -36,6 +36,9 @@ public class EducationLevelsService : Service<EducationLevels, int>, IEducationL
         return await _repository.GetByPersonIdAsync(personId);
     }
 
+    public Task<IReadOnlyList<(int EmployeeId, int? DepartmentId, string? Nivel, string? Grado)>> GetActiveProfessorStatsAsync(CancellationToken ct = default) =>
+        _repository.GetActiveProfessorStatsAsync(ct);
+
     public async Task<(EducationLevels entity, StoredFile? storedFile, string? error)> CreateWithDocumentAsync(
         EducationLevels entity,
         IFormFile? file,

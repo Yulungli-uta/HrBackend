@@ -61,7 +61,6 @@ public sealed class EducationLevelsConfiguration : IEntityTypeConfiguration<Educ
         e.Property(x => x.Title).HasMaxLength(500).IsRequired();
         e.Property(x => x.Specialty).HasMaxLength(100);
         e.Property(x => x.Grade).HasMaxLength(50);
-        e.Property(x => x.Location).HasMaxLength(100);
         e.Property(x => x.SenescytRegistrationNumber).HasMaxLength(50);
         e.Property(x => x.SenescytType).HasMaxLength(20);
         e.Property(x => x.SenescytNivelNombreOriginal).HasMaxLength(200);

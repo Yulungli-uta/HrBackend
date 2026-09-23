@@ -6,7 +6,7 @@ public class InstitutionsDto
     public string Name { get; set; } = null!;
     public int InstitutionTypeId { get; set; }
     public string CountryId { get; set; } = null!;
-    public string ProvinceId { get; set; } = null!;
-    public string CantonId { get; set; } = null!;
+    public string? ProvinceId { get; set; }
+    public string? CantonId { get; set; }
     public DateTime CreatedAt { get; set; }
 }

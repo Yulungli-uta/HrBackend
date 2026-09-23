@@ -17,7 +17,6 @@ public class EducationLevelWithDocumentCreateDto
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
     public string? Grade { get; set; }
-    public string? Location { get; set; }
     public decimal? Score { get; set; }
     public string? SenescytRegistrationNumber { get; set; }
     /// <summary>Solo aplica cuando EducationLevelTypeId es Cuarto Nivel.</summary>
@@ -25,6 +24,8 @@ public class EducationLevelWithDocumentCreateDto
     public DateOnly? SenescytGraduationDate { get; set; }
     public DateOnly? SenescytRegistrationDate { get; set; }
     public string? SenescytType { get; set; }
+    public string? CountryOfStudyId { get; set; }
+    public int? UnescoSubareaTypeId { get; set; }
 
     /// <summary>Archivo opcional (título/certificado). Si se omite, se crea el registro sin adjunto.</summary>
     public IFormFile? File { get; set; }

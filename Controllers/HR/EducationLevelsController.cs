@@ -73,6 +73,30 @@ public class EducationLevelsController : ControllerBase
         return Ok(_mapper.Map<List<EducationLevelsDto>>(await _svc.GetAllAsync(ct)));
     }
 
+    /// <summary>
+    /// Docentes activos (Titulares + Ocasionales) agrupados por Nivel/Grado del título de
+    /// mayor jerarquía — para el gráfico "Docentes activos por grado y nivel" del Dashboard
+    /// de Talento Humano. Requiere rol de RRHH/administración, mismo criterio que GetAll.
+    /// </summary>
+    [HttpGet("stats/active-professors")]
+    [RequirePermission("EMPLOYEE_PROFILE.READ")]
+    public async Task<IActionResult> GetActiveProfessorStats(CancellationToken ct)
+    {
+        if (!ElevatedRoles.Any(User.IsInRole))
+            return Forbid403("No tiene permisos para ver estadísticas de docentes del sistema.");
+
+        var rows = await _svc.GetActiveProfessorStatsAsync(ct);
+        var dto = rows.Select(r => new EducationLevelStatsDto
+        {
+            EmployeeId = r.EmployeeId,
+            DepartmentId = r.DepartmentId,
+            Nivel = r.Nivel ?? "SIN DATO",
+            Grado = r.Grado,
+        }).ToList();
+
+        return Ok(dto);
+    }
+
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]
@@ -140,13 +164,14 @@ public class EducationLevelsController : ControllerBase
             StartDate = dto.StartDate,
             EndDate = dto.EndDate,
             Grade = dto.Grade,
-            Location = dto.Location,
             Score = dto.Score,
             SenescytRegistrationNumber = dto.SenescytRegistrationNumber,
             SiiesGradoTypeId = dto.SiiesGradoTypeId,
             SenescytGraduationDate = dto.SenescytGraduationDate,
             SenescytRegistrationDate = dto.SenescytRegistrationDate,
             SenescytType = dto.SenescytType,
+            CountryOfStudyId = dto.CountryOfStudyId,
+            UnescoSubareaTypeId = dto.UnescoSubareaTypeId,
             // Manual siempre en este endpoint - el sincronizador con DINARDAP no pasa por aquí.
             Source = "Manual",
         };

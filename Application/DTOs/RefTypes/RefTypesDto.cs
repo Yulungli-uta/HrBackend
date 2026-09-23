@@ -10,4 +10,5 @@ public class RefTypesDto
     public DateTime CreatedAt { get; set; }
     public string? Metadata { get; set; }
     public string? SiiesLabel { get; set; }
+    public int SortOrder { get; set; }
 }

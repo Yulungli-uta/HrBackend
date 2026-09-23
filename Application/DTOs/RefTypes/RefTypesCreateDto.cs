@@ -9,4 +9,5 @@ public class RefTypesCreateDto
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? SiiesLabel { get; set; }
+    public int SortOrder { get; set; }
 }

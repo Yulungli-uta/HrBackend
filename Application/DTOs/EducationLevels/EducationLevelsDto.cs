@@ -11,13 +11,14 @@ public class EducationLevelsDto
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
     public string? Grade { get; set; }
-    public string? Location { get; set; }
     public decimal? Score { get; set; }
     public string? SenescytRegistrationNumber { get; set; }
     public int? SiiesGradoTypeId { get; set; }
     public DateOnly? SenescytGraduationDate { get; set; }
     public DateOnly? SenescytRegistrationDate { get; set; }
     public string? SenescytType { get; set; }
+    public string? CountryOfStudyId { get; set; }
+    public int? UnescoSubareaTypeId { get; set; }
     public string? SenescytNivelNombreOriginal { get; set; }
     public string? InstitutionNameOriginal { get; set; }
     public string Source { get; set; } = "Manual";
