@@ -796,6 +796,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ILanguagesRepository, WsUtaSystem.Infrastructure.Repositories.LanguagesRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ILanguagesService, WsUtaSystem.Application.Services.LanguagesService>();
 
+        // ── Módulo: Hoja de Vida Académica (reporte PDF) ────────────────────────
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IAcademicCvService, WsUtaSystem.Application.Services.AcademicCvService>();
+        services.AddScoped<WsUtaSystem.Reports.Abstractions.IAcademicCvPdfComposer, WsUtaSystem.Reports.Renderers.AcademicCvPdfComposer>();
+
         // ── Módulo: Vacaciones ────────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IVacationsRepository, WsUtaSystem.Infrastructure.Repositories.VacationsRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVacationsService, WsUtaSystem.Application.Services.VacationsService>();
