@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Application.Common;
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
@@ -13,11 +14,13 @@ public class RotationPatternService : IRotationPatternService
 {
     private readonly IRotationPatternRepository _repo;
     private readonly AppDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public RotationPatternService(IRotationPatternRepository repo, AppDbContext db)
+    public RotationPatternService(IRotationPatternRepository repo, AppDbContext db, ICurrentUserService currentUser)
     {
         _repo = repo;
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<List<RotationPatternDto>> GetAllAsync(CancellationToken ct)
@@ -122,6 +125,23 @@ public class RotationPatternService : IRotationPatternService
         await ValidateDetailsCoverageAsync(entity.CycleDays, dto.Details, ct);
 
         await EnsurePatternIsNotDuplicatedAsync(patternId, entity.PatternCode, entity.Name, entity.CycleDays, dto.Details, ct);
+
+        // Archiva la versión anterior antes de reemplazarla — no afecta la tabla activa
+        // ni cómo la lee la generación de turnos, solo conserva el histórico para auditoría.
+        var archivedBy = _currentUser.EmployeeId;
+        foreach (var old in entity.Details)
+        {
+            await _db.RotationPatternDetailHistories.AddAsync(new RotationPatternDetailHistory
+            {
+                PatternId = patternId,
+                PatternDetailId = old.PatternDetailId,
+                DayOrder = old.DayOrder,
+                ScheduleId = old.ScheduleId,
+                IsRestDay = old.IsRestDay,
+                Notes = old.Notes,
+                ArchivedBy = archivedBy
+            }, ct);
+        }
 
         _db.RotationPatternDetails.RemoveRange(entity.Details);
 

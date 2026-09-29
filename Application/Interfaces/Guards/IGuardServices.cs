@@ -103,7 +103,11 @@ public interface IGuardShiftChangeService
     Task<List<GuardShiftChangeDto>> GetByPlanningAsync(int planningId, CancellationToken ct);
     Task<List<GuardShiftChangeDto>> GetPendingAsync(CancellationToken ct);
     Task<PagedResult<GuardShiftChangeDto>> GetPendingPagedAsync(int page, int pageSize, CancellationToken ct);
-    Task<PagedResult<GuardShiftChangeDto>> GetAllPagedAsync(int page, int pageSize, string? status, CancellationToken ct);
+    Task<PagedResult<GuardShiftChangeDto>> GetAllPagedAsync(
+        int page, int pageSize, string? status,
+        int? employeeId, int? groupId, string? changeType, DateOnly? fromDate, DateOnly? toDate,
+        string? search,
+        CancellationToken ct);
     Task<GuardShiftChangeDto> CreateReplacementAsync(CreateGuardShiftReplacementDto dto, CancellationToken ct);
     Task<GuardShiftChangeDto> ApproveAsync(int shiftChangeId, ApproveGuardShiftChangeDto dto, CancellationToken ct);
     Task<GuardShiftChangeDto> RejectAsync(int shiftChangeId, RejectGuardShiftChangeDto dto, CancellationToken ct);

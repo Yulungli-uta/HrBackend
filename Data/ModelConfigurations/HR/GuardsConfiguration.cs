@@ -163,6 +163,29 @@ public sealed class RotationPatternDetailConfiguration : IEntityTypeConfiguratio
     }
 }
 
+public sealed class RotationPatternDetailHistoryConfiguration : IEntityTypeConfiguration<RotationPatternDetailHistory>
+{
+    public void Configure(EntityTypeBuilder<RotationPatternDetailHistory> e)
+    {
+        e.ToTable("tbl_RotationPatternDetailHistory", "HR");
+        e.HasKey(x => x.HistoryId);
+        e.Property(x => x.HistoryId).HasColumnName("HistoryId").UseIdentityColumn();
+        e.Property(x => x.PatternId).HasColumnName("PatternId");
+        e.Property(x => x.PatternDetailId).HasColumnName("PatternDetailId");
+        e.Property(x => x.Notes).HasMaxLength(300);
+        e.Property(x => x.ArchivedAt)
+            .HasDefaultValueSql("GETDATE()")
+            .ValueGeneratedOnAdd()
+            .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
+
+        e.HasOne(x => x.Pattern)
+            .WithMany()
+            .HasForeignKey(x => x.PatternId)
+            .HasConstraintName("FK_RotationPatternDetailHistory_Pattern")
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 public sealed class GuardGroupRotationPatternConfiguration : IEntityTypeConfiguration<GuardGroupRotationPattern>
 {
     public void Configure(EntityTypeBuilder<GuardGroupRotationPattern> e)
@@ -239,6 +262,11 @@ public sealed class GuardShiftPlanningConfiguration : IEntityTypeConfiguration<G
         e.Property(x => x.StatusTypeId).HasColumnName("StatusTypeID");
         e.Property(x => x.Notes).HasMaxLength(500);
         e.Property(x => x.AllowDoubleShift).HasDefaultValue(false);
+        e.Property(x => x.GroupNameSnapshot).HasMaxLength(150);
+        e.Property(x => x.GroupColorSnapshot).HasMaxLength(20);
+        e.Property(x => x.EmployeeNameSnapshot).HasMaxLength(200);
+        e.Property(x => x.ScheduleCodeSnapshot).HasMaxLength(20);
+        e.Property(x => x.ScheduleDescriptionSnapshot).HasMaxLength(150);
         e.Property(x => x.RowVersion).IsRowVersion().HasColumnName("RowVersion").IsConcurrencyToken();
         e.Property(x => x.CreatedAt)
             .HasDefaultValueSql("GETDATE()")

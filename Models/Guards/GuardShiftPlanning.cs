@@ -16,6 +16,14 @@ public class GuardShiftPlanning : IAuditable
     public bool IsActiveForAssignment { get; set; } = true;
     public bool AllowDoubleShift { get; set; }
     public string? Notes { get; set; }
+    // Snapshot al momento de crear el turno — para que las vistas históricas no cambien
+    // retroactivamente si el grupo/empleado/horario se edita después. NULL en filas creadas
+    // antes de este campo; el mapeo hace fallback al dato en vivo en ese caso.
+    public string? GroupNameSnapshot { get; set; }
+    public string? GroupColorSnapshot { get; set; }
+    public string? EmployeeNameSnapshot { get; set; }
+    public string? ScheduleCodeSnapshot { get; set; }
+    public string? ScheduleDescriptionSnapshot { get; set; }
     public int? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public int? UpdatedBy { get; set; }

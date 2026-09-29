@@ -55,6 +55,8 @@ public class GuardShiftChangeService : IGuardShiftChangeService
             .Include(c => c.NewLocation)
             .Include(c => c.ChangeType)
             .Include(c => c.StatusType)
+            .Include(c => c.RequesterEmployee).ThenInclude(e => e!.People)
+            .Include(c => c.ApproverEmployee).ThenInclude(e => e!.People)
             .Where(c => c.StatusType!.Name == "PENDING")
             .OrderByDescending(c => c.RequestedAt);
 
@@ -70,7 +72,11 @@ public class GuardShiftChangeService : IGuardShiftChangeService
         };
     }
 
-    public async Task<PagedResult<GuardShiftChangeDto>> GetAllPagedAsync(int page, int pageSize, string? status, CancellationToken ct)
+    public async Task<PagedResult<GuardShiftChangeDto>> GetAllPagedAsync(
+        int page, int pageSize, string? status,
+        int? employeeId, int? groupId, string? changeType, DateOnly? fromDate, DateOnly? toDate,
+        string? search,
+        CancellationToken ct)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
@@ -84,10 +90,29 @@ public class GuardShiftChangeService : IGuardShiftChangeService
             .Include(c => c.NewLocation)
             .Include(c => c.ChangeType)
             .Include(c => c.StatusType)
+            .Include(c => c.RequesterEmployee).ThenInclude(e => e!.People)
+            .Include(c => c.ApproverEmployee).ThenInclude(e => e!.People)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status))
             q = q.Where(c => c.StatusType!.Name == status);
+        if (!string.IsNullOrWhiteSpace(changeType))
+            q = q.Where(c => c.ChangeType!.Name == changeType);
+        if (employeeId.HasValue)
+            q = q.Where(c => c.OriginalEmployeeId == employeeId.Value);
+        if (groupId.HasValue)
+            q = q.Where(c => c.Planning!.GroupId == groupId.Value);
+        if (fromDate.HasValue)
+            q = q.Where(c => c.Planning!.WorkDate >= fromDate.Value);
+        if (toDate.HasValue)
+            q = q.Where(c => c.Planning!.WorkDate <= toDate.Value);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            q = q.Where(c =>
+                (c.OriginalEmployee!.People!.LastName + " " + c.OriginalEmployee.People.FirstName).ToLower().Contains(term) ||
+                (c.OriginalEmployee.People.IdCard != null && c.OriginalEmployee.People.IdCard.ToLower().Contains(term)));
+        }
 
         q = q.OrderByDescending(c => c.RequestedAt);
 
@@ -204,6 +229,8 @@ public class GuardShiftChangeService : IGuardShiftChangeService
             .Include(c => c.NewLocation)
             .Include(c => c.ChangeType)
             .Include(c => c.StatusType)
+            .Include(c => c.RequesterEmployee).ThenInclude(e => e!.People)
+            .Include(c => c.ApproverEmployee).ThenInclude(e => e!.People)
             .FirstAsync(c => c.ShiftChangeId == change.ShiftChangeId, ct);
 
         return MapToDto(reloaded);
@@ -274,6 +301,13 @@ public class GuardShiftChangeService : IGuardShiftChangeService
     {
         if (!planning.IsActiveForAssignment)
             throw new InvalidOperationException("No se puede reasignar un turno cancelado.");
+
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (planning.WorkDate < today)
+            throw new InvalidOperationException(
+                $"No se puede reasignar un turno de una fecha ya pasada ({planning.WorkDate:dd/MM/yyyy}). La planificación pasada queda congelada; si el turno no se cumplió, cancélalo en vez de reasignarlo.");
+        if (newWorkDate < today)
+            throw new InvalidOperationException($"No se puede reasignar un turno hacia una fecha ya pasada. La fecha debe ser {today:dd/MM/yyyy} o posterior.");
 
         var validateReq = new ValidateGuardAssignmentRequestDto(
             planning.EmployeeId, newLocationId, newWorkDate, newScheduleId, planning.PlanningId, overrideConflict);
@@ -377,6 +411,8 @@ public class GuardShiftChangeService : IGuardShiftChangeService
             .Include(c => c.NewLocation)
             .Include(c => c.ChangeType)
             .Include(c => c.StatusType)
+            .Include(c => c.RequesterEmployee).ThenInclude(e => e!.People)
+            .Include(c => c.ApproverEmployee).ThenInclude(e => e!.People)
             .FirstAsync(c => c.ShiftChangeId == change.ShiftChangeId, ct);
 
         return MapToDto(reloaded);
@@ -415,7 +451,10 @@ public class GuardShiftChangeService : IGuardShiftChangeService
             c.OriginalScheduleId, c.OriginalSchedule?.Description ?? "",
             c.NewScheduleId, c.NewSchedule?.Description,
             c.ChangeType?.Name ?? "", c.StatusType?.Name ?? "",
-            c.IsActiveForAttendance, c.Reason, c.RequestedAt, c.RequestedBy, null,
-            c.ApprovedBy, null, c.ApprovedAt, c.RejectionReason,
+            c.IsActiveForAttendance, c.Reason, c.RequestedAt, c.RequestedBy,
+            c.RequesterEmployee is null ? null : c.RequesterEmployee.People.GetFullName(),
+            c.ApprovedBy,
+            c.ApproverEmployee is null ? null : c.ApproverEmployee.People.GetFullName(),
+            c.ApprovedAt, c.RejectionReason,
             c.NewWorkDate, c.NewLocationId, c.NewLocation?.LocationName);
 }

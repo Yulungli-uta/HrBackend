@@ -124,6 +124,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 g.Employees.Count(e => e.IsActive),
                 g.ParentGroupId,
                 g.ParentGroup == null ? null : g.ParentGroup.Name,
+                g.GroupLevelTypeId,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
                 g.Subgroups.Count(s => s.IsActive), g.IsSpecial, null))
@@ -152,6 +153,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 g.Employees.Count(e => e.IsActive),
                 g.ParentGroupId,
                 g.ParentGroup == null ? null : g.ParentGroup.Name,
+                g.GroupLevelTypeId,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
                 g.Subgroups.Count(s => s.IsActive), g.IsSpecial, null))
@@ -174,6 +176,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 g.Employees.Count(e => e.IsActive),
                 g.ParentGroupId,
                 g.ParentGroup == null ? null : g.ParentGroup.Name,
+                g.GroupLevelTypeId,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
                 g.Subgroups.Count(s => s.IsActive), g.IsSpecial, null))
@@ -606,6 +609,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 g.GroupId, g.GroupCode, g.Name, g.Description, g.IsActive,
                 g.Employees.Count(e => e.IsActive),
                 null, null,
+                g.GroupLevelTypeId,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
                 g.Subgroups.Count(s => s.IsActive), g.IsSpecial, null))
@@ -623,13 +627,14 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             .OrderBy(g => g.Name)
             .Select(g => new GuardRotationGroupWithSubgroupsDto(
                 g.GroupId, g.GroupCode, g.Name, g.Description, g.IsActive,
-                g.ColorCode, g.GroupLevelType == null ? null : g.GroupLevelType.Name,
+                g.ColorCode, g.GroupLevelTypeId, g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.Employees.Count(e => e.IsActive),
                 g.Subgroups.Count(),
                 g.Subgroups.Select(s => new GuardRotationGroupDto(
                     s.GroupId, s.GroupCode, s.Name, s.Description, s.IsActive,
                     s.Employees.Count(e => e.IsActive),
                     g.GroupId, g.Name,
+                    s.GroupLevelTypeId,
                     s.GroupLevelType == null ? null : s.GroupLevelType.Name, s.ColorCode,
                     0, s.IsSpecial, null
                 )).ToList(),
@@ -646,6 +651,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 g.Employees.Count(e => e.IsActive),
                 g.ParentGroupId,
                 g.ParentGroup == null ? null : g.ParentGroup.Name,
+                g.GroupLevelTypeId,
                 g.GroupLevelType == null ? null : g.GroupLevelType.Name,
                 g.ColorCode,
                 g.Subgroups.Count(s => s.IsActive), g.IsSpecial, null))

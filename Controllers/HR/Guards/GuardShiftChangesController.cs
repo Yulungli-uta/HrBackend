@@ -35,11 +35,17 @@ public class GuardShiftChangesController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] string? status = null,
+        [FromQuery] int? employeeId = null,
+        [FromQuery] int? groupId = null,
+        [FromQuery] string? changeType = null,
+        [FromQuery] DateOnly? fromDate = null,
+        [FromQuery] DateOnly? toDate = null,
+        [FromQuery] string? search = null,
         CancellationToken ct = default)
     {
         if (page < 1) page = 1;
         if (pageSize < 1 || pageSize > 100) pageSize = 20;
-        return Ok(await _svc.GetAllPagedAsync(page, pageSize, status, ct));
+        return Ok(await _svc.GetAllPagedAsync(page, pageSize, status, employeeId, groupId, changeType, fromDate, toDate, search, ct));
     }
 
     [HttpGet("by-planning/{planningId:int}")]

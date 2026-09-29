@@ -194,6 +194,7 @@ public class AppDbContext : DbContext
     public DbSet<GuardRotationGroupEmployee> GuardRotationGroupEmployees => Set<GuardRotationGroupEmployee>();
     public DbSet<RotationPattern> RotationPatterns => Set<RotationPattern>();
     public DbSet<RotationPatternDetail> RotationPatternDetails => Set<RotationPatternDetail>();
+    public DbSet<RotationPatternDetailHistory> RotationPatternDetailHistories => Set<RotationPatternDetailHistory>();
     public DbSet<GuardGroupRotationPattern> GuardGroupRotationPatterns => Set<GuardGroupRotationPattern>();
     public DbSet<GuardShiftCoverageRequirement> GuardShiftCoverageRequirements => Set<GuardShiftCoverageRequirement>();
     public DbSet<GuardShiftPlanning> GuardShiftPlannings => Set<GuardShiftPlanning>();
