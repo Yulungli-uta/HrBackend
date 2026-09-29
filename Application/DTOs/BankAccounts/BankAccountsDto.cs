@@ -7,5 +7,6 @@ public class BankAccountsDto
     public string FinancialInstitution { get; set; }
     public int AccountTypeId { get; set; }
     public string AccountNumber { get; set; }
+    public bool IsPrimary { get; set; }
     public DateTime CreatedAt { get; set; }
 }

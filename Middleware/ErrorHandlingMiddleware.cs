@@ -40,13 +40,24 @@ public class ErrorHandlingMiddleware
             return new ValidationProblemDetails(errors) { Title = "Solicitud inválida", Status = StatusCodes.Status400BadRequest };
         }
         if (ex is DbUpdateException dbex2)
-            return new ProblemDetails { Title = "No se pudo completar la operación", Detail = dbex2.InnerException?.Message ?? dbex2.Message, Status = StatusCodes.Status400BadRequest };
+            return new ProblemDetails { Title = "No se pudo completar la operación", Detail = TranslateSqlDetail(dbex2.InnerException as SqlException), Status = StatusCodes.Status400BadRequest };
         // Rechazo de una regla de negocio (ej. "ya tiene otro turno", "no se puede reasignar
         // un turno cancelado") — es el tipo de excepción que se lanza en toda la aplicación
         // para este propósito. Sin este caso caía al genérico y salía como 500 en vez de un
         // mensaje claro (hallazgo real: reasignación de guardias 2026-09-07).
         if (ex is InvalidOperationException ioex)
             return new ProblemDetails { Title = "No se puede completar la operación", Detail = ioex.Message, Status = StatusCodes.Status409Conflict };
-        return new ProblemDetails { Title = "Error inesperado", Detail = ex.Message, Status = StatusCodes.Status500InternalServerError };
+        return new ProblemDetails { Title = "Error inesperado", Detail = "Ocurrió un error inesperado en el servidor. Contacte a soporte técnico si el problema persiste.", Status = StatusCodes.Status500InternalServerError };
     }
+
+    // Traduce errores de SQL Server a mensajes en español sin exponer nombres de tabla/columna
+    // (hallazgo informe UTA-DITIC-PS-027-2026, observaciones 18/20/22/26: el detalle crudo de
+    // SqlException llegaba tal cual al usuario final, ej. "String or binary data would be
+    // truncated in table 'dbUtaSystem.HR.tbl_Audit', column 'UserName'").
+    private static string TranslateSqlDetail(SqlException? sql) => sql?.Number switch
+    {
+        547 => "No se puede completar la operación: el registro está relacionado con otra información del sistema.",
+        8152 or 2628 => "Uno de los valores ingresados es demasiado largo para el campo correspondiente.",
+        _ => "No se pudo completar la operación. Contacte a soporte técnico si el problema persiste."
+    };
 }

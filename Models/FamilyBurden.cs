@@ -13,6 +13,9 @@ public class FamilyBurden : IAuditable{
   public DateOnly BirthDate{get;set;}
   public int? DisabilityTypeId{get;set;}
   public decimal? DisabilityPercentage{get;set;}
+  public int? RelationshipTypeId{get;set;}
+  public bool IsStudying{get;set;}
+  public string? EducationInstitution{get;set;}
   public int? StatusTypeId{get;set;}
   public DateTime? ApprovedAt{get;set;}
   public int? ApprovedBy{get;set;}

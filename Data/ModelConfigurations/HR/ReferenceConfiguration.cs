@@ -67,6 +67,7 @@ public sealed class AuditConfiguration : IEntityTypeConfiguration<Audit>
         e.Property(x => x.AuditId).HasColumnName("AuditID");
         e.Property(x => x.TableName).HasMaxLength(128);
         e.Property(x => x.Action).HasMaxLength(20);
+        e.Property(x => x.UserName).HasMaxLength(128);
         e.Property(x => x.RecordId).HasColumnName("RecordID");
         e.Property(x => x.DateTime).HasColumnName("ActionDate");
     }

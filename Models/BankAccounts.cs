@@ -8,6 +8,7 @@ public class BankAccounts : IAuditable{
   public string FinancialInstitution{get;set;}=null!;
   public int AccountTypeId{get;set;}
   public string AccountNumber{get;set;}=null!;
+  public bool IsPrimary{get;set;}
     public DateTime? CreatedAt { get; set; }
     public int? CreatedBy { get; set; }
     public DateTime? UpdatedAt { get; set; }

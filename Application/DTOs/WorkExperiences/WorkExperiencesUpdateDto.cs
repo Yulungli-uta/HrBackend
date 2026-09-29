@@ -12,7 +12,11 @@ public class WorkExperiencesUpdateDto
     public string Position { get; set; } = null!;
     public string? InstitutionAddress { get; set; }
     public DateOnly StartDate { get; set; }
-    public DateOnly EndDate { get; set; }
+    // Nullable: "Trabajo actual" (IsCurrent=true) no tiene fecha de fin. Antes era
+    // DateOnly no nulable — bloqueaba el update con "One or more validation errors
+    // occurred" para cualquier experiencia laboral vigente (hallazgo informe
+    // UTA-DITIC-PS-027-2026, observación 26; mismo patrón que IdentType/EmployeeType).
+    public DateOnly? EndDate { get; set; }
     public int ExperienceTypeId { get; set; }
     public bool IsCurrent { get; set; }
     public DateTime CreatedAt { get; set; }

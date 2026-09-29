@@ -150,6 +150,9 @@ public class FamilyBurdenController : ControllerBase
             BirthDate = dto.BirthDate,
             DisabilityTypeId = dto.DisabilityTypeId,
             DisabilityPercentage = dto.DisabilityPercentage,
+            RelationshipTypeId = dto.RelationshipTypeId,
+            IsStudying = dto.IsStudying,
+            EducationInstitution = dto.EducationInstitution,
         };
 
         if (!ElevatedRoles.Any(User.IsInRole))

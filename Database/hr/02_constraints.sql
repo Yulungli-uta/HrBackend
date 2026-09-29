@@ -987,6 +987,13 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_FamilyBurden_Pers
             REFERENCES [HR].[tbl_People] ([PersonID]);
 GO
 
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_FamilyBurden_RelationshipType')
+    ALTER TABLE [HR].[tbl_FamilyBurden]
+        ADD CONSTRAINT [FK_FamilyBurden_RelationshipType]
+            FOREIGN KEY ([RelationshipTypeID])
+            REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
+
 -- --- Tabla: tbl_Trainings ---
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Trainings_EventType')
     ALTER TABLE [HR].[tbl_Trainings]

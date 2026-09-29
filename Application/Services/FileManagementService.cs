@@ -43,9 +43,11 @@ public class FileManagementService : IFileManagementService
                 return CreateErrorResponse("Directory not found", request.FileName);
             }
 
+            var (effectivePhysicalPath, effectiveUseImpersonation) = ResolveStorageRoot(directory.PhysicalPath);
+
             _logger.LogDebug(
-                "[Upload] Paso 1 OK — PhysicalPath='{Path}' MaxSizeMb={Max} Extension='{Ext}'",
-                directory.PhysicalPath, directory.MaxSizeMb, directory.Extension);
+                "[Upload] Paso 1 OK — PhysicalPath='{Path}' (efectiva='{Effective}') MaxSizeMb={Max} Extension='{Ext}'",
+                directory.PhysicalPath, effectivePhysicalPath, directory.MaxSizeMb, directory.Extension);
 
             // 2. Validar extensión del archivo
             var originalFileName = Path.GetFileName(request.FileName);
@@ -85,7 +87,7 @@ public class FileManagementService : IFileManagementService
             // 4. Preparar rutas (ResolveSafePath evita path traversal vía RelativePath)
             int currentYear = DateTime.Now.Year;
             var relativePath = request.RelativePath.TrimStart('/').TrimEnd('/');
-            var safeRelativeBase = ResolveSafePath(directory.PhysicalPath, relativePath);
+            var safeRelativeBase = ResolveSafePath(effectivePhysicalPath, relativePath);
             var folderPath = Path.Combine(safeRelativeBase, currentYear.ToString());
 
             var storedFileName = FileNameGenerator.Generate(originalFileName, request.DirectoryCode);
@@ -98,14 +100,14 @@ public class FileManagementService : IFileManagementService
             // 4b. Verificar accesibilidad de la ruta base (timeout 8 s para no bloquear en red inaccesible)
             // Debe correr impersonada igual que el guardado real (paso 5): un share NAS no es
             // accesible con la identidad del Application Pool, solo con las credenciales de red.
-            _logger.LogDebug("[Upload] Paso 4b — verificando accesibilidad de '{BasePath}'", directory.PhysicalPath);
+            _logger.LogDebug("[Upload] Paso 4b — verificando accesibilidad de '{BasePath}'", effectivePhysicalPath);
             bool pathOk;
-            if (_settings.UseImpersonation)
+            if (effectiveUseImpersonation)
             {
                 // Diagnóstico: resolver el hostname del share por separado, para distinguir un
                 // problema de DNS/red (nunca llega al servidor) de uno de credenciales/permisos
                 // (llega, pero el NAS rechaza la conexión).
-                var uncHost = (Path.GetPathRoot(directory.PhysicalPath) ?? directory.PhysicalPath)
+                var uncHost = (Path.GetPathRoot(effectivePhysicalPath) ?? effectivePhysicalPath)
                     .Trim('\\').Split('\\').FirstOrDefault();
                 if (!string.IsNullOrEmpty(uncHost))
                 {
@@ -138,8 +140,7 @@ public class FileManagementService : IFileManagementService
                     _logger.LogError(cryptoEx,
                         "[Upload][DIAG] Fallo al desencriptar NetworkCredentials — revisar que FileManagement:EncryptionKey " +
                         "sea EXACTAMENTE la misma que se usó para encriptar Username/Password/Domain.");
-                    return CreateErrorResponse(
-                        "No se pudieron desencriptar las credenciales de red configuradas.", originalFileName);
+                    return CreateErrorResponse(GenericStorageErrorMessage, originalFileName);
                 }
 
                 using var checkImpersonation = new WindowsImpersonation();
@@ -148,33 +149,31 @@ public class FileManagementService : IFileManagementService
                     _logger.LogInformation(
                         "[Upload][DIAG] Identidad DENTRO del impersonation: '{Identity}'",
                         System.Security.Principal.WindowsIdentity.GetCurrent().Name);
-                    return IsPathAccessibleAsync(directory.PhysicalPath, ct);
+                    return IsPathAccessibleAsync(effectivePhysicalPath, ct);
                 });
             }
             else
             {
-                pathOk = await IsPathAccessibleAsync(directory.PhysicalPath, ct);
+                pathOk = await IsPathAccessibleAsync(effectivePhysicalPath, ct);
             }
             if (!pathOk)
             {
-                var shareRoot = (Path.GetPathRoot(directory.PhysicalPath) ?? directory.PhysicalPath).TrimEnd('\\', '/');
+                var shareRoot = (Path.GetPathRoot(effectivePhysicalPath) ?? effectivePhysicalPath).TrimEnd('\\', '/');
                 _logger.LogError(
-                    "[Upload] Share raíz no accesible: '{Share}'. " +
-                    "Verifica montaje de red (net use), credenciales (UseImpersonation) o permisos de la cuenta de servicio.",
+                    "[Upload] Ruta base no accesible: '{Share}'. " +
+                    "Verifica montaje de red (net use), credenciales (UseImpersonation), permisos de la cuenta de servicio " +
+                    "o, en local, que FileManagement:LocalPhysicalPathOverride apunte a una carpeta válida.",
                     shareRoot);
-                return CreateErrorResponse(
-                    $"El share de red '{shareRoot}' no está accesible desde el servidor. " +
-                    "Verifica la conexión al NAS o habilita UseImpersonation con credenciales válidas.",
-                    originalFileName);
+                return CreateErrorResponse(GenericStorageErrorMessage, originalFileName);
             }
             _logger.LogDebug("[Upload] Paso 4b OK — ruta base accesible.");
 
             // 5. Ejecutar operación con o sin impersonation según configuración
             _logger.LogDebug(
                 "[Upload] Paso 5 — guardando archivo. UseImpersonation={Imp}",
-                _settings.UseImpersonation);
+                effectiveUseImpersonation);
 
-            if (_settings.UseImpersonation)
+            if (effectiveUseImpersonation)
             {
                 var (username, password, domain) = DecryptCredentials();
                 using var impersonation = new WindowsImpersonation();
@@ -217,12 +216,12 @@ public class FileManagementService : IFileManagementService
         catch (PlatformNotSupportedException ex)
         {
             _logger.LogError(ex, "[Upload] PlatformNotSupported. DirectoryCode={Code}", request.DirectoryCode);
-            return CreateErrorResponse($"Platform not supported: {ex.Message}", request.FileName);
+            return CreateErrorResponse(GenericStorageErrorMessage, request.FileName);
         }
         catch (InvalidOperationException ex)
         {
             _logger.LogError(ex, "[Upload] Autenticación fallida. DirectoryCode={Code}", request.DirectoryCode);
-            return CreateErrorResponse($"Authentication failed: {ex.Message}", request.FileName);
+            return CreateErrorResponse(GenericStorageErrorMessage, request.FileName);
         }
         catch (Exception ex)
         {
@@ -230,7 +229,7 @@ public class FileManagementService : IFileManagementService
                 ex,
                 "[Upload] Error inesperado. DirectoryCode={Code} FileName={File}",
                 request.DirectoryCode, request.FileName);
-            return CreateErrorResponse($"Error uploading file: {ex.Message}", request.FileName);
+            return CreateErrorResponse(GenericStorageErrorMessage, request.FileName);
         }
     }
 
@@ -273,13 +272,15 @@ public class FileManagementService : IFileManagementService
             var directory = await _directoryService.GetByCodeAsync(directoryCode, ct);
             if (directory == null) return null;
 
+            var (effectivePhysicalPath, effectiveUseImpersonation) = ResolveStorageRoot(directory.PhysicalPath);
+
             // 2. Sanitizar y construir ruta (evita path traversal vía filePath)
-            var fullPath = ResolveSafePath(directory.PhysicalPath, filePath);
+            var fullPath = ResolveSafePath(effectivePhysicalPath, filePath);
 
             byte[] fileBytes;
 
             // 3. Ejecutar operación con o sin impersonation según configuración
-            if (_settings.UseImpersonation)
+            if (effectiveUseImpersonation)
             {
                 // CON CREDENCIALES (NAS remoto con autenticación)
                 var (username, password, domain) = DecryptCredentials();
@@ -333,13 +334,15 @@ public class FileManagementService : IFileManagementService
                 };
             }
 
+            var (effectivePhysicalPath, effectiveUseImpersonation) = ResolveStorageRoot(directory.PhysicalPath);
+
             // 2. Sanitizar y construir ruta (evita path traversal vía filePath)
-            var fullPath = ResolveSafePath(directory.PhysicalPath, filePath);
+            var fullPath = ResolveSafePath(effectivePhysicalPath, filePath);
 
             bool deleted;
 
             // 3. Ejecutar operación con o sin impersonation según configuración
-            if (_settings.UseImpersonation)
+            if (effectiveUseImpersonation)
             {
                 // CON CREDENCIALES (NAS remoto con autenticación)
                 var (username, password, domain) = DecryptCredentials();
@@ -375,34 +378,65 @@ public class FileManagementService : IFileManagementService
         }
         catch (PlatformNotSupportedException ex)
         {
+            _logger.LogError(ex, "[Delete] PlatformNotSupported. DirectoryCode={Code} FilePath={Path}", directoryCode, filePath);
             return new FileDeleteResponseDto
             {
                 Success = false,
-                Message = $"Platform not supported: {ex.Message}",
+                Message = GenericStorageErrorMessage,
                 FilePath = filePath
             };
         }
         catch (InvalidOperationException ex)
         {
+            _logger.LogError(ex, "[Delete] Autenticación fallida. DirectoryCode={Code} FilePath={Path}", directoryCode, filePath);
             return new FileDeleteResponseDto
             {
                 Success = false,
-                Message = $"Authentication failed: {ex.Message}",
+                Message = GenericStorageErrorMessage,
                 FilePath = filePath
             };
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "[Delete] Error inesperado. DirectoryCode={Code} FilePath={Path}", directoryCode, filePath);
             return new FileDeleteResponseDto
             {
                 Success = false,
-                Message = $"Error deleting file: {ex.Message}",
+                Message = GenericStorageErrorMessage,
                 FilePath = filePath
             };
         }
     }
 
     #region Private Helper Methods
+
+    /// <summary>
+    /// Mensaje genérico para el usuario final cuando falla el almacenamiento físico (NAS
+    /// inaccesible, credenciales de red, error inesperado). El detalle técnico real siempre
+    /// queda en el log del servidor (_logger.LogError antes de cada return) — nunca se expone
+    /// share, credenciales ni excepción cruda al cliente.
+    /// </summary>
+    private const string GenericStorageErrorMessage =
+        "No se pudo guardar el archivo en este momento. Intenta nuevamente en unos minutos; si el problema continúa, contacta a soporte técnico.";
+
+    /// <summary>
+    /// Resuelve la raíz física efectiva y si corresponde usar impersonation para esta
+    /// operación. Si FileManagement:LocalPhysicalPathOverride está configurado (solo en
+    /// Development), reemplaza la raíz de unidad de dbPhysicalPath (ej. "G:\") por esa carpeta
+    /// local, preservando la misma estructura relativa por DirectoryCode, y desactiva
+    /// impersonation (acceso directo, no hace falta credencial de red para una carpeta local).
+    /// En Production (sin override) el comportamiento es idéntico al actual.
+    /// </summary>
+    private (string physicalPath, bool useImpersonation) ResolveStorageRoot(string dbPhysicalPath)
+    {
+        if (string.IsNullOrWhiteSpace(_settings.LocalPhysicalPathOverride))
+            return (dbPhysicalPath, _settings.UseImpersonation);
+
+        var root = Path.GetPathRoot(dbPhysicalPath) ?? string.Empty;
+        var relative = dbPhysicalPath.Substring(root.Length);
+        var localPath = Path.Combine(_settings.LocalPhysicalPathOverride, relative);
+        return (localPath, false);
+    }
 
     /// <summary>
     /// Combina basePath con relativePath y garantiza que la ruta resultante no escape

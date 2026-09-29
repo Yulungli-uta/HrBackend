@@ -337,6 +337,22 @@ VALUES ('BANK_ACCOUNT_TYPE', 'Ahorros', 'Cuenta de ahorros', 1),
        ('BANK_ACCOUNT_TYPE', 'Corriente', 'Cuenta corriente', 1);
 GO
 
+-- Hallazgo informe UTA-DITIC-PS-027-2026, observación 44: "Controlar que una sola cuenta se
+-- encuentre activa, o que solo se permita registrar una cuenta". Se implementa como "cuenta
+-- Principal" (IsPrimary), no como desactivar/impedir cuentas adicionales — una persona puede
+-- tener varias cuentas, pero como máximo una marcada Principal. El índice único filtrado es la
+-- garantía real a nivel de BD; BankAccountsService además desmarca las demás en la misma
+-- transacción al marcar una nueva como principal (ver Application/Services/BankAccountsService.cs).
+IF COL_LENGTH('[HR].[tbl_BankAccounts]', 'IsPrimary') IS NULL
+    ALTER TABLE [HR].[tbl_BankAccounts] ADD [IsPrimary] BIT NOT NULL DEFAULT (0);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_BankAccounts_PersonPrimary')
+    CREATE UNIQUE INDEX [UX_BankAccounts_PersonPrimary]
+        ON [HR].[tbl_BankAccounts] ([PersonID])
+        WHERE [IsPrimary] = 1;
+GO
+
 -- ------------------------------------------------------------
 IF OBJECT_ID('[HR].[tbl_Books]') IS NULL
 CREATE TABLE [HR].[tbl_Books] (
@@ -883,6 +899,22 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_FamilyBurden_Stat
 ALTER TABLE [HR].[tbl_FamilyBurden]
     ADD CONSTRAINT [FK_FamilyBurden_StatusType]
     FOREIGN KEY ([StatusTypeID]) REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
+
+-- Hallazgo informe UTA-DITIC-PS-027-2026, observaciones 23/25: la relación (parentesco)
+-- del dependiente y el estado de estudio nunca se persistían, el formulario los pedía pero
+-- el modelo no tenía las columnas. RelationshipTypeID reusa la misma categoría RELATIONSHIP
+-- de ref_Types que ya usa HR.tbl_EmergencyContacts (parentesco = relación, un solo catálogo).
+IF COL_LENGTH('[HR].[tbl_FamilyBurden]', 'RelationshipTypeID') IS NULL
+    ALTER TABLE [HR].[tbl_FamilyBurden] ADD [RelationshipTypeID] INT NULL;
+GO
+
+IF COL_LENGTH('[HR].[tbl_FamilyBurden]', 'IsStudying') IS NULL
+    ALTER TABLE [HR].[tbl_FamilyBurden] ADD [IsStudying] BIT NOT NULL DEFAULT (0);
+GO
+
+IF COL_LENGTH('[HR].[tbl_FamilyBurden]', 'EducationInstitution') IS NULL
+    ALTER TABLE [HR].[tbl_FamilyBurden] ADD [EducationInstitution] NVARCHAR(150) NULL;
 GO
 
 -- ------------------------------------------------------------

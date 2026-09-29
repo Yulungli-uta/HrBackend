@@ -13,6 +13,9 @@ public class FamilyBurdenWithDocumentCreateDto
     public DateOnly BirthDate { get; set; }
     public int? DisabilityTypeId { get; set; }
     public decimal? DisabilityPercentage { get; set; }
+    public int? RelationshipTypeId { get; set; }
+    public bool IsStudying { get; set; }
+    public string? EducationInstitution { get; set; }
 
     public IFormFile? File { get; set; }
     public int? DocumentTypeId { get; set; }

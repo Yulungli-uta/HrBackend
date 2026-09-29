@@ -117,6 +117,8 @@ public sealed class FamilyBurdenConfiguration : IEntityTypeConfiguration<FamilyB
         e.Property(x => x.FirstName).HasMaxLength(100);
         e.Property(x => x.LastName).HasMaxLength(100);
         e.Property(x => x.DisabilityPercentage).HasColumnType("decimal(5,2)");
+        e.Property(x => x.RelationshipTypeId).HasColumnName("RelationshipTypeID");
+        e.Property(x => x.EducationInstitution).HasMaxLength(150);
     }
 }
 

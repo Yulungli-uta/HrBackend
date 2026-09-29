@@ -8,6 +8,12 @@ namespace WsUtaSystem.Infrastructure.Interceptors
 {
     public sealed class AuditSaveChangesInterceptor : SaveChangesInterceptor
     {
+        // Debe calzar con HR.tbl_Audit.UserName (SYSNAME = nvarchar(128), ver AuditConfiguration).
+        // El nombre del usuario actual viene de un claim externo (RepositoryUta) cuya longitud no
+        // controlamos aquí; sin este tope, un nombre largo hace fallar el DELETE completo con un
+        // error crudo de SQL Server (hallazgo informe UTA-DITIC-PS-027-2026, observaciones 18/22).
+        private const int UserNameMaxLength = 128;
+
         private readonly IServiceProvider _serviceProvider; // Cambiado para evitar circularidad
         private readonly ILogger<AuditSaveChangesInterceptor> _logger;
 
@@ -107,6 +113,7 @@ namespace WsUtaSystem.Infrastructure.Interceptors
             if (deletionEntries.Count == 0) return;
 
             var actor = actorName ?? employeeId?.ToString() ?? "unknown";
+            if (actor.Length > UserNameMaxLength) actor = actor[..UserNameMaxLength];
 
             foreach (var entry in deletionEntries)
             {

@@ -11,5 +11,8 @@ public class FamilyBurdenCreateDto
     public DateOnly BirthDate { get; set; }
     public int? DisabilityTypeId { get; set; }
     public decimal? DisabilityPercentage { get; set; }
+    public int? RelationshipTypeId { get; set; }
+    public bool IsStudying { get; set; }
+    public string? EducationInstitution { get; set; }
     public DateTime? CreatedAt { get; set; }
 }

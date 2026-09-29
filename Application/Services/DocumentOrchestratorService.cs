@@ -531,9 +531,12 @@ namespace WsUtaSystem.Application.Services
             result.Uploaded = result.Items.Count(x => x.Success);
             result.Success = result.Failed == 0;
 
+            // Mensaje en español, sin jerga técnica (ElapsedMs/OK=/Fail=) — el detalle técnico de
+            // cada archivo fallido va en item.Message (ya saneado) y en el log del servidor.
+            var total = result.Uploaded + result.Failed;
             result.Message = result.Success
-                ? $"Carga completa OK. Archivos={result.Uploaded}. ElapsedMs={sw.ElapsedMilliseconds}"
-                : $"Carga parcial. OK={result.Uploaded}, Fail={result.Failed}. ElapsedMs={sw.ElapsedMilliseconds}";
+                ? (total == 1 ? "El archivo se cargó correctamente." : $"Los {total} archivos se cargaron correctamente.")
+                : $"Se cargaron {result.Uploaded} de {total} archivo(s). {result.Failed} no se pudo(ieron) guardar — revisa el detalle.";
         }
 
         private async Task TryPhysicalCleanupAsync(string directoryCode, string? relativePath, CancellationToken ct)

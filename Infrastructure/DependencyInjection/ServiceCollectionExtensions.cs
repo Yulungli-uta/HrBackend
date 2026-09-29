@@ -170,7 +170,22 @@ public static class ServiceCollectionExtensions
                 options.JsonSerializerOptions.WriteIndented = true;
                 // Evita errores en grafos de objetos con referencias circulares
                 options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+                // "" → null para fechas opcionales (DateOnly?/DateTime?) — hallazgo informe
+                // UTA-DITIC-PS-027-2026, observación 26 (ver Infrastructure/Serialization).
+                options.JsonSerializerOptions.Converters.Add(new WsUtaSystem.Infrastructure.Serialization.EmptyStringTolerantDateOnlyConverter());
+                options.JsonSerializerOptions.Converters.Add(new WsUtaSystem.Infrastructure.Serialization.EmptyStringTolerantDateTimeConverter());
             });
+
+        // Desactiva la respuesta automática de [ApiController] ante ModelState inválido
+        // ("One or more validation errors occurred" en inglés, sin detalle del campo) para
+        // que ValidateModelFilter (ya registrado arriba) sea quien la genere, con el mismo
+        // formato ValidationProblemDetails por campo que usa el resto de la API (ver también
+        // ErrorHandlingMiddleware para FluentValidation.ValidationException).
+        // Hallazgo informe UTA-DITIC-PS-027-2026, observaciones 26/29/32.
+        services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(options =>
+        {
+            options.SuppressModelStateInvalidFilter = true;
+        });
 
         return services;
     }
