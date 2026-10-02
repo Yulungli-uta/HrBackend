@@ -7,13 +7,15 @@ public class TrainingsUpdateDto
     public string? Location { get; set; }
     public string Title { get; set; } = null!;
     public string Institution { get; set; } = null!;
-    public int KnowledgeAreaTypeId { get; set; }
+    // Nullable: mismo motivo que en TrainingsCreateDto.cs (coincide con Models/Trainings.cs
+    // y con la columna real en BD, que permite NULL para los 3).
+    public int? KnowledgeAreaTypeId { get; set; }
     public int EventTypeId { get; set; }
     public string? CertifiedBy { get; set; }
-    public int CertificateTypeId { get; set; }
+    public int? CertificateTypeId { get; set; }
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
     public int Hours { get; set; }
-    public int ApprovalTypeId { get; set; }
+    public int? ApprovalTypeId { get; set; }
     public DateTime CreatedAt { get; set; }
 }

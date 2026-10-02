@@ -138,8 +138,10 @@ CREATE TABLE [HR].[tbl_Addresses] (
     [PersonID] INT NOT NULL,
     [AddressTypeID] INT NOT NULL,
     [CountryID] NVARCHAR(10) NOT NULL,
-    [ProvinceID] NVARCHAR(10) NOT NULL,
-    [CantonID] NVARCHAR(10) NOT NULL,
+    -- Nullable: solo obligatorios cuando el país tiene catálogo propio (hoy, solo Ecuador) —
+    -- hallazgo 2026-10-02, columnas alteradas a NULL en la BD real vía script aparte.
+    [ProvinceID] NVARCHAR(10) NULL,
+    [CantonID] NVARCHAR(10) NULL,
     [Parish] NVARCHAR(100) NULL,
     [Neighborhood] NVARCHAR(100) NULL,
     [MainStreet] NVARCHAR(100) NOT NULL,
@@ -151,6 +153,16 @@ CREATE TABLE [HR].[tbl_Addresses] (
     [UpdatedAt] DATETIME2 NULL,
     [UpdatedBy] INT NULL
 );
+GO
+
+-- Corrección 2026-10-02: en BDs creadas antes de este cambio, ProvinceID/CantonID
+-- quedaron NOT NULL — hace imposible guardar direcciones de países sin catálogo de
+-- provincias/cantones (hoy, cualquiera que no sea Ecuador), ya que el frontend envía
+-- NULL para esos países y violaba el NOT NULL (antes violaba la FK con "").
+IF COLUMNPROPERTY(OBJECT_ID('[HR].[tbl_Addresses]'), 'ProvinceID', 'AllowsNull') = 0
+    ALTER TABLE [HR].[tbl_Addresses] ALTER COLUMN [ProvinceID] NVARCHAR(10) NULL;
+IF COLUMNPROPERTY(OBJECT_ID('[HR].[tbl_Addresses]'), 'CantonID', 'AllowsNull') = 0
+    ALTER TABLE [HR].[tbl_Addresses] ALTER COLUMN [CantonID] NVARCHAR(10) NULL;
 GO
 
 -- Catalogo ref_Types requerido por tbl_Addresses.AddressTypeID.

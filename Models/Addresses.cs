@@ -8,8 +8,10 @@ public class Addresses : IAuditable
   public int PersonId{get;set;}
   public int AddressTypeId{get;set;}
   public string CountryId{get;set;}
-  public string ProvinceId {get;set;}
-  public string CantonId {get;set;}
+  // Nullable: provincia/cantón solo son obligatorios cuando el país tiene catálogo
+  // propio cargado (hoy, solo Ecuador) — hallazgo 2026-10-02, columnas en BD pasadas a NULL.
+  public string? ProvinceId {get;set;}
+  public string? CantonId {get;set;}
   public string? Parish{get;set;}
   public string? Neighborhood{get;set;}
   public string MainStreet{get;set;}=null!;

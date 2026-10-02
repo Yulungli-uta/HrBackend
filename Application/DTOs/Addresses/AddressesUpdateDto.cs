@@ -5,8 +5,9 @@ public class AddressesUpdateDto
     public int PersonId { get; set; }
     public int AddressTypeId { get; set; }
     public string CountryId { get; set; } = null!;
-    public string ProvinceId { get; set; } = null!;
-    public string CantonId { get; set; } = null!;
+    // Nullable: solo obligatorios cuando el país tiene catálogo propio (hoy, solo Ecuador).
+    public string? ProvinceId { get; set; }
+    public string? CantonId { get; set; }
     public string? Parish { get; set; }
     public string? Neighborhood { get; set; }
     public string MainStreet { get; set; } = null!;

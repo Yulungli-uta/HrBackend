@@ -161,6 +161,24 @@ public class GuardLocationRotationService : IGuardLocationRotationService
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede crear asignaciones.");
 
+        // Evita duplicados activos: si ya existe una asignación activa para el mismo
+        // empleado (o grupo, cuando no es individual) en este mismo periodo, se desactiva
+        // antes de crear la nueva. Antes se acumulaban varias asignaciones activas a la vez
+        // para la misma persona (hallazgo real 2026-10-02) porque GetAssignmentsByEmployeeAsync
+        // solo ve periodos activos — si el periodo no estaba activo el frontend nunca
+        // encontraba la asignación existente para actualizarla y siempre creaba una nueva.
+        var previousActive = await _db.GuardLocationRotationAssignments
+            .Where(a => a.LocationRotationPeriodId == dto.LocationRotationPeriodId
+                && a.IsActive
+                && (dto.EmployeeId != null ? a.EmployeeId == dto.EmployeeId : a.GroupId == dto.GroupId))
+            .ToListAsync(ct);
+        foreach (var prev in previousActive)
+        {
+            prev.IsActive = false;
+            prev.UpdatedBy = userId;
+            prev.UpdatedAt = DateTime.UtcNow;
+        }
+
         var entity = new GuardLocationRotationAssignment
         {
             LocationRotationPeriodId = dto.LocationRotationPeriodId,
