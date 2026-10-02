@@ -15,6 +15,8 @@ public class Publications : IAuditable
   public string? JournalNumber{get;set;}
   public string? Volume{get;set;}
   public string? Pages{get;set;}
+  public string? Doi{get;set;}
+  public string? Link{get;set;}
   public int? KnowledgeAreaTypeId{get;set;}
   public int? SubAreaTypeId{get;set;}
   public int? AreaTypeId{get;set;}

@@ -1806,6 +1806,8 @@ CREATE TABLE [HR].[tbl_Publications] (
     [JournalNumber] NVARCHAR(50) NULL,
     [Volume] NVARCHAR(50) NULL,
     [Pages] NVARCHAR(20) NULL,
+    [Doi] NVARCHAR(255) NULL,
+    [Link] NVARCHAR(500) NULL,
     [KnowledgeAreaTypeID] INT NULL,
     [SubAreaTypeID] INT NULL,
     [AreaTypeID] INT NULL,
@@ -1820,6 +1822,15 @@ CREATE TABLE [HR].[tbl_Publications] (
     [UpdatedAt] DATETIME2 NULL,
     [UpdatedBy] INT NULL
 );
+GO
+
+-- Corrección 2026-10-02: en BDs creadas antes de este cambio, Doi/Link no existían
+-- (hallazgo academic_promotion -- el origen UTA Mático sí tiene DOI/ENLACE_PUBLICACION
+-- reales para ~41%/54% de las publicaciones, pero HR nunca tuvo dónde guardarlos).
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='HR' AND TABLE_NAME='tbl_Publications' AND COLUMN_NAME='Doi')
+    ALTER TABLE [HR].[tbl_Publications] ADD [Doi] NVARCHAR(255) NULL;
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='HR' AND TABLE_NAME='tbl_Publications' AND COLUMN_NAME='Link')
+    ALTER TABLE [HR].[tbl_Publications] ADD [Link] NVARCHAR(500) NULL;
 GO
 
 -- ------------------------------------------------------------

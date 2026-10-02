@@ -78,6 +78,19 @@ public sealed class AcademicPromotionRepository : IAcademicPromotionRepository
         return rows.ToDictionary(r => r.TypeId, r => r.Name.Trim());
     }
 
+    public async Task<IReadOnlyDictionary<int, string>> GetKnowledgeAreaNamesAsync(IEnumerable<int?> ids, CancellationToken ct = default)
+    {
+        var distinctIds = ids.Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
+        if (distinctIds.Count == 0) return new Dictionary<int, string>();
+
+        var rows = await _db.KnowledgeAreas.AsNoTracking()
+            .Where(ka => distinctIds.Contains(ka.Id))
+            .Select(ka => new { ka.Id, ka.Name })
+            .ToListAsync(ct);
+
+        return rows.ToDictionary(r => r.Id, r => r.Name.Trim());
+    }
+
     public async Task<bool> UserHasAnyRoleAsync(string? userId, IReadOnlyCollection<string> roleNames, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(userId)) return false;

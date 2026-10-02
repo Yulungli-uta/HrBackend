@@ -89,10 +89,8 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
         var languages = (await _languagesRepository.GetByPersonIdAsync(employee.PersonId)).ToList();
 
         // Resolución en lote de todos los nombres de ref_Types usados (evita N+1).
-        var typeIds = workExperiences.Select(w => w.ExperienceTypeId)
-            .Concat(publications.Select(p => p.KnowledgeAreaTypeId))
-            .Concat(books.Select(b => b.KnowledgeAreaTypeId))
-            .Concat(trainings.Select(t => (int?)t.KnowledgeAreaTypeId))
+        var typeIds = new[] { currentStructure?.DedicationTypeId }
+            .Concat(workExperiences.Select(w => w.ExperienceTypeId))
             .Concat(trainings.Select(t => t.CertificateTypeId))
             .Concat(trainings.Select(t => t.ModalityTypeId))
             .Concat(trainings.Select(t => t.TrainingDirectionTypeId))
@@ -101,6 +99,17 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
         var refTypeNames = await _academicPromotionRepository.GetRefTypeNamesAsync(typeIds, ct);
 
         string? ResolveName(int? typeId) => typeId.HasValue && refTypeNames.TryGetValue(typeId.Value, out var name) ? name : null;
+
+        // KnowledgeAreaTypeId en Publications/Books/Trainings referencia HR.tbl_KnowledgeArea,
+        // NO ref_Types -- son catálogos distintos con IDs autoincrementales que colisionan
+        // (hallazgo 2026-10-02: resolverlo contra ref_Types devolvía nombres de otra categoría,
+        // ej. "Divorciado/a" en vez de un área de conocimiento real).
+        var knowledgeAreaIds = publications.Select(p => p.KnowledgeAreaTypeId)
+            .Concat(books.Select(b => b.KnowledgeAreaTypeId))
+            .Concat(trainings.Select(t => t.KnowledgeAreaTypeId));
+        var knowledgeAreaNames = await _academicPromotionRepository.GetKnowledgeAreaNamesAsync(knowledgeAreaIds, ct);
+
+        string? ResolveKnowledgeArea(int? id) => id.HasValue && knowledgeAreaNames.TryGetValue(id.Value, out var name) ? name : null;
 
         return new TeacherAcademicProfileDto(
             TeacherId: $"DOC-{employee.EmployeeId:D6}",
@@ -120,16 +129,16 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
             Experience: workExperiences.Select(w => MapExperience(w, ResolveName(w.ExperienceTypeId), evaluationDate)).ToList(),
             // Los libros se reportan como parte de "publications" (Type="BOOK") -- son un tipo
             // más de producción académica, no un módulo aparte en el JSON de perfil.
-            Publications: publications.Select(p => MapPublication(p, ResolveName(p.KnowledgeAreaTypeId)))
-                .Concat(books.Select(b => MapBook(b, ResolveName(b.KnowledgeAreaTypeId))))
+            Publications: publications.Select(p => MapPublication(p, ResolveKnowledgeArea(p.KnowledgeAreaTypeId)))
+                .Concat(books.Select(b => MapBook(b, ResolveKnowledgeArea(b.KnowledgeAreaTypeId))))
                 .ToList(),
             ReceivedTrainings: trainings
                 .Where(t => IsDirection(t.TrainingDirectionTypeId, TrainingDirection.Received, refTypeNames))
-                .Select(t => MapTraining(t, TrainingDirection.Received, ResolveName(t.KnowledgeAreaTypeId), ResolveName(t.CertificateTypeId), ResolveName(t.ModalityTypeId)))
+                .Select(t => MapTraining(t, TrainingDirection.Received, ResolveKnowledgeArea(t.KnowledgeAreaTypeId), ResolveName(t.CertificateTypeId), ResolveName(t.ModalityTypeId)))
                 .ToList(),
             GivenTrainings: trainings
                 .Where(t => IsDirection(t.TrainingDirectionTypeId, TrainingDirection.Given, refTypeNames))
-                .Select(t => MapTraining(t, TrainingDirection.Given, ResolveName(t.KnowledgeAreaTypeId), ResolveName(t.CertificateTypeId), ResolveName(t.ModalityTypeId)))
+                .Select(t => MapTraining(t, TrainingDirection.Given, ResolveKnowledgeArea(t.KnowledgeAreaTypeId), ResolveName(t.CertificateTypeId), ResolveName(t.ModalityTypeId)))
                 .ToList(),
             ResearchProjects: [], // modulo no implementado todavia
             DoctoralTheses: [],   // modulo no implementado todavia
@@ -183,8 +192,8 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
         Journal: p.JournalName,
         KnowledgeArea: knowledgeArea,
         PublicationDate: p.PublicationDate ?? default,
-        Doi: null,        // no existe columna en el modelo actual
-        Link: null,       // no existe columna en el modelo actual
+        Doi: p.Doi,
+        Link: p.Link,
         Language: null,   // no existe columna en el modelo actual
         IndexingDatabase: p.IsIndexed == true ? "INDEXED" : null,
         Status: "PUBLISHED",

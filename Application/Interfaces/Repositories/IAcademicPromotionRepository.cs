@@ -35,6 +35,15 @@ public interface IAcademicPromotionRepository
     /// <summary>Resuelve en lote (una sola consulta) el Name de ref_Types para un conjunto de TypeIds.</summary>
     Task<IReadOnlyDictionary<int, string>> GetRefTypeNamesAsync(IEnumerable<int?> typeIds, CancellationToken ct = default);
 
+    /// <summary>
+    /// Resuelve en lote (una sola consulta) el Name de HR.tbl_KnowledgeArea para un conjunto de Ids.
+    /// KnowledgeAreaTypeId en Publications/Books/Trainings referencia esta tabla, NO ref_Types
+    /// (son catálogos distintos que comparten el mismo rango de IDs autoincrementales — resolverlos
+    /// contra ref_Types por error da nombres de otra categoría, ej. MARITAL_STATUS/ETHNICITY,
+    /// hallazgo 2026-10-02).
+    /// </summary>
+    Task<IReadOnlyDictionary<int, string>> GetKnowledgeAreaNamesAsync(IEnumerable<int?> ids, CancellationToken ct = default);
+
     /// <summary>Indica si el usuario (vw_UserRoles.UserId) tiene alguno de los roles indicados.</summary>
     Task<bool> UserHasAnyRoleAsync(string? userId, IReadOnlyCollection<string> roleNames, CancellationToken ct = default);
 }

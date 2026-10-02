@@ -204,6 +204,8 @@ public sealed class PublicationsConfiguration : IEntityTypeConfiguration<Publica
         e.Property(x => x.JournalNumber).HasMaxLength(50);
         e.Property(x => x.Volume).HasMaxLength(50);
         e.Property(x => x.Pages).HasMaxLength(20);
+        e.Property(x => x.Doi).HasMaxLength(255);
+        e.Property(x => x.Link).HasMaxLength(500);
         e.Property(x => x.Title).HasMaxLength(300).IsRequired();
         e.Property(x => x.OrganizedBy).HasMaxLength(150);
         e.Property(x => x.EventName).HasMaxLength(200);
