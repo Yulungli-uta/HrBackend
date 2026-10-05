@@ -492,6 +492,8 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             .FirstOrDefaultAsync(p => p.PatternId == dto.PatternId && p.IsActive, ct)
             ?? throw new KeyNotFoundException($"Patrón {dto.PatternId} no encontrado o inactivo.");
 
+        ValidateStartCycleDateAlignment(pattern, dto.StartCycleDate);
+
         var overlappingAssignment = await _db.GuardGroupRotationPatterns
             .Include(gp => gp.Group)
             .Where(gp => gp.PatternId == dto.PatternId
@@ -552,6 +554,8 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             .FirstOrDefaultAsync(p => p.PatternId == dto.PatternId && p.IsActive, ct)
             ?? throw new KeyNotFoundException($"Patrón {dto.PatternId} no encontrado o inactivo.");
 
+        ValidateStartCycleDateAlignment(pattern, dto.StartCycleDate);
+
         // Mismo chequeo de cruce de fechas que al asignar, pero excluyendo esta misma fila
         // (si no, una edición que no cambia nada chocaría consigo misma).
         var overlappingAssignment = await _db.GuardGroupRotationPatterns
@@ -597,6 +601,24 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         entity.IsActive = false;
         entity.ValidTo ??= DateOnly.FromDateTime(DateTime.Today);
         await _db.SaveChangesAsync(ct);
+    }
+
+    // La UI de patrones (RotationPatterns.tsx, dayOrderLabel) le muestra al usuario el DayOrder 1
+    // como "Domingo" (y por lo tanto el 7 como "Sábado") para patrones de 7 días. Esa convención
+    // solo es cierta si el ancla del ciclo también cae en domingo; si no, el patrón queda corrido
+    // respecto a lo que el usuario configuró (caso real: grupo "AMARILLO OCTUBRE 2026", ancla en
+    // lunes en vez de domingo, hallazgo 2026-10-05).
+    private static void ValidateStartCycleDateAlignment(RotationPattern pattern, DateOnly startCycleDate)
+    {
+        if (pattern.CycleDays != 7) return;
+
+        if (startCycleDate.DayOfWeek != DayOfWeek.Sunday)
+        {
+            throw new InvalidOperationException(
+                $"La fecha de inicio de ciclo ({startCycleDate:dd/MM/yyyy}) debe ser un domingo. " +
+                "El patrón se configura con el día 1 = domingo; si el ciclo arranca en otro día de la semana, " +
+                "los días de trabajo/descanso configurados ya no corresponden al día real.");
+        }
     }
 
     // ─── Jerarquía de grupos ──────────────────────────────────────────────────
