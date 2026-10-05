@@ -228,11 +228,16 @@ public static class ServiceCollectionExtensions
             // Botón "Authorize" en la UI de Swagger: pega el token JWT (sin el prefijo
             // "Bearer ") y todas las peticiones "Try it out" lo incluyen automáticamente
             // en el header Authorization.
+            // Hallazgo 2026-10-02: con Type=ApiKey, Swagger mandaba el valor tal cual (sin
+            // anteponer "Bearer "), y JwtAuthenticationMiddleware.ExtractToken exige ese
+            // prefijo literal -- toda petición autenticada desde "Try it out" fallaba con
+            // 401 "Token requerido" aunque el token fuera válido. Type=Http + Scheme="bearer"
+            // hace que Swagger sí anteponga "Bearer " automáticamente.
             c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 Name = "Authorization",
-                Type = SecuritySchemeType.ApiKey,
-                Scheme = "Bearer",
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
                 BearerFormat = "JWT",
                 In = ParameterLocation.Header,
                 Description = "Pega el token JWT (sin el prefijo 'Bearer '): eyJhbGciOi..."
