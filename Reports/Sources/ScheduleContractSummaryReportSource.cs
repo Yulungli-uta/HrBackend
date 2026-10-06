@@ -59,6 +59,7 @@ public sealed class ScheduleContractSummaryReportSource : IReportSource
             filter.LaborRegimeId,
             filter.DepartmentTypeId,
             filter.DepartmentScopeId,
+            filter.IsActive,
             CancellationToken.None)).ToList();
       
         _logger.LogInformation(

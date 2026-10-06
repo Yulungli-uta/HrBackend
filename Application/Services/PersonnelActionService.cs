@@ -1531,12 +1531,28 @@ public sealed class PersonnelActionService : IPersonnelActionService
             from od in odg.DefaultIfEmpty()
             join dd  in _db.Departments.AsNoTracking()           on a.DestinationDepartmentId equals dd.DepartmentId  into ddg
             from dd in ddg.DefaultIfEmpty()
+            join emp in _db.Employees.AsNoTracking()             on a.EmployeeId              equals (int?)emp.EmployeeId into empg
+            from emp in empg.DefaultIfEmpty()
             where (!start.HasValue || a.ActionDate >= start.Value)
                && (!end.HasValue   || a.ActionDate <= end.Value)
                && (string.IsNullOrEmpty(filter.Status) || a.Status == filter.Status)
                && (!filter.EmployeeId.HasValue  || a.EmployeeId == filter.EmployeeId.Value || a.PersonId == filter.EmployeeId.Value)
                && (!filter.ActionTypeId.HasValue || a.ActionTypeId == filter.ActionTypeId.Value)
                && (categories == null || categories.Count == 0 || categories.Contains(pat.ActionCategory))
+               // 2026-10-06: faltaban DepartmentId y LaborRegimeId pese a que el frontend los
+               // anuncia (reports.ts 'personnel-actions'/'active-personnel-actions') — mismo
+               // patrón de filtro fantasma encontrado en el Reporte Cruzado de Asistencia.
+               // Departamento: coincide si la acción tocó ese departamento como origen o destino.
+               && (!filter.DepartmentId.HasValue
+                   || a.OriginDepartmentId == filter.DepartmentId.Value
+                   || a.DestinationDepartmentId == filter.DepartmentId.Value)
+               // Régimen laboral: requiere EmployeeId resuelto en la acción; sin él, se excluye
+               // en vez de adivinar (mismo criterio de "no incluir en silencio" que en asistencia).
+               && (!filter.LaborRegimeId.HasValue
+                   || (emp != null
+                       && (_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == emp.EmployeeId && r.IsActive && r.LaborRegimeId == filter.LaborRegimeId.Value)
+                           || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == emp.EmployeeId && r.IsActive)
+                               && emp.EmployeeType == filter.LaborRegimeId.Value))))
             orderby p.LastName, p.FirstName, a.ActionDate descending
             select new PersonnelActionReportDto
             {

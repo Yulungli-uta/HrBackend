@@ -250,11 +250,12 @@ public class VwEmployeeDetailsService : IvwEmployeeDetailsService
     int? departmentId,
     int? employeeType,
     int? laborRegimeId = null,
+    bool? isActive = null,
     CancellationToken ct = default)
     {
         try
         {
-            return await _repository.GetByFiltersAsync(departmentId, employeeType, laborRegimeId, ct);
+            return await _repository.GetByFiltersAsync(departmentId, employeeType, laborRegimeId, isActive, ct);
         }
         catch (Exception ex)
         {
@@ -269,11 +270,12 @@ public class VwEmployeeDetailsService : IvwEmployeeDetailsService
         int? departmentId,
         int? employeeType,
         int? laborRegimeId = null,
+        bool? isActive = null,
         CancellationToken ct = default)
     {
         try
         {
-            return await _repository.GetDepartmentContractCountsAsync(departmentId, employeeType, laborRegimeId, ct);
+            return await _repository.GetDepartmentContractCountsAsync(departmentId, employeeType, laborRegimeId, isActive, ct);
         }
         catch (Exception ex)
         {
@@ -290,11 +292,12 @@ public class VwEmployeeDetailsService : IvwEmployeeDetailsService
         int? laborRegimeId = null,
         int? departmentTypeId = null,
         int? departmentScopeId = null,
+        bool? isActive = null,
         CancellationToken ct = default)
     {
         try
         {
-            return await _repository.GetScheduleContractCountsAsync(departmentId, employeeType, laborRegimeId, departmentTypeId, departmentScopeId, ct);
+            return await _repository.GetScheduleContractCountsAsync(departmentId, employeeType, laborRegimeId, departmentTypeId, departmentScopeId, isActive, ct);
         }
         catch (Exception ex)
         {

@@ -69,6 +69,18 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
         if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
             query = query.Where(x => x.emp.DepartmentId == filter.DepartmentId.Value);
 
+        // Filtro opcional por régimen laboral — mismo criterio que GetFoodSubsidySummaryDataAsync:
+        // prioriza EmployeeLaborRegime activo; si el empleado no tiene ninguno, cae a
+        // EmployeeType legacy en vez de excluirlo en silencio.
+        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
+        {
+            var regimeId = filter.LaborRegimeId.Value;
+            query = query.Where(x =>
+                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
+                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
+                    && x.emp.EmployeeType == regimeId));
+        }
+
         var result = await query
             .OrderBy(x => x.person.LastName)
             .ThenBy(x => x.person.FirstName)
@@ -130,6 +142,18 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
         if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
             query = query.Where(x => x.emp.DepartmentId == filter.DepartmentId.Value);
 
+        // Filtro opcional por régimen laboral — mismo criterio que GetFoodSubsidySummaryDataAsync:
+        // prioriza EmployeeLaborRegime activo; si el empleado no tiene ninguno, cae a
+        // EmployeeType legacy en vez de excluirlo en silencio.
+        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
+        {
+            var regimeId = filter.LaborRegimeId.Value;
+            query = query.Where(x =>
+                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
+                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
+                    && x.emp.EmployeeType == regimeId));
+        }
+
         var result = await query
             .OrderBy(x => x.person.LastName)
             .ThenBy(x => x.person.FirstName)
@@ -190,6 +214,20 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
         // Filtro opcional por departamento
         if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
             query = query.Where(x => x.emp.DepartmentId == filter.DepartmentId.Value);
+
+        // Filtro opcional por régimen laboral — mismo criterio que GetFoodSubsidySummaryDataAsync:
+        // prioriza EmployeeLaborRegime activo; si el empleado no tiene ninguno, cae a
+        // EmployeeType legacy en vez de excluirlo en silencio. Antes NO se aplicaba aquí pese
+        // a que el frontend anuncia este filtro (reports.ts 'attendance-cross') — bug real
+        // encontrado 2026-10-06: filtrar "Código de Trabajo" seguía mostrando empleados LOSEP.
+        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
+        {
+            var regimeId = filter.LaborRegimeId.Value;
+            query = query.Where(x =>
+                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
+                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
+                    && x.emp.EmployeeType == regimeId));
+        }
 
         var result = await query
             .OrderBy(x => x.person.LastName)
@@ -261,6 +299,18 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
 
         if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
             query = query.Where(x => x.emp.DepartmentId == filter.DepartmentId.Value);
+
+        // Filtro opcional por régimen laboral — mismo criterio que GetFoodSubsidySummaryDataAsync:
+        // prioriza EmployeeLaborRegime activo; si el empleado no tiene ninguno, cae a
+        // EmployeeType legacy en vez de excluirlo en silencio.
+        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
+        {
+            var regimeId = filter.LaborRegimeId.Value;
+            query = query.Where(x =>
+                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
+                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
+                    && x.emp.EmployeeType == regimeId));
+        }
 
         var result = await query
             .OrderBy(x => x.person.LastName)

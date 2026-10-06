@@ -66,6 +66,18 @@ public class EmployeesRepository : ServiceAwareEfRepository<Employees, int>, IEm
             baseQuery = baseQuery.Where(x => x.e.EmployeeType == employeeType);
         if (isActive.HasValue)
             baseQuery = baseQuery.Where(x => x.e.IsActive == isActive);
+        // 2026-10-06: filtro declarado por el frontend (reports.ts 'employees') pero nunca
+        // aplicado — laborRegimeId solo se usaba para resolver el nombre a mostrar, no para
+        // filtrar. Mismo criterio que el resto de reportes: prioriza EmployeeLaborRegime
+        // activo, si no tiene cae a EmployeeType legacy en vez de excluir en silencio.
+        if (laborRegimeId.HasValue && laborRegimeId.Value > 0)
+        {
+            var regimeId = laborRegimeId.Value;
+            baseQuery = baseQuery.Where(x =>
+                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.e.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
+                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.e.EmployeeId && r.IsActive)
+                    && x.e.EmployeeType == regimeId));
+        }
         if (hireDateFrom.HasValue)
         {
             var from = DateOnly.FromDateTime(hireDateFrom.Value);

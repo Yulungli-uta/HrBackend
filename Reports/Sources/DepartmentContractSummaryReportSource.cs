@@ -52,6 +52,7 @@ public sealed class DepartmentContractSummaryReportSource : IReportSource
             filter.DepartmentId,
             filter.EmployeeTypeId,
             filter.LaborRegimeId,
+            filter.IsActive,
             CancellationToken.None)).ToList();
 
         _logger.LogInformation(

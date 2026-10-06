@@ -212,6 +212,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
     int? departmentId,
     int? employeeType,
     int? laborRegimeId = null,
+    bool? isActive = null,
     CancellationToken ct = default)
         {
             var query = Query();
@@ -234,6 +235,15 @@ namespace WsUtaSystem.Infrastructure.Repositories
                         && e.EmployeeType == regimeId));
             }
 
+            // 2026-10-06: filtro declarado por el frontend (reports.ts) pero nunca aplicado —
+            // vw_EmployeeDetails no trae IsActive, se resuelve con un join puntual a Employees.
+            if (isActive.HasValue)
+            {
+                var activeValue = isActive.Value;
+                query = query.Where(e =>
+                    _db.Set<Employees>().Any(emp => emp.EmployeeId == e.EmployeeID && emp.IsActive == activeValue));
+            }
+
             return await query
                 .OrderBy(e => e.LastName)
                 .ThenBy(e => e.FirstName)
@@ -244,6 +254,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
             int? departmentId,
             int? employeeType,
             int? laborRegimeId = null,
+            bool? isActive = null,
             CancellationToken ct = default)
         {
             var query = Query();
@@ -264,6 +275,14 @@ namespace WsUtaSystem.Infrastructure.Repositories
                     _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == e.EmployeeID && r.IsActive && r.LaborRegimeId == regimeId)
                     || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == e.EmployeeID && r.IsActive)
                         && e.EmployeeType == regimeId));
+            }
+
+            // 2026-10-06: ver GetByFiltersAsync de esta misma clase para la justificación completa.
+            if (isActive.HasValue)
+            {
+                var activeValue = isActive.Value;
+                query = query.Where(e =>
+                    _db.Set<Employees>().Any(emp => emp.EmployeeId == e.EmployeeID && emp.IsActive == activeValue));
             }
 
             return await query
@@ -295,6 +314,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
             int? laborRegimeId = null,
             int? departmentTypeId = null,
             int? departmentScopeId = null,
+            bool? isActive = null,
             CancellationToken ct = default)
         {
             var query = Query();
@@ -315,6 +335,14 @@ namespace WsUtaSystem.Infrastructure.Repositories
                     _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == e.EmployeeID && r.IsActive && r.LaborRegimeId == regimeId)
                     || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == e.EmployeeID && r.IsActive)
                         && e.EmployeeType == regimeId));
+            }
+
+            // 2026-10-06: ver GetByFiltersAsync de esta misma clase para la justificación completa.
+            if (isActive.HasValue)
+            {
+                var activeValue = isActive.Value;
+                query = query.Where(e =>
+                    _db.Set<Employees>().Any(emp => emp.EmployeeId == e.EmployeeID && emp.IsActive == activeValue));
             }
 
             // Tipo/Ámbito de dependencia: vw_EmployeeDetails no trae estas columnas, así

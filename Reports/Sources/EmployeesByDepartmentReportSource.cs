@@ -62,6 +62,7 @@ namespace WsUtaSystem.Reports.Sources;
                 filter.DepartmentId,
                 filter.EmployeeTypeId,
                 filter.LaborRegimeId,
+                filter.IsActive,
                 CancellationToken.None)).ToList();
 
             _logger.LogInformation(
