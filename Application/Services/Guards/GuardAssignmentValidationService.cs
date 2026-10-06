@@ -157,8 +157,11 @@ public class GuardAssignmentValidationService : IGuardAssignmentValidationServic
                 .Where(p => p.IsActive && (p.Name == "MINIMUM_REST_HOURS" || p.Name == "MINIMUM_REST_SEVERITY"))
                 .ToDictionaryAsync(p => p.Name, p => p.Pvalues ?? "", ct);
 
+            // InvariantCulture: el valor se guarda con punto decimal ("7.5"); parsear con la
+            // cultura del hilo del servidor podía interpretar "7.5" como 75 si esa cultura usa
+            // coma decimal -- bug real preexistente, encontrado al probar en vivo 2026-10-06.
             if (restSettings.TryGetValue("MINIMUM_REST_HOURS", out var minRestStr) &&
-                double.TryParse(minRestStr, out var minRestHours))
+                double.TryParse(minRestStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var minRestHours))
             {
                 var currentStart = dto.WorkDate.ToDateTime(schedule.EntryTime);
 

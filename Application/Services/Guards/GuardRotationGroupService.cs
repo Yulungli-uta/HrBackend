@@ -184,6 +184,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
 
     public async Task<GuardRotationGroupDto> CreateAsync(CreateGuardRotationGroupDto dto, CancellationToken ct)
     {
+        ValidateColorFormat(dto.ColorCode);
         if (!dto.ConfirmDuplicateColor)
             await EnsureColorNotDuplicatedAsync(null, dto.ColorCode, ct);
 
@@ -219,6 +220,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         var entity = await _db.GuardRotationGroups.FirstOrDefaultAsync(g => g.GroupId == groupId, ct)
             ?? throw new KeyNotFoundException($"Grupo {groupId} no encontrado.");
 
+        ValidateColorFormat(dto.ColorCode);
         if (!dto.ConfirmDuplicateColor)
             await EnsureColorNotDuplicatedAsync(groupId, dto.ColorCode, ct);
 
@@ -250,6 +252,17 @@ public class GuardRotationGroupService : IGuardRotationGroupService
     // respaldo (hallazgo real 2026-09-07). Solo advierte — el usuario puede confirmar que
     // quiere el mismo color de todas formas (ConfirmDuplicateColor=true); en ese caso el
     // tablero debe mostrar el color configurado tal cual, sin sustituirlo.
+    private static readonly System.Text.RegularExpressions.Regex HexColorRegex =
+        new(@"^#[0-9a-fA-F]{6}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static void ValidateColorFormat(string? colorCode)
+    {
+        if (string.IsNullOrWhiteSpace(colorCode)) return;
+        if (!HexColorRegex.IsMatch(colorCode))
+            throw new InvalidOperationException(
+                $"El color \"{colorCode}\" no es válido. Debe tener el formato #RRGGBB (ej. #3b82f6).");
+    }
+
     private async Task EnsureColorNotDuplicatedAsync(int? currentGroupId, string? colorCode, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(colorCode)) return;
@@ -478,7 +491,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             .Select(gp => new GuardGroupRotationPatternDto(
                 gp.GroupPatternId, gp.GroupId, gp.PatternId,
                 gp.Pattern!.Name, gp.Pattern.PatternCode,
-                gp.StartCycleDate, gp.ValidFrom, gp.ValidTo, gp.IsActive, gp.Notes
+                gp.StartCycleDate, gp.ValidFrom, gp.ValidTo, gp.IsActive, gp.Pattern.IsActive, gp.Notes
             ))
             .ToListAsync(ct);
     }
@@ -492,7 +505,8 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             .FirstOrDefaultAsync(p => p.PatternId == dto.PatternId && p.IsActive, ct)
             ?? throw new KeyNotFoundException($"Patrón {dto.PatternId} no encontrado o inactivo.");
 
-        ValidateStartCycleDateAlignment(pattern, dto.StartCycleDate);
+        ValidateStartCycleDateAlignment(pattern, dto.StartCycleDate, dto.ValidFrom);
+        ValidateValidityRange(dto.ValidFrom, dto.ValidTo);
 
         var overlappingAssignment = await _db.GuardGroupRotationPatterns
             .Include(gp => gp.Group)
@@ -540,7 +554,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         return new GuardGroupRotationPatternDto(
             entity.GroupPatternId, entity.GroupId, entity.PatternId,
             pattern.Name, pattern.PatternCode,
-            entity.StartCycleDate, entity.ValidFrom, entity.ValidTo, entity.IsActive, entity.Notes
+            entity.StartCycleDate, entity.ValidFrom, entity.ValidTo, entity.IsActive, pattern.IsActive, entity.Notes
         );
     }
 
@@ -554,7 +568,8 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             .FirstOrDefaultAsync(p => p.PatternId == dto.PatternId && p.IsActive, ct)
             ?? throw new KeyNotFoundException($"Patrón {dto.PatternId} no encontrado o inactivo.");
 
-        ValidateStartCycleDateAlignment(pattern, dto.StartCycleDate);
+        ValidateStartCycleDateAlignment(pattern, dto.StartCycleDate, dto.ValidFrom);
+        ValidateValidityRange(dto.ValidFrom, dto.ValidTo);
 
         // Mismo chequeo de cruce de fechas que al asignar, pero excluyendo esta misma fila
         // (si no, una edición que no cambia nada chocaría consigo misma).
@@ -588,7 +603,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         return new GuardGroupRotationPatternDto(
             entity.GroupPatternId, entity.GroupId, entity.PatternId,
             pattern.Name, pattern.PatternCode,
-            entity.StartCycleDate, entity.ValidFrom, entity.ValidTo, entity.IsActive, entity.Notes
+            entity.StartCycleDate, entity.ValidFrom, entity.ValidTo, entity.IsActive, pattern.IsActive, entity.Notes
         );
     }
 
@@ -608,8 +623,16 @@ public class GuardRotationGroupService : IGuardRotationGroupService
     // solo es cierta si el ancla del ciclo también cae en domingo; si no, el patrón queda corrido
     // respecto a lo que el usuario configuró (caso real: grupo "AMARILLO OCTUBRE 2026", ancla en
     // lunes en vez de domingo, hallazgo 2026-10-05).
-    private static void ValidateStartCycleDateAlignment(RotationPattern pattern, DateOnly startCycleDate)
+    private static void ValidateStartCycleDateAlignment(RotationPattern pattern, DateOnly startCycleDate, DateOnly validFrom)
     {
+        // Para cualquier largo de ciclo, el ancla no puede quedar DESPUÉS de donde arranca la
+        // vigencia -- si no, los primeros días de vigencia no tendrían una posición de ciclo
+        // definida hacia atrás. Verificado contra datos reales: las únicas filas que violan esto
+        // hoy (GroupPatternId 51-54) están inactivas, no afecta nada vigente.
+        if (startCycleDate > validFrom)
+            throw new InvalidOperationException(
+                $"La fecha de inicio de ciclo ({startCycleDate:dd/MM/yyyy}) no puede ser posterior a 'Válido desde' ({validFrom:dd/MM/yyyy}).");
+
         if (pattern.CycleDays != 7) return;
 
         if (startCycleDate.DayOfWeek != DayOfWeek.Sunday)
@@ -619,6 +642,18 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 "El patrón se configura con el día 1 = domingo; si el ciclo arranca en otro día de la semana, " +
                 "los días de trabajo/descanso configurados ya no corresponden al día real.");
         }
+    }
+
+    private static void ValidateValidityRange(DateOnly validFrom, DateOnly? validTo)
+    {
+        if (validTo.HasValue && validTo.Value < validFrom)
+            throw new InvalidOperationException("La fecha 'Válido hasta' no puede ser anterior a 'Válido desde'.");
+
+        // Tope de 3 meses de vigencia por asignación de patrón (pedido del usuario
+        // 2026-10-05, QA obs. 10-11). El frontend ya calcula "Válido hasta" solo con este
+        // mismo tope; esta validación es el respaldo si la asignación llega por otra vía.
+        if (validTo.HasValue && validTo.Value > validFrom.AddMonths(3))
+            throw new InvalidOperationException("El rango de vigencia no puede superar los 3 meses entre 'Válido desde' y 'Válido hasta'.");
     }
 
     // ─── Jerarquía de grupos ──────────────────────────────────────────────────

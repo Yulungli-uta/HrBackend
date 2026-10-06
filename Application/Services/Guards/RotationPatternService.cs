@@ -245,6 +245,16 @@ public class RotationPatternService : IRotationPatternService
         if (outOfRange.Count > 0)
             throw new InvalidOperationException($"Día(s) de ciclo fuera de rango (1-{cycleDays}): {string.Join(", ", outOfRange)}.");
 
+        // Un patrón de 1 día es el turno fijo de todo el ciclo -- no tiene sentido como
+        // único día de descanso (dejaría al grupo sin ningún turno de trabajo).
+        if (cycleDays == 1 && byDay.Values.SelectMany(rows => rows).Any(r => r.IsRestDay))
+            throw new InvalidOperationException("Un patrón de 1 día no puede configurarse como día de descanso.");
+
+        // Un patrón no puede tener TODOS los días como descanso -- no tendría ningún turno de
+        // trabajo real, el grupo nunca cubriría nada (pedido del usuario 2026-10-05, QA obs. 19).
+        if (byDay.Values.All(rows => rows.All(r => r.IsRestDay)))
+            throw new InvalidOperationException("El patrón debe tener al menos un día con un horario de trabajo real; no puede estar formado solo por días de descanso.");
+
         var scheduleIds = new List<int>();
 
         foreach (var (day, rows) in byDay)
@@ -279,6 +289,59 @@ public class RotationPatternService : IRotationPatternService
                         throw new InvalidOperationException(
                             $"El día {day} tiene horarios consecutivos o encimados ({daySchedules[i].ScheduleCode} / {daySchedules[j].ScheduleCode}). " +
                             "Los turnos del mismo día deben dejar un descanso entre ellos.");
+        }
+
+        await ValidateRestBetweenConsecutiveDaysAsync(cycleDays, byDay, schedules, ct);
+    }
+
+    // Descanso mínimo entre el último turno de un día y el primer turno del día siguiente del
+    // ciclo (incluyendo el salto del último día de vuelta al primero). Reutiliza el mismo
+    // parámetro ya usado para validar asignaciones puntuales (GuardAssignmentValidationService),
+    // no un valor nuevo -- pedido del usuario 2026-10-05, QA obs. 20.
+    private async Task ValidateRestBetweenConsecutiveDaysAsync(
+        int cycleDays,
+        Dictionary<int, List<CreateRotationPatternDetailDto>> byDay,
+        Dictionary<int, Schedules> schedules,
+        CancellationToken ct)
+    {
+        var restSettings = await _db.Parameters
+            .Where(p => p.IsActive && (p.Name == "MINIMUM_REST_HOURS" || p.Name == "MINIMUM_REST_SEVERITY"))
+            .ToDictionaryAsync(p => p.Name, p => p.Pvalues ?? "", ct);
+
+        // InvariantCulture: el valor se guarda con punto decimal ("7.5"); parsear con la
+        // cultura del servidor (es-EC usa coma decimal) interpretaba "7.5" como 75 -- bug real
+        // encontrado al probar en vivo 2026-10-06, bloqueaba el patrón AMARILLO real.
+        if (!restSettings.TryGetValue("MINIMUM_REST_HOURS", out var minRestStr)
+            || !double.TryParse(minRestStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var minRestHours))
+            return;
+
+        var severity = restSettings.TryGetValue("MINIMUM_REST_SEVERITY", out var sev) ? sev : "WARNING";
+        if (severity != "BLOCKING") return;
+
+        Schedules? LastScheduleOfDay(int day) =>
+            byDay[day].Where(r => r.ScheduleId.HasValue).Select(r => schedules[r.ScheduleId!.Value])
+                .OrderByDescending(s => ScheduleOverlapHelper.ToMinuteRange(s).end).FirstOrDefault();
+
+        Schedules? FirstScheduleOfDay(int day) =>
+            byDay[day].Where(r => r.ScheduleId.HasValue).Select(r => schedules[r.ScheduleId!.Value])
+                .OrderBy(s => ScheduleOverlapHelper.ToMinuteRange(s).start).FirstOrDefault();
+
+        for (var day = 1; day <= cycleDays; day++)
+        {
+            var nextDay = day == cycleDays ? 1 : day + 1;
+
+            var lastToday = LastScheduleOfDay(day);
+            var firstNext = FirstScheduleOfDay(nextDay);
+            if (lastToday is null || firstNext is null) continue;
+
+            var endMinutes = ScheduleOverlapHelper.ToMinuteRange(lastToday).end;
+            var startMinutesNextDay = 1440 + ScheduleOverlapHelper.ToMinuteRange(firstNext).start;
+            var restHours = (startMinutesNextDay - endMinutes) / 60.0;
+
+            if (restHours < minRestHours)
+                throw new InvalidOperationException(
+                    $"El descanso entre el día {day} ({lastToday.ScheduleCode}) y el día {nextDay} ({firstNext.ScheduleCode}) es de {restHours:F1} horas, " +
+                    $"menor al mínimo requerido de {minRestHours} horas.");
         }
     }
 }

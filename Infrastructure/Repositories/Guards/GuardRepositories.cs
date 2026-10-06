@@ -14,12 +14,17 @@ public class GuardServiceLocationRepository
     private readonly AppDbContext _db;
     public GuardServiceLocationRepository(AppDbContext db) : base(db) => _db = db;
 
-    public async Task<List<GuardServiceLocation>> GetTreeAsync(CancellationToken ct) =>
+    // includeInactive=false (default) preserva el comportamiento de siempre (solo activas) para
+    // los selectores que ya consumen este árbol (LocationHierarchySelect, GuardRotationGroups).
+    // Solo la pantalla de administración de Ubicaciones pide includeInactive=true cuando el
+    // filtro "Inactivos"/"Todos" está seleccionado -- antes el árbol nunca traía inactivas sin
+    // importar el filtro elegido en la UI (hallazgo real QA UTA-DITIC-PS-030-2026, obs. 6).
+    public async Task<List<GuardServiceLocation>> GetTreeAsync(CancellationToken ct, bool includeInactive = false) =>
         await _db.GuardServiceLocations
-            .Where(l => l.ParentLocationId == null && l.IsActive)
-            .Include(l => l.Children.Where(c => c.IsActive))
-                .ThenInclude(c => c.Children.Where(c2 => c2.IsActive))
-                    .ThenInclude(c2 => c2.Children.Where(c3 => c3.IsActive))
+            .Where(l => l.ParentLocationId == null && (includeInactive || l.IsActive))
+            .Include(l => l.Children.Where(c => includeInactive || c.IsActive))
+                .ThenInclude(c => c.Children.Where(c2 => includeInactive || c2.IsActive))
+                    .ThenInclude(c2 => c2.Children.Where(c3 => includeInactive || c3.IsActive))
             .OrderBy(l => l.LocationName)
             .ToListAsync(ct);
 

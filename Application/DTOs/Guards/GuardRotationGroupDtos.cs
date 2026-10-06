@@ -136,6 +136,7 @@ public record GuardGroupRotationPatternDto(
     DateOnly ValidFrom,
     DateOnly? ValidTo,
     bool IsActive,
+    bool PatternIsActive,
     string? Notes
 );
 

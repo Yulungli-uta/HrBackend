@@ -182,6 +182,30 @@ public class GuardShiftChangeService : IGuardShiftChangeService
         if (change.StatusType?.Name != "PENDING")
             throw new InvalidOperationException("Solo se pueden aprobar cambios en estado Pendiente.");
 
+        // Re-validar disponibilidad del reemplazante AL APROBAR, no solo al crear la
+        // solicitud: dos solicitudes PENDING para el mismo reemplazante y mismo día pasan la
+        // validación individualmente al crearse (ninguna está activa todavía), pero aprobar
+        // ambas sí los dejaría doble-reservados sin que nada lo detecte (hallazgo real QA
+        // UTA-DITIC-PS-030-2026, obs. 47).
+        if (change.ReplacementEmployeeId.HasValue)
+        {
+            var planningForValidation = await _db.GuardShiftPlannings
+                .FirstOrDefaultAsync(p => p.PlanningId == change.PlanningId, ct);
+
+            if (planningForValidation is not null)
+            {
+                var replacementCheck = new ValidateGuardAssignmentRequestDto(
+                    change.ReplacementEmployeeId.Value, planningForValidation.LocationId, planningForValidation.WorkDate,
+                    change.NewScheduleId ?? planningForValidation.ScheduleId, planningForValidation.PlanningId, false);
+                var replacementValidation = await _validationService.ValidateAsync(replacementCheck, ct);
+
+                if (replacementValidation.HasBlockingErrors)
+                    throw new InvalidOperationException(
+                        "No se puede aprobar: el reemplazante ya no está disponible — " +
+                        string.Join("; ", replacementValidation.Validations.Where(v => v.Severity == "BLOCKING").Select(v => v.Message)));
+            }
+        }
+
         var approvedTypeId = await _db.Set<RefTypes>()
             .Where(r => r.Category == "GUARD_CHANGE_STATUS" && r.Name == "APPROVED")
             .Select(r => r.TypeId).FirstOrDefaultAsync(ct);
@@ -383,6 +407,15 @@ public class GuardShiftChangeService : IGuardShiftChangeService
 
         if (!change.IsActiveForAttendance)
             throw new InvalidOperationException("Esta reasignación ya no está activa (fue reemplazada por otro cambio o ya se deshizo).");
+
+        // No se puede deshacer si la fecha original ya pasó: volver el turno a ese día
+        // alteraría el horario ya ocurrido de la persona (pedido del usuario 2026-10-05,
+        // QA obs. 49).
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        if (change.OriginalWorkDate.HasValue && change.OriginalWorkDate.Value < today)
+            throw new InvalidOperationException(
+                $"No se puede deshacer esta reasignación: la fecha original ({change.OriginalWorkDate.Value:dd/MM/yyyy}) ya pasó, " +
+                "y volver el turno a ese día alteraría el horario ya ocurrido de esa persona.");
 
         if (change.OriginalWorkDate is null || change.OriginalLocationId is null)
             throw new InvalidOperationException(

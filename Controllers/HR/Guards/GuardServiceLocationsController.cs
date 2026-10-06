@@ -12,11 +12,12 @@ public class GuardServiceLocationsController : ControllerBase
     private readonly IGuardServiceLocationService _svc;
     public GuardServiceLocationsController(IGuardServiceLocationService svc) => _svc = svc;
 
-    /// <summary>Retorna árbol jerárquico de ubicaciones.</summary>
+    /// <summary>Retorna árbol jerárquico de ubicaciones. includeInactive=true también trae
+    /// ubicaciones inactivas (usado por el filtro "Inactivos"/"Todos" de administración).</summary>
     [HttpGet("tree")]
     [RequirePermission("GUARDS.READ")]
-    public async Task<IActionResult> GetTree(CancellationToken ct) =>
-        Ok(await _svc.GetTreeAsync(ct));
+    public async Task<IActionResult> GetTree([FromQuery] bool includeInactive, CancellationToken ct) =>
+        Ok(await _svc.GetTreeAsync(ct, includeInactive));
 
     /// <summary>Retorna ubicaciones asignables a guardias.</summary>
     [HttpGet("assignable")]

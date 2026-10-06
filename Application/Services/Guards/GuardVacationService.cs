@@ -4,6 +4,7 @@ using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
 using WsUtaSystem.Models.Guards;
@@ -16,17 +17,20 @@ public class GuardVacationService : IGuardVacationService
     private readonly IGuardVacationRequestRepository _requestRepo;
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
+    private readonly IHrBalanceService _balanceService;
 
     public GuardVacationService(
         IGuardVacationPlanRepository planRepo,
         IGuardVacationRequestRepository requestRepo,
         AppDbContext db,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IHrBalanceService balanceService)
     {
         _planRepo = planRepo;
         _requestRepo = requestRepo;
         _db = db;
         _currentUser = currentUser;
+        _balanceService = balanceService;
     }
 
     // ─── Planes de vacaciones ─────────────────────────────────────────────────
@@ -97,6 +101,8 @@ public class GuardVacationService : IGuardVacationService
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede crear planes de vacaciones.");
 
+        await ValidateWithinVacationBalanceAsync(dto.EmployeeId, dto.PlannedStartDate, dto.PlannedEndDate, ct);
+
         var plannedStatusId = await GetRefTypeIdAsync("GUARD_VACATION_PLAN_STATUS", "PLANNED", ct);
 
         var entity = new GuardVacationPlan
@@ -130,6 +136,8 @@ public class GuardVacationService : IGuardVacationService
 
         if (entity.StatusType?.Name != "PLANNED")
             throw new InvalidOperationException($"Solo se pueden editar planes en estado PLANNED. Estado actual: {entity.StatusType?.Name}");
+
+        await ValidateWithinVacationBalanceAsync(entity.EmployeeId, dto.PlannedStartDate, dto.PlannedEndDate, ct);
 
         entity.PlannedStartDate = dto.PlannedStartDate;
         entity.PlannedEndDate = dto.PlannedEndDate;
@@ -226,6 +234,12 @@ public class GuardVacationService : IGuardVacationService
         entity.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
+
+        // Si el plan ya estaba APPROVED (SyncVacationBlockAsync le creo un bloqueo ACTIVO),
+        // rechazarlo ahora no debe dejar ese bloqueo colgado -- si no, el generador de turnos
+        // sigue excluyendo al guardia aunque el plan ya este rechazado (hallazgo real
+        // 2026-10-05, empleado 5322, plan 82).
+        await CancelVacationBlocksAsync(planId, ct);
 
         return await GetPlanByIdAsync(planId, ct)
             ?? throw new InvalidOperationException("Error al recuperar el plan rechazado.");
@@ -463,25 +477,40 @@ public class GuardVacationService : IGuardVacationService
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
+    // Cancela cualquier bloqueo de disponibilidad que un plan de vacaciones haya generado
+    // (via SyncVacationBlockAsync al aprobarlo). Reutilizado al reemplazar el bloqueo por uno
+    // nuevo y al rechazar un plan que ya estaba aprobado.
+    private async Task CancelVacationBlocksAsync(int planId, CancellationToken ct)
+    {
+        var sourceTable = "tbl_GuardVacationPlans";
+        var sourceId = planId.ToString();
+
+        var cancelledStatusId = await _db.Set<RefTypes>()
+            .Where(r => r.Category == "GUARD_BLOCK_STATUS" && r.Name == "CANCELLED")
+            .Select(r => r.TypeId).FirstOrDefaultAsync(ct);
+
+        var activeStatusId = await _db.Set<RefTypes>()
+            .Where(r => r.Category == "GUARD_BLOCK_STATUS" && r.Name == "ACTIVE")
+            .Select(r => r.TypeId).FirstOrDefaultAsync(ct);
+
+        var existing = await _db.EmployeeAvailabilityBlocks
+            .Where(b => b.SourceTable == sourceTable && b.SourceId == sourceId && b.StatusTypeId == activeStatusId)
+            .ToListAsync(ct);
+
+        if (existing.Count == 0) return;
+
+        foreach (var b in existing)
+            b.StatusTypeId = cancelledStatusId;
+
+        await _db.SaveChangesAsync(ct);
+    }
+
     private async Task SyncVacationBlockAsync(GuardVacationPlan plan, CancellationToken ct)
     {
         var sourceTable = "tbl_GuardVacationPlans";
         var sourceId = plan.GuardVacationPlanId.ToString();
 
-        // Cancelar bloque previo del mismo origen si existe
-        var existing = await _db.EmployeeAvailabilityBlocks
-            .Where(b => b.SourceTable == sourceTable && b.SourceId == sourceId)
-            .ToListAsync(ct);
-
-        if (existing.Count > 0)
-        {
-            var cancelledStatusId = await _db.Set<RefTypes>()
-                .Where(r => r.Category == "GUARD_BLOCK_STATUS" && r.Name == "CANCELLED")
-                .Select(r => r.TypeId).FirstOrDefaultAsync(ct);
-
-            foreach (var b in existing)
-                b.StatusTypeId = cancelledStatusId;
-        }
+        await CancelVacationBlocksAsync(plan.GuardVacationPlanId, ct);
 
         var vacSourceTypeId = await _db.Set<RefTypes>()
             .Where(r => r.Category == "GUARD_BLOCK_SOURCE" && r.Name == "VACATION")
@@ -516,6 +545,23 @@ public class GuardVacationService : IGuardVacationService
 
         if (id == 0) throw new InvalidOperationException($"RefType no encontrado: {category}/{name}");
         return id;
+    }
+
+    // Reutiliza el saldo real de vacaciones del empleado (el mismo que usa el módulo general
+    // de Vacaciones vía IHrBalanceService -- ya resuelve régimen LOSEP/LOES vs Código de
+    // Trabajo, antigüedad y acumulación) en vez de un tope fijo propio de Guardias
+    // (pedido del usuario 2026-10-05, QA obs. 40).
+    private async Task ValidateWithinVacationBalanceAsync(int employeeId, DateOnly startDate, DateOnly endDate, CancellationToken ct)
+    {
+        var requestedDays = endDate.DayNumber - startDate.DayNumber + 1;
+        if (requestedDays <= 0)
+            throw new InvalidOperationException("La fecha final del plan debe ser posterior o igual a la fecha de inicio.");
+
+        var (balance, _) = await _balanceService.GetBalancesAsync(employeeId);
+
+        if (requestedDays > balance.VacationDays)
+            throw new InvalidOperationException(
+                $"El empleado solicita {requestedDays} día(s) de vacaciones, pero su saldo disponible es de {balance.VacationDays:F1} día(s).");
     }
 
     private static GuardVacationPlanDto MapPlanToDto(GuardVacationPlan p) =>

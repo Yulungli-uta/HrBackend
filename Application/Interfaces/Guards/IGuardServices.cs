@@ -6,7 +6,7 @@ namespace WsUtaSystem.Application.Interfaces.Guards;
 
 public interface IGuardServiceLocationService
 {
-    Task<List<GuardServiceLocationTreeDto>> GetTreeAsync(CancellationToken ct);
+    Task<List<GuardServiceLocationTreeDto>> GetTreeAsync(CancellationToken ct, bool includeInactive = false);
     Task<List<GuardServiceLocationDto>> GetAssignableAsync(CancellationToken ct);
     Task<GuardServiceLocationDto?> GetByIdAsync(int locationId, CancellationToken ct);
     Task<GuardServiceLocationDto> CreateAsync(CreateGuardServiceLocationDto dto, CancellationToken ct);

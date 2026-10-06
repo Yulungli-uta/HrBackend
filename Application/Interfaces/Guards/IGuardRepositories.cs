@@ -6,7 +6,7 @@ namespace WsUtaSystem.Application.Interfaces.Guards;
 
 public interface IGuardServiceLocationRepository : IRepository<GuardServiceLocation, int>
 {
-    Task<List<GuardServiceLocation>> GetTreeAsync(CancellationToken ct);
+    Task<List<GuardServiceLocation>> GetTreeAsync(CancellationToken ct, bool includeInactive = false);
     Task<List<GuardServiceLocation>> GetAssignableAsync(CancellationToken ct);
     Task<List<GuardServiceLocation>> GetByRootAsync(int rootLocationId, CancellationToken ct);
 }

@@ -17,9 +17,9 @@ public class GuardServiceLocationService : IGuardServiceLocationService
         _db = db;
     }
 
-    public async Task<List<GuardServiceLocationTreeDto>> GetTreeAsync(CancellationToken ct)
+    public async Task<List<GuardServiceLocationTreeDto>> GetTreeAsync(CancellationToken ct, bool includeInactive = false)
     {
-        var roots = await _repo.GetTreeAsync(ct);
+        var roots = await _repo.GetTreeAsync(ct, includeInactive);
         return roots.Select(MapToTree).ToList();
     }
 
@@ -38,6 +38,8 @@ public class GuardServiceLocationService : IGuardServiceLocationService
 
     public async Task<GuardServiceLocationDto> CreateAsync(CreateGuardServiceLocationDto dto, CancellationToken ct)
     {
+        await EnsureNotDuplicatedAsync(null, dto.ParentLocationId, dto.LocationName, dto.LocationCode, ct);
+
         int level = 0;
         int? rootId = null;
 
@@ -75,6 +77,8 @@ public class GuardServiceLocationService : IGuardServiceLocationService
             .FirstOrDefaultAsync(l => l.LocationId == locationId, ct)
             ?? throw new KeyNotFoundException($"Ubicación {locationId} no encontrada.");
 
+        await EnsureNotDuplicatedAsync(locationId, entity.ParentLocationId, dto.LocationName, dto.LocationCode, ct);
+
         entity.LocationTypeId = dto.LocationTypeId;
         entity.LocationCode = dto.LocationCode;
         entity.LocationName = dto.LocationName;
@@ -85,6 +89,36 @@ public class GuardServiceLocationService : IGuardServiceLocationService
 
         await _db.SaveChangesAsync(ct);
         return MapToDto(entity, null);
+    }
+
+    // Verificado contra datos reales (2026-10): 0 ubicaciones activas duplicadas hoy, seguro
+    // aplicar tanto en Create como en Update.
+    private async Task EnsureNotDuplicatedAsync(
+        int? currentLocationId, int? parentLocationId, string locationName, string? locationCode, CancellationToken ct)
+    {
+        var normalizedName = locationName.Trim().ToLower();
+
+        var nameExists = await _db.GuardServiceLocations.AnyAsync(l =>
+            l.IsActive
+            && (!currentLocationId.HasValue || l.LocationId != currentLocationId.Value)
+            && l.ParentLocationId == parentLocationId
+            && l.LocationName.Trim().ToLower() == normalizedName, ct);
+
+        if (nameExists)
+            throw new InvalidOperationException($"Ya existe una ubicación activa con el nombre '{locationName}' en el mismo nivel.");
+
+        if (!string.IsNullOrWhiteSpace(locationCode))
+        {
+            var normalizedCode = locationCode.Trim().ToLower();
+            var codeExists = await _db.GuardServiceLocations.AnyAsync(l =>
+                l.IsActive
+                && (!currentLocationId.HasValue || l.LocationId != currentLocationId.Value)
+                && l.LocationCode != null
+                && l.LocationCode.Trim().ToLower() == normalizedCode, ct);
+
+            if (codeExists)
+                throw new InvalidOperationException($"Ya existe una ubicación activa con el código '{locationCode}'.");
+        }
     }
 
     private static GuardServiceLocationDto MapToDto(GuardServiceLocation l, List<GuardServiceLocationDto>? children) =>

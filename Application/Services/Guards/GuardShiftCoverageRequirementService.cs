@@ -75,6 +75,14 @@ public class GuardShiftCoverageRequirementService : IGuardShiftCoverageRequireme
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede crear requerimientos.");
 
+        ValidateRequiredGuards(dto.RequiredGuards);
+        ValidateValidityRange(dto.ValidFrom, dto.ValidTo);
+
+        // Solo en Create: ya existen duplicados activos reales en produccion (misma
+        // ubicacion+horario+dia) -- bloquear tambien en Update dejaria esas filas sin poder
+        // editarse hasta limpiarlas. Bloqueamos que se generen MAS duplicados nuevos.
+        await EnsureNotDuplicatedAsync(dto.LocationId, dto.ScheduleId, dto.DayOfWeek, ct);
+
         var entity = new GuardShiftCoverageRequirement
         {
             LocationId = dto.LocationId,
@@ -104,6 +112,9 @@ public class GuardShiftCoverageRequirementService : IGuardShiftCoverageRequireme
 
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede actualizar requerimientos.");
+
+        ValidateRequiredGuards(dto.RequiredGuards);
+        ValidateValidityRange(dto.ValidFrom, dto.ValidTo);
 
         entity.DayOfWeek = dto.DayOfWeek;
         entity.RequiredGuards = dto.RequiredGuards;
@@ -137,5 +148,30 @@ public class GuardShiftCoverageRequirementService : IGuardShiftCoverageRequireme
             r.IsActive,
             r.Notes
         );
+    }
+
+    // Tope razonable para un numero de guardias simultaneos en un mismo turno/ubicacion.
+    // No corrige registros ya guardados (ej. una fila existente con un valor claramente
+    // erroneo) -- solo aplica hacia adelante en Create/Update.
+    private static void ValidateRequiredGuards(int requiredGuards)
+    {
+        if (requiredGuards < 1 || requiredGuards > 50)
+            throw new InvalidOperationException("El número de guardias requeridos debe estar entre 1 y 50.");
+    }
+
+    private static void ValidateValidityRange(DateOnly validFrom, DateOnly? validTo)
+    {
+        if (validTo.HasValue && validTo.Value < validFrom)
+            throw new InvalidOperationException("La fecha 'Válido hasta' no puede ser anterior a 'Válido desde'.");
+    }
+
+    private async Task EnsureNotDuplicatedAsync(int locationId, int scheduleId, int dayOfWeek, CancellationToken ct)
+    {
+        var exists = await _db.GuardShiftCoverageRequirements.AnyAsync(r =>
+            r.IsActive && r.LocationId == locationId && r.ScheduleId == scheduleId && r.DayOfWeek == dayOfWeek, ct);
+
+        if (exists)
+            throw new InvalidOperationException(
+                "Ya existe un requerimiento de cobertura activo para esa ubicación, horario y día de la semana.");
     }
 }

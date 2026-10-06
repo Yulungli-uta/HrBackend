@@ -90,6 +90,15 @@ public class GuardEmployeeSpecialRuleService : IGuardEmployeeSpecialRuleService
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede crear condiciones especiales.");
 
+        // Validaciones solo al CREAR, no al editar: ya existen reglas activas reales en
+        // producción que violan estos 3 chequeos (contradicción Sin-noche/Prioridad-noche,
+        // reglas sin ningún parámetro, y solapamiento de fechas entre reglas del mismo
+        // empleado) -- bloquearlas también en Update dejaría esas filas sin poder editarse
+        // hasta limpiarlas. Esto solo evita que se creen MÁS casos nuevos.
+        ValidateNightShiftCoherence(dto.NoNightShift, dto.NightPriority);
+        ValidateHasAtLeastOneParameter(dto);
+        await EnsureNoOverlappingActiveRuleAsync(dto.EmployeeId, dto.ValidFrom, dto.ValidTo, ct);
+
         var entity = new GuardEmployeeSpecialRule
         {
             EmployeeId = dto.EmployeeId,
@@ -166,4 +175,33 @@ public class GuardEmployeeSpecialRuleService : IGuardEmployeeSpecialRuleService
             r.RequiresApproval,
             r.IsActive
         );
+
+    private static void ValidateNightShiftCoherence(bool noNightShift, bool nightPriority)
+    {
+        if (noNightShift && nightPriority)
+            throw new InvalidOperationException(
+                "No se puede activar 'Sin noche' y 'Prioridad noche' al mismo tiempo — son condiciones contradictorias.");
+    }
+
+    private static void ValidateHasAtLeastOneParameter(CreateGuardEmployeeSpecialRuleDto dto)
+    {
+        var hasAny = dto.FixedLocationId.HasValue || dto.FixedScheduleId.HasValue
+            || dto.NoNightShift || dto.OnlyWeekDays || dto.WeekendPriority || dto.NightPriority;
+
+        if (!hasAny)
+            throw new InvalidOperationException(
+                "La condición especial debe tener al menos un parámetro configurado (ubicación/horario fijo, o alguna de las opciones de restricción).");
+    }
+
+    private async Task EnsureNoOverlappingActiveRuleAsync(int employeeId, DateOnly validFrom, DateOnly? validTo, CancellationToken ct)
+    {
+        var overlaps = await _db.GuardEmployeeSpecialRules.AnyAsync(r =>
+            r.EmployeeId == employeeId && r.IsActive
+            && r.ValidFrom <= (validTo ?? DateOnly.MaxValue)
+            && (r.ValidTo ?? DateOnly.MaxValue) >= validFrom, ct);
+
+        if (overlaps)
+            throw new InvalidOperationException(
+                "Este empleado ya tiene una condición especial activa vigente en ese rango de fechas.");
+    }
 }

@@ -90,6 +90,11 @@ public class GuardLocationRotationService : IGuardLocationRotationService
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede crear periodos de rotación.");
 
+        // El periodo nuevo siempre nace activo -- desactiva cualquier otro para que nunca
+        // existan 2 periodos activos a la vez (mismo criterio que AssignPatternToGroupAsync
+        // al reemplazar la asignacion de patron anterior del grupo).
+        await DeactivateOtherActivePeriodsAsync(null, ct);
+
         var entity = new GuardLocationRotationPeriod
         {
             Name = dto.Name,
@@ -117,6 +122,19 @@ public class GuardLocationRotationService : IGuardLocationRotationService
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede actualizar periodos.");
 
+        if (entity.IsActive && !dto.IsActive)
+        {
+            var otherActiveExists = await _db.GuardLocationRotationPeriods
+                .AnyAsync(p => p.LocationRotationPeriodId != periodId && p.IsActive, ct);
+            if (!otherActiveExists)
+                throw new InvalidOperationException(
+                    "No se puede inactivar el único período activo. Cree o active otro período antes de inactivar este.");
+        }
+        else if (dto.IsActive)
+        {
+            await DeactivateOtherActivePeriodsAsync(periodId, ct);
+        }
+
         entity.Name = dto.Name;
         entity.StartDate = dto.StartDate;
         entity.EndDate = dto.EndDate;
@@ -129,6 +147,16 @@ public class GuardLocationRotationService : IGuardLocationRotationService
 
         return await GetPeriodByIdAsync(periodId, ct)
             ?? throw new InvalidOperationException("Error al recuperar el periodo actualizado.");
+    }
+
+    private async Task DeactivateOtherActivePeriodsAsync(int? excludePeriodId, CancellationToken ct)
+    {
+        var others = await _db.GuardLocationRotationPeriods
+            .Where(p => p.IsActive && (excludePeriodId == null || p.LocationRotationPeriodId != excludePeriodId))
+            .ToListAsync(ct);
+
+        foreach (var p in others)
+            p.IsActive = false;
     }
 
     // ─── Asignaciones ─────────────────────────────────────────────────────────
