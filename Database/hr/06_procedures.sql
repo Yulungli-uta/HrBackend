@@ -6833,7 +6833,13 @@ BEGIN
        AND cs.rn = 1
     LEFT JOIN HR.vw_EmployeeDetails ved
         ON ved.EmployeeID = e.EmployeeID
-    WHERE e.IsActive = 1
+    -- 2026-10-06: antes filtraba e.IsActive = 1, lo que excluia del reproceso
+    -- historico a empleados ya inactivos hoy pero que SI laboraban en @WorkDate
+    -- (ej. backfill de picadas de alguien que ya salio). El estado vigente a la
+    -- fecha procesada lo da HireDate + el horario (CurrentSchedule.ValidFrom/
+    -- ValidTo ya filtrado arriba), no el flag de actividad actual.
+    WHERE e.HireDate <= @WorkDate
+      AND e.IsDeleted = 0
       AND (@FilterEmployeeID IS NULL OR e.EmployeeID = @FilterEmployeeID)
       AND NOT EXISTS (
           SELECT 1
