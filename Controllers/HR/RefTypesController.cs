@@ -64,12 +64,26 @@ public class RefTypesController : ControllerBase
     }
 
     /// <summary>Actualiza un registro existente.</summary>
+    /// <remarks>
+    /// Carga la entidad real primero y solo pisa los campos que esta pantalla edita
+    /// (Category/Name/Description/IsActive). Si se mapeaba el DTO directo a una entidad nueva,
+    /// los campos que el formulario no envía (SortOrder, SiiesLabel, CreatedAt -- usados por
+    /// otras pantallas como los reportes SIIES) quedaban en su valor por defecto y el Update
+    /// genérico los pisaba con ese vacío (hallazgo real QA UTA-DITIC-PS-030-2026, obs. 42).
+    /// </remarks>
     [HttpPut("{id:int}")]
     [RequirePermission("CATALOGS.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] RefTypesUpdateDto dto, CancellationToken ct)
     {
-        var entityObj = _mapper.Map<RefTypes>(dto);
-        await _svc.UpdateAsync(id, entityObj, ct);
+        var existing = await _svc.GetByIdAsync(id, ct)
+            ?? throw new KeyNotFoundException($"Parámetro {id} no encontrado.");
+
+        existing.Category = dto.Category;
+        existing.Name = dto.Name;
+        existing.Description = dto.Description;
+        existing.IsActive = dto.IsActive;
+
+        await _svc.UpdateAsync(id, existing, ct);
         return NoContent();
     }
 

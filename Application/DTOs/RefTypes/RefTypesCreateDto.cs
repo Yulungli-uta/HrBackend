@@ -5,7 +5,8 @@ public class RefTypesCreateDto
     public int TypeId { get; set; }
     public string Category { get; set; }
     public string Name { get; set; }
-    public string Description { get; set; }
+    // Nullable a propósito -- ver RefTypesUpdateDto.cs (mismo hallazgo, obs. 42-43).
+    public string? Description { get; set; }
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? SiiesLabel { get; set; }
