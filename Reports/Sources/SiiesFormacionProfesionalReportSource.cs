@@ -108,7 +108,11 @@ public sealed class SiiesFormacionProfesionalReportSource : IReportSource
                 ["CODIGO_IES"] = codigoIes,
                 ["TIPO_IDENTIFICACIÓN"] = v.IdentTypeName ?? string.Empty,
                 ["NUMERO_IDENTIFICACION"] = v.IDCard,
-                ["PAIS_ESTUDIO"] = v.PaisEstudio ?? string.Empty,
+                ["APELLIDOS_NOMBRES"] = $"{v.LastName} {v.FirstName}".Trim(),
+                ["DEPENDENCIA"] = v.DepartmentName ?? string.Empty,
+                // 2026-10-08: a pedido del usuario, país vacío se muestra como "NN" en vez de
+                // cadena vacía (mismo criterio que un dato de identificación desconocido).
+                ["PAIS_ESTUDIO"] = string.IsNullOrWhiteSpace(v.PaisEstudio) ? "NN" : v.PaisEstudio,
                 ["CODIGO_IES_ESTUDIO"] = v.InstitutionSiiesCode?.ToString() ?? string.Empty,
                 ["NOMBRES_IES"] = v.InstitutionName ?? string.Empty,
                 ["NIVEL"] = v.NivelSiiesLabel ?? string.Empty,
@@ -132,6 +136,8 @@ public sealed class SiiesFormacionProfesionalReportSource : IReportSource
                 new("CODIGO_IES", "CODIGO_IES"),
                 new("TIPO_IDENTIFICACIÓN", "TIPO_IDENTIFICACIÓN"),
                 new("NUMERO_IDENTIFICACION", "NUMERO_IDENTIFICACION"),
+                new("APELLIDOS_NOMBRES", "APELLIDOS_NOMBRES"),
+                new("DEPENDENCIA", "DEPENDENCIA"),
                 new("PAIS_ESTUDIO", "PAIS_ESTUDIO"),
                 new("CODIGO_IES_ESTUDIO", "CODIGO_IES_ESTUDIO"),
                 new("NOMBRES_IES", "NOMBRES_IES"),

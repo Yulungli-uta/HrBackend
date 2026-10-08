@@ -743,9 +743,11 @@ BEGIN
       WHERE rt.Category = 'CONTRACT_TYPE' 
         AND UPPER(rt.Name) = UPPER(N'Código Trabajo')
     )
+    -- 2026-10-08: ac.RequiredMinutes > 0 evita falso positivo en días de descanso
+    -- (ver mismo fix en sp_ProcessAttendanceFinalizeDay, que es el que corre en producción).
     UPDATE ac
-    SET 
-      ac.FoodSubsidy = CASE WHEN ac.RegularMinutes >= ac.RequiredMinutes THEN 1 ELSE ac.FoodSubsidy END
+    SET
+      ac.FoodSubsidy = CASE WHEN ac.RequiredMinutes > 0 AND ac.RegularMinutes >= ac.RequiredMinutes THEN 1 ELSE ac.FoodSubsidy END
     FROM HR.tbl_AttendanceCalculations ac
     INNER JOIN HR.tbl_Employees e ON e.EmployeeID = ac.EmployeeID
     INNER JOIN ContratoCodigoTrabajo ct ON ct.TypeID = e.EmployeeType
@@ -5196,7 +5198,10 @@ BEGIN
              ELSE 0
         END;
 
-    IF (@ContractType = N'Código Trabajo' AND (@RegularMinutes + @TardinessMin) >= @RequiredMin)
+    -- 2026-10-08: @RequiredMin > 0 evita falso positivo en días de descanso
+    -- (fin de semana sin horario asignado) donde Regular/Tardiness/Required
+    -- son todos 0 y "0 >= 0" calificaba como jornada cumplida.
+    IF (@ContractType = N'Código Trabajo' AND @RequiredMin > 0 AND (@RegularMinutes + @TardinessMin) >= @RequiredMin)
         SET @FoodSubsidy = 1;
     ELSE
         SET @FoodSubsidy = 0;
@@ -5786,7 +5791,8 @@ BEGIN
 	DECLARE @FoodSubsidy INT;
 
 	--IF (@ContractType = N'Código Trabajo' AND (@InsideMinutes + @TardinessMin) >= @RequiredMinutes)
-	IF (@ContractType = N'Código Trabajo' AND (@RegularMinutes + @TardinessMin) >= @RequiredMinutes)
+	-- 2026-10-08: @RequiredMinutes > 0 evita falso positivo en días de descanso (ver FinalizeDay).
+	IF (@ContractType = N'Código Trabajo' AND @RequiredMinutes > 0 AND (@RegularMinutes + @TardinessMin) >= @RequiredMinutes)
 		SET @FoodSubsidy = 1;
 	ELSE
 		SET @FoodSubsidy = 0;
@@ -5944,7 +5950,11 @@ BEGIN
       AND WorkDate = @WorkDate
       AND JourneyNumber = @JourneyNumber;
 
-    IF (@ContractType = N'Código Trabajo' AND ISNULL(@RegularMinutes,0) + ISNULL(@TardinessMin,0) >= ISNULL(@RequiredMinutes,0))
+    -- 2026-10-08: ISNULL(@RequiredMinutes,0) > 0 evita falso positivo en días de
+    -- descanso (fin de semana sin horario asignado) donde Regular/Tardiness/Required
+    -- son todos 0 y "0 >= 0" calificaba el día como jornada cumplida.
+    IF (@ContractType = N'Código Trabajo' AND ISNULL(@RequiredMinutes,0) > 0
+        AND ISNULL(@RegularMinutes,0) + ISNULL(@TardinessMin,0) >= ISNULL(@RequiredMinutes,0))
         SET @FoodSubsidy = 1;
     ELSE
         SET @FoodSubsidy = 0;

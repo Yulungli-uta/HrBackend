@@ -19,6 +19,12 @@ public class VwSiiesFormacionProfesional
     public string IDCard { get; set; } = null!;
     public string? IdentTypeName { get; set; }
 
+    /// <summary>Nombres del profesor (ya existían en vw_SiiesProfesores, agregados 2026-10-08.</summary>
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    /// <summary>Dependencia (departamento) del profesor.</summary>
+    public string? DepartmentName { get; set; }
+
     /// <summary>Código SIIES de la IES (=InstitutionID), solo cuando es nacional. CODIGO_IES_ESTUDIO.</summary>
     public int? InstitutionSiiesCode { get; set; }
 

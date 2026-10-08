@@ -116,4 +116,15 @@ public interface IAttendanceCalculationsReportService
         int page,
         int pageSize,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene el reporte consolidado de horas nocturnas por empleado (suma de
+    /// <c>NightMinutes</c>) para el período y filtros indicados. No excluye por
+    /// régimen laboral por defecto.
+    /// </summary>
+    /// <param name="filter">Filtros del reporte.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<NightHoursSummaryReportDto>> GetNightHoursSummaryDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
 }

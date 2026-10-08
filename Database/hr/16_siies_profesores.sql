@@ -216,7 +216,22 @@ SELECT
     ts.[WeeklyClassHours],
     -- 2026-09-11: cuando no hay TeacherStructure (profesor ocasional, ver mas abajo) se
     -- respalda a "No Aplica" -- los ocasionales no tienen escalafon.
-    COALESCE(escal.[SiiesLabel], CASE WHEN ts.[TeacherStructureID] IS NULL AND ocasionalDocente.[ContractID] IS NOT NULL THEN escalNoAplicaDefault.[SiiesLabel] END) AS [TipoEscalafonNombramientoSiiesLabel],
+    -- 2026-10-08: caso adicional confirmado con datos reales (Decano/Director/Subdecano vía
+    -- Nombramiento/Acción de Personal, sin TeacherStructure -- ej. cédulas
+    -- 1804012969/1802807329/1803812062/1803547320): se respalda a "Laboral Actual" en vez de
+    -- "No Aplica", porque sí tiene una relación laboral vigente con la IES (la autoridad),
+    -- solo que no tiene escalafón docente propio. La autoridad tiene prioridad sobre el
+    -- contrato de ocasional: los 4 casos reales verificados TAMBIÉN tienen un contrato viejo
+    -- de "Profesor Ocasional" archivado, pero lo que importa hoy es el cargo de autoridad.
+    COALESCE(
+        escal.[SiiesLabel],
+        CASE
+            WHEN ts.[TeacherStructureID] IS NULL AND authority.[EmployeeId] IS NOT NULL
+                THEN escalLaboralActualDefault.[SiiesLabel]
+            WHEN ts.[TeacherStructureID] IS NULL AND ocasionalDocente.[ContractID] IS NOT NULL
+                THEN escalNoAplicaDefault.[SiiesLabel]
+        END
+    ) AS [TipoEscalafonNombramientoSiiesLabel],
     nivel.[SiiesLabel]             AS [NivelSiiesLabel],
     -- CATEGORIA: prioridad a la columna directa; si está NULL, respaldo desde AcademicLadder;
     -- si tampoco (profesor ocasional sin TeacherStructure), respaldo a "Ocasional".
@@ -329,6 +344,16 @@ LEFT JOIN [HR].[ref_Types] catOcasionalDefault
     ON catOcasionalDefault.[Category] = 'SIIES_CATEGORIA_DOCENTE' AND catOcasionalDefault.[Name] = N'Ocasional'
 LEFT JOIN [HR].[ref_Types] escalNoAplicaDefault
     ON escalNoAplicaDefault.[Category] = 'SIIES_TIPO_ESCALAFON_NOMBRAMIENTO' AND escalNoAplicaDefault.[Name] = N'No Aplica'
+-- 2026-10-08: ¿tiene una autoridad vigente (Decano/Director/Subdecano/etc.) sobre un
+-- departamento/facultad? Ver comentario junto a TipoEscalafonNombramientoSiiesLabel.
+OUTER APPLY (
+    SELECT TOP 1 da.[EmployeeId]
+    FROM [HR].[tbl_DepartmentAuthorities] da
+    WHERE da.[EmployeeId] = e.[EmployeeID] AND da.[IsActive] = 1
+      AND (da.[EndDate] IS NULL OR da.[EndDate] >= CAST(GETDATE() AS DATE))
+) authority
+LEFT JOIN [HR].[ref_Types] escalLaboralActualDefault
+    ON escalLaboralActualDefault.[Category] = 'SIIES_TIPO_ESCALAFON_NOMBRAMIENTO' AND escalLaboralActualDefault.[Name] = N'Laboral Actual'
 OUTER APPLY (
     SELECT TOP 1 r.*
     FROM [HR].[tbl_EmployeeLaborRegime] r
@@ -500,6 +525,9 @@ CREATE OR ALTER VIEW [HR].[vw_SiiesFormacionProfesional] AS
 WITH [Titulos] AS (
     SELECT
         v.[EmployeeID], v.[IDCard], v.[IdentTypeName],
+        -- 2026-10-08: nombres y dependencia a pedido del usuario, ya existian en
+        -- vw_SiiesProfesores pero no se traian a este reporte.
+        v.[FirstName], v.[LastName], v.[DepartmentName],
         v.[LatestPeriodCode], v.[LatestPeriodStart], v.[LatestPeriodEnd],
         el.[EducationID],
         inst.[SiiesInstitutionCode]                                AS [InstitutionSiiesCode],
@@ -549,6 +577,7 @@ WITH [Titulos] AS (
 )
 SELECT
     [EmployeeID], [IDCard], [IdentTypeName],
+    [FirstName], [LastName], [DepartmentName],
     [InstitutionSiiesCode], [PaisEstudio], [InstitutionName],
     [NivelSiiesLabel], [GradoSiiesLabel], [NombreTitulo],
     [CampoDetalladoSiiesCode], [SenescytRegistrationNumber], [FechaObtuvoTitulo],
@@ -588,6 +617,7 @@ RETURN
 
     SELECT
         [EmployeeID], [IDCard], [IdentTypeName],
+        [FirstName], [LastName], [DepartmentName],
         [InstitutionSiiesCode], [PaisEstudio], [InstitutionName],
         [NivelSiiesLabel], [GradoSiiesLabel], [NombreTitulo],
         [CampoDetalladoSiiesCode], [SenescytRegistrationNumber], [FechaObtuvoTitulo],
@@ -605,6 +635,7 @@ RETURN
         FROM (
             SELECT
                 v.[EmployeeID], v.[IDCard], v.[IdentTypeName],
+                v.[FirstName], v.[LastName], v.[DepartmentName],
                 v.[LatestPeriodCode], v.[LatestPeriodStart], v.[LatestPeriodEnd],
                 el.[EducationID],
                 inst.[SiiesInstitutionCode]                                AS [InstitutionSiiesCode],

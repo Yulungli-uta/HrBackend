@@ -263,6 +263,30 @@ public sealed class AttendanceCalculationsReportService : IAttendanceCalculation
         return data;
     }
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<NightHoursSummaryReportDto>> GetNightHoursSummaryDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        _logger.LogInformation(
+            "Generando reporte de horas nocturnas. Período: {Start} - {End} | DeptId: {DeptId} | EmployeeId: {EmpId} | Cédula: {IdCard} | RegimeId: {RegimeId}",
+            filter.StartDate?.ToString("yyyy-MM-dd") ?? "N/A",
+            filter.EndDate?.ToString("yyyy-MM-dd")   ?? "N/A",
+            filter.DepartmentId?.ToString()   ?? "Todas",
+            filter.EmployeeId?.ToString()     ?? "Todos",
+            filter.Identification             ?? "Todas",
+            filter.LaborRegimeId?.ToString()  ?? "Todos");
+
+        var data = await _repository.GetNightHoursSummaryDataAsync(filter, ct);
+
+        _logger.LogInformation(
+            "Reporte de horas nocturnas generado. Total empleados: {Count}", data.Count);
+
+        return data;
+    }
+
     private async Task<decimal> GetParameterDecimalAsync(string name, decimal defaultValue, CancellationToken ct)
     {
         var list = await _parametersRepository.GetByNameAsync(name, ct);

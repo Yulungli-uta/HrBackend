@@ -81,22 +81,10 @@ public abstract class SiiesProfesoresReportSourceBase
             .AsNoTracking()
             .Where(v => v.IdentTypeName == identTypeName);
 
-        // 2026-09-11: el filtro de "activo hoy" solo tiene sentido cuando se pide el listado
-        // general (sin período). Si se pidió un período específico, lo relevante es si el
-        // profesor estuvo activo EN ESE PERÍODO — y eso ya lo garantiza
-        // fn_SiiesProfesoresHoras(@PeriodCode) (solo trae a quien tiene distributivo real
-        // cargado ese período). Aplicar además "empleado activo hoy" excluía en silencio a
-        // profesores cuyo contrato ya venció pero que sí dieron clases en el período
-        // consultado — un reporte histórico no debe filtrar por el estado actual.
-        if (filter.IncludeInactive != true && periodCode is null)
-        {
-            query = query.Where(v => v.EmployeeIsActive);
-
-            // Ver comentario equivalente en SiiesFuncionariosReportSource: Employees.IsActive
-            // no siempre refleja que el régimen laboral ya venció. NULL (sin régimen todavía)
-            // no se excluye a propósito.
-            query = query.Where(v => v.RegimeIsActive != false);
-        }
+        // 2026-10-08: se quitó el filtro de "activo hoy" también para el listado general (sin
+        // período) -- el reporte SIIES debe traer a todos los que laboraron, estén o no activos
+        // hoy, igual que ya se garantizaba para el caso con período específico (ver comentario
+        // histórico arriba sobre fn_SiiesProfesoresHoras).
 
         if (!string.IsNullOrWhiteSpace(filter.Identification))
         {
@@ -192,6 +180,11 @@ public abstract class SiiesProfesoresReportSourceBase
             // solo false explícito exporta "NO" (mismo criterio que SiiesFuncionariosReportSource).
             ["INGRESO_POR_CONCURSO"] = v.IngresoPorConcurso == false ? "NO" : "SI",
             ["RELACION_IES"] = v.RelacionIesSiiesLabel ?? string.Empty,
+            // 2026-10-08: condición exacta ya resuelta en HR.vw_SiiesProfesores (ver comentario
+            // ahí) -- autoridad activa (Decano/Director/etc.) sin escalafón propio = "Laboral
+            // Actual"; sin TeacherStructure y sin autoridad ni contrato de ocasional = "No
+            // Aplica". Este fallback en C# solo cubre el caso residual que la vista no pudo
+            // clasificar en absoluto (NULL puro).
             ["TIPO_ESCALAFON_NOMBRAMIENTO"] = v.TipoEscalafonNombramientoSiiesLabel ?? "NO APLICA",
             ["CATEGORIA"] = v.CategoriaSiiesLabel ?? string.Empty,
             ["TIEMPO_DEDICACION"] = v.TiempoDedicacionSiiesLabel ?? string.Empty,

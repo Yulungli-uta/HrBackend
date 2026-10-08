@@ -152,4 +152,20 @@ public interface IAttendanceCalculationsReportRepository
         int page,
         int pageSize,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene el consolidado de horas nocturnas por empleado (suma de
+    /// <c>NightMinutes</c>) en el rango de fechas indicado. No filtra por régimen
+    /// laboral por defecto: a diferencia del subsidio de alimentación, la jornada
+    /// nocturna no es exclusiva de un tipo de contrato. Solo incluye empleados con
+    /// al menos un minuto nocturno (&gt; 0) en el período.
+    /// </summary>
+    /// <param name="filter">
+    /// Filtros del reporte: StartDate, EndDate, DepartmentId, EmployeeId,
+    /// Identification (cédula) y LaborRegimeId (todos opcionales).
+    /// </param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<NightHoursSummaryReportDto>> GetNightHoursSummaryDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
 }

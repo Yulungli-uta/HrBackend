@@ -80,6 +80,7 @@ public static class ReportTypeMapper
             ["attendance-novelties"] = ReportType.AttendanceNovelties,
             ["family-subsidy-summary"] = ReportType.FamilySubsidySummary,
             ["seniority-bonus-summary"] = ReportType.SeniorityBonusSummary,
+            ["night-hours-summary"] = ReportType.NightHoursSummary,
         };
 
     /// <summary>

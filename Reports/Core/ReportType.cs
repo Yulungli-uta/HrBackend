@@ -119,5 +119,12 @@ public enum ReportType
     /// de horario, recuperación aplicada y reemplazo de guardia. Una fila por (jornada, tipo
     /// de novedad) — la misma jornada puede repetirse si tiene varias novedades a la vez.
     /// </summary>
-    AttendanceNovelties = 31
+    AttendanceNovelties = 31,
+
+    /// <summary>
+    /// Reporte consolidado de horas nocturnas por empleado: suma de
+    /// HR.tbl_AttendanceCalculations.NightMinutes en el período, según la ventana
+    /// nocturna parametrizada en HR.tbl_Parameters (NIGHT_START / NIGHT_END).
+    /// </summary>
+    NightHoursSummary = 32
 }

@@ -367,7 +367,36 @@ LEFT JOIN [HR].[ref_Types] patRelFallback               ON patRelFallback.[TypeI
 -- título de cargo pero sin fila de carga horaria activa).
 WHERE e.[IsDeleted] = 0
   AND ISNULL(j.[Description], '') NOT LIKE 'PROFESOR TITULAR%'
-  AND NOT EXISTS (SELECT 1 FROM [HR].[tbl_TeacherStructure] ts WHERE ts.[EmployeeID] = e.[EmployeeID]);
+  AND NOT EXISTS (SELECT 1 FROM [HR].[tbl_TeacherStructure] ts WHERE ts.[EmployeeID] = e.[EmployeeID])
+  -- 2026-10-08: tbl_TeacherStructure NUNCA tiene fila para Profesores Ocasionales/Técnicos
+  -- Docentes (solo aplica a Titulares) -- se colaban en Funcionarios y a la vez aparecían en
+  -- vw_SiiesProfesores (que sí los detecta por tipo de contrato), duplicando a la persona en
+  -- ambos reportes. Mismo criterio de detección que el OUTER APPLY ocasionalDocente de
+  -- vw_SiiesProfesores, para que los dos reportes queden mutuamente excluyentes. Hallazgo real:
+  -- cédula 0603183609 (CONTRATO PROFESOR/A OCASIONAL (DELEGACIÓN), régimen LOES).
+  AND NOT EXISTS (
+        SELECT 1
+        FROM [HR].[tbl_Contracts] c2
+        INNER JOIN [HR].[tbl_contract_type] ct2 ON ct2.[ContractTypeID] = c2.[ContractTypeID]
+        WHERE c2.[PersonID] = p.[PersonID] AND c2.[IsDeleted] = 0
+          AND (
+                ct2.[Name] LIKE N'CONTRATO PROFESOR/A OCASIONAL%'
+             OR ct2.[Name] LIKE N'CONTRATO TÉCNICO DOCENTE%'
+             OR (
+                  ct2.[Name] LIKE N'ADENDUM%'
+                  AND EXISTS (
+                      SELECT 1
+                      FROM [HR].[tbl_Contracts] parentC
+                      INNER JOIN [HR].[tbl_contract_type] parentCt ON parentCt.[ContractTypeID] = parentC.[ContractTypeID]
+                      WHERE parentC.[ContractID] = c2.[ParentID]
+                        AND (
+                              parentCt.[Name] LIKE N'CONTRATO PROFESOR/A OCASIONAL%'
+                           OR parentCt.[Name] LIKE N'CONTRATO TÉCNICO DOCENTE%'
+                            )
+                  )
+                )
+              )
+      );
 GO
 
 -- 14) Clasificación SiiesRelacionIesTypeId en tbl_contract_type / tbl_personnel_action_type

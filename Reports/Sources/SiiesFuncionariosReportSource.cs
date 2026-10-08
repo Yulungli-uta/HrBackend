@@ -118,21 +118,13 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
         if (filter.StartDate.HasValue && filter.EndDate.HasValue)
             return await GetEmployeesVigentesEnRangoAsync(identTypeName, filter, ct);
 
+        // 2026-10-08: el reporte SIIES debe traer a TODOS los que laboraron en el período, estén
+        // o no activos hoy -- se quitó el filtro de activo/inactivo por defecto (antes excluía
+        // inactivos salvo que se marque IncludeInactive). Sin StartDate/EndDate no hay período
+        // explícito, así que se trae el universo completo de la vista sin recorte por estado.
         var query = _db.vwSiiesFuncionarios
             .AsNoTracking()
             .Where(v => v.IdentTypeName == identTypeName);
-
-        if (filter.IncludeInactive != true)
-        {
-            query = query.Where(v => v.EmployeeIsActive);
-
-            // Employees.IsActive no siempre se actualiza cuando el régimen laboral ya venció
-            // (visto en datos reales: EffectiveTo en el pasado pero IsActive todavía true).
-            // RegimeIsActive=false significa que la única fila de régimen resuelta ya no está
-            // vigente -> no es realmente un funcionario activo. NULL (sin régimen registrado
-            // todavía) no se excluye aquí a propósito, es un hueco de datos aparte.
-            query = query.Where(v => v.RegimeIsActive != false);
-        }
 
         if (!string.IsNullOrWhiteSpace(filter.Identification))
         {
