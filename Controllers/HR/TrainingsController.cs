@@ -104,6 +104,10 @@ public class TrainingsController : ControllerBase
             EndDate = dto.EndDate,
             Hours = dto.Hours,
             ApprovalTypeId = dto.ApprovalTypeId,
+            IsPedagogical = dto.IsPedagogical,
+            TrainingDirectionTypeId = dto.TrainingDirectionTypeId,
+            ModalityTypeId = dto.ModalityTypeId,
+            CountryId = dto.CountryId,
         };
 
         if (!ElevatedRoles.Any(User.IsInRole))

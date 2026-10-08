@@ -99,10 +99,10 @@ public class EmployeesController : ControllerBase
     [RequirePermission("EMPLOYEES.READ")]
     public async Task<IActionResult> GetByPersonId(
         int personId,
+        [FromQuery] bool includeInactive,
         CancellationToken ct)
     {
-        //var result = await _svc.GetByPersonIdAsync(personId, ct);
-        return Ok(_mapper.Map<List<EmployeesDto>>(await _svc.GetByPersonIdAsync(personId, ct)));
+        return Ok(_mapper.Map<List<EmployeesDto>>(await _svc.GetByPersonIdAsync(personId, includeInactive, ct)));
     }
 
     /// <summary>Crea un nuevo registro.</summary>

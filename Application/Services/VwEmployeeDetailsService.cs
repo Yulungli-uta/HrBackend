@@ -234,9 +234,10 @@ public class VwEmployeeDetailsService : IvwEmployeeDetailsService
         int page,
         int pageSize,
         bool? onlySpecialSchedule = null,
+        bool includeInactive = false,
         CancellationToken ct = default)
     {
-        return await _repository.GetPagedAsync(search, page, pageSize, onlySpecialSchedule, ct);
+        return await _repository.GetPagedAsync(search, page, pageSize, onlySpecialSchedule, includeInactive, ct);
     }
 
     public async Task<IEnumerable<VwEmployeeDetails>> GetSubordinatesByBossIdAsync(

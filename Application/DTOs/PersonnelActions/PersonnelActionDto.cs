@@ -209,6 +209,11 @@ public sealed record CreatePersonnelActionRequest(
 
 /// <summary>Solicitud para actualizar una acción de personal existente.</summary>
 public sealed record UpdatePersonnelActionRequest(
+    // 2026-10-08: solo se aplica en CorrectAsync (corrección de acciones históricas) -- nunca
+    // en el flujo normal de edición (UpdateAsync, BORRADOR/GENERADO). Permite reasignar el
+    // empleado de una acción vieja aunque hoy esté inactivo, p.ej. cuando se cargó mal al
+    // registrar el histórico.
+    int? EmployeeId,
     string? ActionNumber,
     DateOnly ActionDate,
     DateOnly? EffectiveDate,

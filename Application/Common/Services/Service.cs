@@ -27,14 +27,17 @@ public class Service<TEntity, TKey> : IService<TEntity, TKey> where TEntity : cl
         _repo.GetByIdAsync(id, ct);
 
     /// <inheritdoc/>
-    public async Task<TEntity> CreateAsync(TEntity entity, CancellationToken ct)
+    // 2026-10-08: virtual para que servicios específicos (ej. TrainingsService) puedan
+    // normalizar/validar antes de persistir sin duplicar el acceso a datos. No cambia el
+    // comportamiento de ningún otro servicio existente -- ninguno más lo sobrescribe hoy.
+    public virtual async Task<TEntity> CreateAsync(TEntity entity, CancellationToken ct)
     {
         await _repo.AddAsync(entity, ct);
         return entity;
     }
 
     /// <inheritdoc/>
-    public Task UpdateAsync(TKey id, TEntity entity, CancellationToken ct) =>
+    public virtual Task UpdateAsync(TKey id, TEntity entity, CancellationToken ct) =>
         _repo.UpdateAsync(id, entity, ct);
 
     /// <inheritdoc/>

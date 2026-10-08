@@ -20,9 +20,9 @@ public class EmployeesService : Service<Employees, int>, IEmployeesService
         return await _Repo.GetSubordinatesByBossIdAsync(bossId, ct);
     }
 
-    public async Task<IEnumerable<Employees>> GetByPersonIdAsync(int personId, CancellationToken ct = default)
+    public async Task<IEnumerable<Employees>> GetByPersonIdAsync(int personId, bool includeInactive = false, CancellationToken ct = default)
     {
-        return await _Repo.GetByPersonIdAsync(personId, ct);
+        return await _Repo.GetByPersonIdAsync(personId, includeInactive, ct);
     }
 
     public async Task<IEnumerable<EmployeeReportDto>> GetEmployeesReportDataAsync(

@@ -20,6 +20,8 @@ public class Trainings : IAuditable
   public int? TrainingDirectionTypeId{get;set;}
   public int? ModalityTypeId{get;set;}
   public string? CountryId{get;set;}
+  /// <summary>Pedagógica (true) o Específica (false) -- null = sin definir (registro viejo).</summary>
+  public bool? IsPedagogical{get;set;}
   public DateTime? CreatedAt { get; set; }
   public int? CreatedBy { get; set; }
   public DateTime? UpdatedAt { get; set; }

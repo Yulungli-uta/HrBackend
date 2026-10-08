@@ -2299,6 +2299,13 @@ CREATE TABLE [HR].[tbl_Trainings] (
 );
 GO
 
+-- 2026-10-08: clasificación Pedagógica/Específica a pedido del usuario -- gobierna si se
+-- muestra/guarda KnowledgeAreaTypeID en el formulario (solo aplica para "Específica").
+-- NULL = registros viejos sin definir, no se infiere ni se toca histórico.
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='HR' AND TABLE_NAME='tbl_Trainings' AND COLUMN_NAME='IsPedagogical')
+    ALTER TABLE [HR].[tbl_Trainings] ADD [IsPedagogical] BIT NULL;
+GO
+
 -- ------------------------------------------------------------
 IF OBJECT_ID('[HR].[tbl_Vacations]') IS NULL
 CREATE TABLE [HR].[tbl_Vacations] (

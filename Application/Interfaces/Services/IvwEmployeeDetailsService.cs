@@ -46,6 +46,7 @@ namespace WsUtaSystem.Application.Interfaces.Services
             int page,
             int pageSize,
             bool? onlySpecialSchedule = null,
+            bool includeInactive = false,
             CancellationToken ct = default);
 
         Task<IEnumerable<VwEmployeeDetails>> GetSubordinatesByBossIdAsync( 

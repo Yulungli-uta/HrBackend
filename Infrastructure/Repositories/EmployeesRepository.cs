@@ -24,11 +24,11 @@ public class EmployeesRepository : ServiceAwareEfRepository<Employees, int>, IEm
             .ToListAsync(ct);
     }
 
-    public async Task<IEnumerable<Employees>> GetByPersonIdAsync(int personId, CancellationToken ct = default)
+    public async Task<IEnumerable<Employees>> GetByPersonIdAsync(int personId, bool includeInactive = false, CancellationToken ct = default)
     {
         return await _db.Set<Employees>()
              .AsNoTracking()
-             .Where(e => e.PersonID == personId && e.IsActive)
+             .Where(e => e.PersonID == personId && (includeInactive || e.IsActive))
              .OrderBy(e => e.EmployeeId)
              .ToListAsync(ct);
     }

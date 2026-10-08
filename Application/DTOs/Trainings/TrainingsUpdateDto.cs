@@ -18,4 +18,9 @@ public class TrainingsUpdateDto
     public int Hours { get; set; }
     public int? ApprovalTypeId { get; set; }
     public DateTime CreatedAt { get; set; }
+    // 2026-10-08: mismo motivo que TrainingsCreateDto.cs.
+    public bool? IsPedagogical { get; set; }
+    public int? TrainingDirectionTypeId { get; set; }
+    public int? ModalityTypeId { get; set; }
+    public string? CountryId { get; set; }
 }

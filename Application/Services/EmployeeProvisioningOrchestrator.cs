@@ -233,7 +233,7 @@ public sealed class EmployeeProvisioningOrchestrator : IEmployeeProvisioningOrch
         ProvisioningOrchestrationRequest request, CancellationToken ct)
     {
         // Busca empleado activo más reciente para ese PersonID
-        var existing = (await _employeesService.GetByPersonIdAsync(request.PersonId, ct))
+        var existing = (await _employeesService.GetByPersonIdAsync(request.PersonId, includeInactive: false, ct))
             .Where(e => e.IsActive)
             .OrderByDescending(e => e.EmployeeId)
             .FirstOrDefault();

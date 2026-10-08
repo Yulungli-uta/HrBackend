@@ -73,7 +73,7 @@ public class AcademicCvService : IAcademicCvService
         // instance...". El costo real es despreciable: son consultas filtradas por
         // una sola persona (pocos registros cada una), disparadas por un clic humano de
         // exportación, no un endpoint de alto volumen.
-        var employeeRecords = (await _employees.GetByPersonIdAsync(personId, ct)).ToList();
+        var employeeRecords = (await _employees.GetByPersonIdAsync(personId, includeInactive: false, ct)).ToList();
         // Si hay varios (poco común — ej. un vínculo cerrado histórico y uno nuevo), se
         // prioriza el activo más reciente; si ninguno está activo, el más reciente de todos.
         var employee = employeeRecords

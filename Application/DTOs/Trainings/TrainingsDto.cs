@@ -16,4 +16,10 @@ public class TrainingsDto
     public int Hours { get; set; }
     public int ApprovalTypeId { get; set; }
     public DateTime CreatedAt { get; set; }
+    public bool? IsPedagogical { get; set; }
+    // 2026-10-08: existían en el modelo/BD (agregados para academic-promotion) pero nunca
+    // llegaban al frontend -- mismo patrón de bug que "Denominación Formal" en PersonForm.
+    public int? TrainingDirectionTypeId { get; set; }
+    public int? ModalityTypeId { get; set; }
+    public string? CountryId { get; set; }
 }

@@ -32,7 +32,10 @@ namespace WsUtaSystem.Controllers.HR
         }
 
         /// <summary>Retorna un resultado paginado de empleados. <paramref name="onlySpecialSchedule"/>:
-        /// true = solo horarios especiales (sustituto/maternidad/lactancia/otro), false = solo catálogo.</summary>
+        /// true = solo horarios especiales (sustituto/maternidad/lactancia/otro), false = solo catálogo.
+        /// <paramref name="includeInactive"/>: true = también trae empleados inactivos (vía
+        /// HR.vw_EmployeeDetailsAll) -- uso exclusivo de pantallas de corrección de datos
+        /// históricos (Acciones de Personal, Contratos).</summary>
         [HttpGet("paged")]
         [RequirePermission("EMPLOYEES.READ")]
         public async Task<IActionResult> GetPaged(
@@ -42,13 +45,14 @@ namespace WsUtaSystem.Controllers.HR
             [FromQuery] string? sortBy = null,
             [FromQuery] string? sortDirection = "asc",
             [FromQuery] bool? onlySpecialSchedule = null,
+            [FromQuery] bool includeInactive = false,
             CancellationToken ct = default)
         {
             if (page < 1) page = 1;
             if (pageSize < 1 || pageSize > 200) pageSize = 20;
 
-            var paged = (!string.IsNullOrWhiteSpace(search) || onlySpecialSchedule.HasValue)
-                ? await _employeeDetailsService.GetPagedAsync(search, page, pageSize, onlySpecialSchedule, ct)
+            var paged = (!string.IsNullOrWhiteSpace(search) || onlySpecialSchedule.HasValue || includeInactive)
+                ? await _employeeDetailsService.GetPagedAsync(search, page, pageSize, onlySpecialSchedule, includeInactive, ct)
                 : await _employeeDetailsService.GetPagedAsync(page, pageSize, ct);
 
             return Ok(paged);

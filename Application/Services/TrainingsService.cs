@@ -33,12 +33,34 @@ public class TrainingsService : Service<Trainings, int>, ITrainingsService
         return await _repository.GetByPersonIdAsync(personId);
     }
 
+    // 2026-10-08: integridad de datos -- si es Pedagógica, nunca debe quedar guardada un área
+    // de conocimiento (el formulario la oculta, pero el backend no puede confiar solo en eso:
+    // alguien podría llamar la API directo). Se aplica en Create y Update.
+    private static void NormalizePedagogy(Trainings entity)
+    {
+        if (entity.IsPedagogical == true)
+            entity.KnowledgeAreaTypeId = null;
+    }
+
+    public override async Task<Trainings> CreateAsync(Trainings entity, CancellationToken ct)
+    {
+        NormalizePedagogy(entity);
+        return await base.CreateAsync(entity, ct);
+    }
+
+    public override Task UpdateAsync(int id, Trainings entity, CancellationToken ct)
+    {
+        NormalizePedagogy(entity);
+        return base.UpdateAsync(id, entity, ct);
+    }
+
     public async Task<(Trainings entity, StoredFile? storedFile, string? error)> CreateWithDocumentAsync(
         Trainings entity,
         IFormFile? file,
         int? documentTypeId,
         CancellationToken ct)
     {
+        NormalizePedagogy(entity);
         FileUploadResponseDto? physical = null;
 
         if (file != null && file.Length > 0)

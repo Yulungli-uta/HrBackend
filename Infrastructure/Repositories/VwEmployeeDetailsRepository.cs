@@ -158,10 +158,18 @@ namespace WsUtaSystem.Infrastructure.Repositories
             int page,
             int pageSize,
             bool? onlySpecialSchedule = null,
+            bool includeInactive = false,
             CancellationToken ct = default)
         {
-            // 1. Empezamos con la consulta base
-            var query = Query();
+            // 1. Empezamos con la consulta base. includeInactive=true consulta
+            // HR.vw_EmployeeDetailsAll (mismo shape, sin el filtro IsActive=1 que trae la vista
+            // normal) en vez de HR.vw_EmployeeDetails -- ver comentario en 04_views.sql. Reusa
+            // la misma clase VwEmployeeDetails (mismas columnas), solo cambia el origen del SQL.
+            var query = includeInactive
+                ? _db.Set<VwEmployeeDetails>()
+                     .FromSqlRaw("SELECT * FROM HR.vw_EmployeeDetailsAll")
+                     .AsNoTracking()
+                : Query();
 
             // 2. Aplicamos filtros (mantiene el tipo IQueryable)
             // Búsqueda por palabra: cada palabra escrita (ej. "Perez Juan") debe

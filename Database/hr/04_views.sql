@@ -398,6 +398,69 @@ WHERE e.IsActive = 1
 
 GO
 
+-- [vw_EmployeeDetailsAll]
+-- 2026-10-08: clon exacto de vw_EmployeeDetails SIN el filtro WHERE e.IsActive = 1 (+ columna
+-- IsActive visible). Existe aparte, sin tocar la vista original, porque vw_EmployeeDetails la
+-- usa medio sistema (login, reportes, horarios) asumiendo "solo activos" -- cambiar eso ahí
+-- sería un cambio de alcance enorme para una necesidad puntual: poder buscar empleados
+-- inactivos SOLO en pantallas de corrección de datos históricos (Acciones de Personal,
+-- Contratos), donde el responsable/empleado de un registro viejo puede ya no estar activo hoy.
+CREATE OR ALTER VIEW HR.vw_EmployeeDetailsAll AS
+SELECT
+    e.EmployeeID      AS EmployeeID,
+    p.PersonID,
+    p.FirstName,
+    p.LastName,
+    p.IDCard,
+    e.Email,
+	  p.Email           AS PersonnelEmail,
+	  e.ImmediateBossID,
+    e.EmployeeType    AS EmployeeType,
+    rt.Name           AS ContractType,
+    e.JobID,
+    j.Description     AS JobName,
+    es_current.ScheduleID AS ScheduleID,
+    es_current.EmployeeSpecialScheduleId AS EmployeeSpecialScheduleId,
+    CAST(CASE WHEN es_current.EmployeeSpecialScheduleId IS NOT NULL THEN 1 ELSE 0 END AS BIT) AS IsSpecialSchedule,
+    sct.Name AS SpecialScheduleCaseType,
+    CASE
+        WHEN COALESCE(ts.EntryTime, ss.EntryTime) IS NOT NULL AND COALESCE(ts.ExitTime, ss.ExitTime) IS NOT NULL
+            THEN CAST(COALESCE(ts.EntryTime, ss.EntryTime) AS VARCHAR(5)) + ' - ' + CAST(COALESCE(ts.ExitTime, ss.ExitTime) AS VARCHAR(5))
+        ELSE NULL
+    END AS Schedule,
+	d.DepartmentID,
+    d.Name            AS Department,
+    sh_latest.NewSalary AS BaseSalary,
+    e.HireDate,
+    e.IsActive
+FROM HR.tbl_People p
+JOIN HR.tbl_Employees e ON e.PersonID = p.PersonID
+LEFT JOIN HR.tbl_Departments d ON d.DepartmentID = e.DepartmentID
+LEFT JOIN HR.ref_Types rt ON rt.TypeID = e.EmployeeType
+                          AND rt.Category = 'CONTRACT_TYPE'
+LEFT JOIN HR.tbl_jobs j ON j.JobID = e.JobID
+OUTER APPLY (
+    SELECT TOP 1
+        es.ScheduleID,
+        es.EmployeeSpecialScheduleId,
+        es.ValidFrom,
+        es.ValidTo
+    FROM HR.tbl_EmployeeSchedules es
+    WHERE es.EmployeeID = e.EmployeeID
+    ORDER BY es.ValidFrom DESC, es.EmpScheduleID DESC
+) es_current
+LEFT JOIN HR.tbl_Schedules ts ON ts.ScheduleID = es_current.ScheduleID
+LEFT JOIN HR.tbl_EmployeeSpecialSchedules ss ON ss.EmployeeSpecialScheduleId = es_current.EmployeeSpecialScheduleId
+LEFT JOIN HR.ref_Types sct ON sct.TypeID = ss.CaseTypeId
+OUTER APPLY (
+    SELECT TOP 1 sh.NewSalary
+    FROM HR.tbl_SalaryHistory sh
+    WHERE sh.EmployeeID = e.EmployeeID
+    ORDER BY sh.ChangedAt DESC, sh.SalaryHistoryID DESC
+) sh_latest
+
+GO
+
 -- [vw_EmployeeDetails2]
 
 CREATE   VIEW HR.vw_EmployeeDetails2 AS

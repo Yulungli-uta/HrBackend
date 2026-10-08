@@ -145,7 +145,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         }
 
         int personId = request.personId;
-        var employee = await _employeesRepository.GetByPersonIdAsync(personId, ct);
+        var employee = await _employeesRepository.GetByPersonIdAsync(personId, includeInactive: false, ct);
 
         // Reservar el número de acción de forma atómica desde la secuencia del tipo — salvo
         // en registro histórico con número manual: el usuario ya tiene el número real del
@@ -336,6 +336,10 @@ public sealed class PersonnelActionService : IPersonnelActionService
         // VIGENTE/FINALIZADO) — exige motivo obligatorio y queda auditada en HR.Audit.
         var newActionNumber = request.ActionNumber?.Trim();
         await ValidateActionNumberUniqueAsync(actionId, newActionNumber, ct);
+        // 2026-10-08: solo CorrectAsync permite reasignar el empleado (incluido uno inactivo
+        // hoy) -- UpdateAsync (edición normal) no toca este campo a propósito.
+        if (request.EmployeeId is > 0)
+            action.EmployeeId = request.EmployeeId.Value;
         action.ActionNumber            = newActionNumber;
         action.ActionDate              = request.ActionDate;
         action.EffectiveDate           = request.EffectiveDate;

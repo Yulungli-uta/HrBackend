@@ -17,6 +17,10 @@ public class TrainingWithDocumentCreateDto
     public DateOnly EndDate { get; set; }
     public int Hours { get; set; }
     public int? ApprovalTypeId { get; set; }
+    public bool? IsPedagogical { get; set; }
+    public int? TrainingDirectionTypeId { get; set; }
+    public int? ModalityTypeId { get; set; }
+    public string? CountryId { get; set; }
 
     public IFormFile? File { get; set; }
     public int? DocumentTypeId { get; set; }

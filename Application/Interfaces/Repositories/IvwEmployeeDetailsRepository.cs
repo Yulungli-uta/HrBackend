@@ -37,12 +37,16 @@ namespace WsUtaSystem.Application.Interfaces.Repositories
 
         /// <summary>Retorna un resultado paginado de empleados con filtro de búsqueda por nombre, apellido o cédula.
         /// <paramref name="onlySpecialSchedule"/>: true = solo empleados con horario especial
-        /// (sustituto/maternidad/lactancia/otro), false = solo horario de catálogo, null = todos.</summary>
+        /// (sustituto/maternidad/lactancia/otro), false = solo horario de catálogo, null = todos.
+        /// <paramref name="includeInactive"/>: true = también incluye empleados inactivos (vía
+        /// HR.vw_EmployeeDetailsAll) -- uso exclusivo de pantallas de corrección de datos
+        /// históricos (Acciones de Personal, Contratos).</summary>
         Task<PagedResult<VwEmployeeDetails>> GetPagedAsync(
             string? search,
             int page,
             int pageSize,
             bool? onlySpecialSchedule = null,
+            bool includeInactive = false,
             CancellationToken ct = default);
 
         /*Report source*/
