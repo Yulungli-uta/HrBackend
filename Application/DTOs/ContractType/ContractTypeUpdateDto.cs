@@ -10,6 +10,7 @@
         public string? ContractText { get; set; }
         public string? ContractCode { get; set; }
         public int? SiiesRelacionIesTypeId { get; set; }
+        public bool IsDocenteOcasional { get; set; } = false;
         public int? DefaultTemplateId { get; set; }
         public int? DelegationTemplateId { get; set; }
         public string? NumberingPrefix { get; set; }

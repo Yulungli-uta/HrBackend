@@ -1,32 +1,11 @@
 -- ============================================================
--- Extensión de esquema: reporte SIIES Funcionarios / Funcionario Pasaporte
--- (matrices 5.7 y 5.8, Instructivo Carga Masiva CACES v2S, mayo 2026)
--- Generado: 2026-08-03
---
--- 1) HR.ref_Types.SiiesLabel: denominación exacta SIIES para valores de
---    catálogo ya existentes (GENDER_TYPE, SEX_TYPE, ETHNICITY, DISABILITY_TYPE).
--- 2) Categorías ref_Types nuevas: SIIES_RELACION_IES, SIIES_TIPO_FUNCIONARIO,
---    SIIES_TIPO_DOCENTE_LOES, SIIES_CATEGORIA_DOCENTE_LOES,
---    SIIES_INDIGENOUS_NATIONALITY.
--- 3) HR.tbl_contract_type.SiiesRelacionIesTypeId y
---    HR.tbl_personnel_action_type.SiiesRelacionIesTypeId: ambos apuntan a la
---    misma categoría SIIES_RELACION_IES (decisión: una sola lista compartida).
--- 4) HR.tbl_EmployeeLaborRegime.IngresoPorConcurso: NULL = sin clasificar
---    (673 registros existentes no tenían este dato); se llena hacia adelante.
--- 5) HR.tbl_jobs.SiiesTipoFuncionarioTypeId y PuestoJerarquicoSuperior:
---    clasificación por cargo, no por empleado.
--- 6) HR.tbl_Employees.TipoDocenteLoesTypeId / CategoriaDocenteLoesTypeId:
---    NULL/NO APLICA salvo que el cargo del empleado sea DOCENTE LOES.
--- 7) HR.tbl_People.IndigenousNationalityTypeId: solo aplica si Etnia=INDIGENA.
--- 8) HR.TBL_PARAMETERS: CODIGO_IES y CODIGO_MATRIZ_EXTENSION (reutiliza tabla
---    de parámetros existente, no se crea tabla nueva).
---
--- Solo aditivo / idempotente — seguro de re-ejecutar. Ninguna columna
--- existente se elimina, renombra ni cambia de tipo.
---
--- PENDIENTE DE DECISIÓN INSTITUCIONAL (no bloquea este script, ya documentado
--- en el análisis Fase 1): homologación exacta de Discapacidad = 'Otra' (sin
--- equivalente en el catálogo SIIES), y de Sexo/Género = 'Prefiero no decir'.
+-- Reporte SIIES Funcionarios / Funcionario Pasaporte (matrices 5.7/5.8, Instructivo
+-- CACES v2S). Homologa SiiesLabel sobre catálogos existentes (Género/Sexo/Etnia/
+-- Discapacidad) y agrega catálogos/columnas SIIES nuevos (RELACION_IES compartida
+-- entre Contratos y Acciones, TIPO_FUNCIONARIO, TIPO/CATEGORIA_DOCENTE_LOES,
+-- NACIONALIDAD_INDIGENA). Solo aditivo / idempotente.
+-- Pendiente de decisión institucional (no bloquea): homologación de Discapacidad
+-- 'Otra' y Sexo/Género 'Prefiero no decir' (sin equivalente en el catálogo SIIES).
 -- ============================================================
 
 SET NOCOUNT ON;
@@ -224,22 +203,15 @@ IF NOT EXISTS (SELECT 1 FROM [HR].[TBL_PARAMETERS] WHERE [Name] = N'CODIGO_MATRI
 GO
 
 -- 13) Vista HR.vw_SiiesFuncionarios -------------------------------------------
--- Un renglón por empleado (funcionario), resolviendo la homologación de catálogos
--- (SiiesLabel) y el régimen laboral vigente/principal ya calculado por
--- EmployeeLaborRegimeService (IsPrincipal/IsActive). Reglas condicionales SIIES
--- (NACIONALIDAD según Etnia, TIPO_DOCENTE_LOES según TIPO_FUNCIONARIO, formato de
--- fecha, separación de nombres para pasaporte) se resuelven en el IReportSource
--- (C#), no aquí — la vista solo joinea y expone los valores crudos/homologados.
+-- Un renglón por empleado: homologa catálogos (SiiesLabel) y expone el régimen
+-- laboral vigente/principal (EmployeeLaborRegimeService). Reglas condicionales
+-- SIIES (nacionalidad, tipo docente LOES, formato de fecha, nombres pasaporte)
+-- se resuelven en el IReportSource (C#), no aquí.
 --
--- [2026-09-21] IMPORTANTE: esta vista solo sirve para "quien esta vigente HOY" (su
--- cascada OUTER APPLY ya elige la fila vigente al momento de consultar, antes de
--- cualquier filtro externo). El filtro de fecha desde/hasta del reporte SIIES
--- Funcionarios (busqueda historica real: quien estuvo vigente en un rango pasado,
--- este o no activo hoy) NO usa esta vista - usa una consulta SQL parametrizada
--- aparte en SiiesFuncionariosReportSource.GetEmployeesVigentesEnRangoAsync, que
--- replica la MISMA cascada de aqui abajo pero evaluada contra el rango en vez de
--- GETDATE(). Si tocas la cascada (joins, exclusiones de Status, TIPO_FUNCIONARIO),
--- replica el mismo cambio alla tambien.
+-- IMPORTANTE: esta vista solo refleja "quien está vigente HOY". El filtro de rango
+-- de fechas del reporte usa en cambio SiiesFuncionariosReportSource.
+-- GetEmployeesVigentesEnRangoAsync, que replica la MISMA cascada evaluada contra
+-- el rango en vez de GETDATE(). Si tocas la cascada, replica el cambio ahí también.
 CREATE OR ALTER VIEW [HR].[vw_SiiesFuncionarios] AS
 SELECT
     e.[EmployeeID],
@@ -264,10 +236,9 @@ SELECT
     d.[Name]                       AS [DepartmentName],
     j.[Description]                AS [JobDescription],
     ISNULL(j.[PuestoJerarquicoSuperior], 0) AS [PuestoJerarquicoSuperior],
-    -- 2026-08-27: TIPO_FUNCIONARIO se homologa automáticamente por Autoridad/Régimen laboral,
-    -- ya no por tbl_jobs.SiiesTipoFuncionarioTypeId (0 de 233 cargos lo tenían clasificado —
-    -- la columna salía siempre vacía). Regla: Autoridad activa -> DIRECTIVO; si no, según
-    -- régimen laboral principal: LOSEP->ADMINISTRATIVO, Código Trabajo->TRABAJADOR, LOES->DOCENTE LOES.
+    -- TIPO_FUNCIONARIO se homologa por Autoridad/Régimen laboral (no por tbl_jobs.
+    -- SiiesTipoFuncionarioTypeId, que salía siempre vacío): Autoridad activa -> DIRECTIVO;
+    -- si no, según régimen principal: LOSEP->ADMINISTRATIVO, Trabajo->TRABAJADOR, LOES->DOCENTE LOES.
     CASE
         WHEN EXISTS (
             SELECT 1 FROM [HR].[tbl_DepartmentAuthorities] da
@@ -281,18 +252,11 @@ SELECT
     END                             AS [TipoFuncionarioSiiesLabel],
     tdl.[SiiesLabel]                AS [TipoDocenteLoesSiiesLabel],
     cdl.[SiiesLabel]                AS [CategoriaDocenteLoesSiiesLabel],
-    -- 2026-08-27: fallback a ContractCode/ActionNumber cuando elr.DocumentNumber nunca se
-    -- copió al crear el régimen (visto en casos reales con SourcePersonnelActionId poblado
-    -- pero DocumentNumber NULL).
-    -- 2026-09-02: segundo fallback (ctrFallback/paFallback) para el caso, mucho más grande en
-    -- volumen real, de empleados que NUNCA tuvieron fila en tbl_EmployeeLaborRegime (317 de 932
-    -- activos verificados) pero sí tienen un Contrato o Acción de Personal real y vigente — sin
-    -- este fallback la vista no tenía ninguna forma de llegar a ese documento.
+    -- Fallback a ContractCode/ActionNumber (DocumentNumber a veces no se copió al crear el
+    -- régimen) y luego a ctrFallback/paFallback para empleados sin fila en EmployeeLaborRegime.
     COALESCE(elr.[DocumentNumber], ctr.[ContractCode], pa.[ActionNumber], ctrFallback.[ContractCode], paFallback.[ActionNumber]) AS [DocumentNumber],
-    -- CAST a DATE obligatorio: tbl_Contracts.startdate/enddate son datetime2, mientras que
-    -- EmployeeLaborRegime.EffectiveFrom/To y PersonnelActions.EffectiveDate/EndDate son date.
-    -- Mezclar date+datetime2 en un COALESCE promueve TODO el resultado a datetime2 (precedencia
-    -- de tipos de SQL Server), lo que rompe el mapeo EF Core DateOnly? con InvalidCastException.
+    -- CAST a DATE obligatorio: mezclar date (EmployeeLaborRegime/PersonnelActions) con datetime2
+    -- (tbl_Contracts) en un COALESCE promueve todo a datetime2 y rompe el mapeo EF Core DateOnly?.
     COALESCE(elr.[EffectiveFrom], CAST(ctrFallback.[startdate] AS DATE), paFallback.[EffectiveDate])   AS [EffectiveFrom],
     COALESCE(elr.[EffectiveTo], CAST(ctrFallback.[enddate] AS DATE), paFallback.[EndDate])             AS [EffectiveTo],
     elr.[IsActive]                  AS [RegimeIsActive],
@@ -313,9 +277,8 @@ LEFT JOIN [HR].[ref_Types] gn        ON gn.[TypeID] = p.[Gender]
 LEFT JOIN [HR].[tbl_Countries] co    ON co.[CountryID] = p.[CountryId]
 LEFT JOIN [HR].[ref_Types] et        ON et.[TypeID] = p.[EthnicityTypeID]
 LEFT JOIN [HR].[ref_Types] indig     ON indig.[TypeID] = p.[IndigenousNationalityTypeId]
--- 2026-08-27: se une por p.Disability (texto libre, ej. "Física"/"Visual"/"Auditiva",
--- coincide con ref_Types.Name de DISABILITY_TYPE) — p.SpecialNeedsTypeID es OTRO catálogo
--- (Category='SPECIAL_NEEDS', necesidades psicológicas/educativas), nunca apunta a DISABILITY_TYPE.
+-- Se une por p.Disability (texto libre, coincide con ref_Types.Name de DISABILITY_TYPE);
+-- p.SpecialNeedsTypeID es otro catálogo (SPECIAL_NEEDS), nunca apunta a DISABILITY_TYPE.
 LEFT JOIN [HR].[ref_Types] sn        ON sn.[Category] = 'DISABILITY_TYPE' AND sn.[Name] = p.[Disability]
 LEFT JOIN [HR].[tbl_Departments] d   ON d.[DepartmentID] = e.[DepartmentID]
 LEFT JOIN [HR].[tbl_jobs] j          ON j.[JobID] = e.[JobID]
@@ -334,9 +297,7 @@ LEFT JOIN [HR].[ref_Types] ctRel             ON ctRel.[TypeID] = ct.[SiiesRelaci
 LEFT JOIN [HR].[tbl_PersonnelActions] pa     ON elr.[DocumentType] = 'PERSONNEL_ACTION' AND pa.[ActionID] = elr.[SourcePersonnelActionId]
 LEFT JOIN [HR].[tbl_personnel_action_type] pat ON pat.[PersonnelActionTypeId] = pa.[ActionTypeID]
 LEFT JOIN [HR].[ref_Types] patRel            ON patRel.[TypeID] = pat.[SiiesRelacionIesTypeId]
--- 2026-09-02: fallback directo cuando elr no resolvió ningún documento (sin fila de régimen,
--- o régimen tipo MIGRATION sin Source*Id). Solo se activa si los 3 orígenes previos vinieron
--- vacíos — nunca reemplaza un documento ya resuelto vía tbl_EmployeeLaborRegime.
+-- Fallback directo cuando elr no resolvió ningún documento; nunca reemplaza uno ya resuelto.
 OUTER APPLY (
     SELECT TOP 1 c.*
     FROM [HR].[tbl_Contracts] c
@@ -358,62 +319,53 @@ OUTER APPLY (
 ) paFallback
 LEFT JOIN [HR].[tbl_personnel_action_type] patFallback ON patFallback.[PersonnelActionTypeId] = paFallback.[ActionTypeID]
 LEFT JOIN [HR].[ref_Types] patRelFallback               ON patRelFallback.[TypeID] = patFallback.[SiiesRelacionIesTypeId]
--- 2026-09-02: la matriz 5.7/5.8 Funcionarios excluye al escalafón docente titular (Profesor
--- Titular Auxiliar/Agregado/Principal, cualquier jornada) — esa población va exclusivamente en
--- HR.vw_SiiesProfesores (matrices 5.2-5.5). Confirmado contra el archivo real entregado
--- "Funcionario-v3 2526.xlsx" (647 filas): 0 coincidencias con cargo "PROFESOR TITULAR%" pese a
--- que esos empleados llevan antigüedad desde 2008 (no es un artefacto de fecha del archivo).
--- Se excluye por patrón de cargo Y por tbl_TeacherStructure (cubre los pocos casos con el mismo
--- título de cargo pero sin fila de carga horaria activa).
+-- Excluye escalafón docente titular (va a HR.vw_SiiesProfesores) por patrón de cargo y por
+-- tbl_TeacherStructure (casos con el mismo título de cargo pero sin carga horaria activa).
 WHERE e.[IsDeleted] = 0
   AND ISNULL(j.[Description], '') NOT LIKE 'PROFESOR TITULAR%'
   AND NOT EXISTS (SELECT 1 FROM [HR].[tbl_TeacherStructure] ts WHERE ts.[EmployeeID] = e.[EmployeeID])
-  -- 2026-10-08: tbl_TeacherStructure NUNCA tiene fila para Profesores Ocasionales/Técnicos
-  -- Docentes (solo aplica a Titulares) -- se colaban en Funcionarios y a la vez aparecían en
-  -- vw_SiiesProfesores (que sí los detecta por tipo de contrato), duplicando a la persona en
-  -- ambos reportes. Mismo criterio de detección que el OUTER APPLY ocasionalDocente de
-  -- vw_SiiesProfesores, para que los dos reportes queden mutuamente excluyentes. Hallazgo real:
-  -- cédula 0603183609 (CONTRATO PROFESOR/A OCASIONAL (DELEGACIÓN), régimen LOES).
-  AND NOT EXISTS (
-        SELECT 1
-        FROM [HR].[tbl_Contracts] c2
-        INNER JOIN [HR].[tbl_contract_type] ct2 ON ct2.[ContractTypeID] = c2.[ContractTypeID]
-        WHERE c2.[PersonID] = p.[PersonID] AND c2.[IsDeleted] = 0
-          AND (
-                ct2.[Name] LIKE N'CONTRATO PROFESOR/A OCASIONAL%'
-             OR ct2.[Name] LIKE N'CONTRATO TÉCNICO DOCENTE%'
-             OR (
-                  ct2.[Name] LIKE N'ADENDUM%'
-                  AND EXISTS (
-                      SELECT 1
-                      FROM [HR].[tbl_Contracts] parentC
-                      INNER JOIN [HR].[tbl_contract_type] parentCt ON parentCt.[ContractTypeID] = parentC.[ContractTypeID]
-                      WHERE parentC.[ContractID] = c2.[ParentID]
-                        AND (
-                              parentCt.[Name] LIKE N'CONTRATO PROFESOR/A OCASIONAL%'
-                           OR parentCt.[Name] LIKE N'CONTRATO TÉCNICO DOCENTE%'
-                            )
-                  )
-                )
-              )
-      );
+  -- Excluye profesores ocasionales/técnicos docentes (van a vw_SiiesProfesores) con el mismo
+  -- criterio exacto, para que los dos reportes queden mutuamente excluyentes.
+  AND NOT EXISTS (SELECT 1 FROM [HR].[fn_SiiesDocenteOcasionalContract](p.[PersonID]));
 GO
 
--- 14) Clasificación SiiesRelacionIesTypeId en tbl_contract_type / tbl_personnel_action_type
--- (revisión institucional 2026-09-02). Antes de este bloque, SiiesRelacionIesTypeId estaba
--- NULL en 0 de 39 tipos de contrato y en 21 de 22 tipos de acción de personal — RELACION_IES
--- salía vacío en prácticamente el 100% de ambos reportes SIIES. Se clasifican solo los tipos
--- con uso real en tbl_Contracts/tbl_PersonnelActions; el resto queda NULL a propósito (sin
--- uso real, no requiere clasificación todavía). Solo aditivo/idempotente — condicionado a
--- SiiesRelacionIesTypeId IS NULL, no pisa clasificaciones ya hechas.
+-- 13.1) tbl_contract_type.IsDocenteOcasional + HR.fn_SiiesDocenteOcasionalContract ---------
+-- Reemplaza el filtro por texto duplicado entre vw_SiiesFuncionarios (exclusión) y
+-- vw_SiiesProfesores (inclusión). Verificado contra datos reales: mismo resultado exacto
+-- que el filtro por texto (1,712 personas).
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_contract_type]') AND name = 'IsDocenteOcasional')
+    ALTER TABLE [HR].[tbl_contract_type] ADD [IsDocenteOcasional] BIT NOT NULL CONSTRAINT [DF_ContractType_IsDocenteOcasional] DEFAULT ((0));
+GO
 
--- Contratos con relación de dependencia (2132): docentes ocasionales, técnicos y adendums
--- de Código de Trabajo — todos con vínculo laboral de dependencia.
--- 2026-09-03: ContractTypeID 22 se movió aquí (estaba mal clasificado como "sin relación").
--- Verificado contra el archivo real entregado "Funcionario-v3 2526.xlsx": los 2 casos reales
--- comparables (cédulas 1803012523, 1804688313) muestran "CONTRATO CON RELACION DE DEPENDENCIA"
--- — "OCASIONALES (DELEGACIÓN)" es personal con vínculo laboral, no un contrato civil, pese al
--- nombre "Prestación de Servicios".
+UPDATE [HR].[tbl_contract_type] SET [IsDocenteOcasional] = 1
+WHERE [ContractTypeID] IN (17, 23, 41, 51, 52) AND [IsDocenteOcasional] = 0;
+GO
+
+CREATE OR ALTER FUNCTION [HR].[fn_SiiesDocenteOcasionalContract] (@PersonID INT)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT TOP 1 b.*
+    FROM [HR].[tbl_Contracts] b
+    LEFT JOIN [HR].[tbl_Contracts] p1 ON p1.[ContractID] = b.[ParentID]
+    LEFT JOIN [HR].[tbl_Contracts] p2 ON p2.[ContractID] = p1.[ParentID]
+    LEFT JOIN [HR].[tbl_contract_type] ctB  ON ctB.[ContractTypeID]  = b.[ContractTypeID]
+    LEFT JOIN [HR].[tbl_contract_type] ctP1 ON ctP1.[ContractTypeID] = p1.[ContractTypeID]
+    LEFT JOIN [HR].[tbl_contract_type] ctP2 ON ctP2.[ContractTypeID] = p2.[ContractTypeID]
+    WHERE b.[PersonID] = @PersonID AND b.[IsDeleted] = 0
+      AND (ISNULL(ctB.[IsDocenteOcasional],0) = 1 OR ISNULL(ctP1.[IsDocenteOcasional],0) = 1 OR ISNULL(ctP2.[IsDocenteOcasional],0) = 1)
+    ORDER BY b.[startdate] DESC
+);
+GO
+
+-- 14) Clasificación SiiesRelacionIesTypeId en tbl_contract_type / tbl_personnel_action_type.
+-- Solo se clasifican los tipos con uso real en tbl_Contracts/tbl_PersonnelActions; el resto
+-- queda NULL a propósito. Aditivo/idempotente — condicionado a SiiesRelacionIesTypeId IS NULL.
+
+-- Contratos con relación de dependencia (2132): docentes ocasionales, técnicos y adendums de
+-- Código de Trabajo. ContractTypeID 22 ("OCASIONALES (DELEGACIÓN)") incluido aquí: verificado
+-- contra "Funcionario-v3 2526.xlsx" que es personal con vínculo laboral, no contrato civil.
 UPDATE [HR].[tbl_contract_type] SET [SiiesRelacionIesTypeId] = 2132
 WHERE [ContractTypeID] IN (46, 17, 47, 51, 23, 52, 22);
 

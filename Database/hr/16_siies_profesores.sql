@@ -1,40 +1,12 @@
 -- ============================================================
--- Extensión de esquema: reporte SIIES Profesores
--- (matrices 5.2/5.3 Contratos, 5.4 Distribución Horas, 5.5 Formación
--- Profesional Terminado. Matriz 5.6 -Becas- queda FUERA de alcance
--- por decisión explícita del usuario. Instructivo CACES v2S, mayo 2026.)
--- Generado: 2026-08-03
---
--- Alcance de este script:
--- 1) HR.ref_Types: 4 categorías nuevas (SIIES_TIPO_ESCALAFON_NOMBRAMIENTO,
---    SIIES_NIVEL, SIIES_GRADO, SIIES_CATEGORIA_DOCENTE) + SiiesLabel sobre
---    HR.tbl_AcademicLadder y sobre la categoría ACADEMIC_LEVEL existente.
--- 2) HR.tbl_TeacherStructure: 3 columnas nuevas (TipoEscalafonNombramiento,
---    Nivel, Categoria) — todas NULL hasta que se complete la carga masiva
---    que el usuario va a ejecutar por separado.
--- 3) HR.tbl_EducationLevels: 1 columna nueva (SiiesGradoTypeId).
--- 4) HR.tbl_KnowledgeArea: columna SiiesCode agregada pero SIN poblar —
---    requiere mapeo manual fila por fila contra el anexo del instructivo,
---    marcado como pendiente (ver decisión institucional #3 del análisis).
--- 5) HR.vw_SiiesProfesores: vista de solo lectura, mismo patrón que
---    vw_SiiesFuncionarios.
--- 6) [2026-09-16] Integración DINARDAP (WsUtaDinardap.Api): corrige la
---    numeración de ACADEMIC_LEVEL (NIVEL_1 tenía "TERCER NIVEL" mal puesto,
---    ver sección 8 al final), migra los 30 registros existentes (fixtures
---    QA, no producción) al nivel correcto, y agrega a tbl_EducationLevels
---    las columnas que hacen falta para guardar todo lo que devuelve
---    DINARDAP (fechas de grado/registro SENESCYT, tipo, nivel original,
---    origen del registro) + índice único filtrado en
---    SenescytRegistrationNumber.
---
--- Decisión de datos ya acordada (no requiere código adicional, solo
--- documentar): HORAS_CLASE_TERCER_NIVEL = Contracts.ContractedHours del
--- contrato vigente, resto de columnas de horas = 0 (no existe distributivo
--- real en el sistema). CODIGO_IES_ESTUDIO queda vacío (decisión pendiente,
--- diferida). Matriz 5.6 (becas) fuera de alcance.
---
--- Solo aditivo / idempotente — seguro de re-ejecutar. Ninguna columna
--- existente se elimina, renombra ni cambia de tipo.
+-- Reporte SIIES Profesores (matrices 5.2-5.5, Instructivo CACES v2S).
+-- Matriz 5.6 (Becas) fuera de alcance. Catálogos SIIES nuevos en ref_Types,
+-- 3 columnas nuevas en tbl_TeacherStructure (Tipo Escalafón/Nivel/Categoría,
+-- se llenan con la carga masiva aparte), SiiesGradoTypeId en EducationLevels,
+-- SiiesCode en KnowledgeArea (sin poblar, requiere mapeo manual).
+-- Horas por actividad: ver sección 6.1 (fn_SiiesProfesoresHoras). Integración
+-- DINARDAP: ver sección 8.
+-- Solo aditivo / idempotente.
 -- ============================================================
 
 SET NOCOUNT ON;
@@ -71,11 +43,8 @@ BEGIN
 END
 GO
 
--- Tabla 9 del instructivo: 12 valores posibles de CATEGORIA (Profesores).
--- Fuente directa: HR.tbl_TeacherStructure.SiiesCategoriaTypeId (columna nueva,
--- punto 2 de este script). Se llena junto con la carga masiva planeada por
--- el usuario; si queda NULL, el reporte intenta derivar desde
--- AcademicLadder.SiiesLabel como respaldo (ver vw_SiiesProfesores).
+-- Tabla 9 del instructivo (CATEGORIA, Profesores). Fuente: tbl_TeacherStructure.SiiesCategoriaTypeId;
+-- si queda NULL, respaldo desde AcademicLadder.SiiesLabel (ver vw_SiiesProfesores).
 IF NOT EXISTS (SELECT 1 FROM [HR].[ref_Types] WHERE [Category] = 'SIIES_CATEGORIA_DOCENTE')
 BEGIN
     INSERT INTO [HR].[ref_Types] (Category, Name, SiiesLabel, IsActive, CreatedAt) VALUES
@@ -101,17 +70,11 @@ GO
 
 -- 2) Homologación SiiesLabel sobre catálogos existentes ----------------------
 
--- ACADEMIC_LEVEL (usado por tbl_EducationLevels.EducationLevelTypeID).
--- Hoy solo existe el valor NIVEL_1 en uso real (30 registros). Se homologa
--- como TERCER NIVEL por ser el valor por defecto más común; si en el futuro
--- se usan NIVEL_2+ para posgrado, requieren revisión manual (no se asume).
+-- ACADEMIC_LEVEL: NIVEL_1 (único valor en uso real) homologado a TERCER NIVEL.
 UPDATE [HR].[ref_Types] SET [SiiesLabel] = N'TERCER NIVEL' WHERE [Category] = 'ACADEMIC_LEVEL' AND [Name] = N'NIVEL_1' AND [SiiesLabel] IS NULL;
 GO
 
--- HR.tbl_AcademicLadder.SiiesLabel: mapeo best-effort por patrón de Code/Name.
--- Deja NULL lo que no se pueda mapear con certeza (requiere confirmación
--- institucional antes de usarse en el reporte, mismo criterio que Género
--- 'Otros'/Discapacidad 'Otra' en el reporte Funcionarios).
+-- tbl_AcademicLadder.SiiesLabel: mapeo best-effort por patrón de Code; deja NULL lo no mapeable con certeza.
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_AcademicLadder]') AND name = 'SiiesLabel')
     ALTER TABLE [HR].[tbl_AcademicLadder] ADD [SiiesLabel] NVARCHAR(50) NULL;
 GO
@@ -139,10 +102,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_
     ALTER TABLE [HR].[tbl_TeacherStructure] ADD [SiiesNivelTypeId] INT NULL;
 GO
 
--- Fuente directa de CATEGORIA. Si queda NULL, la vista cae de respaldo a
--- AcademicLadder.SiiesLabel (cubre solo la familia Titular/Principal/
--- Agregado/Auxiliar; las categorías Ocasional/Honorario/Invitado/No Titular
--- no tienen escalafón y requieren esta columna llena explícitamente).
+-- Fuente directa de CATEGORIA; sin ella, categorías sin escalafón (Ocasional/Honorario/Invitado) quedan sin clasificar.
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_TeacherStructure]') AND name = 'SiiesCategoriaTypeId')
     ALTER TABLE [HR].[tbl_TeacherStructure] ADD [SiiesCategoriaTypeId] INT NULL;
 GO
@@ -152,28 +112,18 @@ IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_
     ALTER TABLE [HR].[tbl_EducationLevels] ADD [SiiesGradoTypeId] INT NULL;
 GO
 
--- No existía ningún vínculo entre un título (EducationLevels) y el árbol de
--- CODIGO_SUBAREA_CONOCIMIENTO_ESPECIFICO_UNESCO (tbl_KnowledgeArea). Se agrega
--- para que a futuro se pueda capturar; queda NULL hasta que exista pantalla o
--- carga que lo asigne (ver decisión pendiente #3 del análisis).
+-- Vínculo título -> tbl_KnowledgeArea (UNESCO); queda NULL hasta que exista pantalla/carga que lo asigne.
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_EducationLevels]') AND name = 'KnowledgeAreaId')
     ALTER TABLE [HR].[tbl_EducationLevels] ADD [KnowledgeAreaId] INT NULL;
 GO
 
 -- 5) HR.tbl_KnowledgeArea.SiiesCode -------------------------------------------
--- Columna agregada pero SIN poblar: requiere mapeo manual fila por fila
--- contra el Anexo Clasificación Internacional Normalizada de la Educación
--- del instructivo (78 filas de nivel de detalle). No se homologa automático
--- para evitar códigos incorrectos en un reporte hacia un ente gubernamental.
+-- Sin poblar a propósito: requiere mapeo manual contra el anexo CINE del instructivo (78 filas).
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_KnowledgeArea]') AND name = 'SiiesCode')
     ALTER TABLE [HR].[tbl_KnowledgeArea] ADD [SiiesCode] NVARCHAR(20) NULL;
 GO
 
--- 5.1) Homologación SiiesRelacionIesTypeId sobre 4 tipos de contrato sin mapear ----------
--- 2026-09-11: huecos de catálogo encontrados al revisar por qué 200 profesores activos
--- salían con RELACION_IES vacía en el reporte SIIES -- sus hermanos (con/sin "(DELEGACIÓN)")
--- ya estaban mapeados, estos 4 quedaron fuera del UPDATE original. Valores confirmados con
--- el usuario 2026-09-11 siguiendo el mismo patrón que sus hermanos ya mapeados.
+-- 5.1) Homologación SiiesRelacionIesTypeId sobre tipos de contrato sin mapear ----------
 UPDATE ct
 SET ct.[SiiesRelacionIesTypeId] = rt.[TypeID]
 FROM [HR].[tbl_contract_type] ct
@@ -214,15 +164,8 @@ SELECT
     d.[Name]                       AS [DepartmentName],
     ts.[TeacherStructureID],
     ts.[WeeklyClassHours],
-    -- 2026-09-11: cuando no hay TeacherStructure (profesor ocasional, ver mas abajo) se
-    -- respalda a "No Aplica" -- los ocasionales no tienen escalafon.
-    -- 2026-10-08: caso adicional confirmado con datos reales (Decano/Director/Subdecano vía
-    -- Nombramiento/Acción de Personal, sin TeacherStructure -- ej. cédulas
-    -- 1804012969/1802807329/1803812062/1803547320): se respalda a "Laboral Actual" en vez de
-    -- "No Aplica", porque sí tiene una relación laboral vigente con la IES (la autoridad),
-    -- solo que no tiene escalafón docente propio. La autoridad tiene prioridad sobre el
-    -- contrato de ocasional: los 4 casos reales verificados TAMBIÉN tienen un contrato viejo
-    -- de "Profesor Ocasional" archivado, pero lo que importa hoy es el cargo de autoridad.
+    -- Sin TeacherStructure: "Laboral Actual" si es autoridad vigente (Decano/Director/etc,
+    -- tiene prioridad), si no "No Aplica" (ocasional sin escalafón).
     COALESCE(
         escal.[SiiesLabel],
         CASE
@@ -237,33 +180,23 @@ SELECT
     -- si tampoco (profesor ocasional sin TeacherStructure), respaldo a "Ocasional".
     COALESCE(catDirecta.[SiiesLabel], la.[SiiesLabel], CASE WHEN ocasionalDocente.[ContractID] IS NOT NULL THEN catOcasionalDefault.[SiiesLabel] END) AS [CategoriaSiiesLabel],
     ded.[SiiesLabel]                AS [TiempoDedicacionSiiesLabel],
-    -- 2026-08-27: fallback a ContractCode/ActionNumber cuando elr.DocumentNumber nunca se
-    -- copió al crear el régimen — mismo criterio que vw_SiiesFuncionarios.
-    -- 2026-09-02: segundo fallback (ctrFallback/paFallback) para profesores sin ninguna fila en
-    -- tbl_EmployeeLaborRegime (210 de 213 profesores activos con NUMERO_DOCUMENTO vacío
-    -- verificados en esa condición) — mismo criterio que vw_SiiesFuncionarios.
+    -- Fallback en cascada a ContractCode/ActionNumber cuando no hay EmployeeLaborRegime
+    -- (o DocumentNumber no se copió al crearlo) -- mismo criterio que vw_SiiesFuncionarios.
     COALESCE(elr.[DocumentNumber], ctr.[ContractCode], pa.[ActionNumber], ctrFallback.[ContractCode], paFallback.[ActionNumber]) AS [DocumentNumber],
     COALESCE(elr.[DocumentType],
         CASE WHEN ctrFallback.[ContractID] IS NOT NULL THEN 'CONTRACT'
              WHEN paFallback.[ActionID] IS NOT NULL THEN 'PERSONNEL_ACTION' END)          AS [RegimeDocumentType],
-    -- CAST a DATE obligatorio: ver comentario equivalente en vw_SiiesFuncionarios — mezclar
-    -- date (EmployeeLaborRegime/PersonnelActions) con datetime2 (tbl_Contracts.startdate/enddate)
-    -- en un COALESCE rompe el mapeo EF Core DateOnly? con InvalidCastException.
+    -- CAST a DATE obligatorio: mezclar date con datetime2 (tbl_Contracts) en un COALESCE
+    -- rompe el mapeo EF Core DateOnly? con InvalidCastException.
     COALESCE(elr.[EffectiveFrom], CAST(ctrFallback.[startdate] AS DATE), paFallback.[EffectiveDate])   AS [EffectiveFrom],
     COALESCE(elr.[EffectiveTo], CAST(ctrFallback.[enddate] AS DATE), paFallback.[EndDate])             AS [EffectiveTo],
     elr.[IsActive]                  AS [RegimeIsActive],
     elr.[IngresoPorConcurso],
-    -- 2026-09-11: si el documento resuelto es una Acción de Personal (no Contrato) y su tipo
-    -- de acción no tiene RelacionIes mapeada (ej. Promoción/Recategorización/Reintegro -- son
-    -- modificaciones administrativas posteriores, no el acto fundacional Nombramiento/
-    -- Designación/Nombramiento Provisional, únicos 3 tipos mapeados a propósito), se asume
-    -- "Nombramiento" por decisión explícita del usuario: si está vinculado por Acción de
-    -- Personal, es porque su relación con la IES es de nombramiento.
+    -- Si no hay RelacionIes mapeada y el documento es Acción de Personal, se asume "Nombramiento"
+    -- (solo Nombramiento/Designación/Nombramiento Provisional tienen mapeo propio a propósito).
     COALESCE(
         ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel],
-        -- 2026-09-11: si el contrato resuelto es un ADENDUM/PRORROGA/RENOVACIÓN (modificación,
-        -- no tiene RelacionIes propia a propósito), se sube por ParentID hasta el contrato base
-        -- (ctRelChainType, definido más abajo) -- decisión explícita del usuario.
+        -- Si el contrato es un ADENDUM/PRORROGA/RENOVACIÓN sin RelacionIes propia, sube por ParentID.
         ctRelChainType.[SiiesLabel],
         CASE WHEN COALESCE(elr.[DocumentType],
                 CASE WHEN ctrFallback.[ContractID] IS NOT NULL THEN 'CONTRACT'
@@ -273,9 +206,7 @@ SELECT
     COALESCE(ctr.[ContractedHours], ctrFallback.[ContractedHours]) AS [ContractedHours],
     e.[IsActive]                    AS [EmployeeIsActive],
     e.[HireDate],
-    -- 2026-09-11: período académico más reciente con distributivo real cargado (visible
-    -- directo en la vista, sin pasar por fn_SiiesProfesoresHoras). Mismo criterio de
-    -- "más reciente" que usa esa función cuando @PeriodCode es NULL.
+    -- Período académico más reciente con distributivo real (mismo criterio que fn_SiiesProfesoresHoras sin @PeriodCode).
     latestPeriod.[PeriodCode]       AS [LatestPeriodCode],
     latestPeriod.[PeriodStart]      AS [LatestPeriodStart],
     latestPeriod.[PeriodEnd]        AS [LatestPeriodEnd]
@@ -287,7 +218,7 @@ LEFT JOIN [HR].[ref_Types] gn          ON gn.[TypeID] = p.[Gender]
 LEFT JOIN [HR].[tbl_Countries] co      ON co.[CountryID] = p.[CountryId]
 LEFT JOIN [HR].[ref_Types] et          ON et.[TypeID] = p.[EthnicityTypeID]
 LEFT JOIN [HR].[ref_Types] indig       ON indig.[TypeID] = p.[IndigenousNationalityTypeId]
--- 2026-08-27: se une por p.Disability (texto libre) — ver comentario en vw_SiiesFuncionarios.
+-- Se une por p.Disability (texto libre) — ver comentario en vw_SiiesFuncionarios.
 LEFT JOIN [HR].[ref_Types] sn          ON sn.[Category] = 'DISABILITY_TYPE' AND sn.[Name] = p.[Disability]
 LEFT JOIN [HR].[tbl_Departments] d     ON d.[DepartmentID] = e.[DepartmentID]
 OUTER APPLY (
@@ -307,45 +238,16 @@ LEFT JOIN [HR].[ref_Types] nivel       ON nivel.[TypeID] = ts.[SiiesNivelTypeId]
 LEFT JOIN [HR].[ref_Types] catDirecta  ON catDirecta.[TypeID] = ts.[SiiesCategoriaTypeId]
 LEFT JOIN [HR].[tbl_AcademicLadder] la ON la.[LadderID] = ts.[LadderID]
 LEFT JOIN [HR].[ref_Types] ded         ON ded.[TypeID] = ts.[DedicationTypeID]
--- 2026-09-11: profesores OCASIONALES (nunca tienen fila en tbl_TeacherStructure -- esa
--- tabla es solo para Titulares, confirmado con el usuario). Se identifican por tener un
--- contrato de tipo "Profesor/a Ocasional" o "Técnico Docente" (con o sin Delegación) --
--- criterio confirmado explícitamente con el usuario 2026-09-11. "Técnico de Laboratorio"
--- queda fuera a propósito (va al reporte de Funcionarios, no a Profesores).
--- 2026-09-11 (ajuste): un ADENDUM por sí solo no dice de qué contrato es -- se resuelve
--- via tbl_Contracts.ParentID (contrato padre). Un ADENDUM cuenta solo si su padre es
--- Profesor Ocasional/Técnico Docente -- esto excluye correctamente las ~75 adendas cuyo
--- padre es Técnico de Laboratorio (confirmado con datos reales antes de aplicar).
-OUTER APPLY (
-    SELECT TOP 1 c2.*
-    FROM [HR].[tbl_Contracts] c2
-    INNER JOIN [HR].[tbl_contract_type] ct2 ON ct2.[ContractTypeID] = c2.[ContractTypeID]
-    WHERE c2.[PersonID] = p.[PersonID] AND c2.[IsDeleted] = 0
-      AND (
-            ct2.[Name] LIKE N'CONTRATO PROFESOR/A OCASIONAL%'
-         OR ct2.[Name] LIKE N'CONTRATO TÉCNICO DOCENTE%'
-         OR (
-              ct2.[Name] LIKE N'ADENDUM%'
-              AND EXISTS (
-                  SELECT 1
-                  FROM [HR].[tbl_Contracts] parentC
-                  INNER JOIN [HR].[tbl_contract_type] parentCt ON parentCt.[ContractTypeID] = parentC.[ContractTypeID]
-                  WHERE parentC.[ContractID] = c2.[ParentID]
-                    AND (
-                          parentCt.[Name] LIKE N'CONTRATO PROFESOR/A OCASIONAL%'
-                       OR parentCt.[Name] LIKE N'CONTRATO TÉCNICO DOCENTE%'
-                        )
-              )
-            )
-          )
-    ORDER BY c2.[startdate] DESC
-) ocasionalDocente
+-- Profesores ocasionales (sin fila en tbl_TeacherStructure, esa tabla es solo para
+-- Titulares): identificados por HR.fn_SiiesDocenteOcasionalContract, que revisa
+-- HR.tbl_contract_type.IsDocenteOcasional en el contrato mismo o hasta 2 niveles de
+-- padre (adendas). Mismo criterio exacto en vw_SiiesFuncionarios (exclusión).
+OUTER APPLY [HR].[fn_SiiesDocenteOcasionalContract](p.[PersonID]) AS ocasionalDocente
 LEFT JOIN [HR].[ref_Types] catOcasionalDefault
     ON catOcasionalDefault.[Category] = 'SIIES_CATEGORIA_DOCENTE' AND catOcasionalDefault.[Name] = N'Ocasional'
 LEFT JOIN [HR].[ref_Types] escalNoAplicaDefault
     ON escalNoAplicaDefault.[Category] = 'SIIES_TIPO_ESCALAFON_NOMBRAMIENTO' AND escalNoAplicaDefault.[Name] = N'No Aplica'
--- 2026-10-08: ¿tiene una autoridad vigente (Decano/Director/Subdecano/etc.) sobre un
--- departamento/facultad? Ver comentario junto a TipoEscalafonNombramientoSiiesLabel.
+-- ¿Tiene autoridad vigente (Decano/Director/Subdecano/etc.)? Ver TipoEscalafonNombramientoSiiesLabel.
 OUTER APPLY (
     SELECT TOP 1 da.[EmployeeId]
     FROM [HR].[tbl_DepartmentAuthorities] da
@@ -366,7 +268,7 @@ LEFT JOIN [HR].[ref_Types] ctRel              ON ctRel.[TypeID] = ct.[SiiesRelac
 LEFT JOIN [HR].[tbl_PersonnelActions] pa      ON elr.[DocumentType] = 'PERSONNEL_ACTION' AND pa.[ActionID] = elr.[SourcePersonnelActionId]
 LEFT JOIN [HR].[tbl_personnel_action_type] pat ON pat.[PersonnelActionTypeId] = pa.[ActionTypeID]
 LEFT JOIN [HR].[ref_Types] patRel             ON patRel.[TypeID] = pat.[SiiesRelacionIesTypeId]
--- 2026-09-02: fallback directo — mismo criterio y mismos filtros de Status que vw_SiiesFuncionarios.
+-- Fallback directo — mismo criterio y filtros de Status que vw_SiiesFuncionarios.
 OUTER APPLY (
     SELECT TOP 1 c.*
     FROM [HR].[tbl_Contracts] c
@@ -377,10 +279,8 @@ OUTER APPLY (
 ) ctrFallback
 LEFT JOIN [HR].[tbl_contract_type] ctFallback ON ctFallback.[ContractTypeID] = ctrFallback.[ContractTypeID]
 LEFT JOIN [HR].[ref_Types] ctRelFallback      ON ctRelFallback.[TypeID] = ctFallback.[SiiesRelacionIesTypeId]
--- 2026-09-11: cadena ParentID para RELACION_IES cuando el contrato resuelto (ctr o
--- ctrFallback) es un ADENDUM/PRORROGA/RENOVACIÓN -- sube hasta 2 niveles (cadena real
--- observada en datos: adenda -> adenda -> contrato base) buscando el primer ancestro cuyo
--- tipo de contrato sí tenga SiiesRelacionIesTypeId mapeado. Decisión explícita del usuario.
+-- Cadena ParentID para RELACION_IES (hasta 2 niveles: adenda -> adenda -> contrato base),
+-- busca el primer ancestro con SiiesRelacionIesTypeId mapeado.
 OUTER APPLY (
     SELECT TOP 1 COALESCE(ctSelf.[SiiesRelacionIesTypeId], ctParent.[SiiesRelacionIesTypeId], ctGrandparent.[SiiesRelacionIesTypeId]) AS [SiiesRelacionIesTypeId]
     FROM [HR].[tbl_Contracts] cSelf
@@ -403,13 +303,9 @@ OUTER APPLY (
 ) paFallback
 LEFT JOIN [HR].[tbl_personnel_action_type] patFallback ON patFallback.[PersonnelActionTypeId] = paFallback.[ActionTypeID]
 LEFT JOIN [HR].[ref_Types] patRelFallback               ON patRelFallback.[TypeID] = patFallback.[SiiesRelacionIesTypeId]
--- 2026-09-11: default de RELACION_IES = "Nombramiento" cuando el documento resuelto es Acción
--- de Personal y su tipo no tiene mapeo propio (ver comentario junto a RelacionIesSiiesLabel).
+-- Default "Nombramiento" para Acción de Personal sin mapeo propio (ver RelacionIesSiiesLabel).
 LEFT JOIN [HR].[ref_Types] relIesNombramientoDefault
     ON relIesNombramientoDefault.[Category] = 'SIIES_RELACION_IES' AND relIesNombramientoDefault.[Name] = N'Nombramiento'
--- 2026-09-11: antes exigia TeacherStructure (solo Titulares). Ahora tambien entran
--- los profesores ocasionales identificados por tipo de contrato (ver OUTER APPLY
--- ocasionalDocente arriba).
 WHERE e.[IsDeleted] = 0
   AND (
         ts.[TeacherStructureID] IS NOT NULL
@@ -417,29 +313,12 @@ WHERE e.[IsDeleted] = 0
       );
 GO
 
--- 6.1) Función de tabla HR.fn_SiiesProfesoresHoras (matriz 5.4, Distribución de Horas)
--- --------------------------------------------------------------------------------
--- 2026-09-10: reemplaza el placeholder de horas en 0 (ver vw_SiiesProfesores original,
--- que nunca tuvo columnas de horas por actividad) con datos reales de
--- HR.tbl_AcademicHoursDistribution (cargados desde el sistema "UTA Mático",
--- servidor 10.102.12.3, ajeno a HrBackend — carga por lotes, ver Database/hr/
--- 22_academic_hours_distribution.sql).
---
--- Se usa una FUNCIÓN DE TABLA (no una vista plana) porque una vista no acepta
--- parámetros y las horas dependen del período académico (un profesor puede
--- tener filas para el período 47 y para el 48, con horas distintas en cada
--- una) — vw_SiiesProfesores debe seguir devolviendo una sola fila por
--- profesor, así que el período no puede resolverse dentro de esa vista sin
--- arriesgar filas duplicadas.
---
--- @PeriodCode = NULL (por defecto): todos los profesores, cada uno con su
--- período más reciente disponible (mismo comportamiento que tenía el
--- placeholder: siempre devuelve algo). @PeriodCode = '47'/'48'/...: filtra
--- exacto a ese período Y RESTRINGE la lista a quienes tuvieron distributivo
--- cargado ese período específico — mismo criterio de "filtrar de verdad" ya
--- usado en HR.fn_SiiesFormacionProfesional, confirmado con el usuario
--- 2026-09-11 (la primera versión solo cambiaba las columnas de horas sin
--- reducir la lista de profesores, lo cual generó confusión).
+-- 6.1) Función de tabla HR.fn_SiiesProfesoresHoras (matriz 5.4, Distribución de Horas) -------
+-- Horas reales de HR.tbl_AcademicHoursDistribution (cargadas desde "UTA Mático", ver
+-- Database/hr/22_academic_hours_distribution.sql). Función de tabla (no vista) porque las
+-- horas varían por período académico y una vista no acepta parámetros.
+-- @PeriodCode NULL: todos los profesores con su período más reciente. Con valor: filtra Y
+-- restringe la lista a quienes tuvieron distributivo cargado ese período específico.
 CREATE OR ALTER FUNCTION [HR].[fn_SiiesProfesoresHoras] (@PeriodCode VARCHAR(10) = NULL)
 RETURNS TABLE
 AS
@@ -475,69 +354,26 @@ RETURN
 GO
 
 -- 7) Vista HR.vw_SiiesFormacionProfesional (matriz 5.5) ------------------------
--- 2026-09-11: cambiada de INNER JOIN sobre tbl_EducationLevels (tabla ancla) a LEFT JOIN
--- desde HR.vw_SiiesProfesores. Antes, si el profesor no tenía ningún título cargado en
--- tbl_EducationLevels (hoy: 0 de los 224 Titulares), ni su identificación aparecía y el
--- reporte quedaba completamente vacío. Ahora aparecen TODOS los profesores (mismo criterio
--- que vw_SiiesProfesores: Titulares + Ocasionales), con los campos de título en NULL cuando
--- no los tienen cargados — visible para que RRHH sepa a quién le falta esa información.
---
--- [2026-09-16, reescrita] Dos problemas encontrados al verificar el reporte tras la
--- sincronización DINARDAP (ver sección 8): (1) traía UNA FILA POR TÍTULO de
--- tbl_EducationLevels, duplicando profesores con más de un título cargado — se agrega
--- ROW_NUMBER() para quedarse solo con el título de MAYOR nivel/grado por profesor
--- (Doctorado > Maestría > Especialista(Salud) > Diplomado > Tercer Nivel > sin
--- clasificar > sin título), una sola fila por EmployeeID, decisión explícita del
--- usuario. (2) FECHA_OBTUVO_TITULO leía [EndDate] (fecha fin de estudios, 0/3409
--- registros la tienen) en vez de [SenescytGraduationDate] (fecha de grado real que
--- llegó de DINARDAP, 2333/3409 la tienen) — corregido con COALESCE, [EndDate] queda
--- de respaldo para registros manuales antiguos.
---
--- [2026-09-18, sección 10] Reescrita otra vez tras poblar HR.tbl_Institutions con el
--- catálogo oficial de 378 IES (antes tenía solo 12 filas de prueba QA) y crear el
--- catálogo dedicado ref_Types.SIIES_UNESCO_SUBAREA (antes se leía de
--- tbl_KnowledgeArea.SiiesCode, catálogo con otra codificación, siempre vacío para
--- esto). Reglas del instructivo CACES v2S aplicadas ahora de verdad:
---   - CODIGO_IES_ESTUDIO: sale de [HR].[tbl_Institutions].[SiiesInstitutionCode], NO
---     de InstitutionID. [2026-09-19] separado a pedido del usuario: aunque hoy
---     coinciden en las 378 filas sembradas del catálogo oficial (se usó
---     IDENTITY_INSERT para que InstitutionID = código CACES), son conceptos
---     distintos — InstitutionID es la identidad interna (PK autogenerada para
---     instituciones creadas a mano desde la pantalla de Instituciones, sin relación
---     con ningún código real), SiiesInstitutionCode es el código oficial CACES/SIIES,
---     nullable, solo se llena cuando se conoce. Antes quedaba siempre vacío (nunca
---     había catálogo real).
---   - NOMBRES_IES: el instructivo pide dejarlo en blanco para IES nacionales (se
---     identifican solo por su código) y llenarlo solo para IES internacionales —
---     antes se llenaba siempre como simplificación, ya no hace falta esa
---     simplificación porque CODIGO_IES_ESTUDIO sí se resuelve.
---   - PAIS_ESTUDIO: COALESCE(nombre de CountryOfStudyId, nombre del país de la
---     institución catalogada) — el instructivo exige el NOMBRE del país (Ver Anexo
---     Países del instructivo: solo tiene NOMBRE/NACIONALIDAD, sin código alguno),
---     por eso se resuelve hasta CountryName y no se deja el código interno.
---     [2026-09-19] corregido: la primera versión traía CountryID (ej. '001') en vez
---     del nombre ('ECUADOR') — columna renombrada de InstitutionCountryId a
---     PaisEstudio para que el nombre no sugiera que es un código.
---   - CODIGO_SUBAREA_CONOCIMIENTO_ESPECIFICO_UNESCO: ref_Types.SIIES_UNESCO_SUBAREA
---     vía UnescoSubareaTypeId, no tbl_KnowledgeArea (deliberadamente separado, ver
---     sección 10 más abajo — misma codificación CACES, no la de Publicaciones).
+-- LEFT JOIN desde vw_SiiesProfesores (no INNER sobre EducationLevels): aparecen TODOS los
+-- profesores aunque no tengan título cargado, con esos campos en NULL (visible para RRHH).
+-- Una sola fila por profesor vía ROW_NUMBER(), quedándose con el título de mayor nivel/grado
+-- (ver CTE Ranked). FECHA_OBTUVO_TITULO prioriza SenescytGraduationDate (DINARDAP) sobre
+-- EndDate (respaldo para registros manuales).
+-- CODIGO_IES_ESTUDIO: tbl_Institutions.SiiesInstitutionCode (código oficial CACES, distinto
+-- de InstitutionID que es solo la PK interna). NOMBRES_IES: en blanco para IES nacionales
+-- (van solo por código), lleno para extranjeras. PAIS_ESTUDIO: nombre del país, nunca el
+-- código interno. CODIGO_SUBAREA_CONOCIMIENTO_ESPECIFICO_UNESCO: ref_Types.SIIES_UNESCO_SUBAREA
+-- (catálogo propio, no tbl_KnowledgeArea que usa otra codificación).
 CREATE OR ALTER VIEW [HR].[vw_SiiesFormacionProfesional] AS
 WITH [Titulos] AS (
     SELECT
         v.[EmployeeID], v.[IDCard], v.[IdentTypeName],
-        -- 2026-10-08: nombres y dependencia a pedido del usuario, ya existian en
-        -- vw_SiiesProfesores pero no se traian a este reporte.
         v.[FirstName], v.[LastName], v.[DepartmentName],
         v.[LatestPeriodCode], v.[LatestPeriodStart], v.[LatestPeriodEnd],
         el.[EducationID],
         inst.[SiiesInstitutionCode]                                AS [InstitutionSiiesCode],
         COALESCE(paisEstudio.[CountryName], paisInstitucion.[CountryName]) AS [PaisEstudio],
-        -- [2026-09-21] Antes se apagaba el nombre a proposito cuando habia codigo (regla de
-        -- "mutua exclusividad" del instructivo, ver comentario en
-        -- SiiesFormacionProfesionalReportSource.cs) - decision explicita del usuario: el
-        -- nombre debe aparecer siempre. Con codigo (institucion catalogada), se trae el
-        -- nombre real de tbl_Institutions; sin codigo (extranjera), sigue usando el nombre
-        -- libre como hasta ahora.
+        -- El nombre siempre aparece (con código, viene de tbl_Institutions; sin código, nombre libre).
         COALESCE(inst.[Name], el.[InstitutionNameOriginal]) AS [InstitutionName],
         nivelCat.[Name]                                            AS [NivelName],
         nivelCat.[SiiesLabel]                                      AS [NivelSiiesLabel],
@@ -559,11 +395,7 @@ WITH [Titulos] AS (
     LEFT JOIN [HR].[ref_Types] unesco        ON unesco.[TypeID] = el.[UnescoSubareaTypeId]
 ),
 [Ranked] AS (
-    -- [2026-09-19] Jerarquia movida de CASE WHEN hardcodeado a ref_Types.SortOrder
-    -- (ACADEMIC_LEVEL y SIIES_GRADO) -- si se agrega un nivel/grado nuevo al catalogo
-    -- en el futuro, solo hace falta ponerle su SortOrder (mayor = mas alto), sin tocar
-    -- esta vista. NULL (sin clasificar) queda de ultimo por diseno de SQL Server:
-    -- ORDER BY ... DESC deja los NULL al final.
+    -- Jerarquía vía ref_Types.SortOrder (mayor = más alto); NULL queda al final por diseño de ORDER BY DESC.
     SELECT *,
         ROW_NUMBER() OVER (
             PARTITION BY [EmployeeID]
@@ -679,54 +511,18 @@ RETURN
 GO
 
 -- ============================================================
--- 8) [2026-09-16] Integración DINARDAP — historial académico real vía
---    HR.tbl_EducationLevels (analizado y aprobado por el usuario en la
---    misma sesión que el proyecto DatosDINARDAP/WsUtaDinardap.Api).
---
--- 8.1) ACADEMIC_LEVEL: corrige la incoherencia de numeración detectada en
---      vivo — NIVEL_1 tenía el SiiesLabel "TERCER NIVEL" mientras
---      NIVEL_3/NIVEL_4 estaban vacíos, sin un solo registro real usándolos
---      (confirmado: los 30 registros existentes de tbl_EducationLevels son
---      fixtures de QA, no datos de producción). Se mueve "TERCER NIVEL" a
---      NIVEL_3 y se agrega "CUARTO NIVEL" a NIVEL_4 — coherente con
---      SIIES_NIVEL (mismos nombres) y con el nivel numérico 2/3/4 que ya
---      calcula WsUtaDinardap.Api.TitulosPackageHandler.ClasificarNivel.
---      NIVEL_1 queda sin SiiesLabel (huérfano, NO se borra ni desactiva).
---      NIVEL_2 queda sin usar por ahora.
--- 8.2) Migra los 30 registros existentes (fixtures QA) a NIVEL_3/NIVEL_4
---      según su Title real, coherente con 8.1. Bajo riesgo: datos de
---      prueba, no producción real.
--- 8.3) tbl_EducationLevels: 5 columnas nuevas para capturar todo lo que
---      devuelve DINARDAP y que hoy no tiene dónde guardarse:
---      - SenescytGraduationDate / SenescytRegistrationDate: fechaGrado /
---        fechaRegistro de DINARDAP. Conceptos DISTINTOS de StartDate/
---        EndDate (fechas de inicio/fin de ESTUDIO) — confirmado en vivo
---        que pueden diferir por meses/años del fin de estudios.
---      - SenescytType: Nacional/Extranjero (campo "tipo" de DINARDAP).
---      - SenescytNivelNombreOriginal: texto crudo del nivel tal como lo
---        manda DINARDAP (ej. "Tercer Nivel Técnico Superior"), para no
---        perder trazabilidad si el clasificador se corrige después.
---      - Source: 'Manual' (default) o 'Dinardap' — gobierna el bloqueo
---        por campo en el formulario de HrFrontend.
---      - InstitutionNameOriginal: nombre libre de la institución tal como
---        lo manda DINARDAP (ej. "ARIZONA STATE UNIVERSITY") — el catálogo
---        HR.tbl_Institutions hoy solo tiene 12 filas (casi todas fixtures
---        QA, todas de Ecuador) y exige Tipo+País+Provincia+Cantón NOT
---        NULL, dato que DINARDAP no manda para universidades extranjeras.
---        Decisión del usuario 2026-09-16: InstitutionID deja de ser
---        obligatorio (8.3b) y el nombre siempre se guarda como texto,
---        se resuelva o no contra el catálogo.
--- 8.3b) InstitutionID pasa a NULLABLE (antes NOT NULL) — un título
---       sincronizado sin institución catalogada igual se guarda completo,
---       con InstitutionID en null e InstitutionNameOriginal con el
---       nombre real. La FK (FK_EducationLevels_Institution) no se toca,
---       ya admite NULL sola.
--- 8.4) Índice único FILTRADO en SenescytRegistrationNumber (solo WHERE NOT
---      NULL, porque no todos los registros manuales lo tienen) para que
---      sincronizar dos veces nunca duplique el mismo título.
---
--- Solo aditivo / idempotente. Ninguna columna ni fila existente se
--- elimina; StartDate/EndDate no se tocan.
+-- 8) Integración DINARDAP — historial académico real vía HR.tbl_EducationLevels.
+-- 8.1/8.2: homologa ACADEMIC_LEVEL (NIVEL_3=TERCER NIVEL, NIVEL_4=CUARTO NIVEL,
+--   coherente con WsUtaDinardap.Api.TitulosPackageHandler.ClasificarNivel) y migra
+--   los 30 registros existentes (fixtures QA) al nivel correcto.
+-- 8.3: columnas nuevas para lo que DINARDAP devuelve y no tenía dónde guardarse
+--   (fechas de grado/registro, tipo, nivel original crudo, Source Manual/Dinardap,
+--   nombre de institución en texto libre). 8.3b: InstitutionID pasa a nullable (un
+--   título sin institución catalogada igual se guarda completo).
+-- 8.4: índice único FILTRADO por persona en SenescytRegistrationNumber (no global:
+--   DINARDAP devolvió el mismo número para ~510 personas distintas, un valor de
+--   relleno) — evita duplicar el mismo título sin bloquear sincronizaciones repetidas.
+-- Solo aditivo / idempotente.
 -- ============================================================
 
 -- 8.1) Corrección de ACADEMIC_LEVEL --------------------------------------
@@ -789,13 +585,6 @@ IF EXISTS (
 GO
 
 -- 8.4) Índice único filtrado en (PersonID, SenescytRegistrationNumber) ---
--- [2026-09-16, corregido tras la sincronización masiva real] Originalmente el índice era
--- solo sobre SenescytRegistrationNumber (global) - asumía que ese número es único en TODO
--- el sistema. Falso: DINARDAP devolvió el mismo número "858192970" (formato distinto al
--- típico "1010-13-1222798", parece un valor de relleno) para ~510 personas reales distintas,
--- bloqueando el INSERT de todas menos la primera con "Cannot insert duplicate key". Lo único
--- que en realidad había que evitar es duplicar el MISMO título para la MISMA persona - el
--- índice compuesto por persona es la unicidad correcta.
 IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_EducationLevels_SenescytRegistrationNumber' AND object_id = OBJECT_ID('[HR].[tbl_EducationLevels]'))
     DROP INDEX [UQ_EducationLevels_SenescytRegistrationNumber] ON [HR].[tbl_EducationLevels];
 GO
@@ -806,11 +595,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_EducationLevels_Person
         WHERE [SenescytRegistrationNumber] IS NOT NULL;
 GO
 
--- 8.5) [2026-09-16, encontrado en vivo durante la sincronización masiva real]
--- Title NVARCHAR(150) truncaba títulos reales largos (ej. maestrías con nombre
--- compuesto de más de 150 caracteres: "MASTER UNIVERSITARIO EN SISTEMAS
--- INTEGRADOS DE GESTION DE LA PREVENCION DE RIESGOS LABORALES, LA CALIDAD Y EL
--- MEDIO AMBIENTE"), tumbando el INSERT para esas personas. Se amplía a 500.
+-- 8.5) Title ampliado a 500 (150 truncaba títulos largos reales, ej. maestrías con nombre compuesto).
 IF EXISTS (
     SELECT 1 FROM sys.columns
     WHERE object_id = OBJECT_ID('[HR].[tbl_EducationLevels]') AND name = 'Title' AND max_length < 1000
@@ -819,61 +604,24 @@ IF EXISTS (
 GO
 
 -- ============================================================
--- 9) [2026-09-16] Corrección HR.vw_SiiesFormacionProfesional / fn_SiiesFormacionProfesional
---    (matriz 5.5) — verificación pedida por el usuario tras la sincronización masiva.
+-- 9) Corrección de vw_SiiesFormacionProfesional/fn_SiiesFormacionProfesional ya
+--    aplicada arriba (secciones 7/7.1) tras agregar las columnas DINARDAP (sección 8).
 -- ============================================================
--- Verificado contra datos reales (HR.fn_SiiesFormacionProfesional(NULL), 3421 filas
--- antes de este fix): FECHA_OBTUVO_TITULO 100% vacío ([EndDate] nunca se llena,
--- 0/3409), NOMBRES_IES/PAIS_ESTUDIO vacíos en 3379/3409 registros sin InstitutionID
--- catalogado, y filas duplicadas por profesor (una por cada título en
--- tbl_EducationLevels) — la vista/función se habían escrito el 2026-09-11, antes de
--- las columnas DINARDAP agregadas en la sección 8 de este mismo archivo (2026-09-16),
--- y nunca se actualizaron. Ambos objetos quedaron redefinidos más arriba (secciones 7
--- y 7.1): una sola fila por profesor con el título de mayor nivel/grado, fechas
--- correctas con COALESCE(SenescytGraduationDate, EndDate), fallback de nombre de
--- institución a InstitutionNameOriginal, y corte por fecha de período cuando se pide
--- @PeriodCode explícito. PAIS_ESTUDIO y CODIGO_SUBAREA_CONOCIMIENTO_ESPECIFICO_UNESCO
--- siguen vacíos a propósito (sin fuente real todavía, ver comentario en
--- SiiesFormacionProfesionalReportSource.cs) — no se inventa el dato.
--- No requiere cambio en SiiesFormacionProfesionalReportSource.cs: sigue llamando
--- HR.fn_SiiesFormacionProfesional(@PeriodCode) igual que antes, solo cambió el SQL.
 
 -- ============================================================
--- 10) [2026-09-18] Backfill de Formación Académica para profesores sin fila en
---     HR.tbl_Employees, detectado al comparar el archivo oficial "Profesores-
---     Formacion Profesional (Terminado) 2526.xlsx" contra HR.tbl_EducationLevels.
+-- 10) Backfill de Formación Académica para 31 profesores sin fila en tbl_Employees
+--     (solo existen en tbl_People) -- DinardapSenescytSyncJob solo sincroniza
+--     empleados activos, así que nunca los procesa. Cargados a mano desde el archivo
+--     oficial, Source='Manual'.
 -- ============================================================
--- Hallazgo: de 683 profesores del archivo, 31 no tienen NINGUNA fila en
--- HR.tbl_Employees (solo existen en HR.tbl_People) -- DinardapSenescytSyncJob solo
--- sincroniza "empleados activos" (EducationLevelSyncService.SyncActiveEmployeesAsync),
--- así que nunca los procesa. Se cargan a mano desde el archivo oficial, con
--- Source='Manual' porque no vino de una llamada viva al servicio DINARDAP en esta
--- sesión. Las otras 130 personas que aparecen en el archivo con Employee.IsActive=0
--- quedan fuera de este backfill a propósito -- mismo problema de fondo (alcance del
--- job), pero el usuario pidió resolver primero el subconjunto sin fila de Employee.
+-- Columnas nuevas que el archivo trae y tbl_EducationLevels no tenía dónde guardar:
+--   - CountryOfStudy: país de estudio, texto crudo (mismo patrón que InstitutionNameOriginal).
+--   - UnescoSubareaCodeOriginal: código SIIES exclusivo (no tiene relación con
+--     tbl_KnowledgeArea, que usa otra codificación tipo ISCED).
+--   - InstitutionSiiesCodeTypeId: resuelto contra ref_Types 'SIIES_INSTITUTION_CODE'
+--     (Name=código, SiiesLabel=nombre IES); solo aplica a instituciones ecuatorianas.
 --
--- Columnas nuevas: el archivo trae 3 campos que HR.tbl_EducationLevels no tenía
--- dónde guardar:
---   - CountryOfStudy: país de estudio, texto crudo (PAIS_ESTUDIO). Mismo patrón que
---     InstitutionNameOriginal (sección 8) -- no hay catálogo de países ligado aquí.
---   - UnescoSubareaCodeOriginal: CODIGO_SUBAREA_CONOCIMIENTO_ESPECIFICO_UNESCO
---     (ej. "81-16A"). Es un dato EXCLUSIVO del reporte SIIES, sin ninguna relación
---     con HR.tbl_KnowledgeArea (catálogo de áreas de conocimiento de uso interno,
---     con codificación tipo ISCED "01".."10" -- formatos incompatibles, verificado
---     que no hay mapeo entre ambos hoy). Se guarda como texto crudo, sin resolver
---     contra ningún catálogo.
---   - InstitutionSiiesCodeTypeId: CODIGO_IES_ESTUDIO, resuelto contra la nueva
---     categoría ref_Types 'SIIES_INSTITUTION_CODE' -- Name=código, SiiesLabel=nombre
---     de la IES, código y nombre atados al MISMO registro de catálogo (decisión
---     explícita del usuario, en vez de repetir el nombre como texto suelto). Sin FK
---     física, mismo patrón que SiiesGradoTypeId/KnowledgeAreaId (sección 8). Solo
---     aplica a instituciones ecuatorianas -- DINARDAP/SIIES no asigna este código a
---     instituciones extranjeras (13 de las 31 filas quedan NULL aquí a propósito).
---     HR.tbl_Institutions NO se usó para esto: solo tiene 12 filas y son fixtures de
---     QA, no un catálogo real de instituciones.
---
--- Verificado end-to-end tras la carga: 31 filas insertadas, EducationLevelTypeID
--- siempre NIVEL_4 (2022, las 31 son Cuarto Nivel según el archivo), SiiesGradoTypeId
+-- Verificado end-to-end: 31 filas insertadas, EducationLevelTypeID NIVEL_4, SiiesGradoTypeId
 -- resuelto por texto de GRADO (2192 Maestría / 2191 Doctor Ph.D / 2196 Especialista
 -- Área Salud), InstitutionSiiesCodeTypeId resuelto en 18/31 (instituciones
 -- ecuatorianas), NULL en las 13 extranjeras restantes -- consistente con que el

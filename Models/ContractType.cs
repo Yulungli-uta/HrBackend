@@ -16,6 +16,11 @@ namespace WsUtaSystem.Models
         /// <summary>FK -> ref_Types (Category='SIIES_RELACION_IES'). Homologación para el reporte SIIES Funcionarios.</summary>
         public int? SiiesRelacionIesTypeId { get; set; }
 
+        /// <summary>Clasifica este tipo como "docente ocasional" (Profesor Ocasional / Técnico Docente) para
+        /// los reportes SIIES Funcionarios/Profesores (HR.fn_SiiesDocenteOcasionalContract). No marcar tipos
+        /// de Técnico de Laboratorio ni LOSEP/Código de Trabajo.</summary>
+        public bool IsDocenteOcasional { get; set; } = false;
+
         /// <summary>Familia documental asociada a este tipo (ref_Types DOCUMENT_TEMPLATE_TYPE).</summary>
         public int? DocumentTemplateTypeId { get; set; }
 
