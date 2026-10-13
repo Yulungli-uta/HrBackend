@@ -287,6 +287,48 @@ public sealed class AttendanceCalculationsReportService : IAttendanceCalculation
         return data;
     }
 
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<OvertimePlanDailyReportDto>> GetOvertimePlanDailyDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        _logger.LogInformation(
+            "Generando reporte diario de planificación vs. ejecución de horas extra. Período: {Start} - {End} | DeptId: {DeptId} | EmployeeId: {EmpId}",
+            filter.StartDate?.ToString("yyyy-MM-dd") ?? "N/A",
+            filter.EndDate?.ToString("yyyy-MM-dd")   ?? "N/A",
+            filter.DepartmentId?.ToString() ?? "Todas",
+            filter.EmployeeId?.ToString()   ?? "Todos");
+
+        var data = await _repository.GetOvertimePlanDailyDataAsync(filter, ct);
+
+        _logger.LogInformation("Reporte diario de planificación vs. ejecución generado. Total filas: {Count}", data.Count);
+
+        return data;
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<OvertimePlanMonthlyReportDto>> GetOvertimePlanMonthlyDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        _logger.LogInformation(
+            "Generando reporte mensual de planificación vs. ejecución de horas extra. Período: {Start} - {End} | DeptId: {DeptId} | EmployeeId: {EmpId}",
+            filter.StartDate?.ToString("yyyy-MM-dd") ?? "N/A",
+            filter.EndDate?.ToString("yyyy-MM-dd")   ?? "N/A",
+            filter.DepartmentId?.ToString() ?? "Todas",
+            filter.EmployeeId?.ToString()   ?? "Todos");
+
+        var data = await _repository.GetOvertimePlanMonthlyDataAsync(filter, ct);
+
+        _logger.LogInformation("Reporte mensual de planificación vs. ejecución generado. Total filas: {Count}", data.Count);
+
+        return data;
+    }
+
     private async Task<decimal> GetParameterDecimalAsync(string name, decimal defaultValue, CancellationToken ct)
     {
         var list = await _parametersRepository.GetByNameAsync(name, ct);

@@ -479,6 +479,14 @@ public static class ServiceCollectionExtensions
             WsUtaSystem.Reports.Abstractions.IReportSource,
             WsUtaSystem.Reports.Sources.NightHoursSummaryReportSource>();
 
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.OvertimePlanDailyReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.OvertimePlanMonthlyReportSource>();
+
         // ── Reportes módulo Guardias ──────────────────────────────────────────
         services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportSource,

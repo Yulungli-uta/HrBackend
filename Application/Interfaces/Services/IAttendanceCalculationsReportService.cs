@@ -127,4 +127,24 @@ public interface IAttendanceCalculationsReportService
     Task<IReadOnlyList<NightHoursSummaryReportDto>> GetNightHoursSummaryDataAsync(
         ReportFilterDto filter,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene el detalle diario de planificación vs. ejecución de horas extra (una fila por
+    /// día ejecutado, con el estado de aprobación/pago si ya se consolidó en HR.tbl_Overtime).
+    /// </summary>
+    /// <param name="filter">Filtros del reporte.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<OvertimePlanDailyReportDto>> GetOvertimePlanDailyDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene el resumen mensual de planificación vs. ejecución de horas extra (una fila por
+    /// mes calendario, agregando el detalle diario).
+    /// </summary>
+    /// <param name="filter">Filtros del reporte.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<OvertimePlanMonthlyReportDto>> GetOvertimePlanMonthlyDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
 }

@@ -42,7 +42,6 @@ public sealed class OvertimeReportSource : IReportSource
     private const string ColNightMin          = "night_min";
     private const string ColHolidayMin        = "holiday_min";
     private const string ColOffScheduleMin    = "off_schedule_min";
-    private const string ColStatus            = "status";
 
     /// <summary>Columnas del reporte en orden de visualización.</summary>
     private static readonly IReadOnlyList<ReportColumn> Columns =
@@ -62,7 +61,6 @@ public sealed class OvertimeReportSource : IReportSource
         new(ColNightMin,       "Min. Nocturno",    55f,  ColumnAlignment.Right),
         new(ColHolidayMin,     "Min. Feriado",     55f,  ColumnAlignment.Right),
         new(ColOffScheduleMin, "Min. Fuera Hor.",  60f,  ColumnAlignment.Right),
-        new(ColStatus,         "Estado",           55f,  ColumnAlignment.Center),
     ];
 
     public OvertimeReportSource(
@@ -104,7 +102,6 @@ public sealed class OvertimeReportSource : IReportSource
                 [ColNightMin]       = d.NightMinutes,
                 [ColHolidayMin]     = d.HolidayMinutes,
                 [ColOffScheduleMin] = d.OffScheduleMin,
-                [ColStatus]         = d.Status,
             })
             .ToList()
             .AsReadOnly();

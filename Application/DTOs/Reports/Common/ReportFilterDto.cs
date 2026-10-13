@@ -92,6 +92,12 @@ public record ReportFilterDto
     /// </summary>
     public string? PeriodCode { get; init; }
 
+    /// <summary>Año calendario — usado por el resumen mensual de horas extra en vez de un rango de fechas. Null = todos los años.</summary>
+    public int? Year { get; init; }
+
+    /// <summary>Mes calendario (1-12), junto a <see cref="Year"/>. Null = todos los meses del año filtrado.</summary>
+    public int? Month { get; init; }
+
     /// <summary>
     /// Filtra acciones de personal por categoría funcional.
     /// Valores: MOVEMENT, ENTRY, ECONOMIC, LEAVE, DISCIPLINARY, EXIT.

@@ -126,5 +126,18 @@ public enum ReportType
     /// HR.tbl_AttendanceCalculations.NightMinutes en el período, según la ventana
     /// nocturna parametrizada en HR.tbl_Parameters (NIGHT_START / NIGHT_END).
     /// </summary>
-    NightHoursSummary = 32
+    NightHoursSummary = 32,
+
+    /// <summary>
+    /// Reporte diario de planificación vs. ejecución de horas extra (HR.tbl_TimePlanning /
+    /// tbl_TimePlanningEmployees / tbl_TimePlanningExecution): una fila por día ejecutado,
+    /// con la cuota planificada del plan y el estado de aprobación/pago en HR.tbl_Overtime.
+    /// </summary>
+    OvertimePlanDaily = 33,
+
+    /// <summary>
+    /// Reporte mensual de planificación vs. ejecución de horas extra: igual fuente que
+    /// <see cref="OvertimePlanDaily"/>, agregada por mes calendario.
+    /// </summary>
+    OvertimePlanMonthly = 34
 }

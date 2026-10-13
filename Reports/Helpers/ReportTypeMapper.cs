@@ -81,6 +81,9 @@ public static class ReportTypeMapper
             ["family-subsidy-summary"] = ReportType.FamilySubsidySummary,
             ["seniority-bonus-summary"] = ReportType.SeniorityBonusSummary,
             ["night-hours-summary"] = ReportType.NightHoursSummary,
+
+            ["overtime-plan-daily"]   = ReportType.OvertimePlanDaily,
+            ["overtime-plan-monthly"] = ReportType.OvertimePlanMonthly,
         };
 
     /// <summary>

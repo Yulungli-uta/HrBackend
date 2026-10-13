@@ -168,4 +168,29 @@ public interface IAttendanceCalculationsReportRepository
     Task<IReadOnlyList<NightHoursSummaryReportDto>> GetNightHoursSummaryDataAsync(
         ReportFilterDto filter,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene el detalle diario de planificación vs. ejecución de horas extra: una fila por
+    /// (PlanEmployeeID, WorkDate) con la cuota planificada del plan (HR.tbl_TimePlanning /
+    /// tbl_TimePlanningEmployees.AssignedHours), lo ejecutado ese día (HR.tbl_TimePlanningExecution)
+    /// y el estado de aprobación/pago de esa fecha si ya se consolidó en HR.tbl_Overtime.
+    /// Solo planes con <c>PlanType='Overtime'</c>.
+    /// </summary>
+    /// <param name="filter">Filtros del reporte: StartDate, EndDate, EmployeeId, DepartmentId.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<OvertimePlanDailyReportDto>> GetOvertimePlanDailyDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Obtiene el resumen mensual de planificación vs. ejecución de horas extra: una fila por
+    /// (PlanEmployeeID, Año-Mes), agregando el mismo detalle de
+    /// <see cref="GetOvertimePlanDailyDataAsync"/> por mes calendario. Solo planes con
+    /// <c>PlanType='Overtime'</c>.
+    /// </summary>
+    /// <param name="filter">Filtros del reporte: StartDate, EndDate, EmployeeId, DepartmentId.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    Task<IReadOnlyList<OvertimePlanMonthlyReportDto>> GetOvertimePlanMonthlyDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default);
 }

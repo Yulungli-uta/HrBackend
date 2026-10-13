@@ -913,4 +913,200 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
             TotalCount = totalCount
         };
     }
+
+    /// <summary>Fila cruda intermedia para el reporte de planificación vs. ejecución de horas
+    /// extra — compartida entre el detalle diario y el resumen mensual para no duplicar el join.</summary>
+    private sealed record OvertimePlanRawRow(
+        int EmployeeId,
+        string IdCard,
+        string FullName,
+        int? DepartmentId,
+        int PlanId,
+        string PlanTitle,
+        DateTime PlanStartDate,
+        DateTime PlanEndDate,
+        decimal? AssignedHours,
+        int EmployeeStatusTypeId,
+        DateTime WorkDate,
+        int TotalMinutes,
+        int OvertimeMinutes,
+        int NightMinutes,
+        int HolidayMinutes);
+
+    private async Task<List<OvertimePlanRawRow>> GetOvertimePlanRawRowsAsync(
+        ReportFilterDto filter,
+        CancellationToken ct,
+        bool applyDateFilter = true)
+    {
+        var query = from tex in _db.TimePlanningExecution.AsNoTracking()
+                    join tpe in _db.TimePlanningEmployee.AsNoTracking() on tex.PlanEmployeeID equals tpe.PlanEmployeeID
+                    join tp in _db.TimePlanning.AsNoTracking() on tpe.PlanID equals tp.PlanID
+                    join emp in _db.Employees.AsNoTracking() on tpe.EmployeeID equals emp.EmployeeId
+                    join person in _db.People.AsNoTracking() on emp.PersonID equals person.PersonId
+                    where tp.PlanType == "Overtime"
+                    select new { tex, tpe, tp, emp, person };
+
+        // El resumen mensual no filtra por fecha (quiere ver todo el historial agregado por
+        // mes, sin que el usuario tenga que elegir un rango); el detalle diario sí lo respeta.
+        if (applyDateFilter)
+        {
+            var startDate = filter.StartDate ?? DateTime.Today.AddMonths(-1);
+            var endDate = filter.EndDate ?? DateTime.Today;
+            query = query.Where(x => x.tex.WorkDate.Date >= startDate.Date && x.tex.WorkDate.Date <= endDate.Date);
+        }
+
+        if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
+            query = query.Where(x => x.tpe.EmployeeID == filter.EmployeeId.Value);
+
+        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
+            query = query.Where(x => x.emp.DepartmentId == filter.DepartmentId.Value);
+
+        if (!string.IsNullOrWhiteSpace(filter.Identification))
+            query = query.Where(x => x.person.IdCard == filter.Identification);
+
+        return await query
+            .Select(x => new OvertimePlanRawRow(
+                x.tpe.EmployeeID,
+                x.person.IdCard,
+                x.person.LastName + " " + x.person.FirstName,
+                x.emp.DepartmentId,
+                x.tp.PlanID,
+                x.tp.Title,
+                x.tp.StartDate,
+                x.tp.EndDate,
+                x.tpe.AssignedHours,
+                x.tpe.EmployeeStatusTypeID,
+                x.tex.WorkDate,
+                x.tex.TotalMinutes,
+                x.tex.OvertimeMinutes,
+                x.tex.NightMinutes,
+                x.tex.HolidayMinutes))
+            .ToListAsync(ct);
+    }
+
+    private async Task<(
+        Dictionary<int, string> Departments,
+        Dictionary<int, string> StatusNames,
+        Dictionary<(int EmployeeId, DateOnly WorkDate), string> OvertimeStatuses)>
+        ResolveOvertimePlanLookupsAsync(List<OvertimePlanRawRow> rows, bool includeOvertimeStatus, CancellationToken ct)
+    {
+        var deptIds = rows.Where(r => r.DepartmentId.HasValue).Select(r => r.DepartmentId!.Value).Distinct().ToList();
+        var departments = await _db.Departments.AsNoTracking()
+            .Where(d => deptIds.Contains(d.DepartmentId))
+            .ToDictionaryAsync(d => d.DepartmentId, d => d.Name, ct);
+
+        var statusIds = rows.Select(r => r.EmployeeStatusTypeId).Distinct().ToList();
+        var statusNames = await _db.RefTypes.AsNoTracking()
+            .Where(rt => rt.Category == "EMPLOYEE_PLAN_STATUS" && statusIds.Contains(rt.TypeId))
+            .ToDictionaryAsync(rt => rt.TypeId, rt => rt.Name, ct);
+
+        var overtimeStatuses = new Dictionary<(int, DateOnly), string>();
+        if (includeOvertimeStatus)
+        {
+            var employeeIds = rows.Select(r => r.EmployeeId).Distinct().ToList();
+            var workDates = rows.Select(r => DateOnly.FromDateTime(r.WorkDate)).Distinct().ToList();
+
+            var otRows = await _db.Overtime.AsNoTracking()
+                .Where(o => employeeIds.Contains(o.EmployeeId) && workDates.Contains(o.WorkDate))
+                .Select(o => new { o.EmployeeId, o.WorkDate, o.Status })
+                .ToListAsync(ct);
+
+            foreach (var o in otRows)
+                overtimeStatuses[(o.EmployeeId, o.WorkDate)] = o.Status;
+        }
+
+        return (departments, statusNames, overtimeStatuses);
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<OvertimePlanDailyReportDto>> GetOvertimePlanDailyDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        var rows = await GetOvertimePlanRawRowsAsync(filter, ct);
+        if (rows.Count == 0) return Array.Empty<OvertimePlanDailyReportDto>();
+
+        var (departments, statusNames, overtimeStatuses) = await ResolveOvertimePlanLookupsAsync(rows, includeOvertimeStatus: true, ct);
+
+        return rows
+            .Select(r => new OvertimePlanDailyReportDto
+            {
+                EmployeeId = r.EmployeeId,
+                IdCard = r.IdCard,
+                FullName = r.FullName,
+                DepartmentName = r.DepartmentId.HasValue && departments.TryGetValue(r.DepartmentId.Value, out var dn) ? dn : null,
+                PlanId = r.PlanId,
+                PlanTitle = r.PlanTitle,
+                PlanStartDate = r.PlanStartDate,
+                PlanEndDate = r.PlanEndDate,
+                AssignedHours = r.AssignedHours,
+                WorkDate = DateOnly.FromDateTime(r.WorkDate),
+                ExecutedTotalMinutes = r.TotalMinutes,
+                ExecutedOvertimeMinutes = r.OvertimeMinutes,
+                ExecutedNightMinutes = r.NightMinutes,
+                ExecutedHolidayMinutes = r.HolidayMinutes,
+                EmployeeStatusName = statusNames.TryGetValue(r.EmployeeStatusTypeId, out var sn) ? sn : "Desconocido",
+                OvertimeStatus = overtimeStatuses.TryGetValue((r.EmployeeId, DateOnly.FromDateTime(r.WorkDate)), out var os) ? os : null
+            })
+            .OrderBy(r => r.FullName).ThenBy(r => r.WorkDate)
+            .ToList()
+            .AsReadOnly();
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<OvertimePlanMonthlyReportDto>> GetOvertimePlanMonthlyDataAsync(
+        ReportFilterDto filter,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+
+        // Sin filtro de rango startDate/endDate a propósito: el resumen mensual filtra por
+        // Año/Mes (más natural para un reporte "por mes"), no por un rango de fechas.
+        var rows = await GetOvertimePlanRawRowsAsync(filter, ct, applyDateFilter: false);
+
+        if (filter.Year.HasValue)
+            rows = rows.Where(r => r.WorkDate.Year == filter.Year.Value).ToList();
+
+        if (filter.Month.HasValue)
+            rows = rows.Where(r => r.WorkDate.Month == filter.Month.Value).ToList();
+
+        if (rows.Count == 0) return Array.Empty<OvertimePlanMonthlyReportDto>();
+
+        var deptIds = rows.Where(r => r.DepartmentId.HasValue).Select(r => r.DepartmentId!.Value).Distinct().ToList();
+        var departments = await _db.Departments.AsNoTracking()
+            .Where(d => deptIds.Contains(d.DepartmentId))
+            .ToDictionaryAsync(d => d.DepartmentId, d => d.Name, ct);
+
+        return rows
+            // Agrupa por EMPLEADO+MES, no por plan: una persona con 2+ planificaciones en el
+            // mismo mes debe aparecer en una sola fila con el total sumado de todas.
+            .GroupBy(r => (r.EmployeeId, Period: r.WorkDate.ToString("yyyy-MM")))
+            .Select(g =>
+            {
+                var first = g.First();
+                // Cada plan distinto se cuenta una sola vez (no una vez por día ejecutado),
+                // para no inflar "Horas Planificadas" cuando el mismo plan tiene varios días.
+                var distinctPlans = g.Select(x => new { x.PlanId, x.AssignedHours }).Distinct().ToList();
+
+                return new OvertimePlanMonthlyReportDto
+                {
+                    EmployeeId = first.EmployeeId,
+                    IdCard = first.IdCard,
+                    FullName = first.FullName,
+                    DepartmentName = first.DepartmentId.HasValue && departments.TryGetValue(first.DepartmentId.Value, out var dn) ? dn : null,
+                    AssignedHours = distinctPlans.Sum(p => p.AssignedHours ?? 0),
+                    Period = g.Key.Period,
+                    PlanCount = distinctPlans.Count,
+                    ExecutedTotalMinutes = g.Sum(x => x.TotalMinutes),
+                    ExecutedOvertimeMinutes = g.Sum(x => x.OvertimeMinutes),
+                    ExecutedNightMinutes = g.Sum(x => x.NightMinutes),
+                    ExecutedHolidayMinutes = g.Sum(x => x.HolidayMinutes),
+                };
+            })
+            .OrderBy(r => r.FullName).ThenBy(r => r.Period)
+            .ToList()
+            .AsReadOnly();
+    }
 }
