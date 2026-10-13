@@ -936,7 +936,8 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
     private async Task<List<OvertimePlanRawRow>> GetOvertimePlanRawRowsAsync(
         ReportFilterDto filter,
         CancellationToken ct,
-        bool applyDateFilter = true)
+        bool applyDateFilter = true,
+        int? yearFilter = null)
     {
         var query = from tex in _db.TimePlanningExecution.AsNoTracking()
                     join tpe in _db.TimePlanningEmployee.AsNoTracking() on tex.PlanEmployeeID equals tpe.PlanEmployeeID
@@ -946,13 +947,24 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
                     where tp.PlanType == "Overtime"
                     select new { tex, tpe, tp, emp, person };
 
-        // El resumen mensual no filtra por fecha (quiere ver todo el historial agregado por
-        // mes, sin que el usuario tenga que elegir un rango); el detalle diario sí lo respeta.
+        // El resumen mensual no filtra por rango startDate/endDate (quiere ver todo el
+        // historial agregado por mes, sin que el usuario tenga que elegir un rango); el
+        // detalle diario sí lo respeta.
         if (applyDateFilter)
         {
             var startDate = filter.StartDate ?? DateTime.Today.AddMonths(-1);
             var endDate = filter.EndDate ?? DateTime.Today;
             query = query.Where(x => x.tex.WorkDate.Date >= startDate.Date && x.tex.WorkDate.Date <= endDate.Date);
+        }
+
+        // Filtro por año empujado al SQL (rango sargable, no YEAR(WorkDate)) para que el
+        // resumen mensual no tenga que traer TODO el historico a memoria cuando se filtra
+        // por año — solo queda sin empujar el caso raro de "mes sin año" (ver llamador).
+        if (yearFilter.HasValue)
+        {
+            var yearStart = new DateTime(yearFilter.Value, 1, 1);
+            var yearEnd = yearStart.AddYears(1);
+            query = query.Where(x => x.tex.WorkDate >= yearStart && x.tex.WorkDate < yearEnd);
         }
 
         if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
@@ -1064,10 +1076,11 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
 
         // Sin filtro de rango startDate/endDate a propósito: el resumen mensual filtra por
         // Año/Mes (más natural para un reporte "por mes"), no por un rango de fechas.
-        var rows = await GetOvertimePlanRawRowsAsync(filter, ct, applyDateFilter: false);
-
-        if (filter.Year.HasValue)
-            rows = rows.Where(r => r.WorkDate.Year == filter.Year.Value).ToList();
+        // El año se empuja al SQL (rango sargable) para no traer todo el histórico a memoria
+        // cuando el caso común (año elegido, con o sin mes) aplica. Solo el caso raro de
+        // "mes sin año" (todos los años, un solo mes) se sigue filtrando en memoria, porque
+        // no es expresable como un rango de fechas contiguo.
+        var rows = await GetOvertimePlanRawRowsAsync(filter, ct, applyDateFilter: false, yearFilter: filter.Year);
 
         if (filter.Month.HasValue)
             rows = rows.Where(r => r.WorkDate.Month == filter.Month.Value).ToList();
