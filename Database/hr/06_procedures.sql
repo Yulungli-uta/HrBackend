@@ -7516,6 +7516,31 @@ BEGIN
         PRINT 'Recalculado ActualMinutes/ActualHours en HR.tbl_TimePlanningEmployees.';
 
     --------------------------------------------------------------------
+    -- 10.6) Fase 1 (2026-10-12): transición automática de EmployeeStatusTypeID
+    --       (EMPLOYEE_PLAN_STATUS) según Actual vs Assigned, ahora que ActualMinutes
+    --       ya quedó recalculado arriba. Resuelto por Name, no por TypeID (IDENTITY
+    --       varía entre ambientes). Cancelado nunca se pisa (solo manual).
+    --------------------------------------------------------------------
+    DECLARE @StatusEnProceso INT = (SELECT TypeID FROM HR.ref_Types WHERE Category = 'EMPLOYEE_PLAN_STATUS' AND Name = 'En Proceso');
+    DECLARE @StatusEjecutado INT = (SELECT TypeID FROM HR.ref_Types WHERE Category = 'EMPLOYEE_PLAN_STATUS' AND Name = 'Ejecutado');
+    DECLARE @StatusCancelado INT = (SELECT TypeID FROM HR.ref_Types WHERE Category = 'EMPLOYEE_PLAN_STATUS' AND Name = 'Cancelado');
+
+    UPDATE pe
+    SET pe.EmployeeStatusTypeID = CASE
+            WHEN pe.EmployeeStatusTypeID = @StatusCancelado THEN pe.EmployeeStatusTypeID
+            WHEN (ISNULL(pe.AssignedHours, 0) * 60 + ISNULL(pe.AssignedMinutes, 0)) > 0
+                 AND pe.ActualMinutes >= (ISNULL(pe.AssignedHours, 0) * 60 + ISNULL(pe.AssignedMinutes, 0))
+                THEN @StatusEjecutado
+            WHEN pe.ActualMinutes > 0 THEN @StatusEnProceso
+            ELSE pe.EmployeeStatusTypeID
+        END
+    FROM HR.tbl_TimePlanningEmployees pe
+    WHERE pe.PlanEmployeeID IN (SELECT DISTINCT PlanEmployeeID FROM #ExecPlans);
+
+    IF @Debug = 1
+        PRINT 'Actualizado EmployeeStatusTypeID (Asignado/En Proceso/Ejecutado) en HR.tbl_TimePlanningEmployees.';
+
+    --------------------------------------------------------------------
     -- 11) Consolidar horas extra en HR.tbl_Overtime (solo Overtime)
     --------------------------------------------------------------------
     IF @TotalOvertimeMin > 0
