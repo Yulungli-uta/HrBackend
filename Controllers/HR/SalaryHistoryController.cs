@@ -33,6 +33,25 @@ public class SalaryHistoryController : ControllerBase
         return e is null ? NotFound() : Ok(_mapper.Map<SalaryHistoryDto>(e));
     }
 
+    /// <summary>
+    /// Resuelve el RMU de referencia para prellenar "RMU Origen"/"RMU Destino" en el formulario
+    /// de Acciones de Personal. Ver <see cref="ISalaryHistoryService.GetReferenceRmuAsync"/> para
+    /// el orden de prioridad de fuentes. Al menos uno de los dos parámetros es requerido.
+    /// </summary>
+    [HttpGet("reference-rmu")]
+    [RequirePermission("SALARY_HISTORY.READ")]
+    public async Task<IActionResult> GetReferenceRmu(
+        [FromQuery] int? employeeId,
+        [FromQuery] int? jobId,
+        CancellationToken ct)
+    {
+        if (!employeeId.HasValue && !jobId.HasValue)
+            return BadRequest(new { message = "Debe especificar employeeId o jobId." });
+
+        var rmu = await _svc.GetReferenceRmuAsync(employeeId, jobId, ct);
+        return Ok(new { rmu });
+    }
+
     /// <summary>Crea un nuevo registro.</summary>
     [HttpPost]
     [RequirePermission("SALARY_HISTORY.CREATE")]
