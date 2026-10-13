@@ -4,8 +4,13 @@ namespace WsUtaSystem.Application.DTOs.AcademicPromotion;
 
 public static class TrainingDirection
 {
-    public const string Received = "RECEIVED_TRAINING";
-    public const string Given = "GIVEN_TRAINING";
+    // 2026-10-12: antes en inglés ("RECEIVED_TRAINING"/"GIVEN_TRAINING") -- el frontend
+    // mostraba ese valor crudo porque leía ref_Types.Name directo. Se tradujo HR.ref_Types
+    // (TypeId 2075/2076) a español; estas constantes deben coincidir EXACTO con ese valor,
+    // ya que AcademicPromotionService.IsDirection() compara por igualdad de string contra
+    // lo que devuelve la BD en vivo (ver GetRefTypeNamesAsync).
+    public const string Received = "Capacitación recibida";
+    public const string Given = "Capacitación impartida";
 }
 
 // ── Respuesta ────────────────────────────────────────────────────────────────────
