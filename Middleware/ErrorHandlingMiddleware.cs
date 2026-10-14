@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common;
 
 namespace WsUtaSystem.Middleware;
 
@@ -47,6 +48,16 @@ public class ErrorHandlingMiddleware
         // mensaje claro (hallazgo real: reasignación de guardias 2026-09-07).
         if (ex is InvalidOperationException ioex)
             return new ProblemDetails { Title = "No se puede completar la operación", Detail = ioex.Message, Status = StatusCodes.Status409Conflict };
+        // BusinessRuleException hereda de Exception (no de InvalidOperationException), así que
+        // no entraba al caso anterior y salía como 500 genérico con el mensaje perdido (hallazgo
+        // real: número de acción duplicado al ingresar un histórico, 2026-10-13).
+        if (ex is BusinessRuleException brex)
+            return new ProblemDetails { Title = "No se puede completar la operación", Detail = brex.Message, Status = StatusCodes.Status409Conflict };
+        // Parámetro inválido lanzado explícitamente por un servicio con un mensaje pensado para
+        // el usuario (ej. fechas de un registro histórico); no es un error inesperado del servidor.
+        // ArgumentNullException se excluye: es un fallo de programación, no un mensaje para el usuario.
+        if (ex is ArgumentException aex and not ArgumentNullException)
+            return new ProblemDetails { Title = "Solicitud inválida", Detail = aex.Message.Replace($" (Parameter '{aex.ParamName}')", string.Empty), Status = StatusCodes.Status400BadRequest };
         return new ProblemDetails { Title = "Error inesperado", Detail = "Ocurrió un error inesperado en el servidor. Contacte a soporte técnico si el problema persiste.", Status = StatusCodes.Status500InternalServerError };
     }
 
