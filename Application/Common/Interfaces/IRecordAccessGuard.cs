@@ -18,4 +18,11 @@ public interface IRecordAccessGuard
     /// siempre está permitido, sin necesidad de scope de departamento.
     /// </summary>
     Task EnsureEmployeeRecordAsync(int recordOwnerEmployeeId, string moduleCode, CancellationToken ct = default);
+
+    /// <summary>
+    /// Igual que <see cref="EnsureEmployeeRecordAsync"/>, pero si el departamento del empleado no se
+    /// puede determinar (empleado inactivo o sin departamento) no bloquea: solo valida el alcance
+    /// cuando existe un departamento contra el cual compararlo. Para consultas de registros existentes.
+    /// </summary>
+    Task EnsureEmployeeRecordIfDepartmentKnownAsync(int recordOwnerEmployeeId, string moduleCode, CancellationToken ct = default);
 }

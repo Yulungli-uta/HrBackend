@@ -68,19 +68,14 @@ public sealed class PersonnelActionsController : ControllerBase
 
         if (await HasManagePermissionAsync(ct)) return action;
 
-        if (action.EmployeeId > 0)
+        // Acción existente: el alcance se valida con los datos de la propia acción (destino y, si no,
+        // origen), no con el estado actual del empleado (puede estar inactivo o sin departamento).
+        // Si la acción no registra departamento no hay contra qué comparar y no se bloquea; el permiso
+        // del endpoint (READ/UPDATE/...) sigue decidiendo qué puede hacer el usuario.
+        var departmentId = action.DestinationDepartmentId ?? action.OriginDepartmentId;
+        if (departmentId.HasValue)
         {
-            await _accessGuard.EnsureEmployeeRecordAsync(action.EmployeeId, "PERSONNEL_ACTIONS", ct);
-        }
-        else
-        {
-            // Acción de ingreso (ej. Nombramiento) para una persona que aún no tiene registro
-            // de Empleado: EmployeeID es NULL a propósito (la acción solo referencia PersonId).
-            // No se puede resolver el departamento vía empleado, así que se usa el departamento
-            // propio de la acción (mismo criterio que Create(), línea ~156).
-            var departmentId = action.DestinationDepartmentId ?? action.OriginDepartmentId
-                ?? throw new UnauthorizedAccessException("No se pudo determinar el departamento del registro solicitado.");
-            await _accessGuard.EnsureDepartmentAsync(departmentId, "PERSONNEL_ACTIONS", ct);
+            await _accessGuard.EnsureDepartmentAsync(departmentId.Value, "PERSONNEL_ACTIONS", ct);
         }
 
         return action;
@@ -152,7 +147,7 @@ public sealed class PersonnelActionsController : ControllerBase
     {
         if (_currentUser.EmployeeId != employeeId)
         {
-            try { await _accessGuard.EnsureEmployeeRecordAsync(employeeId, "PERSONNEL_ACTIONS", ct); }
+            try { await _accessGuard.EnsureEmployeeRecordIfDepartmentKnownAsync(employeeId, "PERSONNEL_ACTIONS", ct); }
             catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
         }
 

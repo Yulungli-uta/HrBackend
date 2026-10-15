@@ -41,4 +41,19 @@ public class RecordAccessGuard : IRecordAccessGuard
 
         await _scope.EnsureDepartmentAllowedAsync(callerEmployeeId, moduleCode, owner.DepartmentID.Value, ct);
     }
+
+    /// <inheritdoc />
+    public async Task EnsureEmployeeRecordIfDepartmentKnownAsync(int recordOwnerEmployeeId, string moduleCode, CancellationToken ct = default)
+    {
+        var callerEmployeeId = _currentUser.EmployeeId
+            ?? throw new UnauthorizedAccessException("Usuario sin EmployeeId no puede acceder a este recurso.");
+
+        if (callerEmployeeId == recordOwnerEmployeeId) return;
+
+        // Empleado inactivo o sin departamento: no hay departamento contra el cual validar, no se bloquea.
+        var owner = await _employeeDetails.GetEmployeeDetailsAsync(recordOwnerEmployeeId, ct);
+        if (owner?.DepartmentID is null) return;
+
+        await _scope.EnsureDepartmentAllowedAsync(callerEmployeeId, moduleCode, owner.DepartmentID.Value, ct);
+    }
 }
