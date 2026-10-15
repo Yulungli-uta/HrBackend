@@ -325,6 +325,177 @@ WHERE
     AND (es.ValidTo IS NULL OR es.ValidTo >= CAST(GETDATE() AS DATE));
 GO
 
+-- [vw_EmployeeAppointment]
+-- 2026-10-15: documento con el que cada empleado GANÓ su nombramiento, una fila por empleado. Se usa para los años
+-- de escalafón y los reportes SIIES. Se calcula en vivo desde las acciones firmadas (no depende de Status=VIGENTE ni
+-- de matrices externas), así que una acción nueva se refleja sola.
+-- Regla de "cadena": los nombramientos PERMANENTES de un empleado, en orden de vigencia, forman una cadena mientras
+-- el cargo no cambie. Un nombramiento permanente NUEVO inicia una cadena nueva (reinicia el conteo de años) solo si
+--   a) su cargo destino es distinto al del permanente anterior (ambos conocidos), o
+--   b) hay una Recategorización / Promoción / Homologación / Ubicación Escalafonaria firmada entre ambos o a menos
+--      de 90 días después del nuevo.
+-- HasLaterExit = 1 si hay una salida firmada (Renuncia/Jubilación, categoría EXIT) con fecha igual o posterior al
+-- documento: la persona pudo reingresar por otra relación y el nombramiento ya no es su relación actual (los reportes
+-- SIIES no lo imponen en ese caso).
+-- Un permanente del mismo cargo sin recategorización cerca es una reemisión del documento: sigue en la misma
+-- cadena. El documento mostrado es el PRIMERO de la ÚLTIMA cadena. Sin permanente: Provisional más reciente y, si
+-- no, Designación más reciente. Un Provisional posterior a un permanente no reinicia nada.
+CREATE OR ALTER VIEW HR.vw_EmployeeAppointment AS
+WITH SignedAction AS (
+    SELECT pa.ActionID, pa.EmployeeID, pa.ActionNumber, pa.EffectiveDate, pa.DestinationJobId, t.Code AS TypeCode, t.Name AS TypeName, t.ActionCategory AS TypeCategory
+    FROM HR.tbl_PersonnelActions pa
+    JOIN HR.tbl_Personnel_Action_Type t ON t.PersonnelActionTypeId = pa.ActionTypeID
+    WHERE pa.IsDeleted = 0
+      AND pa.EmployeeID IS NOT NULL
+      AND pa.EffectiveDate IS NOT NULL
+      AND pa.Status IN ('FIRMADO_CARGADO', 'VIGENTE', 'FINALIZADO')
+),
+Perm AS (
+    SELECT
+        s.EmployeeID, s.ActionID, s.ActionNumber, s.EffectiveDate,
+        -- Cargo normalizado: sin signos ni espacios dobles, para no tratar "PROFESOR X " y "PROFESOR X" como cargos distintos.
+        LTRIM(RTRIM(REPLACE(REPLACE(REPLACE(UPPER(TRANSLATE(j.Description, N'()/.,-', N'      ')), N'  ', N' '), N'  ', N' '), N'  ', N' '))) AS JobKey,
+        ROW_NUMBER() OVER (PARTITION BY s.EmployeeID ORDER BY s.EffectiveDate, s.ActionID) AS rn
+    FROM SignedAction s
+    LEFT JOIN HR.tbl_Jobs j ON j.JobID = s.DestinationJobId
+    WHERE s.TypeCode = N'NOMBRAMIENTO'
+),
+PermFlag AS (
+    SELECT
+        cur.EmployeeID, cur.ActionID, cur.ActionNumber, cur.EffectiveDate, cur.rn,
+        CASE
+            WHEN cur.rn = 1 THEN 1
+            WHEN prev.JobKey IS NOT NULL AND cur.JobKey IS NOT NULL AND prev.JobKey <> cur.JobKey THEN 1
+            WHEN EXISTS (
+                SELECT 1 FROM SignedAction r
+                WHERE r.EmployeeID = cur.EmployeeID
+                  AND r.TypeCode IN (N'RECATEGORIZACION', N'PROMOCION', N'HOMOLOGACION_PUESTO', N'UBICACION_ESCALAFONARIA')
+                  AND r.EffectiveDate >= prev.EffectiveDate
+                  AND r.EffectiveDate <= DATEADD(DAY, 90, cur.EffectiveDate)
+            ) THEN 1
+            ELSE 0
+        END AS IsChainStart
+    FROM Perm cur
+    LEFT JOIN Perm prev ON prev.EmployeeID = cur.EmployeeID AND prev.rn = cur.rn - 1
+),
+PermSummary AS (
+    SELECT EmployeeID,
+           MAX(CASE WHEN IsChainStart = 1 THEN rn END) AS StartRn,
+           MAX(rn) AS LastRn
+    FROM PermFlag
+    GROUP BY EmployeeID
+),
+Other AS (
+    SELECT s.EmployeeID, s.ActionID, s.ActionNumber, s.EffectiveDate,
+           CASE WHEN s.TypeCode = N'DESIGNACION' THEN N'DESIGNACION' ELSE N'PROVISIONAL' END AS Kind,
+           ROW_NUMBER() OVER (
+               PARTITION BY s.EmployeeID
+               ORDER BY CASE WHEN s.TypeCode = N'DESIGNACION' THEN 2 ELSE 1 END, s.EffectiveDate DESC, s.ActionID DESC
+           ) AS rk
+    FROM SignedAction s
+    WHERE s.TypeCode = N'DESIGNACION' OR s.TypeName = N'Nombramiento Provisional'
+)
+SELECT
+    ps.EmployeeID,
+    st.ActionID        AS AppointmentActionId,
+    st.ActionNumber    AS AppointmentActionNumber,
+    st.EffectiveDate   AS AppointmentDate,
+    CAST(N'NOMBRAMIENTO' AS NVARCHAR(20)) AS AppointmentKind,
+    (SELECT COUNT(*) FROM Perm p WHERE p.EmployeeID = ps.EmployeeID) AS PermanentCount,
+    (ps.LastRn - ps.StartRn + 1) AS ChainLength,
+    CAST(CASE WHEN ps.StartRn > 1 THEN 1 ELSE 0 END AS BIT) AS IsRecategorized,
+    CAST(CASE WHEN EXISTS (
+        SELECT 1 FROM SignedAction x WHERE x.EmployeeID = ps.EmployeeID AND x.TypeCategory = N'EXIT' AND x.EffectiveDate >= st.EffectiveDate
+    ) THEN 1 ELSE 0 END AS BIT) AS HasLaterExit,
+    fi.ActionId        AS FirstPermanentActionId,
+    fi.ActionNumber    AS FirstPermanentActionNumber,
+    fi.EffectiveDate   AS FirstPermanentDate,
+    la.ActionId        AS LatestPermanentActionId,
+    la.ActionNumber    AS LatestPermanentActionNumber,
+    la.EffectiveDate   AS LatestPermanentDate
+FROM PermSummary ps
+JOIN Perm st ON st.EmployeeID = ps.EmployeeID AND st.rn = ps.StartRn
+JOIN Perm fi ON fi.EmployeeID = ps.EmployeeID AND fi.rn = 1
+JOIN Perm la ON la.EmployeeID = ps.EmployeeID AND la.rn = ps.LastRn
+UNION ALL
+SELECT
+    o.EmployeeID, o.ActionID, o.ActionNumber, o.EffectiveDate,
+    o.Kind,
+    0, 1, CAST(0 AS BIT),
+    CAST(CASE WHEN EXISTS (
+        SELECT 1 FROM SignedAction x WHERE x.EmployeeID = o.EmployeeID AND x.TypeCategory = N'EXIT' AND x.EffectiveDate >= o.EffectiveDate
+    ) THEN 1 ELSE 0 END AS BIT),
+    NULL, NULL, NULL, NULL, NULL, NULL
+FROM Other o
+WHERE o.rk = 1
+  AND NOT EXISTS (SELECT 1 FROM Perm p WHERE p.EmployeeID = o.EmployeeID);
+GO
+
+-- [vw_EmployeeCurrentSalary]
+-- 2026-10-14: "último sueldo" por empleado según la VIGENCIA del documento fuente, no por
+-- ChangedAt (se reescribe en cada edición/corrección) ni por ID (un histórico se carga después).
+-- Definida antes de vw_EmployeeDetails* porque estas la consumen.
+CREATE OR ALTER VIEW HR.vw_EmployeeCurrentSalary AS
+/*
+  HR.vw_EmployeeCurrentSalary — "último sueldo" de cada empleado, una fila por empleado.
+
+  Se ordena por nivel (Tier) y luego por fecha de inicio (acción: EffectiveDate; contrato: StartDate):
+    Tier 3  documento VIGENTE hoy (inicio <= hoy y fin nulo o >= hoy)
+    Tier 2  documento válido ya concluido (el último sueldo conocido de un empleado inactivo)
+    Tier 1  documento con inicio futuro   } solo como RESPALDO cuando el empleado no tiene
+    Tier 0  documento ANULADO o NO FIRMADO } ningún documento válido (IsFallback = 1), para no
+                                            dejarlo sin sueldo donde antes se mostraba uno.
+  Dentro del mismo nivel gana la fecha de inicio más reciente. Empate real (mismo nivel y misma
+  fecha de inicio): IsAmbiguous = 1 y se toma el MAYOR NewSalary como desempate determinista;
+  esos casos se revisan filtrando IsAmbiguous = 1.
+  Alineado con HR.fn_ResolveEmployeeRate (nómina), que también ordena por EffectiveDate y vigencia.
+*/
+WITH cand AS (
+    SELECT
+        sh.SalaryHistoryID,
+        sh.EmployeeID,
+        sh.OldSalary,
+        sh.NewSalary,
+        CASE WHEN sh.ActionID IS NOT NULL THEN 'ACCION' ELSE 'CONTRATO' END AS SourceType,
+        COALESCE(CAST(pa.EffectiveDate AS date), CAST(c.StartDate AS date), CAST(sh.ChangedAt AS date)) AS EffectiveFrom,
+        COALESCE(CAST(pa.EndDate AS date), CAST(c.EndDate AS date)) AS EffectiveTo,
+        CASE WHEN pa.Status IN ('ANULADO', 'BORRADOR', 'GENERADO', 'PENDIENTE_FIRMAS') OR rt.Name = 'ANULADO' THEN 1 ELSE 0 END AS IsVoided
+    FROM HR.tbl_SalaryHistory sh
+    LEFT JOIN HR.tbl_PersonnelActions pa ON pa.ActionID = sh.ActionID
+    LEFT JOIN HR.tbl_Contracts c         ON c.ContractID = sh.ContractID
+    LEFT JOIN HR.ref_Types rt            ON rt.TypeId = c.Status AND rt.Category = 'CONTRACT_STATUS'
+    WHERE sh.EmployeeID IS NOT NULL
+),
+flagged AS (
+    SELECT *,
+        CASE WHEN IsVoided = 1 THEN 0
+             WHEN EffectiveFrom > CAST(GETDATE() AS date) THEN 1
+             WHEN EffectiveTo IS NULL OR EffectiveTo >= CAST(GETDATE() AS date) THEN 3
+             ELSE 2 END AS Tier
+    FROM cand
+),
+ranked AS (
+    SELECT *,
+        ROW_NUMBER() OVER (PARTITION BY EmployeeID ORDER BY Tier DESC, EffectiveFrom DESC, NewSalary DESC) AS rn,
+        MIN(NewSalary) OVER (PARTITION BY EmployeeID, Tier, EffectiveFrom) AS MinSal,
+        MAX(NewSalary) OVER (PARTITION BY EmployeeID, Tier, EffectiveFrom) AS MaxSal
+    FROM flagged
+)
+SELECT
+    EmployeeID,
+    SalaryHistoryID,
+    NewSalary,
+    OldSalary,
+    SourceType,
+    EffectiveFrom,
+    EffectiveTo,
+    CAST(CASE WHEN Tier = 3 THEN 1 ELSE 0 END AS bit) AS InForce,
+    CAST(CASE WHEN Tier < 2 THEN 1 ELSE 0 END AS bit) AS IsFallback,
+    CAST(CASE WHEN MinSal <> MaxSal THEN 1 ELSE 0 END AS bit) AS IsAmbiguous
+FROM ranked
+WHERE rn = 1;
+GO
+
 -- [vw_EmployeeDetails]
 -- 2026-09-10: se agrega resolución de horario especial (ver
 -- HR.tbl_EmployeeSpecialSchedules / Database/hr/21_journey_number_and_special_schedules.sql)
@@ -386,13 +557,12 @@ LEFT JOIN HR.tbl_Schedules ts ON ts.ScheduleID = es_current.ScheduleID
 LEFT JOIN HR.tbl_EmployeeSpecialSchedules ss ON ss.EmployeeSpecialScheduleId = es_current.EmployeeSpecialScheduleId
 LEFT JOIN HR.ref_Types sct ON sct.TypeID = ss.CaseTypeId
 OUTER APPLY (
-    -- Último sueldo del empleado en HR.tbl_SalaryHistory, sin importar si el
-    -- documento fuente fue un Contrato (Código de Trabajo) o una Acción de
-    -- Personal (LOSEP/LOES) — ver Database/hr/18_salary_history_unification.sql.
-    SELECT TOP 1 sh.NewSalary
-    FROM HR.tbl_SalaryHistory sh
-    WHERE sh.EmployeeID = e.EmployeeID
-    ORDER BY sh.ChangedAt DESC, sh.SalaryHistoryID DESC
+    -- Último sueldo vigente del empleado según la vigencia del documento fuente (Contrato o
+    -- Acción de Personal), no ChangedAt — ver HR.vw_EmployeeCurrentSalary (definida arriba) y
+    -- Database/hr/18_salary_history_unification.sql.
+    SELECT cs.NewSalary
+    FROM HR.vw_EmployeeCurrentSalary cs
+    WHERE cs.EmployeeID = e.EmployeeID
 ) sh_latest
 WHERE e.IsActive = 1
 
@@ -453,10 +623,10 @@ LEFT JOIN HR.tbl_Schedules ts ON ts.ScheduleID = es_current.ScheduleID
 LEFT JOIN HR.tbl_EmployeeSpecialSchedules ss ON ss.EmployeeSpecialScheduleId = es_current.EmployeeSpecialScheduleId
 LEFT JOIN HR.ref_Types sct ON sct.TypeID = ss.CaseTypeId
 OUTER APPLY (
-    SELECT TOP 1 sh.NewSalary
-    FROM HR.tbl_SalaryHistory sh
-    WHERE sh.EmployeeID = e.EmployeeID
-    ORDER BY sh.ChangedAt DESC, sh.SalaryHistoryID DESC
+    -- Ver comentario equivalente en vw_EmployeeDetails.
+    SELECT cs.NewSalary
+    FROM HR.vw_EmployeeCurrentSalary cs
+    WHERE cs.EmployeeID = e.EmployeeID
 ) sh_latest
 
 GO
@@ -521,10 +691,9 @@ LEFT JOIN HR.tbl_Schedules  ts  ON ts.ScheduleID    = es_current.ScheduleID
 
 OUTER APPLY (
     -- Ver comentario equivalente en vw_EmployeeDetails.
-    SELECT TOP 1 sh.NewSalary
-    FROM HR.tbl_SalaryHistory sh
-    WHERE sh.EmployeeID = e.EmployeeID
-    ORDER BY sh.ChangedAt DESC, sh.SalaryHistoryID DESC
+    SELECT cs.NewSalary
+    FROM HR.vw_EmployeeCurrentSalary cs
+    WHERE cs.EmployeeID = e.EmployeeID
 ) sh_latest;
 
 

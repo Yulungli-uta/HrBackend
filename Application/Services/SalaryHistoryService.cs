@@ -49,27 +49,41 @@ public class SalaryHistoryService : Service<SalaryHistory, int>, ISalaryHistoryS
 
     /// <inheritdoc/>
     public async Task UpsertForActionAsync(
-        int actionId, int employeeId, decimal previousSalary, decimal newSalary,
+        int actionId, int employeeId, decimal? previousSalary, decimal newSalary,
         string changedBy, string? reason, CancellationToken ct)
     {
-        var existing = await _repository.GetByActionIdAsync(actionId, ct);
-        if (existing is not null)
+        // Todas las filas de la acción, no una arbitraria: la migración de 2022 dejó acciones con
+        // dos filas (sueldos distintos); corregir la acción las deja consistentes entre sí.
+        var existing = await _repository.GetAllByActionIdAsync(actionId, ct);
+        if (existing.Count > 0)
         {
-            existing.OldSalary = previousSalary;
-            existing.NewSalary = newSalary;
-            existing.EmployeeId = employeeId;
-            existing.ChangedBy = changedBy;
-            existing.ChangedAt = DateTime.UtcNow;
-            existing.Reason = reason;
-            await _repository.UpdateAsync(existing.SalaryHistoryId, existing, ct);
+            foreach (var row in existing)
+            {
+                // Si no se informó RMU Origen, se conserva el OldSalary ya guardado en vez de
+                // pisarlo con 0 (antes `previousRmu ?? 0` borraba un dato válido).
+                if (previousSalary.HasValue)
+                    row.OldSalary = previousSalary.Value;
+                row.NewSalary = newSalary;
+                row.EmployeeId = employeeId;
+                row.ChangedBy = changedBy;
+                row.ChangedAt = DateTime.UtcNow;
+                row.Reason = reason;
+                await _repository.UpdateAsync(row.SalaryHistoryId, row, ct);
+            }
             return;
         }
+
+        // Fila nueva sin RMU Origen: mismo criterio que UpsertForContractAsync (último sueldo
+        // conocido del empleado; si no hay, el nuevo), nunca 0.
+        var previous = previousSalary
+            ?? (await _repository.GetLatestByEmployeeIdAsync(employeeId, ct))?.NewSalary
+            ?? newSalary;
 
         await _repository.AddAsync(new SalaryHistory
         {
             ActionId = actionId,
             EmployeeId = employeeId,
-            OldSalary = previousSalary,
+            OldSalary = previous,
             NewSalary = newSalary,
             ChangedBy = changedBy,
             ChangedAt = DateTime.UtcNow,

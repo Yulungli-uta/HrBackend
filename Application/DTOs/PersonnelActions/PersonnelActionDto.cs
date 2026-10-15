@@ -144,7 +144,17 @@ public sealed record PersonnelActionDetailDto(
     string? OriginOccupationalGroupName,
     string? OriginGradeName,
     string? DestinationOccupationalGroupName,
-    string? DestinationGradeName
+    string? DestinationGradeName,
+
+    // 2026-10-14: situación de ORIGEN guardada en la propia acción (antes solo se derivaba de
+    // la acción previa del empleado, ver PreviousInstitutionalProcessName/PreviousManagementLevelName,
+    // que quedan como respaldo cuando estos campos están vacíos) y código presupuestario completo.
+    int? OriginInstitutionalProcess,
+    string? OriginInstitutionalProcessName,
+    int? OriginManagementLevel,
+    string? OriginManagementLevelName,
+    string? OriginBudgetProgramCode,
+    string? DestinationBudgetProgramCode
 );
 
 // ── Solicitudes ──────────────────────────────────────────────────────────────────
@@ -190,6 +200,11 @@ public sealed record CreatePersonnelActionRequest(
     int? InstitutionalProcess,
     int? ManagementLevel,
     int? Workplace,
+    // Situación de ORIGEN (proceso/nivel) y código presupuestario completo
+    int? OriginInstitutionalProcess,
+    int? OriginManagementLevel,
+    string? OriginBudgetProgramCode,
+    string? DestinationBudgetProgramCode,
 
     // Responsables del documento
     int? DthDirectorId,
@@ -238,6 +253,13 @@ public sealed record UpdatePersonnelActionRequest(
     int? InstitutionalProcess,
     int? ManagementLevel,
     int? Workplace,
+
+    // Situación de ORIGEN (proceso/nivel) y código presupuestario completo. null = conservar
+    // lo guardado; 0 (enteros) o "" (texto) = borrar el valor.
+    int? OriginInstitutionalProcess,
+    int? OriginManagementLevel,
+    string? OriginBudgetProgramCode,
+    string? DestinationBudgetProgramCode,
 
     // Responsables del documento
     int? DthDirectorId,

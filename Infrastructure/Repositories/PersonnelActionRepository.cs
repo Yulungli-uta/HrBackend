@@ -270,6 +270,20 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 .FirstOrDefaultAsync(ct)
             : null;
 
+        var originInstProcessName = result.action.OriginInstitutionalProcess.HasValue
+            ? await _db.RefTypes.AsNoTracking()
+                .Where(r => r.TypeId == result.action.OriginInstitutionalProcess.Value)
+                .Select(r => r.Name)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var originMgmtLevelName = result.action.OriginManagementLevel.HasValue
+            ? await _db.RefTypes.AsNoTracking()
+                .Where(r => r.TypeId == result.action.OriginManagementLevel.Value)
+                .Select(r => r.Name)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
         var workplaceName = result.action.Workplace.HasValue
             ? await _db.RefTypes.AsNoTracking()
                 .Where(r => r.TypeId == result.action.Workplace.Value)
@@ -357,7 +371,13 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             originGroupGrade?.Description,
             originGroupGrade?.GradeDescription,
             destGroupGrade?.Description,
-            destGroupGrade?.GradeDescription
+            destGroupGrade?.GradeDescription,
+            result.action.OriginInstitutionalProcess,
+            originInstProcessName,
+            result.action.OriginManagementLevel,
+            originMgmtLevelName,
+            result.action.OriginBudgetProgramCode,
+            result.action.DestinationBudgetProgramCode
         );
     }
 

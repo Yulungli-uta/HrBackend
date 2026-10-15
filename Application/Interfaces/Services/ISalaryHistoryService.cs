@@ -17,7 +17,7 @@ public interface ISalaryHistoryService : IService<SalaryHistory, int>
     /// Mismo criterio que <see cref="UpsertForContractAsync"/> pero para el documento "acción de personal".
     /// </summary>
     Task UpsertForActionAsync(
-        int actionId, int employeeId, decimal previousSalary, decimal newSalary,
+        int actionId, int employeeId, decimal? previousSalary, decimal newSalary,
         string changedBy, string? reason, CancellationToken ct);
 
     /// <summary>

@@ -97,7 +97,7 @@ public sealed class PersonnelActionTypeConfiguration : IEntityTypeConfiguration<
         e.ToTable("tbl_Personnel_Action_Type", "HR");
         e.HasKey(x => x.PersonnelActionTypeId);
         e.Property(x => x.PersonnelActionTypeId).HasColumnName("PersonnelActionTypeID");
-        e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+        e.Property(x => x.Name).HasMaxLength(150).IsRequired();
         e.Property(x => x.Code).HasMaxLength(50).IsRequired();
         e.Property(x => x.Description).HasMaxLength(300);
         e.Property(x => x.NumberingPrefix).HasMaxLength(30).IsRequired();
@@ -263,6 +263,8 @@ public sealed class PersonnelActionConfiguration : IEntityTypeConfiguration<Pers
         e.Property(x => x.ActionNumber).HasMaxLength(50);
         e.Property(x => x.OriginBudgetCode).HasMaxLength(50);
         e.Property(x => x.DestinationBudgetCode).HasMaxLength(50);
+        e.Property(x => x.OriginBudgetProgramCode).HasMaxLength(60);
+        e.Property(x => x.DestinationBudgetProgramCode).HasMaxLength(60);
         e.Property(x => x.LegalBasis).HasMaxLength(500);
         e.Property(x => x.Reason).HasMaxLength(1000);
         e.Property(x => x.Observations).HasMaxLength(1000);

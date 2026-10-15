@@ -182,20 +182,24 @@ SELECT
     ded.[SiiesLabel]                AS [TiempoDedicacionSiiesLabel],
     -- Fallback en cascada a ContractCode/ActionNumber cuando no hay EmployeeLaborRegime
     -- (o DocumentNumber no se copió al crearlo) -- mismo criterio que vw_SiiesFuncionarios.
-    COALESCE(elr.[DocumentNumber], ctr.[ContractCode], pa.[ActionNumber], ctrFallback.[ContractCode], paFallback.[ActionNumber]) AS [DocumentNumber],
-    COALESCE(elr.[DocumentType],
+    COALESCE(apt.[ActionNumber], elr.[DocumentNumber], ctr.[ContractCode], pa.[ActionNumber], ctrFallback.[ContractCode], paFallback.[ActionNumber]) AS [DocumentNumber],
+    CASE WHEN apt.[ActionId] IS NOT NULL THEN 'PERSONNEL_ACTION' ELSE COALESCE(elr.[DocumentType],
         CASE WHEN ctrFallback.[ContractID] IS NOT NULL THEN 'CONTRACT'
-             WHEN paFallback.[ActionID] IS NOT NULL THEN 'PERSONNEL_ACTION' END)          AS [RegimeDocumentType],
+             WHEN paFallback.[ActionID] IS NOT NULL THEN 'PERSONNEL_ACTION' END) END        AS [RegimeDocumentType],
     -- CAST a DATE obligatorio: mezclar date con datetime2 (tbl_Contracts) en un COALESCE
     -- rompe el mapeo EF Core DateOnly? con InvalidCastException.
-    COALESCE(elr.[EffectiveFrom], CAST(ctrFallback.[startdate] AS DATE), paFallback.[EffectiveDate])   AS [EffectiveFrom],
+    -- 2026-10-14: FECHA_INICIO = inicio del contrato/accion que respalda el regimen (ctr/pa); el
+    -- EffectiveFrom del regimen queda solo como respaldo (se cargo en bloque con 2025-01-01 en 549
+    -- filas) y HireDate como ultimo recurso. CAST a DATE obligatorio por el mismo motivo de arriba.
+    COALESCE(CAST(apt.[ActionDate] AS DATE), CAST(ctr.[startdate] AS DATE), CAST(pa.[EffectiveDate] AS DATE), elr.[EffectiveFrom],
+             CAST(ctrFallback.[startdate] AS DATE), paFallback.[EffectiveDate], e.[HireDate])   AS [EffectiveFrom],
     COALESCE(elr.[EffectiveTo], CAST(ctrFallback.[enddate] AS DATE), paFallback.[EndDate])             AS [EffectiveTo],
     elr.[IsActive]                  AS [RegimeIsActive],
     elr.[IngresoPorConcurso],
     -- Si no hay RelacionIes mapeada y el documento es Acción de Personal, se asume "Nombramiento"
     -- (solo Nombramiento/Designación/Nombramiento Provisional tienen mapeo propio a propósito).
     COALESCE(
-        ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel],
+        aptRel.[SiiesLabel], ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel],
         -- Si el contrato es un ADENDUM/PRORROGA/RENOVACIÓN sin RelacionIes propia, sube por ParentID.
         ctRelChainType.[SiiesLabel],
         CASE WHEN COALESCE(elr.[DocumentType],
@@ -303,6 +307,29 @@ OUTER APPLY (
 ) paFallback
 LEFT JOIN [HR].[tbl_personnel_action_type] patFallback ON patFallback.[PersonnelActionTypeId] = paFallback.[ActionTypeID]
 LEFT JOIN [HR].[ref_Types] patRelFallback               ON patRelFallback.[TypeID] = patFallback.[SiiesRelacionIesTypeId]
+-- 2026-10-15: SOLO TITULARES (con fila en tbl_TeacherStructure y sin contrato de docente ocasional) toman
+-- NUMERO_DOCUMENTO / FECHA_INICIO / RELACION_IES del documento con el que ganaron el nombramiento
+-- (HR.vw_EmployeeAppointment, regla de cadena). Los ocasionales conservan su contrato: un ocasional puede tener un
+-- nombramiento antiguo de otro puesto que no es su relacion actual. Con salida posterior (HasLaterExit) tambien se
+-- conserva la cascada anterior. Si el nombramiento actual es de fecha futura, se usa el primer permanente vigente.
+OUTER APPLY (
+    SELECT TOP 1 x.[ActionId], x.[ActionNumber], x.[ActionDate]
+    FROM (
+        SELECT ap.[AppointmentActionId] AS [ActionId], ap.[AppointmentActionNumber] AS [ActionNumber], ap.[AppointmentDate] AS [ActionDate], 1 AS [Pri]
+        FROM [HR].[vw_EmployeeAppointment] ap
+        WHERE ap.[EmployeeID] = e.[EmployeeID] AND ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] <= CAST(GETDATE() AS DATE)
+        UNION ALL
+        SELECT ap.[FirstPermanentActionId], ap.[FirstPermanentActionNumber], ap.[FirstPermanentDate], 2
+        FROM [HR].[vw_EmployeeAppointment] ap
+        WHERE ap.[EmployeeID] = e.[EmployeeID] AND ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] > CAST(GETDATE() AS DATE)
+          AND ap.[FirstPermanentDate] <= CAST(GETDATE() AS DATE)
+    ) x
+    WHERE ts.[TeacherStructureID] IS NOT NULL AND ocasionalDocente.[ContractID] IS NULL
+    ORDER BY x.[Pri]
+) apt
+LEFT JOIN [HR].[tbl_PersonnelActions] aptPa           ON aptPa.[ActionID] = apt.[ActionId]
+LEFT JOIN [HR].[tbl_personnel_action_type] aptPat     ON aptPat.[PersonnelActionTypeId] = aptPa.[ActionTypeID]
+LEFT JOIN [HR].[ref_Types] aptRel                     ON aptRel.[TypeID] = aptPat.[SiiesRelacionIesTypeId]
 -- Default "Nombramiento" para Acción de Personal sin mapeo propio (ver RelacionIesSiiesLabel).
 LEFT JOIN [HR].[ref_Types] relIesNombramientoDefault
     ON relIesNombramientoDefault.[Category] = 'SIIES_RELACION_IES' AND relIesNombramientoDefault.[Name] = N'Nombramiento'

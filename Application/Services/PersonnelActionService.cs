@@ -188,6 +188,10 @@ public sealed class PersonnelActionService : IPersonnelActionService
             SwornDeclaration        = request.SwornDeclaration,
             InstitutionalProcess    = request.InstitutionalProcess,
             ManagementLevel        = request.ManagementLevel,
+            OriginInstitutionalProcess   = request.OriginInstitutionalProcess is > 0 ? request.OriginInstitutionalProcess : null,
+            OriginManagementLevel        = request.OriginManagementLevel is > 0 ? request.OriginManagementLevel : null,
+            OriginBudgetProgramCode      = NormalizeText(request.OriginBudgetProgramCode),
+            DestinationBudgetProgramCode = NormalizeText(request.DestinationBudgetProgramCode),
             Workplace               = request.Workplace,
             DthDirectorId           = request.DthDirectorId,
             AuthorityNominatorId    = request.AuthorityNominatorId,
@@ -198,6 +202,12 @@ public sealed class PersonnelActionService : IPersonnelActionService
             CreatedAt               = DateTime.UtcNow,
             CreatedBy               = createdBy
         };
+
+        // Creación normal (no histórico): el origen de proceso/nivel se toma de la situación
+        // vigente del empleado (lo que quedó como PROPUESTA en su acción anterior). En un
+        // histórico lo registra el usuario según el documento original.
+        if (!request.IsHistoricalEntry && action.EmployeeId.HasValue)
+            await FillOriginClassificationFromPreviousActionAsync(action, ct);
 
         var actionId = await _actionRepository.CreateAsync(action, ct);
 
@@ -266,6 +276,12 @@ public sealed class PersonnelActionService : IPersonnelActionService
         action.SwornDeclaration        = request.SwornDeclaration;
         action.InstitutionalProcess    = request.InstitutionalProcess;
         action.ManagementLevel         = request.ManagementLevel;
+        // Campos de origen nuevos: null = conservar lo guardado (un cliente anterior que no los
+        // envía no debe borrarlos); 0 / "" = borrar el valor.
+        action.OriginInstitutionalProcess   = MergeOptionalId(request.OriginInstitutionalProcess, action.OriginInstitutionalProcess);
+        action.OriginManagementLevel        = MergeOptionalId(request.OriginManagementLevel, action.OriginManagementLevel);
+        action.OriginBudgetProgramCode      = MergeOptionalText(request.OriginBudgetProgramCode, action.OriginBudgetProgramCode);
+        action.DestinationBudgetProgramCode = MergeOptionalText(request.DestinationBudgetProgramCode, action.DestinationBudgetProgramCode);
         action.Workplace               = request.Workplace;
         action.EmployeeTypeId          = request.EmployeeTypeId is > 0 ? request.EmployeeTypeId : action.EmployeeTypeId;
         action.DthDirectorId           = request.DthDirectorId;
@@ -277,6 +293,42 @@ public sealed class PersonnelActionService : IPersonnelActionService
         action.UpdatedBy               = updatedBy;
 
         await _actionRepository.UpdateAsync(action, ct);
+    }
+
+    private static string? NormalizeText(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>null = conservar el valor actual; 0 o negativo = borrar; &gt;0 = asignar.</summary>
+    private static int? MergeOptionalId(int? requested, int? current)
+        => requested is null ? current : (requested > 0 ? requested : null);
+
+    /// <summary>null = conservar el valor actual; "" / solo espacios = borrar; otro = asignar (recortado).</summary>
+    private static string? MergeOptionalText(string? requested, string? current)
+        => requested is null ? current : NormalizeText(requested);
+
+    /// <summary>
+    /// Completa el Proceso Institucional / Nivel de Gestión de ORIGEN de una acción nueva con lo que
+    /// quedó como PROPUESTA en la acción previa más reciente del mismo empleado (su clasificación
+    /// actual real). Solo llena los que vengan vacíos; si no hay acción previa queda vacío.
+    /// </summary>
+    private async Task FillOriginClassificationFromPreviousActionAsync(PersonnelAction action, CancellationToken ct)
+    {
+        if (action.OriginInstitutionalProcess.HasValue && action.OriginManagementLevel.HasValue) return;
+
+        var employeeId = action.EmployeeId!.Value;
+        if (!action.OriginInstitutionalProcess.HasValue)
+            action.OriginInstitutionalProcess = await _db.PersonnelActions.AsNoTracking()
+                .Where(a => a.EmployeeId == employeeId && a.InstitutionalProcess != null)
+                .OrderByDescending(a => a.ActionDate).ThenByDescending(a => a.ActionId)
+                .Select(a => a.InstitutionalProcess)
+                .FirstOrDefaultAsync(ct);
+
+        if (!action.OriginManagementLevel.HasValue)
+            action.OriginManagementLevel = await _db.PersonnelActions.AsNoTracking()
+                .Where(a => a.EmployeeId == employeeId && a.ManagementLevel != null)
+                .OrderByDescending(a => a.ActionDate).ThenByDescending(a => a.ActionId)
+                .Select(a => a.ManagementLevel)
+                .FirstOrDefaultAsync(ct);
     }
 
     /// <summary>
@@ -292,7 +344,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
             return;
 
         await _salaryHistory.UpsertForActionAsync(
-            action.ActionId, action.EmployeeId.Value, action.PreviousRmu ?? 0m, action.NewRmu.Value,
+            action.ActionId, action.EmployeeId.Value, action.PreviousRmu, action.NewRmu.Value,
             _currentUser.UserName ?? _currentUser.Email ?? "system", reason, ct);
     }
 
@@ -358,6 +410,12 @@ public sealed class PersonnelActionService : IPersonnelActionService
         action.SwornDeclaration        = request.SwornDeclaration;
         action.InstitutionalProcess    = request.InstitutionalProcess;
         action.ManagementLevel         = request.ManagementLevel;
+        // Campos de origen nuevos: null = conservar lo guardado (un cliente anterior que no los
+        // envía no debe borrarlos); 0 / "" = borrar el valor.
+        action.OriginInstitutionalProcess   = MergeOptionalId(request.OriginInstitutionalProcess, action.OriginInstitutionalProcess);
+        action.OriginManagementLevel        = MergeOptionalId(request.OriginManagementLevel, action.OriginManagementLevel);
+        action.OriginBudgetProgramCode      = MergeOptionalText(request.OriginBudgetProgramCode, action.OriginBudgetProgramCode);
+        action.DestinationBudgetProgramCode = MergeOptionalText(request.DestinationBudgetProgramCode, action.DestinationBudgetProgramCode);
         action.Workplace               = request.Workplace;
         action.EmployeeTypeId          = request.EmployeeTypeId is > 0 ? request.EmployeeTypeId : action.EmployeeTypeId;
         action.DthDirectorId           = request.DthDirectorId;
@@ -988,8 +1046,12 @@ public sealed class PersonnelActionService : IPersonnelActionService
         // La clasificación ACTUAL se consulta de la Acción de Personal previa de este
         // mismo empleado (lo que quedó como su PROPUESTA la última vez); si no hay acción
         // previa, queda vacía — nunca se inventa/deriva de otra fuente.
-        Set(r, "CURRENT_INSTITUTIONAL_PROCESS",  d.PreviousInstitutionalProcessName);
-        Set(r, "CURRENT_MANAGEMENT_LEVEL",       d.PreviousManagementLevelName);
+        // 2026-10-14: la situación de ORIGEN se guarda en la propia acción; la acción previa del
+        // empleado queda solo como respaldo cuando el origen no se registró.
+        Set(r, "CURRENT_INSTITUTIONAL_PROCESS",  d.OriginInstitutionalProcessName ?? d.PreviousInstitutionalProcessName);
+        Set(r, "CURRENT_MANAGEMENT_LEVEL",       d.OriginManagementLevelName ?? d.PreviousManagementLevelName);
+        Set(r, "CURRENT_BUDGET_PROGRAM_CODE",    d.OriginBudgetProgramCode);
+        Set(r, "PROPOSED_BUDGET_PROGRAM_CODE",   d.DestinationBudgetProgramCode);
         Set(r, "PROPOSED_INSTITUTIONAL_PROCESS", d.InstitutionalProcessName ?? d.DestinationDepartmentTypeName);
         Set(r, "PROPOSED_MANAGEMENT_LEVEL",      d.ManagementLevelName ?? d.DestinationDepartmentTypeDescription);
 

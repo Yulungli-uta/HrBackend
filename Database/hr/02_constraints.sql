@@ -1226,6 +1226,20 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_PersonnelActions_
             REFERENCES [HR].[ref_Types] ([TypeID]);
 GO
 
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_PersonnelActions_OriginInstitutionalProcess')
+    ALTER TABLE [HR].[tbl_PersonnelActions]
+        ADD CONSTRAINT [FK_PersonnelActions_OriginInstitutionalProcess]
+            FOREIGN KEY ([OriginInstitutionalProcess])
+            REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_PersonnelActions_OriginManagementLevel')
+    ALTER TABLE [HR].[tbl_PersonnelActions]
+        ADD CONSTRAINT [FK_PersonnelActions_OriginManagementLevel]
+            FOREIGN KEY ([OriginManagementLevel])
+            REFERENCES [HR].[ref_Types] ([TypeID]);
+GO
+
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_PersonnelActions_Movement')
     ALTER TABLE [HR].[tbl_PersonnelActions]
         ADD CONSTRAINT [FK_PersonnelActions_Movement]

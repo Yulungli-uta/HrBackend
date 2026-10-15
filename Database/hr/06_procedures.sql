@@ -4341,16 +4341,25 @@ RETURN
           ))
     ),
     ContractRate AS (
+        -- 2026-10-15: el sueldo del contrato es el REAL registrado en HR.tbl_SalaryHistory para ese contrato
+        -- (docentes ocasionales/técnicos no tienen cargo con grupo ocupacional, por eso antes salían sin tarifa);
+        -- la RMU del grupo ocupacional del cargo queda solo como respaldo.
         SELECT
             e.EmployeeID,
             cc.LaborRegimeID,
-            og.RMU,
+            COALESCE(shc.NewSalary, og.RMU) AS RMU,
             'CONTRATO' AS SourceType
         FROM ContractCandidates cc
         JOIN HR.tbl_Employees e ON e.PersonID = cc.PersonID
         LEFT JOIN HR.tbl_jobs j ON j.JobID = cc.JobID
         LEFT JOIN HR.tbl_Occupational_Groups og ON og.GroupID = j.GroupID
-        WHERE cc.rn = 1 AND og.RMU IS NOT NULL
+        OUTER APPLY (
+            SELECT TOP 1 s.NewSalary
+            FROM HR.tbl_SalaryHistory s
+            WHERE s.ContractID = cc.ContractID
+            ORDER BY s.ChangedAt DESC, s.SalaryHistoryID DESC
+        ) shc
+        WHERE cc.rn = 1 AND COALESCE(shc.NewSalary, og.RMU) IS NOT NULL
     ),
     ActionCandidates AS (
         SELECT
@@ -4359,15 +4368,16 @@ RETURN
             pa.NewRmu,
             ROW_NUMBER() OVER (
                 PARTITION BY pa.EmployeeID
-                ORDER BY pa.EffectiveDate DESC, pa.ActionID DESC
+                -- 2026-10-15: igual que HR.vw_EmployeeCurrentSalary — primero la acción que RIGE en @AsOfDate
+                -- (sin fin, con fin abierto 9999 o posterior), y solo si no hay ninguna, la última concluida por fecha
+                -- de vigencia. Antes se exigía Status='VIGENTE', que la migración dejó en miles de acciones ya terminadas
+                -- y que las acciones de cambio de sueldo firmadas desde la aplicación nunca alcanzan.
+                ORDER BY CASE WHEN pa.EndDate IS NULL OR pa.EndDate >= @AsOfDate OR YEAR(pa.EndDate) >= 9000 THEN 0 ELSE 1 END,
+                         pa.EffectiveDate DESC, pa.ActionID DESC
             ) AS rn
         FROM HR.tbl_PersonnelActions pa
-        -- 2026-07-06: VIGENTE reemplaza a FIRMADO_CARGADO como señal de "esta acción
-        -- es la actual" — antes se usaba una heurística de "la más reciente por fecha"
-        -- porque no existía un estado explícito de vigencia; ahora sí existe (ver
-        -- PersonnelActionService.ReachesVigente). El ROW_NUMBER se conserva como
-        -- respaldo defensivo, aunque solo debería haber una VIGENTE por empleado.
-        WHERE pa.Status = 'VIGENTE'
+        WHERE pa.IsDeleted = 0
+          AND pa.Status IN ('FIRMADO_CARGADO', 'VIGENTE', 'FINALIZADO')
           AND pa.EffectiveDate <= @AsOfDate
           AND pa.NewRmu IS NOT NULL
           AND (@EmployeeID IS NULL OR pa.EmployeeID = @EmployeeID)

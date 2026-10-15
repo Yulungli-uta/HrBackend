@@ -198,23 +198,26 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                           AND da.[StartDate] <= @FechaHasta
                           AND (da.[EndDate] IS NULL OR da.[EndDate] >= @FechaDesde)
                     ) THEN N'DIRECTIVO'
-                    WHEN lr.[Name] = N'LOSEP' THEN N'ADMINISTRATIVO'
-                    WHEN lr.[Name] = N'Código Trabajo' THEN N'TRABAJADOR'
-                    WHEN lr.[Name] = N'LOES' THEN N'DOCENTE LOES'
+                    WHEN lrEff.[Name] = N'LOSEP' THEN N'ADMINISTRATIVO'
+                    WHEN lrEff.[Name] = N'Código Trabajo' THEN N'TRABAJADOR'
+                    WHEN lrEff.[Name] = N'LOES' THEN N'DOCENTE LOES'
                     ELSE NULL
                 END                             AS [TipoFuncionarioSiiesLabel],
                 tdl.[SiiesLabel]                AS [TipoDocenteLoesSiiesLabel],
                 cdl.[SiiesLabel]                AS [CategoriaDocenteLoesSiiesLabel],
-                COALESCE(elr.[DocumentNumber], ctr.[ContractCode], pa.[ActionNumber], ctrFallback.[ContractCode], paFallback.[ActionNumber]) AS [DocumentNumber],
-                COALESCE(elr.[EffectiveFrom], CAST(ctrFallback.[startdate] AS DATE), paFallback.[EffectiveDate])   AS [EffectiveFrom],
+                COALESCE(apt.[ActionNumber], elr.[DocumentNumber], ctr.[ContractCode], pa.[ActionNumber], ctrFallback.[ContractCode], paFallback.[ActionNumber]) AS [DocumentNumber],
+                -- 2026-10-14: igual que la vista — FECHA_INICIO = inicio del contrato/accion que respalda el
+                -- regimen (ctr/pa); EffectiveFrom del regimen solo como respaldo y HireDate como ultimo recurso.
+                COALESCE(CAST(apt.[ActionDate] AS DATE), CAST(ctr.[startdate] AS DATE), CAST(pa.[EffectiveDate] AS DATE), elr.[EffectiveFrom],
+                         CAST(ctrFallback.[startdate] AS DATE), paFallback.[EffectiveDate], e.[HireDate])   AS [EffectiveFrom],
                 COALESCE(elr.[EffectiveTo], CAST(ctrFallback.[enddate] AS DATE), paFallback.[EndDate])             AS [EffectiveTo],
                 elr.[IsActive]                  AS [RegimeIsActive],
                 elr.[IngresoPorConcurso],
-                COALESCE(elr.[DocumentType],
+                CASE WHEN apt.[ActionId] IS NOT NULL THEN 'PERSONNEL_ACTION' ELSE COALESCE(elr.[DocumentType],
                     CASE WHEN ctrFallback.[ContractID] IS NOT NULL THEN 'CONTRACT'
-                         WHEN paFallback.[ActionID] IS NOT NULL THEN 'PERSONNEL_ACTION' END)          AS [RegimeDocumentType],
-                lr.[Name]                       AS [LaborRegimeName],
-                COALESCE(ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel]) AS [RelacionIesSiiesLabel],
+                         WHEN paFallback.[ActionID] IS NOT NULL THEN 'PERSONNEL_ACTION' END) END        AS [RegimeDocumentType],
+                lrEff.[Name]                    AS [LaborRegimeName],
+                COALESCE(aptRel.[SiiesLabel], ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel]) AS [RelacionIesSiiesLabel],
                 COALESCE(ctr.[ContractedHours], ctrFallback.[ContractedHours]) AS [ContractedHours],
                 e.[IsActive]                    AS [EmployeeIsActive],
                 e.[HireDate]
@@ -241,7 +244,6 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                   AND (r.[EffectiveTo] IS NULL OR r.[EffectiveTo] >= @FechaDesde)
                 ORDER BY CASE WHEN r.[IsPrincipal] = 1 THEN 0 ELSE 1 END, r.[EffectiveFrom] DESC
             ) elr
-            LEFT JOIN [HR].[ref_Types] lr                ON lr.[TypeID] = elr.[LaborRegimeId]
             LEFT JOIN [HR].[tbl_Contracts] ctr           ON elr.[DocumentType] = 'CONTRACT' AND ctr.[ContractID] = elr.[SourceContractId]
             LEFT JOIN [HR].[tbl_contract_type] ct        ON ct.[ContractTypeID] = ctr.[ContractTypeID]
             LEFT JOIN [HR].[ref_Types] ctRel             ON ctRel.[TypeID] = ct.[SiiesRelacionIesTypeId]
@@ -274,9 +276,54 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             ) paFallback
             LEFT JOIN [HR].[tbl_personnel_action_type] patFallback ON patFallback.[PersonnelActionTypeId] = paFallback.[ActionTypeID]
             LEFT JOIN [HR].[ref_Types] patRelFallback               ON patRelFallback.[TypeID] = patFallback.[SiiesRelacionIesTypeId]
+            -- 2026-10-15: igual que la vista — documento con el que GANO el nombramiento (HR.vw_EmployeeAppointment), evaluado
+            -- contra el rango: si el nombramiento actual es posterior al fin del rango se usa el primer permanente ya vigente
+            -- en esa fecha (aproximacion: exacta cuando hubo a lo mas un reinicio de cadena). Sin nombramiento o con salida
+            -- posterior queda la cascada anterior.
+            OUTER APPLY (
+                SELECT TOP 1 x.[ActionId], x.[ActionNumber], x.[ActionDate]
+                FROM (
+                    SELECT ap.[AppointmentActionId] AS [ActionId], ap.[AppointmentActionNumber] AS [ActionNumber], ap.[AppointmentDate] AS [ActionDate], 1 AS [Pri]
+                    FROM [HR].[vw_EmployeeAppointment] ap
+                    WHERE ap.[EmployeeID] = e.[EmployeeID] AND ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] <= @FechaHasta
+                    UNION ALL
+                    SELECT ap.[FirstPermanentActionId], ap.[FirstPermanentActionNumber], ap.[FirstPermanentDate], 2
+                    FROM [HR].[vw_EmployeeAppointment] ap
+                    WHERE ap.[EmployeeID] = e.[EmployeeID] AND ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] > @FechaHasta
+                      AND ap.[FirstPermanentDate] <= @FechaHasta
+                ) x
+                ORDER BY x.[Pri]
+            ) apt
+            LEFT JOIN [HR].[tbl_PersonnelActions] aptPa           ON aptPa.[ActionID] = apt.[ActionId]
+            LEFT JOIN [HR].[tbl_personnel_action_type] aptPat     ON aptPat.[PersonnelActionTypeId] = aptPa.[ActionTypeID]
+            LEFT JOIN [HR].[ref_Types] aptRel                     ON aptRel.[TypeID] = aptPat.[SiiesRelacionIesTypeId]
+            -- 2026-10-14: Regimen EFECTIVO (TIPO_FUNCIONARIO / LaborRegimeName), el primero que exista:
+            --   1) regimen que solapa el rango (elr)
+            --   2) regimen del TIPO del contrato de respaldo (tbl_contract_type.PersonalContractTypeID: 57/58/59)
+            --   3) regimen propio de la accion de respaldo (EmployeeTypeId; el tipo de accion NO se usa: el mismo
+            --      tipo sale LOES y LOSEP)
+            --   4) regimen ACTUAL del empleado (principal activo, o el mas reciente; acierta 98-99 % donde se puede
+            --      comparar con el regimen real del periodo)
+            --   5) NULL: sin documento ni regimen, no se adivina.
+            -- Antes solo existia el paso 1, y tbl_EmployeeLaborRegime guarda el regimen vigente, asi que en rangos
+            -- pasados TIPO_FUNCIONARIO salia vacio (617 filas en 2024).
+            OUTER APPLY (
+                SELECT TOP 1 x.[LaborRegimeId]
+                FROM [HR].[tbl_EmployeeLaborRegime] x
+                WHERE x.[EmployeeId] = e.[EmployeeID]
+                ORDER BY CASE WHEN x.[IsPrincipal] = 1 AND x.[IsActive] = 1 THEN 0 ELSE 1 END, x.[EffectiveFrom] DESC
+            ) curReg
+            LEFT JOIN [HR].[ref_Types] lrEff ON lrEff.[TypeID] = COALESCE(
+                elr.[LaborRegimeId],
+                CASE WHEN ctFallback.[PersonalContractTypeID] IN (57, 58, 59) THEN ctFallback.[PersonalContractTypeID] END,
+                CASE WHEN paFallback.[EmployeeTypeId] IN (57, 58, 59) THEN paFallback.[EmployeeTypeId] END,
+                curReg.[LaborRegimeId])
             WHERE e.[IsDeleted] = 0
               AND ISNULL(j.[Description], '') NOT LIKE 'PROFESOR TITULAR%'
               AND NOT EXISTS (SELECT 1 FROM [HR].[tbl_TeacherStructure] ts WHERE ts.[EmployeeID] = e.[EmployeeID])
+              -- 2026-10-14: igual que la vista — los profesores ocasionales/tecnicos docentes van a
+              -- vw_SiiesProfesores; sin esta exclusion se colaban aqui (557-727 filas segun el rango).
+              AND NOT EXISTS (SELECT 1 FROM [HR].[fn_SiiesDocenteOcasionalContract](p.[PersonID]))
               AND it.[Name] = @IdentTypeName
               AND (@Identification IS NULL OR p.[IDCard] = @Identification)
               -- A diferencia de la vista (que siempre devuelve 1 fila por empleado activo,

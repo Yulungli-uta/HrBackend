@@ -6,6 +6,7 @@ using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Data;
+using WsUtaSystem.Infrastructure.Repositories;
 using WsUtaSystem.Models;
 using WsUtaSystem.Reports.Abstractions;
 using WsUtaSystem.Reports.Core;
@@ -124,11 +125,10 @@ public sealed class SeniorityBonusReportSource : IReportSource
                 .ToList();
         }
 
-        // RMU: última fila de SalaryHistory por empleado (libro único desde 2026-08-14).
-        var latestSalaries = await _db.Set<SalaryHistory>().AsNoTracking()
+        // RMU: fila vigente de SalaryHistory por empleado (libro único desde 2026-08-14), según la
+        // vigencia del documento fuente — no ChangedAt, que se reescribe en cada edición/corrección.
+        var latestSalaries = await _db.CurrentSalaries().AsNoTracking()
             .Where(s => s.EmployeeId != null && employeeIds.Contains(s.EmployeeId.Value))
-            .GroupBy(s => s.EmployeeId)
-            .Select(g => g.OrderByDescending(s => s.ChangedAt).ThenByDescending(s => s.SalaryHistoryId).First())
             .ToListAsync(ct);
         var rmuByEmployee = latestSalaries.ToDictionary(s => s.EmployeeId!.Value, s => s.NewSalary);
 

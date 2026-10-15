@@ -13,10 +13,14 @@ public class SalaryHistoryRepository : ServiceAwareEfRepository<SalaryHistory, i
     public Task<SalaryHistory?> GetByActionIdAsync(int actionId, CancellationToken ct) =>
         Query().Where(x => x.ActionId == actionId).FirstOrDefaultAsync(ct);
 
+    public Task<List<SalaryHistory>> GetAllByActionIdAsync(int actionId, CancellationToken ct) =>
+        Query().Where(x => x.ActionId == actionId).ToListAsync(ct);
+
+    // "Último sueldo" por vigencia del documento fuente (ver HR.vw_EmployeeCurrentSalary), no por
+    // ChangedAt: ese campo se reescribe en cada edición y un histórico cargado hoy lo adelantaría.
     public Task<SalaryHistory?> GetLatestByEmployeeIdAsync(int employeeId, CancellationToken ct) =>
-        Query()
+        _db.CurrentSalaries()
+            .AsNoTracking()
             .Where(x => x.EmployeeId == employeeId)
-            .OrderByDescending(x => x.ChangedAt)
-            .ThenByDescending(x => x.SalaryHistoryId)
             .FirstOrDefaultAsync(ct);
 }

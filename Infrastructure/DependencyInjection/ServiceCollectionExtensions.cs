@@ -817,6 +817,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimePlanningEmployeeRepository, WsUtaSystem.Infrastructure.Repositories.TimePlanningEmployeeRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimePlanningExecutionRepository, WsUtaSystem.Infrastructure.Repositories.TimePlanningExecutionRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimePlanningService, WsUtaSystem.Application.Services.TimePlanningService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimePlanningOverviewRepository, WsUtaSystem.Infrastructure.Repositories.TimePlanningOverviewRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimePlanningOverviewService, WsUtaSystem.Application.Services.TimePlanningOverviewService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimePlanningEmployeeService, WsUtaSystem.Application.Services.TimePlanningEmployeeService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimePlanningExecutionService, WsUtaSystem.Application.Services.TimePlanningExecutionService>();
 

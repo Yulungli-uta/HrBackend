@@ -118,6 +118,18 @@ public sealed class PersonnelAction : IAuditable, ISoftDeletable
     /// <summary>FK a ref_Types (Category = 'AP_NIVEL_GESTION'). Nivel de gestión de la acción.</summary>
     public int? ManagementLevel { get; set; }
 
+    /// <summary>FK a ref_Types (Category = 'AP_PROCESO_INSTITUCIONAL'). Proceso institucional de la situación de ORIGEN.</summary>
+    public int? OriginInstitutionalProcess { get; set; }
+
+    /// <summary>FK a ref_Types (Category = 'AP_NIVEL_GESTION'). Nivel de gestión de la situación de ORIGEN.</summary>
+    public int? OriginManagementLevel { get; set; }
+
+    /// <summary>Código presupuestario completo de la situación de origen (distinto de la partida del puesto, <see cref="OriginBudgetCode"/>).</summary>
+    public string? OriginBudgetProgramCode { get; set; }
+
+    /// <summary>Código presupuestario completo de la situación propuesta (distinto de la partida del puesto, <see cref="DestinationBudgetCode"/>).</summary>
+    public string? DestinationBudgetProgramCode { get; set; }
+
     /// <summary>FK a ref_Types (Category = 'AP_LUGAR_TRABAJO'). Lugar de trabajo propuesto de la acción.</summary>
     public int? Workplace { get; set; }
 

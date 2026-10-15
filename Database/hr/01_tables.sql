@@ -1741,9 +1741,26 @@ CREATE TABLE [HR].[tbl_PersonnelActions] (
     [RegistrarID] INT NULL,
     [InstitutionalProcess] INT NULL,
     [ManagementLevel] INT NULL,
+    [OriginInstitutionalProcess] INT NULL,
+    [OriginManagementLevel] INT NULL,
+    [OriginBudgetProgramCode] NVARCHAR(60) NULL,
+    [DestinationBudgetProgramCode] NVARCHAR(60) NULL,
     [SwornDeclaration] BIT DEFAULT ((0)) NOT NULL,
     [IsDeleted] BIT DEFAULT ((0)) NOT NULL
 );
+GO
+
+-- Situación de ORIGEN y código presupuestario guardados en la propia acción (igual que
+-- el documento legado: sa_*/sp_*). OriginBudgetCode/DestinationBudgetCode = partida del
+-- puesto; *BudgetProgramCode = código presupuestario completo. Aditivo e idempotente.
+IF COL_LENGTH('[HR].[tbl_PersonnelActions]', 'OriginInstitutionalProcess') IS NULL
+    ALTER TABLE [HR].[tbl_PersonnelActions] ADD [OriginInstitutionalProcess] INT NULL;
+IF COL_LENGTH('[HR].[tbl_PersonnelActions]', 'OriginManagementLevel') IS NULL
+    ALTER TABLE [HR].[tbl_PersonnelActions] ADD [OriginManagementLevel] INT NULL;
+IF COL_LENGTH('[HR].[tbl_PersonnelActions]', 'OriginBudgetProgramCode') IS NULL
+    ALTER TABLE [HR].[tbl_PersonnelActions] ADD [OriginBudgetProgramCode] NVARCHAR(60) NULL;
+IF COL_LENGTH('[HR].[tbl_PersonnelActions]', 'DestinationBudgetProgramCode') IS NULL
+    ALTER TABLE [HR].[tbl_PersonnelActions] ADD [DestinationBudgetProgramCode] NVARCHAR(60) NULL;
 GO
 
 -- ------------------------------------------------------------

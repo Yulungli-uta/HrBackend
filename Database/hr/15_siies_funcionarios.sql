@@ -254,18 +254,22 @@ SELECT
     cdl.[SiiesLabel]                AS [CategoriaDocenteLoesSiiesLabel],
     -- Fallback a ContractCode/ActionNumber (DocumentNumber a veces no se copió al crear el
     -- régimen) y luego a ctrFallback/paFallback para empleados sin fila en EmployeeLaborRegime.
-    COALESCE(elr.[DocumentNumber], ctr.[ContractCode], pa.[ActionNumber], ctrFallback.[ContractCode], paFallback.[ActionNumber]) AS [DocumentNumber],
+    COALESCE(apt.[ActionNumber], elr.[DocumentNumber], ctr.[ContractCode], pa.[ActionNumber], ctrFallback.[ContractCode], paFallback.[ActionNumber]) AS [DocumentNumber],
     -- CAST a DATE obligatorio: mezclar date (EmployeeLaborRegime/PersonnelActions) con datetime2
     -- (tbl_Contracts) en un COALESCE promueve todo a datetime2 y rompe el mapeo EF Core DateOnly?.
-    COALESCE(elr.[EffectiveFrom], CAST(ctrFallback.[startdate] AS DATE), paFallback.[EffectiveDate])   AS [EffectiveFrom],
+    -- 2026-10-14: FECHA_INICIO = inicio del contrato/accion que respalda el regimen (ctr/pa); el
+    -- EffectiveFrom del regimen queda solo como respaldo (se cargo en bloque con 2025-01-01 en 549
+    -- filas) y HireDate como ultimo recurso. CAST a DATE obligatorio por el mismo motivo de arriba.
+    COALESCE(CAST(apt.[ActionDate] AS DATE), CAST(ctr.[startdate] AS DATE), CAST(pa.[EffectiveDate] AS DATE), elr.[EffectiveFrom],
+             CAST(ctrFallback.[startdate] AS DATE), paFallback.[EffectiveDate], e.[HireDate])   AS [EffectiveFrom],
     COALESCE(elr.[EffectiveTo], CAST(ctrFallback.[enddate] AS DATE), paFallback.[EndDate])             AS [EffectiveTo],
     elr.[IsActive]                  AS [RegimeIsActive],
     elr.[IngresoPorConcurso],
-    COALESCE(elr.[DocumentType],
+    CASE WHEN apt.[ActionId] IS NOT NULL THEN 'PERSONNEL_ACTION' ELSE COALESCE(elr.[DocumentType],
         CASE WHEN ctrFallback.[ContractID] IS NOT NULL THEN 'CONTRACT'
-             WHEN paFallback.[ActionID] IS NOT NULL THEN 'PERSONNEL_ACTION' END)          AS [RegimeDocumentType],
+             WHEN paFallback.[ActionID] IS NOT NULL THEN 'PERSONNEL_ACTION' END) END        AS [RegimeDocumentType],
     lr.[Name]                       AS [LaborRegimeName],
-    COALESCE(ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel]) AS [RelacionIesSiiesLabel],
+    COALESCE(aptRel.[SiiesLabel], ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel]) AS [RelacionIesSiiesLabel],
     COALESCE(ctr.[ContractedHours], ctrFallback.[ContractedHours]) AS [ContractedHours],
     e.[IsActive]                    AS [EmployeeIsActive],
     e.[HireDate]
@@ -319,6 +323,27 @@ OUTER APPLY (
 ) paFallback
 LEFT JOIN [HR].[tbl_personnel_action_type] patFallback ON patFallback.[PersonnelActionTypeId] = paFallback.[ActionTypeID]
 LEFT JOIN [HR].[ref_Types] patRelFallback               ON patRelFallback.[TypeID] = patFallback.[SiiesRelacionIesTypeId]
+-- 2026-10-15: NUMERO_DOCUMENTO / FECHA_INICIO / RELACION_IES = documento con el que el empleado GANO su
+-- nombramiento (HR.vw_EmployeeAppointment, regla de cadena: un permanente nuevo reinicia solo si cambia el cargo o hay
+-- recategorizacion). Si no tiene nombramiento, o tiene una salida posterior (HasLaterExit), queda la cascada anterior.
+-- Si el nombramiento actual es de fecha futura, se usa el primer permanente ya vigente.
+OUTER APPLY (
+    SELECT TOP 1 x.[ActionId], x.[ActionNumber], x.[ActionDate]
+    FROM (
+        SELECT ap.[AppointmentActionId] AS [ActionId], ap.[AppointmentActionNumber] AS [ActionNumber], ap.[AppointmentDate] AS [ActionDate], 1 AS [Pri]
+        FROM [HR].[vw_EmployeeAppointment] ap
+        WHERE ap.[EmployeeID] = e.[EmployeeID] AND ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] <= CAST(GETDATE() AS DATE)
+        UNION ALL
+        SELECT ap.[FirstPermanentActionId], ap.[FirstPermanentActionNumber], ap.[FirstPermanentDate], 2
+        FROM [HR].[vw_EmployeeAppointment] ap
+        WHERE ap.[EmployeeID] = e.[EmployeeID] AND ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] > CAST(GETDATE() AS DATE)
+          AND ap.[FirstPermanentDate] <= CAST(GETDATE() AS DATE)
+    ) x
+    ORDER BY x.[Pri]
+) apt
+LEFT JOIN [HR].[tbl_PersonnelActions] aptPa           ON aptPa.[ActionID] = apt.[ActionId]
+LEFT JOIN [HR].[tbl_personnel_action_type] aptPat     ON aptPat.[PersonnelActionTypeId] = aptPa.[ActionTypeID]
+LEFT JOIN [HR].[ref_Types] aptRel                     ON aptRel.[TypeID] = aptPat.[SiiesRelacionIesTypeId]
 -- Excluye escalafón docente titular (va a HR.vw_SiiesProfesores) por patrón de cargo y por
 -- tbl_TeacherStructure (casos con el mismo título de cargo pero sin carga horaria activa).
 WHERE e.[IsDeleted] = 0
