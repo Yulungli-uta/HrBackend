@@ -41,6 +41,16 @@ public sealed class TimePlanningOverviewService : ITimePlanningOverviewService
         return await _repository.GetPlanEmployeesPagedAsync(planId, page, pageSize, employeeStatusTypeId, search, allowed, ct);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<TimePlanningOverviewExecutionDto>> GetPlanEmployeeExecutionsAsync(
+        int planEmployeeId, int? requesterEmployeeId, CancellationToken ct = default)
+    {
+        if (planEmployeeId <= 0) throw new ArgumentException("El identificador del empleado del plan no es válido.");
+
+        var allowed = await ResolveAllowedDepartmentsAsync(requesterEmployeeId, ct);
+        return await _repository.GetPlanEmployeeExecutionsAsync(planEmployeeId, allowed, ct);
+    }
+
     // null = sin restricción (alcance GLOBAL o sin scopes asignados), igual que Acciones de Personal.
     private async Task<IReadOnlyList<int>?> ResolveAllowedDepartmentsAsync(int? requesterEmployeeId, CancellationToken ct)
         => requesterEmployeeId.HasValue

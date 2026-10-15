@@ -249,6 +249,14 @@ public sealed class TimePlanningExecutionConfiguration : IEntityTypeConfiguratio
         e.HasKey(x => x.ExecutionID);
         e.Property(x => x.ExecutionID).HasColumnName("ExecutionID");
         e.Property(x => x.PlanEmployeeID).HasColumnName("PlanEmployeeID");
+
+        // La relación con el empleado del plan usa PlanEmployeeID. Sin esta configuración EF creaba columnas sombra
+        // (TimePlanningEmployeePlanEmployeeID / EmployeesEmployeeId) que no existen en la tabla y toda consulta fallaba
+        // con "Invalid column name". La navegación Employees no tiene columna propia (se llega por TimePlanningEmployee).
+        e.HasOne(x => x.TimePlanningEmployee)
+            .WithMany()
+            .HasForeignKey(x => x.PlanEmployeeID);
+        e.Ignore(x => x.Employees);
     }
 }
 

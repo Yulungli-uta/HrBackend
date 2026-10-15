@@ -101,6 +101,37 @@ public sealed class TimePlanningOverviewRepository : ITimePlanningOverviewReposi
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<TimePlanningOverviewExecutionDto>> GetPlanEmployeeExecutionsAsync(
+        int planEmployeeId, IReadOnlyList<int>? allowedDepartmentIds, CancellationToken ct = default)
+    {
+        var allowed = allowedDepartmentIds?.ToList();
+        if (allowed is not null)
+        {
+            var inScope = await (
+                from pe in _db.TimePlanningEmployee.AsNoTracking()
+                where pe.PlanEmployeeID == planEmployeeId
+                join e in _db.Employees.AsNoTracking() on pe.EmployeeID equals e.EmployeeId
+                select e.DepartmentId).FirstOrDefaultAsync(ct);
+            if (inScope is null || !allowed.Contains(inScope.Value)) return [];
+        }
+
+        // Proyección explícita: solo lee las columnas del DTO y no depende de navegaciones del modelo.
+        return await (
+            from ex in _db.TimePlanningExecution.AsNoTracking()
+            where ex.PlanEmployeeID == planEmployeeId
+            join vb in _db.Employees.AsNoTracking() on ex.VerifiedBy equals (int?)vb.EmployeeId into vbJoin
+            from vb in vbJoin.DefaultIfEmpty()
+            join vp in _db.People.AsNoTracking() on (int?)vb.PersonID equals (int?)vp.PersonId into vpJoin
+            from vp in vpJoin.DefaultIfEmpty()
+            orderby ex.WorkDate, ex.StartTime
+            select new TimePlanningOverviewExecutionDto(
+                ex.ExecutionID, ex.WorkDate, ex.StartTime, ex.EndTime, ex.TotalMinutes, ex.RegularMinutes,
+                ex.OvertimeMinutes, ex.NightMinutes, ex.HolidayMinutes, ex.ExceededMinutes,
+                vp != null ? vp.LastName + " " + vp.FirstName : null, ex.VerifiedAt, ex.Comments)
+        ).ToListAsync(ct);
+    }
+
+    /// <inheritdoc />
     public async Task<PagedResult<TimePlanningOverviewEmployeeDto>> GetPlanEmployeesPagedAsync(
         int planId, int page, int pageSize, int? employeeStatusTypeId, string? search,
         IReadOnlyList<int>? allowedDepartmentIds, CancellationToken ct = default)

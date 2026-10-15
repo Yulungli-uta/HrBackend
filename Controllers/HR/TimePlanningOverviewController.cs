@@ -31,6 +31,13 @@ public sealed class TimePlanningOverviewController : ControllerBase
     public async Task<IActionResult> GetPlans([FromQuery] TimePlanningOverviewFilter filter, CancellationToken ct)
         => Ok(await _service.GetPlansAsync(filter, _currentUser.EmployeeId, ct));
 
+    /// <summary>Ejecuciones (horas trabajadas) de un empleado dentro de una planificación.</summary>
+    [HttpGet("employees/{planEmployeeId:int}/executions")]
+    [RequirePermission("TIME_PLANNING.READ")]
+    [ProducesResponseType(typeof(IReadOnlyList<TimePlanningOverviewExecutionDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPlanEmployeeExecutions([FromRoute] int planEmployeeId, CancellationToken ct)
+        => Ok(await _service.GetPlanEmployeeExecutionsAsync(planEmployeeId, _currentUser.EmployeeId, ct));
+
     /// <summary>Empleados de una planificación (paginado) con su estado y horas asignadas/ejecutadas.</summary>
     [HttpGet("{planId:int}/employees")]
     [RequirePermission("TIME_PLANNING.READ")]

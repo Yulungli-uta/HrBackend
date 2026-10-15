@@ -33,6 +33,22 @@ public sealed record TimePlanningOverviewItemDto(
     decimal TotalAssignedHours,
     decimal TotalActualHours);
 
+/// <summary>Ejecución (horas trabajadas) de un empleado dentro de una planificación.</summary>
+public sealed record TimePlanningOverviewExecutionDto(
+    int ExecutionId,
+    DateTime WorkDate,
+    DateTime? StartTime,
+    DateTime? EndTime,
+    int TotalMinutes,
+    int RegularMinutes,
+    int OvertimeMinutes,
+    int NightMinutes,
+    int HolidayMinutes,
+    int ExceededMinutes,
+    string? VerifiedByName,
+    DateTime? VerifiedAt,
+    string? Comments);
+
 /// <summary>Empleado incluido en una planificación, con su estado y horas.</summary>
 public sealed record TimePlanningOverviewEmployeeDto(
     int PlanEmployeeId,
