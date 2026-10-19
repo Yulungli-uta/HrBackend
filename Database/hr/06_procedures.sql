@@ -5949,12 +5949,14 @@ BEGIN
         @RegularMinutes INT,
         @TardinessMin INT,
         @RequiredMinutes INT,
+        @LeaveMinutes INT,
         @FoodSubsidy INT = 0;
 
     SELECT
         @RegularMinutes = RegularMinutes,
         @TardinessMin = TardinessMin,
-        @RequiredMinutes = RequiredMinutes
+        @RequiredMinutes = RequiredMinutes,
+        @LeaveMinutes = ISNULL(PermissionMinutes, 0) + ISNULL(VacationMinutes, 0) + ISNULL(MedicalLeaveMinutes, 0)
     FROM HR.tbl_AttendanceCalculations
     WHERE EmployeeID = @EmployeeID
       AND WorkDate = @WorkDate
@@ -5964,7 +5966,9 @@ BEGIN
     -- descanso (fin de semana sin horario asignado) donde Regular/Tardiness/Required
     -- son todos 0 y "0 >= 0" calificaba el día como jornada cumplida.
     IF (@ContractType = N'Código Trabajo' AND ISNULL(@RequiredMinutes,0) > 0
-        AND ISNULL(@RegularMinutes,0) + ISNULL(@TardinessMin,0) >= ISNULL(@RequiredMinutes,0))
+        AND ISNULL(@RegularMinutes,0) + ISNULL(@TardinessMin,0) >= ISNULL(@RequiredMinutes,0)
+        -- 2026-10-16: un día con permiso (aunque sea por horas), vacación o licencia médica no genera subsidio.
+        AND ISNULL(@LeaveMinutes,0) = 0)
         SET @FoodSubsidy = 1;
     ELSE
         SET @FoodSubsidy = 0;
@@ -6349,7 +6353,7 @@ BEGIN
             OverlapEnd   = CASE WHEN DATEADD(DAY, 1, CAST(v.EndDate AS DATETIME2)) < @ShiftEnd THEN DATEADD(DAY, 1, CAST(v.EndDate AS DATETIME2)) ELSE @ShiftEnd END
         FROM HR.tbl_Vacations v
         WHERE v.EmployeeID = @EmployeeID
-          AND v.Status IN ('Planned', 'InProgress', 'Completed')
+          AND v.Status IN ('Planned', 'Approved', 'InProgress', 'Completed')
           AND @WorkDate BETWEEN v.StartDate AND v.EndDate
 
         UNION ALL
@@ -6484,6 +6488,57 @@ BEGIN
         ), 0)
     FROM PermissionWindows;
 
+    /* Permiso por horas que cubre el atraso o la salida anticipada (2026-10-16).
+       Antes solo se descontaba de la ausencia: un permiso que empezaba en la hora de ingreso
+       (o terminaba en la de salida) dejaba igual el atraso / la salida anticipada que Base
+       calculó contra la picada real. Se mide la parte del permiso que cae entre el inicio del
+       turno y la primera picada (atraso) o entre la última picada y el fin del turno (salida),
+       sin contar el almuerzo, y se descuenta de MinutesLate / TardinessMin / EarlyLeaveMinutes.
+       Solo corre después de Base en el mismo pipeline, que reinicia esos valores en cada corrida. */
+    DECLARE
+        @FirstPunchIn DATETIME2, @LastPunchOut DATETIME2,
+        @CurMinutesLate INT = 0, @CurTardiness INT = 0, @CurEarlyLeave INT = 0,
+        @LateCovered INT = 0, @EarlyCovered INT = 0;
+
+    SELECT
+        @FirstPunchIn = FirstPunchIn,
+        @LastPunchOut = LastPunchOut,
+        @CurMinutesLate = ISNULL(MinutesLate, 0),
+        @CurTardiness = ISNULL(TardinessMin, 0),
+        @CurEarlyLeave = ISNULL(EarlyLeaveMinutes, 0)
+    FROM HR.tbl_AttendanceCalculations
+    WHERE EmployeeID = @EmployeeID
+      AND WorkDate = @WorkDate
+      AND JourneyNumber = @JourneyNumber;
+
+    IF (@CurMinutesLate > 0 AND @FirstPunchIn IS NOT NULL) OR (@CurEarlyLeave > 0 AND @LastPunchOut IS NOT NULL)
+    BEGIN
+        ;WITH Cover AS
+        (
+            SELECT
+                LateStart  = CASE WHEN p.StartDate > @ShiftStart THEN p.StartDate ELSE @ShiftStart END,
+                LateEnd    = CASE WHEN p.EndDate < @FirstPunchIn THEN p.EndDate ELSE @FirstPunchIn END,
+                EarlyStart = CASE WHEN p.StartDate > @LastPunchOut THEN p.StartDate ELSE @LastPunchOut END,
+                EarlyEnd   = CASE WHEN p.EndDate < @ShiftEnd THEN p.EndDate ELSE @ShiftEnd END
+            FROM HR.tbl_Permissions p
+            WHERE p.EmployeeID = @EmployeeID
+              AND p.Status = 'Approved'
+              AND p.StartDate < @ShiftEnd
+              AND p.EndDate   > @ShiftStart
+        )
+        SELECT
+            @LateCovered = ISNULL(SUM(CASE WHEN @FirstPunchIn IS NOT NULL AND LateEnd > LateStart
+                THEN DATEDIFF(MINUTE, LateStart, LateEnd) - CASE WHEN @HasLunch = 1 AND @LunchStart IS NOT NULL AND @LunchEnd IS NOT NULL AND LateStart < @LunchEnd AND LateEnd > @LunchStart THEN DATEDIFF(MINUTE, CASE WHEN LateStart > @LunchStart THEN LateStart ELSE @LunchStart END, CASE WHEN LateEnd < @LunchEnd THEN LateEnd ELSE @LunchEnd END) ELSE 0 END ELSE 0 END), 0),
+            @EarlyCovered = ISNULL(SUM(CASE WHEN @LastPunchOut IS NOT NULL AND EarlyEnd > EarlyStart
+                THEN DATEDIFF(MINUTE, EarlyStart, EarlyEnd) - CASE WHEN @HasLunch = 1 AND @LunchStart IS NOT NULL AND @LunchEnd IS NOT NULL AND EarlyStart < @LunchEnd AND EarlyEnd > @LunchStart THEN DATEDIFF(MINUTE, CASE WHEN EarlyStart > @LunchStart THEN EarlyStart ELSE @LunchStart END, CASE WHEN EarlyEnd < @LunchEnd THEN EarlyEnd ELSE @LunchEnd END) ELSE 0 END ELSE 0 END), 0)
+        FROM Cover;
+    END;
+
+    IF @LateCovered > @CurMinutesLate SET @LateCovered = @CurMinutesLate;
+    IF @EarlyCovered > @CurEarlyLeave SET @EarlyCovered = @CurEarlyLeave;
+    IF @LateCovered < 0 SET @LateCovered = 0;
+    IF @EarlyCovered < 0 SET @EarlyCovered = 0;
+
     IF @VacationMinutes < 0 SET @VacationMinutes = 0;
     IF @PermissionMinutes < 0 SET @PermissionMinutes = 0;
     IF @MedicalLeaveMinutes < 0 SET @MedicalLeaveMinutes = 0;
@@ -6528,6 +6583,9 @@ BEGIN
         HasPermission = @HasPermission,
         HasMedicalLeave = @HasMedicalLeave,
         AbsentMinutes = @AbsentMinutes,
+        MinutesLate = @CurMinutesLate - @LateCovered,
+        TardinessMin = CASE WHEN @CurTardiness - @LateCovered < 0 THEN 0 ELSE @CurTardiness - @LateCovered END,
+        EarlyLeaveMinutes = @CurEarlyLeave - @EarlyCovered,
         UpdatedAt = GETDATE()
     WHERE EmployeeID = @EmployeeID
       AND WorkDate = @WorkDate

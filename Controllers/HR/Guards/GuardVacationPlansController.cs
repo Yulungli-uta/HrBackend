@@ -46,8 +46,9 @@ public class GuardVacationPlansController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    // Solo supervisores: los guardias tienen turnos rotativos y no registran sus propias vacaciones.
     [HttpPost]
-    [RequirePermission("GUARDS.CREATE")]
+    [RequirePermission("GUARD_VACATION_PLANS.CREATE")]
     public async Task<IActionResult> Create([FromBody] CreateGuardVacationPlanDto dto, CancellationToken ct)
     {
         var created = await _svc.CreatePlanAsync(dto, ct);

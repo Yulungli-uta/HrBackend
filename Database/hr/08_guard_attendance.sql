@@ -90,13 +90,18 @@ BEGIN
        ========================================================= */
     DECLARE
         @StatusCompleted INT,
-        @StatusAbsent    INT;
+        @StatusAbsent    INT,
+        @StatusCovered   INT;
 
     SELECT @StatusCompleted = TypeId FROM HR.ref_Types
     WHERE Category = 'GUARD_PLANNING_STATUS' AND Name = 'COMPLETED';
 
     SELECT @StatusAbsent = TypeId FROM HR.ref_Types
     WHERE Category = 'GUARD_PLANNING_STATUS' AND Name = 'ABSENT';
+
+    -- 2026-10-16: turno sin picadas pero cubierto por vacación / permiso / licencia médica.
+    SELECT @StatusCovered = TypeId FROM HR.ref_Types
+    WHERE Category = 'GUARD_PLANNING_STATUS' AND Name = 'COVERED_BY_LEAVE';
 
     /* =========================================================
        3. TURNOS DEL DÍA: GuardShiftPlanning activos + cambio
@@ -319,13 +324,17 @@ BEGIN
                equivocada. */
             IF @WorkDate <= CAST(GETDATE() AS DATE)
             BEGIN
-                DECLARE @TotalWorked INT = 0;
-                SELECT @TotalWorked = ISNULL(TotalWorkedMinutes, 0)
+                DECLARE @TotalWorked INT = 0, @CoveredMin INT = 0, @AbsentLeft INT = 0;
+                SELECT @TotalWorked = ISNULL(TotalWorkedMinutes, 0),
+                       @CoveredMin = ISNULL(VacationMinutes, 0) + ISNULL(PermissionMinutes, 0) + ISNULL(MedicalLeaveMinutes, 0),
+                       @AbsentLeft = ISNULL(AbsentMinutes, 0)
                 FROM HR.tbl_AttendanceCalculations
                 WHERE EmployeeID = @EffectiveEmpId AND WorkDate = @WorkDate AND JourneyNumber = @JourneyNumber;
 
                 UPDATE HR.tbl_GuardShiftPlanning
-                SET StatusTypeId = CASE WHEN @TotalWorked > 0 THEN @StatusCompleted ELSE @StatusAbsent END,
+                SET StatusTypeId = CASE WHEN @TotalWorked > 0 THEN @StatusCompleted
+                                        WHEN @CoveredMin > 0 AND @AbsentLeft = 0 AND @StatusCovered IS NOT NULL THEN @StatusCovered
+                                        ELSE @StatusAbsent END,
                     UpdatedAt    = GETDATE()
                 WHERE PlanningId = @PlanningId;
             END
@@ -350,4 +359,28 @@ BEGIN
 
     DROP TABLE IF EXISTS #GuardShifts;
 END;
+GO
+
+GO
+
+-- 2026-10-16: estado de turno "cubierto por novedad" (vacación / permiso / licencia médica sin picadas).
+IF NOT EXISTS (SELECT 1 FROM HR.ref_Types WHERE Category = 'GUARD_PLANNING_STATUS' AND Name = 'COVERED_BY_LEAVE')
+    INSERT INTO HR.ref_Types (Category, Name, Description, IsActive, CreatedAt, SortOrder)
+    VALUES ('GUARD_PLANNING_STATUS', 'COVERED_BY_LEAVE', N'Turno cubierto por vacación, permiso o licencia médica', 1, SYSDATETIME(), 7);
+GO
+
+-- 2026-10-16: solo los supervisores registran planes y solicitudes de vacaciones de guardias
+-- (los guardias tienen turnos rotativos). Se asigna a R_GUARDIAS y R_GUARDIAS_APROBADOR.
+IF NOT EXISTS (SELECT 1 FROM auth.tbl_Permissions WHERE Name = 'GUARD_VACATION_PLANS.CREATE')
+    INSERT INTO auth.tbl_Permissions (Name, Module, Action, Description, Version, IsDeleted)
+    VALUES ('GUARD_VACATION_PLANS.CREATE', 'GUARD_VACATION_PLANS', 'CREATE',
+            N'Registrar planes y solicitudes de vacaciones de guardias (solo supervisores)', 1, 0);
+GO
+
+INSERT INTO auth.tbl_RolePermissions (RoleId, PermissionId, GrantedAt, GrantedBy)
+SELECT r.Id, p.Id, SYSDATETIME(), 'script'
+FROM auth.tbl_Roles r
+JOIN auth.tbl_Permissions p ON p.Name = 'GUARD_VACATION_PLANS.CREATE'
+WHERE r.Name IN ('R_GUARDIAS', 'R_GUARDIAS_APROBADOR') AND r.IsDeleted = 0
+  AND NOT EXISTS (SELECT 1 FROM auth.tbl_RolePermissions x WHERE x.RoleId = r.Id AND x.PermissionId = p.Id);
 GO

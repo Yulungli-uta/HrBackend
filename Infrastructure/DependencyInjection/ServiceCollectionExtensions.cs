@@ -892,6 +892,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardShiftCoverageRequirementRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardShiftCoverageRequirementRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardShiftPlanningRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardShiftPlanningRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardShiftChangeRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardShiftChangeRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardMembershipRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardMembershipRepository>();
+        services.AddScoped<WsUtaSystem.Application.Common.GuardVacationFlowContext>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IEmployeeAvailabilityBlockRepository, WsUtaSystem.Infrastructure.Repositories.Guards.EmployeeAvailabilityBlockRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardAssignmentValidationRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardAssignmentValidationRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Guards.IGuardLocationRotationPeriodRepository, WsUtaSystem.Infrastructure.Repositories.Guards.GuardLocationRotationPeriodRepository>();

@@ -6,6 +6,7 @@ using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.DTOs.TimeBalances;
+using WsUtaSystem.Application.Interfaces.Guards;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Data;
@@ -23,6 +24,8 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
     private readonly IEmailBuilder _emailBuilder;
     private readonly ICurrentUserService _currentUser;
     private readonly IvwEmployeeDetailsService _employeeDetails;
+    private readonly IGuardMembershipRepository _guardMembership;
+    private readonly GuardVacationFlowContext _guardFlow;
 
     private readonly ILogger<VacationsService> _logger;
 
@@ -34,6 +37,8 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
         IEmailBuilder emailBuilder,
         ICurrentUserService currentUser,
         IvwEmployeeDetailsService employeeDetails,
+        IGuardMembershipRepository guardMembership,
+        GuardVacationFlowContext guardFlow,
         ILogger<VacationsService> logger
     ) : base(repo)
     {
@@ -45,6 +50,8 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
         _emailBuilder = emailBuilder ?? throw new ArgumentNullException(nameof(emailBuilder));
         _currentUser = currentUser ?? throw new ArgumentNullException(nameof(currentUser));
         _employeeDetails = employeeDetails ?? throw new ArgumentNullException(nameof(employeeDetails));
+        _guardMembership = guardMembership ?? throw new ArgumentNullException(nameof(guardMembership));
+        _guardFlow = guardFlow ?? throw new ArgumentNullException(nameof(guardFlow));
 
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -141,9 +148,23 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
             throw new BusinessRuleException("Ya existe un permiso activo que se superpone con estas fechas.");
     }
 
+    /// <summary>
+    /// Los guardias tienen turnos rotativos: sus vacaciones las planifica el supervisor y las aprueba
+    /// la dirección desde el módulo de Guardias, nunca por el módulo general de vacaciones.
+    /// </summary>
+    private async Task EnsureNotGuardSelfServiceAsync(int employeeId, CancellationToken ct)
+    {
+        if (_guardFlow.IsActive) return;
+
+        if (await _guardMembership.IsGuardAsync(employeeId, DateOnly.FromDateTime(DateTime.Today), ct))
+            throw new BusinessRuleException(
+                "Las vacaciones de los guardias las planifica el supervisor en el módulo de Guardias y las aprueba la dirección.");
+    }
+
     public async Task<Vacations> CreateWithBalanceCheckAsync(Vacations entity, CancellationToken ct)
     {
         if (entity is null) throw new ArgumentNullException(nameof(entity));
+        await EnsureNotGuardSelfServiceAsync(entity.EmployeeId, ct);
         if (entity.EndDate < entity.StartDate)
             throw new BusinessRuleException("La fecha 'Hasta' no puede ser anterior a 'Desde'.");
 
@@ -228,8 +249,9 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
             );
         });
 
-        // CORREO: fuera de la transacción
-        if (created is not null)
+        // CORREO: fuera de la transacción. No aplica a las vacaciones de guardias: las crea el flujo de
+        // planes (aprobadas por dirección) y no hay solicitud pendiente que el jefe inmediato deba resolver.
+        if (created is not null && !_guardFlow.IsActive)
         {
             _logger.LogInformation("VAC CREATE => notificando por correo. VacationId={VacationId}", created.VacationId);
             await NotifyBossOnCreateAsync(created, ct);
@@ -247,6 +269,9 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
     public async Task<Vacations> UpdateBalanceAffectAsync(int id, Vacations entity, CancellationToken ct)
     {
         if (entity is null) throw new ArgumentNullException(nameof(entity));
+        var owner = await _repository.GetByIdAsync(id, ct)
+            ?? throw new KeyNotFoundException($"Vacations con id={id} no existe.");
+        await EnsureNotGuardSelfServiceAsync(owner.EmployeeId, ct);
         if (entity.EndDate < entity.StartDate)
             throw new BusinessRuleException("La fecha 'Hasta' no puede ser anterior a 'Desde'.");
 
@@ -452,6 +477,10 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
     /// </summary>
     public async Task DeleteWithBalanceReleaseAsync(int id, CancellationToken ct)
     {
+        var owner = await _repository.GetByIdAsync(id, ct)
+            ?? throw new KeyNotFoundException($"Vacations con id={id} no existe.");
+        await EnsureNotGuardSelfServiceAsync(owner.EmployeeId, ct);
+
         var strategy = _db.Database.CreateExecutionStrategy();
 
         await strategy.ExecuteAsync(async () =>

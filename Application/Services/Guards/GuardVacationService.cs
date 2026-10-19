@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Common;
@@ -18,19 +19,25 @@ public class GuardVacationService : IGuardVacationService
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
     private readonly IHrBalanceService _balanceService;
+    private readonly IVacationsService _vacationsService;
+    private readonly GuardVacationFlowContext _guardFlow;
 
     public GuardVacationService(
         IGuardVacationPlanRepository planRepo,
         IGuardVacationRequestRepository requestRepo,
         AppDbContext db,
         ICurrentUserService currentUser,
-        IHrBalanceService balanceService)
+        IHrBalanceService balanceService,
+        IVacationsService vacationsService,
+        GuardVacationFlowContext guardFlow)
     {
         _planRepo = planRepo;
         _requestRepo = requestRepo;
         _db = db;
         _currentUser = currentUser;
         _balanceService = balanceService;
+        _vacationsService = vacationsService;
+        _guardFlow = guardFlow;
     }
 
     // ─── Planes de vacaciones ─────────────────────────────────────────────────
@@ -197,6 +204,11 @@ public class GuardVacationService : IGuardVacationService
 
         var approvedStatusId = await GetRefTypeIdAsync("GUARD_VACATION_PLAN_STATUS", "APPROVED", ct);
 
+        // La vacación aprobada se registra en tbl_Vacations (reserva y consume saldo) para que el
+        // cruce de asistencia la reconozca; antes solo se creaba el bloqueo de disponibilidad y los
+        // días del plan salían como ausencia. Si no hay saldo, la aprobación se rechaza completa.
+        var vacationId = await CreateApprovedVacationAsync(entity, userId, ct);
+
         entity.StatusTypeId = approvedStatusId;
         entity.DirectionApprovedBy = userId;
         entity.DirectionApprovedAt = DateTime.UtcNow;
@@ -204,7 +216,15 @@ public class GuardVacationService : IGuardVacationService
         entity.UpdatedBy = userId;
         entity.UpdatedAt = DateTime.UtcNow;
 
-        await _db.SaveChangesAsync(ct);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch
+        {
+            await CancelVacationAsync(vacationId, ct);
+            throw;
+        }
 
         // Sincronizar bloque de disponibilidad para que el generador de turnos
         // excluya automáticamente al guardia durante sus vacaciones aprobadas.
@@ -227,6 +247,9 @@ public class GuardVacationService : IGuardVacationService
             throw new InvalidOperationException("No puede rechazar su propia solicitud de vacaciones.");
 
         var rejectedStatusId = await GetRefTypeIdAsync("GUARD_VACATION_PLAN_STATUS", "REJECTED", ct);
+
+        // Si el plan ya estaba aprobado, su vacación se cancela y se libera el saldo reservado.
+        await CancelLinkedVacationAsync(entity, ct);
 
         entity.StatusTypeId = rejectedStatusId;
         entity.Notes = dto.Reason;
@@ -438,12 +461,33 @@ public class GuardVacationService : IGuardVacationService
             throw new InvalidOperationException($"Solo se pueden aprobar solicitudes en estado PENDING_DIRECTION_APPROVAL. Estado actual: {entity.StatusType?.Name}");
 
         var approvedStatusId = await GetRefTypeIdAsync("GUARD_VACATION_REQUEST_STATUS", "APPROVED", ct);
+        var appliedStatusId = await GetRefTypeIdAsync("GUARD_VACATION_REQUEST_STATUS", "APPLIED", ct);
 
         entity.StatusTypeId = approvedStatusId;
         entity.DirectionApprovedBy = userId;
         entity.DirectionApprovedAt = DateTime.UtcNow;
         entity.UpdatedBy = userId;
         entity.UpdatedAt = DateTime.UtcNow;
+
+        // Aprobar una solicitud de cambio de fechas o de acumulación ya modifica de verdad el plan,
+        // el bloqueo de disponibilidad y la vacación; antes solo cambiaba el estado de la solicitud.
+        if (entity.GuardVacationPlanId.HasValue)
+        {
+            var requestType = await _db.GuardVacationRequests
+                .Where(r => r.GuardVacationRequestId == requestId)
+                .Select(r => r.RequestType!.Name)
+                .FirstAsync(ct);
+
+            var vacationId = requestType switch
+            {
+                "CHANGE_DATES" => await ApplyChangeDatesAsync(entity, ct),
+                "ACCUMULATE_NEXT_YEAR" => await ApplyAccumulateAsync(entity, ct),
+                _ => (int?)null
+            };
+
+            if (vacationId.HasValue) entity.VacationId = vacationId;
+            if (requestType is "CHANGE_DATES" or "ACCUMULATE_NEXT_YEAR") entity.StatusTypeId = appliedStatusId;
+        }
 
         await _db.SaveChangesAsync(ct);
 
@@ -474,6 +518,135 @@ public class GuardVacationService : IGuardVacationService
         return await GetRequestByIdAsync(requestId, ct)
             ?? throw new InvalidOperationException("Error al recuperar la solicitud rechazada.");
     }
+
+    // ─── Aplicación de solicitudes aprobadas ─────────────────────────────────
+
+    /// <summary>
+    /// Cambio de fechas aprobado: valida que no choque con turnos ni con otros planes del guardia y
+    /// mueve el plan, su bloqueo de disponibilidad y la vacación (que recalcula la reserva de saldo).
+    /// </summary>
+    private async Task<int?> ApplyChangeDatesAsync(GuardVacationRequest request, CancellationToken ct)
+    {
+        var plan = await LoadApprovedPlanForRequestAsync(request, ct);
+
+        if (request.RequestedStartDate is not { } newStart || request.RequestedEndDate is not { } newEnd)
+            throw new BusinessRuleException("La solicitud de cambio de fechas no indica las fechas nuevas.");
+        if (newEnd < newStart)
+            throw new BusinessRuleException("La fecha final solicitada no puede ser anterior a la inicial.");
+
+        var shifts = await _db.GuardShiftPlannings
+            .Where(g => g.EmployeeId == plan.EmployeeId && g.IsActiveForAssignment
+                        && g.WorkDate >= newStart && g.WorkDate <= newEnd)
+            .CountAsync(ct);
+        if (shifts > 0)
+            throw new BusinessRuleException(
+                $"El guardia tiene {shifts} turno(s) programado(s) entre {newStart:dd/MM/yyyy} y {newEnd:dd/MM/yyyy}. " +
+                "Reasígnelos o cancélelos antes de aprobar el cambio de fechas.");
+
+        var overlapsPlan = await _db.GuardVacationPlans
+            .AnyAsync(p => p.EmployeeId == plan.EmployeeId
+                           && p.GuardVacationPlanId != plan.GuardVacationPlanId
+                           && p.StatusType!.Name == "APPROVED"
+                           && p.PlannedStartDate <= newEnd && p.PlannedEndDate >= newStart, ct);
+        if (overlapsPlan)
+            throw new BusinessRuleException("Las fechas solicitadas se cruzan con otro plan de vacaciones aprobado del guardia.");
+
+        var oldStart = plan.PlannedStartDate;
+        var oldEnd = plan.PlannedEndDate;
+
+        // 1) vacación (transacción propia): recalcula la reserva; si no hay saldo para las fechas nuevas falla aquí
+        var vacation = await FindLinkedVacationAsync(plan.EmployeeId, oldStart, oldEnd, ct);
+        if (vacation is not null && vacation.Status == "Planned")
+        {
+            var days = newEnd.DayNumber - newStart.DayNumber + 1;
+            using var flow = _guardFlow.Begin();
+            await _vacationsService.UpdateBalanceAffectAsync(vacation.VacationId, new Vacations
+            {
+                VacationId = vacation.VacationId,
+                EmployeeId = vacation.EmployeeId,
+                StartDate = newStart,
+                EndDate = newEnd,
+                DaysGranted = days,
+                DaysTaken = days,
+                Status = vacation.Status,
+                ApprovedBy = vacation.ApprovedBy,
+                ApprovedAt = vacation.ApprovedAt,
+                CreatedBy = vacation.CreatedBy,
+                CreatedAt = vacation.CreatedAt
+            }, ct);
+        }
+
+        // 2) plan + bloqueo; si falla, se devuelve la vacación a las fechas originales
+        try
+        {
+            plan.PlannedStartDate = newStart;
+            plan.PlannedEndDate = newEnd;
+            plan.Notes = AppendNote(plan.Notes, $"Fechas cambiadas {oldStart:dd/MM/yyyy}-{oldEnd:dd/MM/yyyy} a {newStart:dd/MM/yyyy}-{newEnd:dd/MM/yyyy} (solicitud {request.GuardVacationRequestId})");
+            plan.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+            await SyncVacationBlockAsync(plan, ct);
+        }
+        catch
+        {
+            if (vacation is not null && vacation.Status == "Planned")
+            {
+                var days = oldEnd.DayNumber - oldStart.DayNumber + 1;
+                using var flow = _guardFlow.Begin();
+                await _vacationsService.UpdateBalanceAffectAsync(vacation.VacationId, new Vacations
+                {
+                    VacationId = vacation.VacationId, EmployeeId = vacation.EmployeeId, StartDate = oldStart, EndDate = oldEnd,
+                    DaysGranted = days, DaysTaken = days, Status = vacation.Status, ApprovedBy = vacation.ApprovedBy,
+                    ApprovedAt = vacation.ApprovedAt, CreatedBy = vacation.CreatedBy, CreatedAt = vacation.CreatedAt
+                }, ct);
+            }
+            throw;
+        }
+
+        return vacation?.VacationId;
+    }
+
+    /// <summary>
+    /// Acumulación aprobada: se cancela la vacación (libera el saldo reservado, que queda disponible para
+    /// el año siguiente dentro del tope de acumulación) y el bloqueo, y el plan pasa a ACCUMULATED.
+    /// El supervisor registra el plan del año siguiente cuando corresponda.
+    /// </summary>
+    private async Task<int?> ApplyAccumulateAsync(GuardVacationRequest request, CancellationToken ct)
+    {
+        var plan = await LoadApprovedPlanForRequestAsync(request, ct);
+
+        var vacation = await FindLinkedVacationAsync(plan.EmployeeId, plan.PlannedStartDate, plan.PlannedEndDate, ct);
+        if (vacation is not null)
+            await CancelVacationAsync(vacation.VacationId, ct);
+
+        plan.StatusTypeId = await GetRefTypeIdAsync("GUARD_VACATION_PLAN_STATUS", "ACCUMULATED", ct);
+        plan.Notes = AppendNote(plan.Notes, $"Acumulado al año {request.TargetYear?.ToString() ?? "siguiente"} (solicitud {request.GuardVacationRequestId})");
+        plan.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        await CancelVacationBlocksAsync(plan.GuardVacationPlanId, ct);
+
+        return vacation?.VacationId;
+    }
+
+    private async Task<GuardVacationPlan> LoadApprovedPlanForRequestAsync(GuardVacationRequest request, CancellationToken ct)
+    {
+        var plan = await _db.GuardVacationPlans
+            .Include(p => p.StatusType)
+            .FirstOrDefaultAsync(p => p.GuardVacationPlanId == request.GuardVacationPlanId, ct)
+            ?? throw new KeyNotFoundException($"Plan de vacaciones {request.GuardVacationPlanId} no encontrado.");
+
+        if (plan.StatusType?.Name != "APPROVED")
+            throw new BusinessRuleException($"El plan de vacaciones ya no está aprobado (estado actual: {plan.StatusType?.Name}).");
+
+        return plan;
+    }
+
+    private Task<Vacations?> FindLinkedVacationAsync(int employeeId, DateOnly start, DateOnly end, CancellationToken ct) =>
+        _db.Vacations.AsNoTracking().FirstOrDefaultAsync(v => v.EmployeeId == employeeId
+                                                              && v.StartDate == start && v.EndDate == end
+                                                              && v.Status != "Canceled", ct);
+
+    private static string AppendNote(string? current, string note) =>
+        string.IsNullOrWhiteSpace(current) ? note : $"{current} | {note}";
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -535,6 +708,75 @@ public class GuardVacationService : IGuardVacationService
         await _db.EmployeeAvailabilityBlocks.AddAsync(block, ct);
         await _db.SaveChangesAsync(ct);
     }
+
+    /// <summary>
+    /// Registra la vacación del plan aprobado en HR.tbl_Vacations. Queda en Planned con el saldo reservado
+    /// (no consumido): así los días se pueden devolver si el plan se rechaza, cambia de fechas o se acumula;
+    /// una reserva ya consumida (estado Approved) no admite devolución en el libro de saldos.
+    /// La aprobación de la dirección queda en ApprovedBy / ApprovedAt.
+    /// </summary>
+    private async Task<int> CreateApprovedVacationAsync(GuardVacationPlan plan, int approvedBy, CancellationToken ct)
+    {
+        var days = plan.PlannedEndDate.DayNumber - plan.PlannedStartDate.DayNumber + 1;
+
+        using var flow = _guardFlow.Begin();
+        var created = await _vacationsService.CreateWithBalanceCheckAsync(new Vacations
+        {
+            EmployeeId = plan.EmployeeId,
+            StartDate = plan.PlannedStartDate,
+            EndDate = plan.PlannedEndDate,
+            DaysGranted = days,
+            DaysTaken = days,
+            Status = "Planned",
+            ApprovedBy = approvedBy,
+            ApprovedAt = DateTime.Now,
+            CreatedBy = approvedBy
+        }, ct);
+
+        return created.VacationId;
+    }
+
+    /// <summary>Cancela la vacación activa del empleado con las mismas fechas que el plan (si existe).</summary>
+    private async Task CancelLinkedVacationAsync(GuardVacationPlan plan, CancellationToken ct)
+    {
+        var vacationId = await _db.Vacations
+            .AsNoTracking()
+            .Where(v => v.EmployeeId == plan.EmployeeId
+                        && v.StartDate == plan.PlannedStartDate
+                        && v.EndDate == plan.PlannedEndDate
+                        && v.Status != "Canceled")
+            .Select(v => (int?)v.VacationId)
+            .FirstOrDefaultAsync(ct);
+
+        if (vacationId.HasValue)
+            await CancelVacationAsync(vacationId.Value, ct);
+    }
+
+    private async Task CancelVacationAsync(int vacationId, CancellationToken ct)
+    {
+        using var flow = _guardFlow.Begin();
+        var current = await _db.Vacations.AsNoTracking().FirstOrDefaultAsync(v => v.VacationId == vacationId, ct);
+        if (current is not null && current.Status != "Canceled")
+            await ChangeVacationStatusAsync(current, "Canceled", ct);
+    }
+
+    // UpdateBalanceAffectAsync reemplaza la fila completa con el payload, por eso se manda una copia
+    // íntegra de la vacación actual con solo el estado cambiado.
+    private Task ChangeVacationStatusAsync(Vacations current, string newStatus, CancellationToken ct) =>
+        _vacationsService.UpdateBalanceAffectAsync(current.VacationId, new Vacations
+        {
+            VacationId = current.VacationId,
+            EmployeeId = current.EmployeeId,
+            StartDate = current.StartDate,
+            EndDate = current.EndDate,
+            DaysGranted = current.DaysGranted,
+            DaysTaken = current.DaysTaken,
+            Status = newStatus,
+            ApprovedBy = current.ApprovedBy,
+            ApprovedAt = current.ApprovedAt,
+            CreatedBy = current.CreatedBy,
+            CreatedAt = current.CreatedAt
+        }, ct);
 
     private async Task<int> GetRefTypeIdAsync(string category, string name, CancellationToken ct)
     {

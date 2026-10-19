@@ -43,7 +43,7 @@ public class GuardVacationRequestsController : ControllerBase
     }
 
     [HttpPost("change-dates")]
-    [RequirePermission("GUARDS.CREATE")]
+    [RequirePermission("GUARD_VACATION_PLANS.CREATE")]
     public async Task<IActionResult> CreateChangeDates([FromBody] CreateChangeDatesRequestDto dto, CancellationToken ct)
     {
         var created = await _svc.CreateChangeDatesRequestAsync(dto, ct);
@@ -51,7 +51,7 @@ public class GuardVacationRequestsController : ControllerBase
     }
 
     [HttpPost("accumulate")]
-    [RequirePermission("GUARDS.CREATE")]
+    [RequirePermission("GUARD_VACATION_PLANS.CREATE")]
     public async Task<IActionResult> CreateAccumulate([FromBody] CreateAccumulateRequestDto dto, CancellationToken ct)
     {
         var created = await _svc.CreateAccumulateRequestAsync(dto, ct);
