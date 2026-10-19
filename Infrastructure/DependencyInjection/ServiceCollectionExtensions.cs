@@ -684,6 +684,8 @@ public static class ServiceCollectionExtensions
         // ── Módulo: Feriados ──────────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IHolidayRepository, WsUtaSystem.Infrastructure.Repositories.HolidayRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IHolidayService, WsUtaSystem.Application.Services.HolidayService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IUserPreferencesService, WsUtaSystem.Application.Services.UserPreferencesService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IUserPreferenceRepository, WsUtaSystem.Infrastructure.Repositories.UserPreferenceRepository>();
 
         // ── Módulo: Saldos de Horas ───────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IHrBalanceRepository, WsUtaSystem.Infrastructure.Repositories.HrBalanceRepository>();
