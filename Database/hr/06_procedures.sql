@@ -4025,7 +4025,7 @@ BEGIN
   
   INSERT INTO @AllowedStatusTypes (TypeID)
   SELECT TypeID FROM HR.ref_Types 
-  WHERE Category = 'PLAN_STATUS' AND Name IN ('Aprobado','En Progreso','Borrador');
+  WHERE Category = 'PLAN_STATUS' AND Name IN ('Aprobado','Planificado','Borrador','En Progreso','Completado');
 
   ------------------------------------------------------------------
   -- 1) Fuente: AttendanceCalculations (solo HE>0)
@@ -6658,6 +6658,91 @@ END;
 
 GO
 
+-- [sp_RefreshTimePlanningStatuses]
+-- Estado automático de las planificaciones (horas extra y recuperación) según fechas y ejecución real.
+--   Planificado : aún no llega la fecha de inicio.
+--   En Progreso : dentro del rango de fechas (y hasta TIME_PLAN_CLOSE_GRACE_DAYS días después del fin).
+--   Completado  : terminó y al menos un empleado ejecutó minutos.
+--   Cancelado   : terminó y nadie ejecutó nada (también cancela a sus empleados sin ejecución).
+-- Un plan en Cancelado nunca se reabre ni se recalcula. Se puede ejecutar varias veces (idempotente).
+-- Los nombres de estado se resuelven por Name; 'Borrador' es el nombre previo de 'Planificado'.
+CREATE OR ALTER PROCEDURE HR.sp_RefreshTimePlanningStatuses
+    @AsOfDate DATE = NULL,
+    @Debug    BIT  = 0
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @Today DATE = ISNULL(@AsOfDate, CAST(GETDATE() AS DATE));
+    DECLARE @GraceDays INT = ISNULL(
+        TRY_CAST((SELECT TOP 1 Pvalues FROM HR.tbl_Parameters
+                  WHERE name = 'TIME_PLAN_CLOSE_GRACE_DAYS' AND IsActive = 1) AS INT), 1);
+    DECLARE @CloseOnOrBefore DATE = DATEADD(DAY, -@GraceDays, @Today);
+
+    DECLARE @PlanPlanificado INT = (SELECT TOP 1 TypeID FROM HR.ref_Types
+                                    WHERE Category = 'PLAN_STATUS' AND Name IN ('Planificado', 'Borrador')
+                                    ORDER BY CASE Name WHEN 'Planificado' THEN 0 ELSE 1 END);
+    DECLARE @PlanEnProgreso  INT = (SELECT TypeID FROM HR.ref_Types WHERE Category = 'PLAN_STATUS' AND Name = 'En Progreso');
+    DECLARE @PlanCompletado  INT = (SELECT TypeID FROM HR.ref_Types WHERE Category = 'PLAN_STATUS' AND Name = 'Completado');
+    DECLARE @PlanCancelado   INT = (SELECT TypeID FROM HR.ref_Types WHERE Category = 'PLAN_STATUS' AND Name = 'Cancelado');
+    DECLARE @EmpEnProceso    INT = (SELECT TypeID FROM HR.ref_Types WHERE Category = 'EMPLOYEE_PLAN_STATUS' AND Name = 'En Proceso');
+    DECLARE @EmpEjecutado    INT = (SELECT TypeID FROM HR.ref_Types WHERE Category = 'EMPLOYEE_PLAN_STATUS' AND Name = 'Ejecutado');
+    DECLARE @EmpCancelado    INT = (SELECT TypeID FROM HR.ref_Types WHERE Category = 'EMPLOYEE_PLAN_STATUS' AND Name = 'Cancelado');
+
+    IF @PlanPlanificado IS NULL OR @PlanEnProgreso IS NULL OR @PlanCompletado IS NULL OR @PlanCancelado IS NULL
+       OR @EmpEnProceso IS NULL OR @EmpEjecutado IS NULL OR @EmpCancelado IS NULL
+        THROW 50020, 'sp_RefreshTimePlanningStatuses: faltan estados en HR.ref_Types (PLAN_STATUS / EMPLOYEE_PLAN_STATUS).', 1;
+
+    BEGIN TRANSACTION;
+
+    -- 1) Estado de cada empleado según lo ejecutado (misma regla que sp_ProcessTimePlanningForEmployeeDay)
+    UPDATE pe
+    SET pe.EmployeeStatusTypeID = x.NewStatus
+    FROM HR.tbl_TimePlanningEmployees pe
+    JOIN HR.tbl_TimePlanning p ON p.PlanID = pe.PlanID
+    CROSS APPLY (SELECT CASE
+            WHEN (ISNULL(pe.AssignedHours, 0) * 60 + ISNULL(pe.AssignedMinutes, 0)) > 0
+                 AND ISNULL(pe.ActualMinutes, 0) >= (ISNULL(pe.AssignedHours, 0) * 60 + ISNULL(pe.AssignedMinutes, 0))
+                THEN @EmpEjecutado
+            WHEN ISNULL(pe.ActualMinutes, 0) > 0 THEN @EmpEnProceso
+            ELSE pe.EmployeeStatusTypeID END AS NewStatus) x
+    WHERE p.PlanStatusTypeID <> @PlanCancelado
+      AND pe.EmployeeStatusTypeID <> @EmpCancelado
+      AND pe.EmployeeStatusTypeID <> x.NewStatus;
+
+    -- 2) Planes ya terminados: los empleados que no ejecutaron nada pasan a Cancelado
+    UPDATE pe
+    SET pe.EmployeeStatusTypeID = @EmpCancelado
+    FROM HR.tbl_TimePlanningEmployees pe
+    JOIN HR.tbl_TimePlanning p ON p.PlanID = pe.PlanID
+    WHERE p.PlanStatusTypeID <> @PlanCancelado
+      AND p.EndDate <= @CloseOnOrBefore
+      AND ISNULL(pe.ActualMinutes, 0) = 0
+      AND pe.EmployeeStatusTypeID <> @EmpCancelado;
+
+    -- 3) Estado del plan
+    UPDATE p
+    SET p.PlanStatusTypeID = t.NewStatus,
+        p.UpdatedAt        = GETDATE()
+    FROM HR.tbl_TimePlanning p
+    CROSS APPLY (SELECT CASE
+            WHEN p.EndDate <= @CloseOnOrBefore THEN
+                 CASE WHEN EXISTS (SELECT 1 FROM HR.tbl_TimePlanningEmployees pe
+                                   WHERE pe.PlanID = p.PlanID AND ISNULL(pe.ActualMinutes, 0) > 0)
+                      THEN @PlanCompletado ELSE @PlanCancelado END
+            WHEN p.StartDate > @Today THEN @PlanPlanificado
+            ELSE @PlanEnProgreso END AS NewStatus) t
+    WHERE p.PlanStatusTypeID <> @PlanCancelado
+      AND p.PlanStatusTypeID <> t.NewStatus;
+
+    IF @Debug = 1
+        PRINT 'Planes actualizados: ' + CAST(@@ROWCOUNT AS VARCHAR(10));
+
+    COMMIT TRANSACTION;
+END;
+GO
+
 -- [sp_ProcessAttendanceRunDate]
 
 /*---------HR.sp_ProcessAttendanceRunDate -----------*/
@@ -6985,6 +7070,14 @@ BEGIN
          @WorkDate         = @WorkDate,
          @Debug            = @Debug,
          @FilterEmployeeID = @FilterEmployeeID;
+
+    -- Estado automático de las planificaciones (horas extra / recuperación); nunca debe romper el cruce.
+    BEGIN TRY
+        EXEC HR.sp_RefreshTimePlanningStatuses;
+    END TRY
+    BEGIN CATCH
+        PRINT 'sp_RefreshTimePlanningStatuses falló: ' + ERROR_MESSAGE();
+    END CATCH;
 END;
 
 GO
@@ -7175,7 +7268,9 @@ BEGIN
       -- rompiendo el pago de horas extra por completo. Se acepta 'Borrador'
       -- (el único estado alcanzable hoy) pero se mantiene excluido el caso de
       -- estado nulo/no clasificado (fail-open real del bug original).
-      AND st.Name IN ('Aprobado', 'Borrador');
+      -- Estados vigentes: 'Planificado' (antes 'Borrador'), 'En Progreso' y 'Completado' (el plan se cierra solo
+      -- por fechas, ver sp_RefreshTimePlanningStatuses y se sigue reprocesando); 'Cancelado' queda excluido.
+      AND st.Name IN ('Aprobado', 'Planificado', 'Borrador', 'En Progreso', 'Completado');
 
     IF NOT EXISTS(SELECT 1 FROM #Plans)
     BEGIN

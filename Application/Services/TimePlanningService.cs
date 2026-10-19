@@ -45,6 +45,32 @@ namespace WsUtaSystem.Application.Services
             return await _repository.GetByDateRangeAsync(startDate, endDate, ct);
         }
 
+        /// <summary>
+        /// Al cambiar fechas u horas de un plan se revalida que ninguno de sus empleados quede cruzado
+        /// con otra planificación.
+        /// </summary>
+        public override async Task UpdateAsync(int id, TimePlanning entity, CancellationToken ct)
+        {
+            var strategy = _db.Database.CreateExecutionStrategy();
+
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _db.Database.BeginTransactionAsync(
+                    System.Data.IsolationLevel.ReadCommitted, ct);
+
+                await _timePlanningEmployeeService.AcquireOverlapLockAsync(ct);
+                await _timePlanningEmployeeService.EnsurePlanScheduleHasNoOverlapAsync(
+                    id, entity.StartDate, entity.EndDate, entity.StartTime, entity.EndTime, ct);
+
+                await base.UpdateAsync(id, entity, ct);
+                await transaction.CommitAsync(ct);
+            });
+        }
+
+        // Sin endpoint en TimePlanningsController y con TypeIDs fijos (2, 3, 4) que NO corresponden a
+        // PLAN_STATUS (en HR.ref_Types son estados civiles). Los planes se crean directamente en
+        // "Planificado" porque el jefe que planifica es quien autoriza; no usar sin resolver el estado por nombre.
+        [Obsolete("Sin flujo de aprobación: usa TypeIDs fijos que no son de PLAN_STATUS.")]
         public async Task<TimePlanning> SubmitForApprovalAsync(int planId, int submittedBy, CancellationToken ct = default)
         {
             var success = await _repository.ChangeStatusAsync(planId, 2, submittedBy, ct);
@@ -54,6 +80,7 @@ namespace WsUtaSystem.Application.Services
             return await _repository.GetByIdAsync(planId, ct);
         }
 
+        [Obsolete("Sin flujo de aprobación: usa TypeIDs fijos que no son de PLAN_STATUS.")]
         public async Task<TimePlanning> ApprovePlanningAsync(int planId, int approvedBy, int? secondApprover = null, CancellationToken ct = default)
         {
             var success = await _repository.ChangeStatusAsync(planId, 3, approvedBy, ct);
@@ -63,6 +90,7 @@ namespace WsUtaSystem.Application.Services
             return await _repository.GetByIdAsync(planId, ct);
         }
 
+        [Obsolete("Sin flujo de aprobación: usa TypeIDs fijos que no son de PLAN_STATUS.")]
         public async Task<TimePlanning> RejectPlanningAsync(int planId, int rejectedBy, string reason, CancellationToken ct = default)
         {
             var success = await _repository.ChangeStatusAsync(planId, 4, rejectedBy, ct);
@@ -143,6 +171,8 @@ namespace WsUtaSystem.Application.Services
 
                 try
                 {
+                    await _timePlanningEmployeeService.AcquireOverlapLockAsync(ct);
+
                     createdPlan = await base.CreateAsync(entity, ct);
 
                     foreach (var emp in employees)
@@ -178,7 +208,8 @@ namespace WsUtaSystem.Application.Services
                 throw new InvalidOperationException(
                     $"EmployeeStatusTypeID inválido para EmployeeID={employee.EmployeeID}.");
 
-            var isEligible = await _timePlanningEmployeeService.ValidateEmployeeEligibilityAsync(
+            // Un empleado no puede estar en dos planificaciones (horas extra o recuperación) a la misma hora.
+            await _timePlanningEmployeeService.EnsureNoOverlapAsync(
                 employee.EmployeeID,
                 plan.StartDate,
                 plan.EndDate,
@@ -186,12 +217,6 @@ namespace WsUtaSystem.Application.Services
                 plan.EndTime,
                 excludePlanId: null,
                 ct);
-
-            if (!isEligible)
-            {
-                throw new InvalidOperationException(
-                    $"El empleado {employee.EmployeeID} ya tiene otra planificación en el mismo rango de fecha y hora.");
-            }
 
             if (plan.PlanType == "Overtime")
             {
