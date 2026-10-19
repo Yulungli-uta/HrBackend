@@ -93,6 +93,9 @@ public class AppDbContext : DbContext
     public DbSet<TimeBalanceMovements> TimeBalanceMovements => Set<TimeBalanceMovements>();
     public DbSet<Holiday> Holidays => Set<Holiday>();
     public DbSet<UserPreference> UserPreferences => Set<UserPreference>();
+    public DbSet<AllowedPunchNetwork> AllowedPunchNetworks => Set<AllowedPunchNetwork>();
+    public DbSet<EmployeePunchPolicy> EmployeePunchPolicies => Set<EmployeePunchPolicy>();
+    public DbSet<PunchAccessLog> PunchAccessLogs => Set<PunchAccessLog>();
     public DbSet<Activity> Activity => Set<Activity>();
     public DbSet<AdditionalActivity> AdditionalActivity => Set<AdditionalActivity>();
     public DbSet<JobActivity> JobActivity => Set<JobActivity>();

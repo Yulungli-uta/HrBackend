@@ -250,6 +250,20 @@ public sealed class CurrentUserService : ICurrentUserService
         return ip == "::1" ? "127.0.0.1" : ip;
     }
 
+    public string? GetRemoteIp()
+    {
+        var ip = _http.HttpContext?.Connection.RemoteIpAddress;
+        if (ip is null) return null;
+        if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
+        return ip.ToString();
+    }
+
+    public string? GetForwardedForHeader()
+    {
+        var xff = _http.HttpContext?.Request.Headers["X-Forwarded-For"].ToString();
+        return string.IsNullOrWhiteSpace(xff) ? null : xff;
+    }
+
     public string? GetUserAgent()
     {
         var ctx = _http.HttpContext;

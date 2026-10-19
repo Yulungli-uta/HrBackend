@@ -686,6 +686,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IHolidayService, WsUtaSystem.Application.Services.HolidayService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IUserPreferencesService, WsUtaSystem.Application.Services.UserPreferencesService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IUserPreferenceRepository, WsUtaSystem.Infrastructure.Repositories.UserPreferenceRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPunchPolicyRepository, WsUtaSystem.Infrastructure.Repositories.PunchPolicyRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPunchAccessPolicyService, WsUtaSystem.Application.Services.PunchAccessPolicyService>();
 
         // ── Módulo: Saldos de Horas ───────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IHrBalanceRepository, WsUtaSystem.Infrastructure.Repositories.HrBalanceRepository>();

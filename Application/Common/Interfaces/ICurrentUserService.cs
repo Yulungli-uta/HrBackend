@@ -27,6 +27,11 @@ namespace WsUtaSystem.Application.Common.Interfaces
         Task<int?> GetPersonIdAsync(CancellationToken ct = default);
 
         string? GetIp();
+        /// <summary>IP de origen que ve el servidor (RemoteIpAddress, ya corregida por UseForwardedHeaders si el proxy es de confianza).
+        /// A diferencia de <see cref="GetIp"/>, NO lee X-Forwarded-For a mano: el cliente no puede falsearla. Úsese para decisiones de seguridad.</summary>
+        string? GetRemoteIp();
+        /// <summary>Valor crudo de X-Forwarded-For (solo informativo para diagnóstico; nunca para decidir accesos).</summary>
+        string? GetForwardedForHeader();
         string? GetUserAgent();
         string? GetDeviceInfo();
     }

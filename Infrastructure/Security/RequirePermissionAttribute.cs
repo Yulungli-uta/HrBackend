@@ -24,6 +24,10 @@ public class RequirePermissionAttribute : Attribute, IAsyncActionFilter
 {
     private readonly string _permissionCode;
 
+    /// <summary>true = bloquea siempre, sin importar <c>Authorization:ShadowMode</c>. Para endpoints nuevos
+    /// que no tienen usuarios previos a los que proteger de un bloqueo accidental.</summary>
+    public bool Strict { get; init; }
+
     public RequirePermissionAttribute(string permissionCode)
     {
         _permissionCode = permissionCode;
@@ -37,8 +41,8 @@ public class RequirePermissionAttribute : Attribute, IAsyncActionFilter
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("RequirePermission");
 
         // Default true (modo sombra) si la clave no está configurada explícitamente.
-        var shadowMode = configuration["Authorization:ShadowMode"] is null
-            || (bool.TryParse(configuration["Authorization:ShadowMode"], out var sm) && sm);
+        var shadowMode = !Strict && (configuration["Authorization:ShadowMode"] is null
+            || (bool.TryParse(configuration["Authorization:ShadowMode"], out var sm) && sm));
 
         var roles = context.HttpContext.User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
         var hasPermission = await permissionService.HasPermissionAsync(roles, _permissionCode, context.HttpContext.RequestAborted);

@@ -80,10 +80,27 @@ var app = builder.Build();
 
 // ── Pipeline: Headers de proxy inverso ───────────────────────────────────────
 // Debe ser el primero para que los middlewares posteriores lean la IP/protocolo real
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+// Proxies de confianza (opcional): "ForwardedHeaders:KnownProxies" (IPs) y "ForwardedHeaders:KnownNetworks"
+// (rangos CIDR). Sin ellos solo se confía en loopback (comportamiento anterior): detrás de un proxy no local la IP
+// que ve la aplicación sería la del proxy, no la del usuario. Necesario para el control de picadas por red y el
+// límite de peticiones por IP cuando el sistema se publique detrás de un proxy inverso.
+var forwardedOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+};
+foreach (var proxy in app.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? Array.Empty<string>())
+{
+    if (System.Net.IPAddress.TryParse(proxy, out var proxyIp)) forwardedOptions.KnownProxies.Add(proxyIp);
+    else app.Logger.LogWarning("ForwardedHeaders:KnownProxies ignora un valor inválido: {Value}", proxy);
+}
+foreach (var network in app.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? Array.Empty<string>())
+{
+    var parts = network.Split('/');
+    if (parts.Length == 2 && System.Net.IPAddress.TryParse(parts[0], out var netIp) && int.TryParse(parts[1], out var prefix))
+        forwardedOptions.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(netIp, prefix));
+    else app.Logger.LogWarning("ForwardedHeaders:KnownNetworks ignora un valor inválido: {Value}", network);
+}
+app.UseForwardedHeaders(forwardedOptions);
 
 // ── Pipeline: Manejo global de errores ───────────────────────────────────────
 // Envuelve todo el pipeline para capturar excepciones no controladas

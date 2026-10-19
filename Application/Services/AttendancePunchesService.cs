@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Options;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Email;
 using WsUtaSystem.Application.Common.Enums;
 using WsUtaSystem.Application.Common.Interfaces;
@@ -14,14 +15,18 @@ public class AttendancePunchesService : Service<AttendancePunches, int>, IAttend
     private readonly IAttendancePunchesRepository _repository;
     private readonly IEmailBuilder _emailBuilder;
     private readonly ICurrentUserService _currentUser;
+    private readonly IPunchAccessPolicyService _accessPolicy;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, SemaphoreSlim> EmployeeGates = new();
     //private readonly EmailTemplatesOptions _emailTemplates;
 
     public AttendancePunchesService(IAttendancePunchesRepository repo, IEmailBuilder emailBuilder, ICurrentUserService currentUser,
+        IPunchAccessPolicyService accessPolicy,
         //IOptions<EmailTemplatesOptions> emailTemplates,
         ILogger<AttendancePunchesService> logger) : base(repo) {        
         _repository = repo;
         _emailBuilder = emailBuilder;
         _currentUser = currentUser;
+        _accessPolicy = accessPolicy;
         //_emailTemplates = emailTemplates.Value;
         _logger = logger;
     }
@@ -56,12 +61,57 @@ public class AttendancePunchesService : Service<AttendancePunches, int>, IAttend
         //await TryNotifyPunchByEmailAsync(created, ct);
         await _emailBuilder.TryNotifyAsync(
             EmailTemplateKey.AttendancePunch,
-            "NotificaciÛn de picada",
+            "Notificaci√≥n de picada",
             generateEmailBody(created),
             to: _currentUser.Email,
             timeoutSeconds: 15,
             ct);
         return created;
+    }
+
+    /// <inheritdoc />
+    public async Task<OwnPunchResult> RegisterOwnPunchAsync(AttendancePunches punch, CancellationToken ct)
+    {
+        var employeeId = _currentUser.EmployeeId;
+        if (employeeId is null)
+            return new OwnPunchResult(null, "Tu usuario no tiene un empleado asociado, por lo que no puede registrar picadas.", "NO_EMPLOYEE");
+
+        // Solo se puede picar a nombre propio: el empleado del cuerpo debe coincidir con el del token.
+        if (punch.EmployeeId != employeeId.Value)
+        {
+            _logger.LogWarning("Intento de picada a nombre de otro empleado: token={TokenEmployee} cuerpo={BodyEmployee}", employeeId, punch.EmployeeId);
+            return new OwnPunchResult(null, "Solo puedes registrar tu propia picada.", "NOT_OWN_PUNCH");
+        }
+
+        // Una picada a la vez por empleado: dos clics simult√°neos no pueden saltarse el intervalo m√≠nimo.
+        var gate = EmployeeGates.GetOrAdd(employeeId.Value, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
+        {
+            // La hora la define el servidor (el cliente no puede adelantarla ni atrasarla).
+            var now = DateTime.Now;
+            now = now.AddTicks(-(now.Ticks % TimeSpan.TicksPerSecond));
+
+            // Intervalo m√≠nimo entre picadas (el trigger de BD que lo hac√≠a est√° deshabilitado a prop√≥sito).
+            var minMinutes = await _accessPolicy.GetMinIntervalMinutesAsync(ct);
+            var last = (await _repository.GetLastPunchAsync(employeeId.Value, ct)).FirstOrDefault();
+            var remaining = PunchCooldown.Remaining(last?.PunchTime, now, minMinutes);
+            if (remaining is not null)
+                return new OwnPunchResult(null, PunchCooldown.Message(remaining.Value), "PUNCH_TOO_SOON");
+
+            var decision = await _accessPolicy.EvaluateAsync(
+                employeeId.Value, _currentUser.GetRemoteIp(), _currentUser.GetForwardedForHeader(), ct);
+            if (!decision.Allowed)
+                return new OwnPunchResult(null, decision.Message, "PUNCH_OUTSIDE_CAMPUS");
+
+            punch.PunchTime = now;
+            var created = await CreatePunchesWithIPAsync(punch, _currentUser.GetIp() ?? string.Empty, ct);
+            return new OwnPunchResult(created, null, null);
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     private string generateEmailBody(AttendancePunches punch)
@@ -86,11 +136,11 @@ public class AttendancePunchesService : Service<AttendancePunches, int>, IAttend
 
     //        if (string.IsNullOrWhiteSpace(to))
     //        {
-    //            _logger.LogWarning("No se enviÛ correo de picada: ICurrentUserService.Email es null/vacÌo.");
+    //            _logger.LogWarning("No se envi√≥ correo de picada: ICurrentUserService.Email es null/vac√≠o.");
     //            return;
     //        }
 
-    //        // Si no existe, EmailSenderService enviar· sin layout (degrada).
+    //        // Si no existe, EmailSenderService enviar√° sin layout (degrada).
     //        //const string layoutSlug = "informativo";
     //        // Resolver slug por clave (enum)
     //        var templateKey = EmailTemplateKey.AttendancePunch;
@@ -119,14 +169,14 @@ public class AttendancePunchesService : Service<AttendancePunches, int>, IAttend
 
     //        //var res = await _emailBuilder
     //        //    .To(to.Trim())
-    //        //    .Subject("NotificaciÛn de picada")
-    //        //    .WithLayout(layoutSlug) // <- usa el slug leÌdo desde appsettings
+    //        //    .Subject("Notificaci√≥n de picada")
+    //        //    .WithLayout(layoutSlug) // <- usa el slug le√≠do desde appsettings
     //        //    .WithBody(body)
     //        //    .CreatedBy(_currentUser.EmployeeId)
     //        //    .SendAsync(emailCt);
     //        await _emailBuilder
     //        .To(to.Trim())
-    //        .Subject("NotificaciÛn de picada")
+    //        .Subject("Notificaci√≥n de picada")
     //        .WithLayout(layoutSlug)
     //        .WithBody(body)
     //        .CreatedBy(_currentUser.EmployeeId)
@@ -141,7 +191,7 @@ public class AttendancePunchesService : Service<AttendancePunches, int>, IAttend
     //    }
     //    catch (Exception ex)
     //    {
-    //        _logger.LogError(ex, "Error inesperado enviando correo de notificaciÛn de picada (best-effort).");
+    //        _logger.LogError(ex, "Error inesperado enviando correo de notificaci√≥n de picada (best-effort).");
     //    }
     //}
 }

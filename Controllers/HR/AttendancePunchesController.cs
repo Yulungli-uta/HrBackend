@@ -153,9 +153,21 @@ public class AttendancePunchesController : ControllerBase
     {
         var entityObj = _mapper.Map<AttendancePunches>(dto);
 
-        entityObj.IpAddress = _clientInfo.GetIp();
-        //var created = await _svc.CreateAsync(entityObj, ct);
-        var created = await _svc.CreatePunchesWithIPAsync(entityObj, _clientInfo.GetIp(), ct);
+        var result = await _svc.RegisterOwnPunchAsync(entityObj, ct);
+        if (!result.Succeeded)
+        {
+            // "message" en la raíz: es el campo que el cliente HTTP del frontend muestra al usuario.
+            var status = result.DeniedCode == "PUNCH_TOO_SOON" ? StatusCodes.Status409Conflict : StatusCodes.Status403Forbidden;
+            return StatusCode(status, new
+            {
+                title = "Picada no permitida",
+                status,
+                code = result.DeniedCode ?? "FORBIDDEN",
+                message = result.DeniedMessage ?? "No se pudo registrar la picada.",
+                traceId = HttpContext.TraceIdentifier
+            });
+        }
+        var created = result.Punch!;
         _logger.LogInformation("Created AttendancePunches with ID: {AttendancePunchesId}", created.PunchId);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);        
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<AttendancePunchesDto>(created));
