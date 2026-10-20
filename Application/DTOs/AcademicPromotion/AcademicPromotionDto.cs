@@ -29,6 +29,8 @@ public sealed record TeacherAcademicProfileDto(
     string? Orcid,
     DependencyDto Dependency,
     string? EmploymentRelationship,
+    string? Dedication,
+    decimal? WeeklyHours,
     string? CurrentPosition,
     DateOnly? CurrentPositionStartDate,
     DateOnly EvaluationDate,

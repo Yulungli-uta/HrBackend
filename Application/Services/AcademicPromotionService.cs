@@ -24,6 +24,16 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
         ["HORAS"] = "HOURLY",
     };
 
+    // Texto de la dedicación sin horas: en tiempo parcial las horas varían por persona
+    // y se informan aparte en WeeklyHours.
+    private static readonly Dictionary<string, string> DedicationTexts = new()
+    {
+        ["TC"] = "Tiempo Completo",
+        ["EXCLUSIVA"] = "Dedicación Exclusiva",
+        ["MT"] = "Medio Tiempo",
+        ["HORAS"] = "Tiempo Parcial",
+    };
+
     private const string PedagogicalCertificateName = "CURSO EN EL CAMPO DE DOCENCIA UNIVERSITARIA";
     private const string DisciplinaryCertificateName = "ACTUALIZACIÓN Y PERFECCIONAMIENTO EN EL CAMPO ESPECÍFICO";
     private static readonly string[] AllowedRoles = ["R_RH", "Administrador"];
@@ -123,6 +133,10 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
             EmploymentRelationship: currentStructure is not null
                 ? MapDedicationLabel(ResolveName(currentStructure.DedicationTypeId))
                 : null,
+            Dedication: currentStructure is not null
+                ? MapDedicationText(ResolveName(currentStructure.DedicationTypeId))
+                : null,
+            WeeklyHours: currentStructure?.WeeklyClassHours,
             CurrentPosition: currentStructure?.Ladder is not null ? MapLadderCode(currentStructure.Ladder.Code) : null,
             CurrentPositionStartDate: currentStructure?.StartDate,
             EvaluationDate: evaluationDate,
@@ -153,8 +167,25 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
     private static string MapDedicationLabel(string? dedicationName)
         => dedicationName is not null && DedicationLabels.TryGetValue(dedicationName, out var label) ? label : dedicationName ?? "";
 
+    private static string? MapDedicationText(string? dedicationName)
+        => dedicationName is not null && DedicationTexts.TryGetValue(dedicationName, out var text) ? text : dedicationName;
+
+    /// <summary>
+    /// Devuelve solo la posición (p. ej. AGREGADO_2): quita el prefijo TITULAR_ y el sufijo de
+    /// dedicación (_TC/_MT/_TP) que traen los códigos de peldaño; la dedicación va en Dedication.
+    /// </summary>
     private static string MapLadderCode(string code)
-        => code.StartsWith("TITULAR_", StringComparison.OrdinalIgnoreCase) ? code["TITULAR_".Length..] : code;
+    {
+        var position = code.StartsWith("TITULAR_", StringComparison.OrdinalIgnoreCase) ? code["TITULAR_".Length..] : code;
+        foreach (var suffix in DedicationCodeSuffixes)
+        {
+            if (position.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                return position[..^suffix.Length];
+        }
+        return position;
+    }
+
+    private static readonly string[] DedicationCodeSuffixes = ["_TC", "_MT", "_TP"];
 
     /// <summary>
     /// Años/meses de UNA experiencia individual (no del total acumulado). El total agregado
