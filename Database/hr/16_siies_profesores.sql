@@ -312,21 +312,20 @@ LEFT JOIN [HR].[ref_Types] patRelFallback               ON patRelFallback.[TypeI
 -- (HR.vw_EmployeeAppointment, regla de cadena). Los ocasionales conservan su contrato: un ocasional puede tener un
 -- nombramiento antiguo de otro puesto que no es su relacion actual. Con salida posterior (HasLaterExit) tambien se
 -- conserva la cascada anterior. Si el nombramiento actual es de fecha futura, se usa el primer permanente vigente.
-OUTER APPLY (
-    SELECT TOP 1 x.[ActionId], x.[ActionNumber], x.[ActionDate]
-    FROM (
-        SELECT ap.[AppointmentActionId] AS [ActionId], ap.[AppointmentActionNumber] AS [ActionNumber], ap.[AppointmentDate] AS [ActionDate], 1 AS [Pri]
-        FROM [HR].[vw_EmployeeAppointment] ap
-        WHERE ap.[EmployeeID] = e.[EmployeeID] AND ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] <= CAST(GETDATE() AS DATE)
-        UNION ALL
-        SELECT ap.[FirstPermanentActionId], ap.[FirstPermanentActionNumber], ap.[FirstPermanentDate], 2
-        FROM [HR].[vw_EmployeeAppointment] ap
-        WHERE ap.[EmployeeID] = e.[EmployeeID] AND ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] > CAST(GETDATE() AS DATE)
-          AND ap.[FirstPermanentDate] <= CAST(GETDATE() AS DATE)
-    ) x
-    WHERE ts.[TeacherStructureID] IS NOT NULL AND ocasionalDocente.[ContractID] IS NULL
-    ORDER BY x.[Pri]
-) apt
+-- 2026-10-26: join por empleado calculado UNA vez. Antes era un OUTER APPLY correlacionado que reevaluaba
+-- HR.vw_EmployeeAppointment por cada fila (~2000 veces, ~20 s). Equivale al TOP 1 anterior porque esa vista
+-- tiene una sola fila por empleado y las dos ramas (Pri 1 / Pri 2) son excluyentes por la fecha de hoy.
+-- Si vw_EmployeeAppointment dejara de ser una fila por empleado, volver a un TOP 1 por empleado.
+LEFT JOIN (
+    SELECT ap.[EmployeeID], ap.[AppointmentActionId] AS [ActionId], ap.[AppointmentActionNumber] AS [ActionNumber], ap.[AppointmentDate] AS [ActionDate], 1 AS [Pri]
+    FROM [HR].[vw_EmployeeAppointment] ap
+    WHERE ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] <= CAST(GETDATE() AS DATE)
+    UNION ALL
+    SELECT ap.[EmployeeID], ap.[FirstPermanentActionId], ap.[FirstPermanentActionNumber], ap.[FirstPermanentDate], 2
+    FROM [HR].[vw_EmployeeAppointment] ap
+    WHERE ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] > CAST(GETDATE() AS DATE)
+      AND ap.[FirstPermanentDate] <= CAST(GETDATE() AS DATE)
+) apt ON apt.[EmployeeID] = e.[EmployeeID] AND ts.[TeacherStructureID] IS NOT NULL AND ocasionalDocente.[ContractID] IS NULL
 LEFT JOIN [HR].[tbl_PersonnelActions] aptPa           ON aptPa.[ActionID] = apt.[ActionId]
 LEFT JOIN [HR].[tbl_personnel_action_type] aptPat     ON aptPat.[PersonnelActionTypeId] = aptPa.[ActionTypeID]
 LEFT JOIN [HR].[ref_Types] aptRel                     ON aptRel.[TypeID] = aptPat.[SiiesRelacionIesTypeId]

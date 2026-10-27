@@ -327,20 +327,20 @@ LEFT JOIN [HR].[ref_Types] patRelFallback               ON patRelFallback.[TypeI
 -- nombramiento (HR.vw_EmployeeAppointment, regla de cadena: un permanente nuevo reinicia solo si cambia el cargo o hay
 -- recategorizacion). Si no tiene nombramiento, o tiene una salida posterior (HasLaterExit), queda la cascada anterior.
 -- Si el nombramiento actual es de fecha futura, se usa el primer permanente ya vigente.
-OUTER APPLY (
-    SELECT TOP 1 x.[ActionId], x.[ActionNumber], x.[ActionDate]
-    FROM (
-        SELECT ap.[AppointmentActionId] AS [ActionId], ap.[AppointmentActionNumber] AS [ActionNumber], ap.[AppointmentDate] AS [ActionDate], 1 AS [Pri]
-        FROM [HR].[vw_EmployeeAppointment] ap
-        WHERE ap.[EmployeeID] = e.[EmployeeID] AND ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] <= CAST(GETDATE() AS DATE)
-        UNION ALL
-        SELECT ap.[FirstPermanentActionId], ap.[FirstPermanentActionNumber], ap.[FirstPermanentDate], 2
-        FROM [HR].[vw_EmployeeAppointment] ap
-        WHERE ap.[EmployeeID] = e.[EmployeeID] AND ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] > CAST(GETDATE() AS DATE)
-          AND ap.[FirstPermanentDate] <= CAST(GETDATE() AS DATE)
-    ) x
-    ORDER BY x.[Pri]
-) apt
+-- 2026-10-26: join por empleado calculado UNA vez. Antes era un OUTER APPLY correlacionado que reevaluaba
+-- HR.vw_EmployeeAppointment por cada fila (~2000 veces, ~20 s). Equivale al TOP 1 anterior porque esa vista
+-- tiene una sola fila por empleado y las dos ramas (Pri 1 / Pri 2) son excluyentes por la fecha de hoy.
+-- Si vw_EmployeeAppointment dejara de ser una fila por empleado, volver a un TOP 1 por empleado.
+LEFT JOIN (
+    SELECT ap.[EmployeeID], ap.[AppointmentActionId] AS [ActionId], ap.[AppointmentActionNumber] AS [ActionNumber], ap.[AppointmentDate] AS [ActionDate], 1 AS [Pri]
+    FROM [HR].[vw_EmployeeAppointment] ap
+    WHERE ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] <= CAST(GETDATE() AS DATE)
+    UNION ALL
+    SELECT ap.[EmployeeID], ap.[FirstPermanentActionId], ap.[FirstPermanentActionNumber], ap.[FirstPermanentDate], 2
+    FROM [HR].[vw_EmployeeAppointment] ap
+    WHERE ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] > CAST(GETDATE() AS DATE)
+      AND ap.[FirstPermanentDate] <= CAST(GETDATE() AS DATE)
+) apt ON apt.[EmployeeID] = e.[EmployeeID]
 LEFT JOIN [HR].[tbl_PersonnelActions] aptPa           ON aptPa.[ActionID] = apt.[ActionId]
 LEFT JOIN [HR].[tbl_personnel_action_type] aptPat     ON aptPat.[PersonnelActionTypeId] = aptPa.[ActionTypeID]
 LEFT JOIN [HR].[ref_Types] aptRel                     ON aptRel.[TypeID] = aptPat.[SiiesRelacionIesTypeId]
@@ -349,8 +349,9 @@ LEFT JOIN [HR].[ref_Types] aptRel                     ON aptRel.[TypeID] = aptPa
 WHERE e.[IsDeleted] = 0
   AND ISNULL(j.[Description], '') NOT LIKE 'PROFESOR TITULAR%'
   AND NOT EXISTS (SELECT 1 FROM [HR].[tbl_TeacherStructure] ts WHERE ts.[EmployeeID] = e.[EmployeeID])
-  -- Excluye profesores ocasionales/técnicos docentes (van a vw_SiiesProfesores) con el mismo
-  -- criterio exacto, para que los dos reportes queden mutuamente excluyentes.
+  -- Excluye profesores ocasionales (van a vw_SiiesProfesores) con el mismo criterio exacto, para que los dos
+  -- reportes queden mutuamente excluyentes. Los técnicos docentes y de laboratorio (tipo docente LOES 2139/2140) NO se
+  -- excluyen: la función no los trata como docentes ocasionales, así que quedan aquí y fuera de Profesores/Formación.
   AND NOT EXISTS (SELECT 1 FROM [HR].[fn_SiiesDocenteOcasionalContract](p.[PersonID]));
 GO
 
@@ -363,7 +364,9 @@ IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('[HR].[tbl_
 GO
 
 UPDATE [HR].[tbl_contract_type] SET [IsDocenteOcasional] = 1
-WHERE [ContractTypeID] IN (17, 23, 41, 51, 52) AND [IsDocenteOcasional] = 0;
+WHERE [ContractTypeID] IN (17, 51) AND [IsDocenteOcasional] = 0;
+-- Los tipos de técnico docente (23, 41, 52) NO se marcan: el técnico docente y el técnico de laboratorio van en Funcionarios
+-- (2026-10-26). Si en BD siguieran marcados: UPDATE [HR].[tbl_contract_type] SET [IsDocenteOcasional] = 0 WHERE [ContractTypeID] IN (23, 41, 52);
 GO
 
 CREATE OR ALTER FUNCTION [HR].[fn_SiiesDocenteOcasionalContract] (@PersonID INT)
@@ -380,6 +383,11 @@ RETURN
     LEFT JOIN [HR].[tbl_contract_type] ctP2 ON ctP2.[ContractTypeID] = p2.[ContractTypeID]
     WHERE b.[PersonID] = @PersonID AND b.[IsDeleted] = 0
       AND (ISNULL(ctB.[IsDocenteOcasional],0) = 1 OR ISNULL(ctP1.[IsDocenteOcasional],0) = 1 OR ISNULL(ctP2.[IsDocenteOcasional],0) = 1)
+      -- Técnico docente / técnico de laboratorio (tipo docente LOES 2139/2140) van en Funcionarios, nunca en Profesores ni en
+      -- Formación Profesional: la etiqueta explícita manda sobre el tipo de contrato.
+      AND NOT EXISTS (SELECT 1 FROM [HR].[tbl_Employees] tec
+                      WHERE tec.[PersonID] = @PersonID AND tec.[IsDeleted] = 0
+                        AND tec.[TipoDocenteLoesTypeId] IN (2139, 2140))
     ORDER BY b.[startdate] DESC
 );
 GO

@@ -125,10 +125,33 @@ public class EmployeesRepository : ServiceAwareEfRepository<Employees, int>, IEm
         var contractTypeNames = await _db.ContractType.AsNoTracking()
             .ToDictionaryAsync(c => c.ContractTypeId, c => c.Name, ct);
 
+        var employeeIds = employees.Select(x => x.e.EmployeeId).Distinct().ToList();
+
+        // RMU: el "último sueldo" vigente del empleado según la regla única del sistema (HR.vw_EmployeeCurrentSalary: vigencia del
+        // documento fuente, nunca ChangedAt ni ID). Cubre también a quien no tiene contrato (nombramientos y acciones de personal),
+        // que antes salían con 0 porque solo se miraba el SalaryHistory del contrato más reciente.
+        var currentSalaryByEmployee = await _db.CurrentSalaries().AsNoTracking()
+            .Where(s => s.EmployeeId.HasValue && employeeIds.Contains(s.EmployeeId.Value))
+            .Select(s => new { EmployeeId = s.EmployeeId!.Value, s.NewSalary })
+            .ToDictionaryAsync(s => s.EmployeeId, s => s.NewSalary, ct);
+
+        // N° de documento: el del régimen laboral principal vigente (HR.tbl_EmployeeLaborRegime, IsPrincipal=1 e IsActive=1), que es
+        // contrato o acción de personal según el caso. Si hubiera más de uno se toma el de vigencia más reciente.
+        var documentByEmployee = (await _db.Set<EmployeeLaborRegime>().AsNoTracking()
+                .Where(r => employeeIds.Contains(r.EmployeeId) && r.IsPrincipal && r.IsActive
+                            && r.DocumentNumber != null && r.DocumentNumber != "")
+                .Select(r => new { r.EmployeeId, r.DocumentNumber, r.EffectiveFrom, r.Id })
+                .ToListAsync(ct))
+            .GroupBy(r => r.EmployeeId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.EffectiveFrom).ThenByDescending(r => r.Id).First().DocumentNumber);
+
         return employees.Select(x =>
         {
             latestContractByPerson.TryGetValue(x.p.PersonId, out var contract);
-            var salary = contract is not null && salaryByContract.TryGetValue(contract.ContractID, out var s) ? s : 0m;
+            // Sueldo vigente del empleado; si no tuviera fila en la vista, el del contrato más reciente (comportamiento anterior).
+            var salary = currentSalaryByEmployee.TryGetValue(x.e.EmployeeId, out var currentSalary)
+                ? currentSalary
+                : contract is not null && salaryByContract.TryGetValue(contract.ContractID, out var s) ? s : 0m;
             var contractTypeName = contract is not null && contractTypeNames.TryGetValue(contract.ContractTypeID, out var ctName)
                 ? ctName
                 : null;
@@ -152,6 +175,7 @@ public class EmployeesRepository : ServiceAwareEfRepository<Employees, int>, IEm
                 BaseSalary = salary,
                 NetSalary = salary,
                 ContractType = contractTypeName,
+                DocumentNumber = documentByEmployee.GetValueOrDefault(x.e.EmployeeId),
                 ContractStartDate = contract?.StartDate,
                 HireDate = x.e.HireDate.ToDateTime(TimeOnly.MinValue),
                 CreatedAt = x.e.CreatedAt ?? DateTime.MinValue,

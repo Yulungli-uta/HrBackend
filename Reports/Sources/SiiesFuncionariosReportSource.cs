@@ -18,12 +18,11 @@ namespace WsUtaSystem.Reports.Sources;
 /// </summary>
 /// <remarks>
 /// <para>
-/// SIIES prohíbe mezclar CEDULA y PASAPORTE en un mismo archivo. Por eso, aunque es un solo
-/// <see cref="IReportSource"/> (un solo reporte, un solo menú, un solo filtro para el usuario),
-/// cada ejecución genera un único archivo correspondiente a UN tipo de identificación a la vez,
-/// determinado por <see cref="ReportFilterDto.IdentType"/> ("CEDULA" o "PASAPORTE"; por defecto
-/// CEDULA si no se especifica). Nunca se combinan filas de ambos tipos en el mismo
-/// <see cref="ReportDefinition"/>.
+/// SIIES prohíbe mezclar CEDULA y PASAPORTE en un mismo archivo de carga. Por eso
+/// <see cref="ReportFilterDto.IdentType"/> "CEDULA" o "PASAPORTE" genera un único archivo de ese tipo
+/// (la matriz oficial 5.7 o 5.8). "TODOS", que es el valor por defecto cuando no se especifica,
+/// junta ambos en un solo archivo con las columnas de la matriz 5.8 (las columnas propias del
+/// pasaporte quedan vacías en las filas de cédula): sirve para revisión interna, no para cargar en SIIES.
 /// </para>
 /// <para>
 /// Consulta HR.vw_SiiesFuncionarios (joins y homologación de catálogos ya resueltos en la vista)
@@ -44,7 +43,9 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
 
     private const string DocenteLoesLabel = "DOCENTE LOES";
     private const string IndigenaLabel = "INDIGENA";
-    private const string DefaultIdentType = "CEDULA";
+    private const string AllIdentTypes = "TODOS";
+    // Sin tipo especificado se trae cédula y pasaporte juntos; cada matriz por separado se pide explícitamente
+    private const string DefaultIdentType = AllIdentTypes;
 
     public ReportType ReportType => ReportType.SiiesFuncionarios;
 
@@ -61,6 +62,7 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
 
         var identType = NormalizeIdentType(filter.IdentType);
         var esPasaporte = identType == "PASAPORTE";
+        var esTodos = identType == AllIdentTypes;
 
         var (codigoIes, codigoMatriz) = await GetInstitutionalParametersAsync(context.RequestAborted);
         var employees = await GetEmployeesAsync(identType, filter, context.RequestAborted);
@@ -69,29 +71,26 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             "SiiesFuncionariosReportSource: IdentType={IdentType}, {Count} registros.",
             identType, employees.Count);
 
-        var rows = esPasaporte
-            ? employees.Select(v =>
-                {
-                    var row = BuildCommonRow(v, codigoIes, codigoMatriz);
-                    var (primerApellido, segundoApellido, nombres) = SplitNamesForPasaporte(v);
-                    row["PRIMER_APELLIDO"] = primerApellido;
-                    row["SEGUNDO_APELLIDO"] = segundoApellido;
-                    row["NOMBRES"] = nombres;
-                    row["FECHA_NACIMIENTO"] = v.BirthDate;
-                    return (IReadOnlyDictionary<string, object?>)row;
-                }).ToList()
-            : employees
-                .Select(v => (IReadOnlyDictionary<string, object?>)BuildCommonRow(v, codigoIes, codigoMatriz))
-                .ToList();
+        // "TODOS": un solo archivo con cédula y pasaporte (columnas de la matriz 5.8). Las columnas propias del
+        // pasaporte quedan vacías en las filas de cédula. Es para revisión: SIIES exige cargarlos por separado.
+        var rows = employees
+            .Select(v => esPasaporte || (esTodos && v.IdentTypeName == "PASAPORTE")
+                ? BuildPasaporteRow(v, codigoIes, codigoMatriz)
+                : (IReadOnlyDictionary<string, object?>)BuildCedulaRow(v, codigoIes, codigoMatriz, withPasaporteColumns: esTodos))
+            .ToList();
 
         return new ReportDefinition
         {
-            Title = esPasaporte ? "SIIES - Funcionario Pasaporte" : "SIIES - Funcionarios (Cédula)",
-            FilePrefix = esPasaporte ? "SIIES_Funcionario_Pasaporte" : "SIIES_Funcionarios_Cedula",
+            Title = esTodos ? "SIIES - Funcionarios (Cédula y Pasaporte)"
+                : esPasaporte ? "SIIES - Funcionario Pasaporte" : "SIIES - Funcionarios (Cédula)",
+            FilePrefix = esTodos ? "SIIES_Funcionarios_Todos"
+                : esPasaporte ? "SIIES_Funcionario_Pasaporte" : "SIIES_Funcionarios_Cedula",
             Subtitle = $"Total registros: {rows.Count}",
             GeneratedBy = context.User.Identity?.Name ?? "anonymous",
             GeneratedAt = DateTime.Now,
-            Columns = esPasaporte ? PasaporteColumns : CedulaColumns,
+            Columns = esPasaporte || esTodos ? PasaporteColumns : CedulaColumns,
+            PdfPagination = PdfPagination.Blocks,
+            PinnedColumnKeys = ["TIPO_IDENTIFICACION", "IDENTIFICACION", "NOMBRE_COMPLETO"],
             Rows = rows,
             Orientation = PageOrientation.Landscape,
             VerticalHeaders = filter.VerticalHeaders ?? false,
@@ -100,14 +99,41 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
     }
 
     /// <summary>
-    /// Normaliza <see cref="ReportFilterDto.IdentType"/> a "CEDULA" o "PASAPORTE".
-    /// Cualquier valor nulo, vacío o distinto de "PASAPORTE" cae a CEDULA (matriz por defecto)
-    /// — nunca se generan ambos tipos a la vez.
+    /// Normaliza <see cref="ReportFilterDto.IdentType"/> a "CEDULA", "PASAPORTE" o "TODOS".
+    /// Cualquier valor nulo, vacío o desconocido cae a TODOS (cédula y pasaporte en un mismo archivo,
+    /// para revisión: SIIES exige cargar cada matriz por separado, para eso se pide CEDULA o PASAPORTE).
     /// </summary>
-    private static string NormalizeIdentType(string? identType) =>
-        string.Equals(identType?.Trim(), "PASAPORTE", StringComparison.OrdinalIgnoreCase)
-            ? "PASAPORTE"
-            : DefaultIdentType;
+    private static string NormalizeIdentType(string? identType)
+    {
+        var value = identType?.Trim();
+        if (string.Equals(value, "PASAPORTE", StringComparison.OrdinalIgnoreCase)) return "PASAPORTE";
+        if (string.Equals(value, "CEDULA", StringComparison.OrdinalIgnoreCase)) return "CEDULA";
+        return DefaultIdentType;
+    }
+
+    private IReadOnlyDictionary<string, object?> BuildPasaporteRow(VwSiiesFuncionario v, string codigoIes, string codigoMatriz)
+    {
+        var row = BuildCommonRow(v, codigoIes, codigoMatriz);
+        var (primerApellido, segundoApellido, nombres) = SplitNamesForPasaporte(v);
+        row["PRIMER_APELLIDO"] = primerApellido;
+        row["SEGUNDO_APELLIDO"] = segundoApellido;
+        row["NOMBRES"] = nombres;
+        row["FECHA_NACIMIENTO"] = v.BirthDate;
+        return row;
+    }
+
+    private IReadOnlyDictionary<string, object?> BuildCedulaRow(VwSiiesFuncionario v, string codigoIes, string codigoMatriz, bool withPasaporteColumns)
+    {
+        var row = BuildCommonRow(v, codigoIes, codigoMatriz);
+        if (withPasaporteColumns)
+        {
+            row["PRIMER_APELLIDO"] = string.Empty;
+            row["SEGUNDO_APELLIDO"] = string.Empty;
+            row["NOMBRES"] = string.Empty;
+            row["FECHA_NACIMIENTO"] = string.Empty;
+        }
+        return row;
+    }
 
     private async Task<List<VwSiiesFuncionario>> GetEmployeesAsync(string identTypeName, ReportFilterDto filter, CancellationToken ct)
     {
@@ -122,9 +148,11 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
         // o no activos hoy -- se quitó el filtro de activo/inactivo por defecto (antes excluía
         // inactivos salvo que se marque IncludeInactive). Sin StartDate/EndDate no hay período
         // explícito, así que se trae el universo completo de la vista sin recorte por estado.
-        var query = _db.vwSiiesFuncionarios
-            .AsNoTracking()
-            .Where(v => v.IdentTypeName == identTypeName);
+        var query = _db.vwSiiesFuncionarios.AsNoTracking();
+        query = identTypeName == AllIdentTypes
+            ? query.Where(v => v.IdentTypeName == "CEDULA" || v.IdentTypeName == "PASAPORTE")
+                   .OrderBy(v => v.IdentTypeName).ThenBy(v => v.LastName)
+            : query.Where(v => v.IdentTypeName == identTypeName);
 
         if (!string.IsNullOrWhiteSpace(filter.Identification))
         {
@@ -324,7 +352,7 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
               -- 2026-10-14: igual que la vista — los profesores ocasionales/tecnicos docentes van a
               -- vw_SiiesProfesores; sin esta exclusion se colaban aqui (557-727 filas segun el rango).
               AND NOT EXISTS (SELECT 1 FROM [HR].[fn_SiiesDocenteOcasionalContract](p.[PersonID]))
-              AND it.[Name] = @IdentTypeName
+              AND (it.[Name] = @IdentTypeName OR (@IdentTypeName = N'TODOS' AND it.[Name] IN (N'CEDULA', N'PASAPORTE')))
               AND (@Identification IS NULL OR p.[IDCard] = @Identification)
               -- A diferencia de la vista (que siempre devuelve 1 fila por empleado activo,
               -- vigente o no), aqui se excluye a quien no tuvo NINGUN origen de vigencia
@@ -508,9 +536,7 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
     /// </summary>
     private static (string primerApellido, string segundoApellido, string nombres) SplitNamesForPasaporte(VwSiiesFuncionario v)
     {
-        var parts = (v.LastName ?? string.Empty).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var primerApellido = parts.Length > 0 ? parts[0] : string.Empty;
-        var segundoApellido = parts.Length > 1 ? string.Join(' ', parts.Skip(1)) : string.Empty;
+        var (primerApellido, segundoApellido) = SiiesNameSplitter.Split(v.LastName);
         return (primerApellido, segundoApellido, v.FirstName ?? string.Empty);
     }
 

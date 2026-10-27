@@ -20,7 +20,9 @@ namespace WsUtaSystem.Reports.Sources;
 /// <para>
 /// SIIES prohíbe mezclar CEDULA y PASAPORTE en un mismo archivo. Igual que
 /// <see cref="SiiesFuncionariosReportSource"/>, es un solo <see cref="IReportSource"/> que
-/// segrega por <see cref="ReportFilterDto.IdentType"/> ("CEDULA" por defecto).
+/// segrega por <see cref="ReportFilterDto.IdentType"/> ("TODOS" por defecto). "TODOS" junta cédula y
+/// pasaporte en un solo archivo con las columnas de la matriz 5.3 (las propias del pasaporte quedan
+/// vacías en las filas de cédula): sirve para revisión interna, no para cargar en SIIES.
 /// </para>
 /// <para>
 /// Requiere que el empleado tenga un registro en HR.tbl_TeacherStructure (la vista
@@ -55,6 +57,9 @@ public abstract class SiiesProfesoresReportSourceBase
     private const string IndigenaLabel = "INDIGENA";
     private const string CuartoNivelLabel = "CUARTO NIVEL";
 
+    /// <summary>Valor de <see cref="ReportFilterDto.IdentType"/> que junta cédula y pasaporte en un mismo archivo (revisión interna).</summary>
+    protected const string AllIdentTypes = "TODOS";
+
     protected SiiesProfesoresReportSourceBase(AppDbContext db, ILogger logger)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
@@ -79,7 +84,9 @@ public abstract class SiiesProfesoresReportSourceBase
         var query = _db.vwSiiesProfesores
             .FromSqlInterpolated($"SELECT * FROM HR.fn_SiiesProfesoresHoras({periodCode})")
             .AsNoTracking()
-            .Where(v => v.IdentTypeName == identTypeName);
+            .Where(v => identTypeName == AllIdentTypes
+                ? (v.IdentTypeName == "CEDULA" || v.IdentTypeName == "PASAPORTE")
+                : v.IdentTypeName == identTypeName);
 
         // 2026-10-08: se quitó el filtro de "activo hoy" también para el listado general (sin
         // período) -- el reporte SIIES debe traer a todos los que laboraron, estén o no activos
@@ -91,6 +98,10 @@ public abstract class SiiesProfesoresReportSourceBase
             var identification = filter.Identification.Trim();
             query = query.Where(v => v.IDCard == identification);
         }
+
+        // "Todos": agrupado por tipo (cédula, luego pasaporte) y por apellido, igual que SIIES Funcionarios.
+        if (identTypeName == AllIdentTypes)
+            query = query.OrderBy(v => v.IdentTypeName).ThenBy(v => v.LastName).ThenBy(v => v.FirstName);
 
         return await query.ToListAsync(ct);
     }
@@ -116,7 +127,9 @@ public abstract class SiiesProfesoresReportSourceBase
             var periodRows = await _db.vwSiiesProfesores
                 .FromSqlInterpolated($"SELECT * FROM HR.fn_SiiesProfesoresHoras({periodCode})")
                 .AsNoTracking()
-                .Where(v => v.IdentTypeName == identTypeName)
+                .Where(v => identTypeName == AllIdentTypes
+                    ? (v.IdentTypeName == "CEDULA" || v.IdentTypeName == "PASAPORTE")
+                    : v.IdentTypeName == identTypeName)
                 .ToListAsync(ct);
 
             foreach (var row in periodRows)
@@ -131,7 +144,10 @@ public abstract class SiiesProfesoresReportSourceBase
             results = results.Where(v => v.IDCard == identification);
         }
 
-        return results.ToList();
+        // "Todos": agrupado por tipo (cédula, luego pasaporte) y por apellido, igual que SIIES Funcionarios.
+        return identTypeName == AllIdentTypes
+            ? results.OrderBy(v => v.IdentTypeName, StringComparer.Ordinal).ThenBy(v => v.LastName, StringComparer.CurrentCulture).ThenBy(v => v.FirstName, StringComparer.CurrentCulture).ToList()
+            : results.ToList();
     }
 
     private static string HomologateTipoDocumento(string? regimeDocumentType) => regimeDocumentType switch
@@ -212,9 +228,7 @@ public abstract class SiiesProfesoresReportSourceBase
     /// <summary>Separa Apellidos/Nombres a nivel de reporte (no se toca tbl_People), mismo criterio que Funcionarios.</summary>
     private static (string primerApellido, string segundoApellido, string nombres) SplitNamesForPasaporte(VwSiiesProfesor v)
     {
-        var parts = (v.LastName ?? string.Empty).Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var primerApellido = parts.Length > 0 ? parts[0] : string.Empty;
-        var segundoApellido = parts.Length > 1 ? string.Join(' ', parts.Skip(1)) : string.Empty;
+        var (primerApellido, segundoApellido) = SiiesNameSplitter.Split(v.LastName);
         return (primerApellido, segundoApellido, v.FirstName ?? string.Empty);
     }
 
@@ -292,8 +306,18 @@ public abstract class SiiesProfesoresReportSourceBase
     protected static IReadOnlyList<ReportColumn> PasaporteColumns =>
         [.. HeadColumns, .. PasaporteNameColumns, .. GeneroSexoColumns, .. FechaNacimientoColumn, .. TailColumns];
 
-    protected static IReadOnlyDictionary<string, object?> BuildRowCedula(VwSiiesProfesor v, string codigoIes) =>
-        BuildCommonRow(v, codigoIes);
+    protected static IReadOnlyDictionary<string, object?> BuildRowCedula(VwSiiesProfesor v, string codigoIes, bool withPasaporteColumns = false)
+    {
+        var row = BuildCommonRow(v, codigoIes);
+        if (withPasaporteColumns)
+        {
+            row["PRIMER_APELLIDO"] = string.Empty;
+            row["SEGUNDO_APELLIDO"] = string.Empty;
+            row["NOMBRES"] = string.Empty;
+            row["FECHA_NACIMIENTO"] = string.Empty;
+        }
+        return row;
+    }
 
     protected static IReadOnlyDictionary<string, object?> BuildRowPasaporte(VwSiiesProfesor v, string codigoIes)
     {
@@ -320,10 +344,13 @@ public sealed class SiiesProfesoresReportSource : SiiesProfesoresReportSourceBas
         ArgumentNullException.ThrowIfNull(filter);
         ArgumentNullException.ThrowIfNull(context);
 
-        var identType = string.Equals(filter.IdentType?.Trim(), "PASAPORTE", StringComparison.OrdinalIgnoreCase)
-            ? "PASAPORTE"
-            : "CEDULA";
+        // Cualquier valor nulo, vacío o desconocido cae a TODOS (igual que Funcionarios).
+        var requested = filter.IdentType?.Trim();
+        var identType = string.Equals(requested, "PASAPORTE", StringComparison.OrdinalIgnoreCase) ? "PASAPORTE"
+            : string.Equals(requested, "CEDULA", StringComparison.OrdinalIgnoreCase) ? "CEDULA"
+            : AllIdentTypes;
         var esPasaporte = identType == "PASAPORTE";
+        var esTodos = identType == AllIdentTypes;
 
         var codigoIes = await GetCodigoIesAsync(context.RequestAborted);
         var teachers = await GetTeachersAsync(identType, filter, context.RequestAborted);
@@ -331,17 +358,23 @@ public sealed class SiiesProfesoresReportSource : SiiesProfesoresReportSourceBas
         _logger.LogInformation("SiiesProfesoresReportSource: IdentType={IdentType}, {Count} registros.", identType, teachers.Count);
 
         var rows = teachers
-            .Select(v => esPasaporte ? BuildRowPasaporte(v, codigoIes) : BuildRowCedula(v, codigoIes))
+            .Select(v => esPasaporte || (esTodos && v.IdentTypeName == "PASAPORTE")
+                ? BuildRowPasaporte(v, codigoIes)
+                : BuildRowCedula(v, codigoIes, withPasaporteColumns: esTodos))
             .ToList();
 
         return new ReportDefinition
         {
-            Title = esPasaporte ? "SIIES - Profesores Pasaporte" : "SIIES - Profesores (Cédula)",
-            FilePrefix = esPasaporte ? "SIIES_Profesores_Pasaporte" : "SIIES_Profesores_Cedula",
+            Title = esTodos ? "SIIES - Profesores (Cédula y Pasaporte)"
+                : esPasaporte ? "SIIES - Profesores Pasaporte" : "SIIES - Profesores (Cédula)",
+            FilePrefix = esTodos ? "SIIES_Profesores_Todos"
+                : esPasaporte ? "SIIES_Profesores_Pasaporte" : "SIIES_Profesores_Cedula",
             Subtitle = $"Total registros: {rows.Count}",
             GeneratedBy = context.User.Identity?.Name ?? "anonymous",
             GeneratedAt = DateTime.Now,
-            Columns = esPasaporte ? PasaporteColumns : CedulaColumns,
+            Columns = esPasaporte || esTodos ? PasaporteColumns : CedulaColumns,
+            PdfPagination = PdfPagination.Blocks,
+            PinnedColumnKeys = ["TIPO_IDENTIFICACION", "IDENTIFICACION", "NOMBRE_COMPLETO"],
             Rows = rows,
             Orientation = PageOrientation.Landscape,
             VerticalHeaders = filter.VerticalHeaders ?? false,

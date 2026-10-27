@@ -58,13 +58,25 @@ public sealed class ReportDefinition
     /// <summary>
     /// Fecha y hora de generación del reporte (UTC).
     /// </summary>
-    public DateTime GeneratedAt { get; init; } = DateTime.UtcNow;
+    public DateTime GeneratedAt { get; init; } = DateTime.Now;
 
     /// <summary>
     /// Definición ordenada de las columnas del reporte.
     /// El orden de esta lista determina el orden de las columnas en PDF y Excel.
     /// </summary>
     public IReadOnlyList<ReportColumn> Columns { get; init; } = [];
+
+    /// <summary>
+    /// Cómo reparte el PDF las columnas en las hojas. Por defecto <see cref="Core.PdfPagination.FitA4"/> (comportamiento histórico);
+    /// las matrices anchas (SIIES) piden <see cref="Core.PdfPagination.Blocks"/>. El Excel y el CSV ignoran esta propiedad.
+    /// </summary>
+    public PdfPagination PdfPagination { get; init; } = PdfPagination.FitA4;
+
+    /// <summary>
+    /// Claves de las columnas que se repiten al inicio de cada bloque cuando <see cref="PdfPagination"/> es
+    /// <see cref="Core.PdfPagination.Blocks"/> (ej. identificación y nombre, para saber de quién es la fila en cada hoja).
+    /// </summary>
+    public IReadOnlyList<string> PinnedColumnKeys { get; init; } = [];
 
     /// <summary>
     /// Filas de datos del reporte.

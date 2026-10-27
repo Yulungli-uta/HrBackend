@@ -18,9 +18,10 @@ public record ReportFilterDto
     public int? EmployeeTypeId { get; init; }
 
     /// <summary>
-    /// Filtra por tipo de identificación ("CEDULA" o "PASAPORTE"). Usado por el reporte SIIES
-    /// Funcionarios para segregar en un solo flujo las dos matrices (5.7/5.8) sin mezclarlas
-    /// nunca en un mismo archivo. Null o vacío = CEDULA (matriz por defecto).
+    /// Filtra por tipo de identificación ("CEDULA", "PASAPORTE" o "TODOS"). Lo usan los reportes SIIES
+    /// para segregar las matrices de cédula y pasaporte. En SIIES Funcionarios "TODOS" trae ambos en un
+    /// solo archivo (revisión interna; SIIES exige cargarlos por separado) y es el valor por defecto;
+    /// en SIIES Profesores solo existen CEDULA y PASAPORTE y el valor por defecto es CEDULA.
     /// </summary>
     public string? IdentType { get; init; }
 
