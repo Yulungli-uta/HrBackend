@@ -202,6 +202,14 @@ IF NOT EXISTS (SELECT 1 FROM [HR].[TBL_PARAMETERS] WHERE [Name] = N'CODIGO_MATRI
     VALUES (N'CODIGO_MATRIZ_EXTENSION', N'1010-MAT-01', N'Código de Matriz/Extensión obtenido en el sistema SIIES (Menú Matriz/Extensión).', N'TEXTO', 1);
 GO
 
+-- 12b) Parámetro: jornada institucional por defecto (horas por semana) -----------
+-- HORAS_LABORABLES_SEMANA de SIIES Funcionarios: ver la cascada en la vista (sección 13). Solo se usa para LOSEP y
+-- Código de Trabajo cuando ni el contrato ni el horario asignado dan el dato; LOES nunca recibe un valor por defecto.
+IF NOT EXISTS (SELECT 1 FROM [HR].[TBL_PARAMETERS] WHERE [Name] = N'SIIES_HORAS_SEMANA_DEFECTO')
+    INSERT INTO [HR].[TBL_PARAMETERS] (Name, Pvalues, Description, DataType, IsActive, CreatedAt)
+    VALUES (N'SIIES_HORAS_SEMANA_DEFECTO', N'40', N'Horas laborables por semana que SIIES Funcionarios declara a LOSEP y Código de Trabajo cuando no hay dato en contrato ni horario.', N'NUMERO', 1, SYSDATETIME());
+GO
+
 -- 13) Vista HR.vw_SiiesFuncionarios -------------------------------------------
 -- Un renglón por empleado: homologa catálogos (SiiesLabel) y expone el régimen
 -- laboral vigente/principal (EmployeeLaborRegimeService). Reglas condicionales
@@ -270,7 +278,20 @@ SELECT
              WHEN paFallback.[ActionID] IS NOT NULL THEN 'PERSONNEL_ACTION' END) END        AS [RegimeDocumentType],
     lr.[Name]                       AS [LaborRegimeName],
     COALESCE(aptRel.[SiiesLabel], ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel]) AS [RelacionIesSiiesLabel],
-    COALESCE(ctr.[ContractedHours], ctrFallback.[ContractedHours]) AS [ContractedHours],
+    -- 2026-10-27: horas laborables por semana (HORAS_LABORABLES_SEMANA). Antes solo se leia ContractedHours del contrato, que
+    -- solo existe en los contratos LOES: 1.474 de 2.133 filas quedaban en NULL (el reporte las mostraba como 0) y 248 en 0.
+    -- Cascada: 1) ContractedHours del contrato (un 0 es "sin dato", no una jornada real); 2) LOES sin dato queda NULL (sus
+    -- jornadas son de 16, 20, 30 o 40 h y no se inventan); 3) horas por semana del horario asignado vigente; 4) jornada
+    -- institucional (parametro SIIES_HORAS_SEMANA_DEFECTO) para quien tiene regimen LOSEP o Codigo de Trabajo.
+    CASE
+        WHEN COALESCE(NULLIF(ctr.[ContractedHours], 0), NULLIF(ctrFallback.[ContractedHours], 0)) IS NOT NULL
+            THEN COALESCE(NULLIF(ctr.[ContractedHours], 0), NULLIF(ctrFallback.[ContractedHours], 0))
+        WHEN lr.[Name] = N'LOES' THEN NULL
+        WHEN sch.[WeeklyHours] IS NOT NULL THEN sch.[WeeklyHours]
+        WHEN lr.[Name] IN (N'LOSEP', N'Código Trabajo')
+            THEN (SELECT TOP 1 TRY_CAST(prm.[Pvalues] AS DECIMAL(5,2)) FROM [HR].[TBL_PARAMETERS] prm
+                  WHERE prm.[Name] = N'SIIES_HORAS_SEMANA_DEFECTO' AND prm.[IsActive] = 1)
+    END AS [ContractedHours],
     e.[IsActive]                    AS [EmployeeIsActive],
     e.[HireDate]
 FROM [HR].[tbl_Employees] e
@@ -323,6 +344,17 @@ OUTER APPLY (
 ) paFallback
 LEFT JOIN [HR].[tbl_personnel_action_type] patFallback ON patFallback.[PersonnelActionTypeId] = paFallback.[ActionTypeID]
 LEFT JOIN [HR].[ref_Types] patRelFallback               ON patRelFallback.[TypeID] = patFallback.[SiiesRelacionIesTypeId]
+-- Horas por semana del horario asignado vigente (jornada diaria x 5 dias: todos los horarios son "Lunes a Viernes").
+-- Prefiere el horario base sobre el especial y excluye los rotativos, cuyas horas semanales no son fijas.
+OUTER APPLY (
+    SELECT TOP 1 CAST(sc.[RequiredHoursPerDay] * 5 AS DECIMAL(5,2)) AS [WeeklyHours]
+    FROM [HR].[tbl_EmployeeSchedules] es
+    JOIN [HR].[tbl_Schedules] sc ON sc.[ScheduleID] = es.[ScheduleID]
+    WHERE es.[EmployeeID] = e.[EmployeeID]
+      AND es.[ValidFrom] <= CAST(SYSDATETIME() AS DATE) AND (es.[ValidTo] IS NULL OR es.[ValidTo] >= CAST(SYSDATETIME() AS DATE))
+      AND sc.[IsActive] = 1 AND sc.[IsRotating] = 0 AND sc.[WorkingDays] = N'Lunes a Viernes' AND sc.[RequiredHoursPerDay] > 0
+    ORDER BY CASE WHEN es.[EmployeeSpecialScheduleId] IS NULL THEN 0 ELSE 1 END, es.[ValidFrom] DESC
+) sch
 -- 2026-10-15: NUMERO_DOCUMENTO / FECHA_INICIO / RELACION_IES = documento con el que el empleado GANO su
 -- nombramiento (HR.vw_EmployeeAppointment, regla de cadena: un permanente nuevo reinicia solo si cambia el cargo o hay
 -- recategorizacion). Si no tiene nombramiento, o tiene una salida posterior (HasLaterExit), queda la cascada anterior.

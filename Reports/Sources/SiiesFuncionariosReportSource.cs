@@ -510,7 +510,9 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             ["CATEGORIA_DOCENTE_LOSEP(LOES)"] = esDocenteLoes ? (v.CategoriaDocenteLoesSiiesLabel ?? "NO APLICA") : "NO APLICA",
             ["UNIDAD_ACADEMICA"] = v.DepartmentName ?? string.Empty,
             ["PUESTO_JERARQUICO_SUPERIOR"] = v.PuestoJerarquicoSuperior ? "SI" : "NO",
-            ["HORAS_LABORABLES_SEMANA"] = v.ContractedHours ?? 0,
+            // Horas por semana según la cascada de la vista (contrato > horario > jornada institucional). Vacío cuando no hay
+            // dato (LOES sin contrato con horas): no se declara 0 horas.
+            ["HORAS_LABORABLES_SEMANA"] = v.ContractedHours,
             // Columnas adicionales fuera del esquema oficial CACES — se agregan al final para
             // no alterar el orden/cantidad de las columnas oficiales (uso interno/verificación,
             // no para la carga masiva al SIIES).
