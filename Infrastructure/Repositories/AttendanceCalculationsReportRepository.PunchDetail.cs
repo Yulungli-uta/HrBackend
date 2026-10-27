@@ -18,7 +18,8 @@ public sealed partial class AttendanceCalculationsReportRepository
     {
         ArgumentNullException.ThrowIfNull(filter);
 
-        var rows = await PunchDetailRowsQuery(filter).ToListAsync(ct);
+        var scope = await ResolveEmployeeScopeFromViewAsync(filter, ct);
+        var rows = await PunchDetailRowsQuery(filter, scope).ToListAsync(ct);
         return await AttachPunchesAsync(rows, ct);
     }
 
@@ -30,7 +31,8 @@ public sealed partial class AttendanceCalculationsReportRepository
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var query = PunchDetailRowsQuery(filter);
+        var scope = await ResolveEmployeeScopeFromViewAsync(filter, ct);
+        var query = PunchDetailRowsQuery(filter, scope);
         var total = await query.LongCountAsync(ct);
         var rows = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
 
@@ -51,7 +53,8 @@ public sealed partial class AttendanceCalculationsReportRepository
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
-        var query = PunchDetailRowsQuery(filter, onlyLate: true);
+        var scope = await ResolveEmployeeScopeFromViewAsync(filter, ct);
+        var query = PunchDetailRowsQuery(filter, scope, onlyLate: true);
         var total = await query.LongCountAsync(ct);
         var rows = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
 
@@ -73,8 +76,10 @@ public sealed partial class AttendanceCalculationsReportRepository
     /// <summary>
     /// Jornadas calculadas del rango, ordenadas por nombre y fecha. Incluye los días con horario programado
     /// aunque no tengan ninguna picada (ausencias) y los días con picadas aunque no tengan horario.
+    /// <paramref name="employeeScope"/> son los empleados que cumplen dependencia y régimen
+    /// (<see cref="ResolveEmployeeScopeFromViewAsync"/>); null = sin ese filtro.
     /// </summary>
-    private IQueryable<PunchDetailRow> PunchDetailRowsQuery(ReportFilterDto filter, bool onlyLate = false)
+    private IQueryable<PunchDetailRow> PunchDetailRowsQuery(ReportFilterDto filter, IReadOnlyCollection<int>? employeeScope, bool onlyLate = false)
     {
         var startDate = filter.StartDate.HasValue ? DateOnly.FromDateTime(filter.StartDate.Value) : _clock.Today.AddDays(-7);
         var endDate = filter.EndDate.HasValue ? DateOnly.FromDateTime(filter.EndDate.Value) : _clock.Today;
@@ -92,8 +97,8 @@ public sealed partial class AttendanceCalculationsReportRepository
         if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
             query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
 
-        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
-            query = query.Where(x => x.ved.DepartmentID == filter.DepartmentId.Value);
+        if (employeeScope is not null)
+            query = query.Where(x => employeeScope.Contains(x.calc.EmployeeId));
 
         if (!string.IsNullOrWhiteSpace(filter.Identification))
             query = query.Where(x => x.ved.IDCard == filter.Identification);
@@ -103,15 +108,6 @@ public sealed partial class AttendanceCalculationsReportRepository
             var like = $"%{filter.SearchText.Trim()}%";
             query = query.Where(x => EF.Functions.Like(x.ved.IDCard, like)
                                      || EF.Functions.Like(x.ved.LastName + " " + x.ved.FirstName, like));
-        }
-
-        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
-        {
-            var regimeId = filter.LaborRegimeId.Value;
-            query = query.Where(x =>
-                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
-                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
-                    && x.ved.EmployeeType == regimeId));
         }
 
         return query

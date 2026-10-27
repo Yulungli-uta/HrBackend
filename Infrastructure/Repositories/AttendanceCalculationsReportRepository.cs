@@ -69,21 +69,11 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
         if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
             query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
 
-        // Filtro opcional por departamento
-        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
-            query = query.Where(x => x.emp.DepartmentId == filter.DepartmentId.Value);
-
-        // Filtro opcional por régimen laboral — mismo criterio que GetFoodSubsidySummaryDataAsync:
-        // prioriza EmployeeLaborRegime activo; si el empleado no tiene ninguno, cae a
-        // EmployeeType legacy en vez de excluirlo en silencio.
-        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
-        {
-            var regimeId = filter.LaborRegimeId.Value;
-            query = query.Where(x =>
-                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
-                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
-                    && x.emp.EmployeeType == regimeId));
-        }
+        // Dependencia y régimen laboral: se resuelven primero los empleados (consulta pequeña) y luego se filtra la
+        // asistencia por ID; evita los planes inestables de SQL Server (ver ResolveEmployeeScopeAsync).
+        var employeeScope = await ResolveEmployeeScopeAsync(filter, ct);
+        if (employeeScope is not null)
+            query = query.Where(x => employeeScope.Contains(x.calc.EmployeeId));
 
         var result = await query
             .OrderBy(x => x.person.LastName)
@@ -142,21 +132,11 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
         if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
             query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
 
-        // Filtro opcional por departamento
-        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
-            query = query.Where(x => x.emp.DepartmentId == filter.DepartmentId.Value);
-
-        // Filtro opcional por régimen laboral — mismo criterio que GetFoodSubsidySummaryDataAsync:
-        // prioriza EmployeeLaborRegime activo; si el empleado no tiene ninguno, cae a
-        // EmployeeType legacy en vez de excluirlo en silencio.
-        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
-        {
-            var regimeId = filter.LaborRegimeId.Value;
-            query = query.Where(x =>
-                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
-                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
-                    && x.emp.EmployeeType == regimeId));
-        }
+        // Dependencia y régimen laboral: se resuelven primero los empleados (consulta pequeña) y luego se filtra la
+        // asistencia por ID; evita los planes inestables de SQL Server (ver ResolveEmployeeScopeAsync).
+        var employeeScope = await ResolveEmployeeScopeAsync(filter, ct);
+        if (employeeScope is not null)
+            query = query.Where(x => employeeScope.Contains(x.calc.EmployeeId));
 
         var result = await query
             .OrderBy(x => x.person.LastName)
@@ -215,23 +195,11 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
         if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
             query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
 
-        // Filtro opcional por departamento
-        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
-            query = query.Where(x => x.emp.DepartmentId == filter.DepartmentId.Value);
-
-        // Filtro opcional por régimen laboral — mismo criterio que GetFoodSubsidySummaryDataAsync:
-        // prioriza EmployeeLaborRegime activo; si el empleado no tiene ninguno, cae a
-        // EmployeeType legacy en vez de excluirlo en silencio. Antes NO se aplicaba aquí pese
-        // a que el frontend anuncia este filtro (reports.ts 'attendance-cross') — bug real
-        // encontrado 2026-10-06: filtrar "Código de Trabajo" seguía mostrando empleados LOSEP.
-        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
-        {
-            var regimeId = filter.LaborRegimeId.Value;
-            query = query.Where(x =>
-                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
-                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
-                    && x.emp.EmployeeType == regimeId));
-        }
+        // Dependencia y régimen laboral: se resuelven primero los empleados (consulta pequeña) y luego se filtra la
+        // asistencia por ID; evita los planes inestables de SQL Server (ver ResolveEmployeeScopeAsync).
+        var employeeScope = await ResolveEmployeeScopeAsync(filter, ct);
+        if (employeeScope is not null)
+            query = query.Where(x => employeeScope.Contains(x.calc.EmployeeId));
 
         var result = await query
             .OrderBy(x => x.person.LastName)
@@ -301,20 +269,11 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
         if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
             query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
 
-        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
-            query = query.Where(x => x.emp.DepartmentId == filter.DepartmentId.Value);
-
-        // Filtro opcional por régimen laboral — mismo criterio que GetFoodSubsidySummaryDataAsync:
-        // prioriza EmployeeLaborRegime activo; si el empleado no tiene ninguno, cae a
-        // EmployeeType legacy en vez de excluirlo en silencio.
-        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
-        {
-            var regimeId = filter.LaborRegimeId.Value;
-            query = query.Where(x =>
-                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
-                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
-                    && x.emp.EmployeeType == regimeId));
-        }
+        // Dependencia y régimen laboral: se resuelven primero los empleados (consulta pequeña) y luego se filtra la
+        // asistencia por ID; evita los planes inestables de SQL Server (ver ResolveEmployeeScopeAsync).
+        var employeeScope = await ResolveEmployeeScopeAsync(filter, ct);
+        if (employeeScope is not null)
+            query = query.Where(x => employeeScope.Contains(x.calc.EmployeeId));
 
         var result = await query
             .OrderBy(x => x.person.LastName)
@@ -400,28 +359,15 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
         if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
             query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
 
-        // Filtro opcional por dependencia
-        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
-            query = query.Where(x => x.ved.DepartmentID == filter.DepartmentId.Value);
+        // Dependencia y régimen laboral: se resuelven primero los empleados (consulta pequeña) y luego se filtra la
+        // asistencia por ID; evita los planes inestables de SQL Server (ver ResolveEmployeeScopeFromViewAsync).
+        var employeeScope = await ResolveEmployeeScopeFromViewAsync(filter, ct);
+        if (employeeScope is not null)
+            query = query.Where(x => employeeScope.Contains(x.calc.EmployeeId));
 
         // Filtro opcional por cédula exacta
         if (!string.IsNullOrWhiteSpace(filter.Identification))
             query = query.Where(x => x.ved.IDCard == filter.Identification);
-
-        // Filtro opcional por régimen laboral. No se aplica por defecto: el flag
-        // FoodSubsidy ya solo se activa para Código de Trabajo, así que el resto de
-        // empleados queda excluido naturalmente (0 días) sin necesidad de forzar este filtro.
-        // Mismo criterio que VwEmployeeDetailsRepository.GetByFiltersAsync: prioriza
-        // EmployeeLaborRegime; si el empleado no tiene ningún registro activo ahí,
-        // cae a EmployeeType legacy en vez de excluirlo en silencio.
-        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
-        {
-            var regimeId = filter.LaborRegimeId.Value;
-            query = query.Where(x =>
-                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
-                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
-                    && x.ved.EmployeeType == regimeId));
-        }
 
         var grouped = await query
             .GroupBy(x => new
@@ -474,20 +420,14 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
         if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
             query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
 
-        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
-            query = query.Where(x => x.ved.DepartmentID == filter.DepartmentId.Value);
+        // Dependencia y régimen laboral: se resuelven primero los empleados (consulta pequeña) y luego se filtra la
+        // asistencia por ID; evita los planes inestables de SQL Server (ver ResolveEmployeeScopeFromViewAsync).
+        var employeeScope = await ResolveEmployeeScopeFromViewAsync(filter, ct);
+        if (employeeScope is not null)
+            query = query.Where(x => employeeScope.Contains(x.calc.EmployeeId));
 
         if (!string.IsNullOrWhiteSpace(filter.Identification))
             query = query.Where(x => x.ved.IDCard == filter.Identification);
-
-        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
-        {
-            var regimeId = filter.LaborRegimeId.Value;
-            query = query.Where(x =>
-                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
-                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
-                    && x.ved.EmployeeType == regimeId));
-        }
 
         // Left join a Schedules por AppliedScheduleId — puede ser NULL si la jornada
         // no tiene horario de catálogo resuelto (caso raro para Código de Trabajo).
@@ -552,25 +492,15 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
         if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
             query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
 
-        // Filtro opcional por dependencia
-        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
-            query = query.Where(x => x.ved.DepartmentID == filter.DepartmentId.Value);
+        // Dependencia y régimen laboral: se resuelven primero los empleados (consulta pequeña) y luego se filtra la
+        // asistencia por ID; evita los planes inestables de SQL Server (ver ResolveEmployeeScopeFromViewAsync).
+        var employeeScope = await ResolveEmployeeScopeFromViewAsync(filter, ct);
+        if (employeeScope is not null)
+            query = query.Where(x => employeeScope.Contains(x.calc.EmployeeId));
 
         // Filtro opcional por cédula exacta
         if (!string.IsNullOrWhiteSpace(filter.Identification))
             query = query.Where(x => x.ved.IDCard == filter.Identification);
-
-        // Filtro opcional por régimen laboral. A diferencia del subsidio de
-        // alimentación, la jornada nocturna no es exclusiva de un régimen — se
-        // deja como filtro opcional, no como exclusión implícita.
-        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
-        {
-            var regimeId = filter.LaborRegimeId.Value;
-            query = query.Where(x =>
-                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
-                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
-                    && x.ved.EmployeeType == regimeId));
-        }
 
         var grouped = await query
             .GroupBy(x => new
@@ -682,20 +612,14 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
         if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
             query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
 
-        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
-            query = query.Where(x => x.ved.DepartmentID == filter.DepartmentId.Value);
+        // Dependencia y régimen laboral: se resuelven primero los empleados (consulta pequeña) y luego se filtra la
+        // asistencia por ID; evita los planes inestables de SQL Server (ver ResolveEmployeeScopeFromViewAsync).
+        var employeeScope = await ResolveEmployeeScopeFromViewAsync(filter, ct);
+        if (employeeScope is not null)
+            query = query.Where(x => employeeScope.Contains(x.calc.EmployeeId));
 
         if (!string.IsNullOrWhiteSpace(filter.Identification))
             query = query.Where(x => x.ved.IDCard == filter.Identification);
-
-        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
-        {
-            var regimeId = filter.LaborRegimeId.Value;
-            query = query.Where(x =>
-                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
-                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
-                    && x.ved.EmployeeType == regimeId));
-        }
 
         var rows = await query
             .Select(x => new
@@ -886,9 +810,11 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
         if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
             query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
 
-        // Filtro opcional por dependencia
-        if (filter.DepartmentId.HasValue && filter.DepartmentId.Value > 0)
-            query = query.Where(x => x.ved.DepartmentID == filter.DepartmentId.Value);
+        // Dependencia y régimen laboral: se resuelven primero los empleados (consulta pequeña) y luego se filtra la
+        // asistencia por ID; evita los planes inestables de SQL Server (ver ResolveEmployeeScopeFromViewAsync).
+        var employeeScope = await ResolveEmployeeScopeFromViewAsync(filter, ct);
+        if (employeeScope is not null)
+            query = query.Where(x => employeeScope.Contains(x.calc.EmployeeId));
 
         // Filtro opcional por cédula exacta
         if (!string.IsNullOrWhiteSpace(filter.Identification))
@@ -901,18 +827,6 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
             query = query.Where(x =>
                 x.ved.IDCard.Contains(term)
                 || (x.ved.LastName + " " + x.ved.FirstName).Contains(term));
-        }
-
-        // Filtro opcional por régimen laboral — mismo criterio que GetFoodSubsidySummaryDataAsync:
-        // prioriza EmployeeLaborRegime activo; si el empleado no tiene ninguno, cae a
-        // EmployeeType legacy en vez de excluirlo en silencio.
-        if (filter.LaborRegimeId.HasValue && filter.LaborRegimeId.Value > 0)
-        {
-            var regimeId = filter.LaborRegimeId.Value;
-            query = query.Where(x =>
-                _db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive && r.LaborRegimeId == regimeId)
-                || (!_db.Set<EmployeeLaborRegime>().Any(r => r.EmployeeId == x.calc.EmployeeId && r.IsActive)
-                    && x.ved.EmployeeType == regimeId));
         }
 
         var groupedQuery = query
