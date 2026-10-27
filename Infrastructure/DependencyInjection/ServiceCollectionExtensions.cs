@@ -457,6 +457,10 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.PunchDetailReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
             WsUtaSystem.Reports.Sources.FoodSubsidySummaryReportSource>();
 
         services.AddScoped<

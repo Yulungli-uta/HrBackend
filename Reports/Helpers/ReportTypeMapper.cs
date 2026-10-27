@@ -51,6 +51,7 @@ public static class ReportTypeMapper
             ["lateness"]          = ReportType.Lateness,
             ["overtime"]          = ReportType.Overtime,
             ["attendance-cross"]  = ReportType.AttendanceCross,
+            ["punch-detail"]      = ReportType.PunchDetail,
 
             // ── Reportes v2 — Gestión RH ──────────────────────────────────────
             // ── Reportes módulo Guardias ──────────────────────────────────────

@@ -139,5 +139,11 @@ public enum ReportType
     /// Reporte mensual de planificación vs. ejecución de horas extra: igual fuente que
     /// <see cref="OvertimePlanDaily"/>, agregada por mes calendario.
     /// </summary>
-    OvertimePlanMonthly = 34
+    OvertimePlanMonthly = 34,
+
+    /// <summary>
+    /// Reporte detallado de picadas: por persona y día, horario programado, si tiene almuerzo, las cuatro
+    /// picadas (entrada, salida a almuerzo, regreso de almuerzo y salida) y si tuvo atraso. Incluye días sin picadas.
+    /// </summary>
+    PunchDetail = 35
 }

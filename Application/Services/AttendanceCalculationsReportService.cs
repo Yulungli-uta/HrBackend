@@ -190,6 +190,54 @@ public sealed class AttendanceCalculationsReportService : IAttendanceCalculation
         return result;
     }
 
+    private const int PunchDetailMaxDays = 31;
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<PunchDetailReportDto>> GetPunchDetailDataAsync(ReportFilterDto filter, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        ValidatePunchDetailRange(filter);
+
+        var data = await _repository.GetPunchDetailDataAsync(filter, ct);
+        _logger.LogInformation("Reporte detallado de picadas generado. Filas: {Count}", data.Count);
+        return data;
+    }
+
+    /// <inheritdoc/>
+    public async Task<PagedResult<PunchDetailReportDto>> GetPunchDetailSummaryAsync(ReportFilterDto filter, int page, int pageSize, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        ValidatePunchDetailRange(filter);
+        return await _repository.GetPunchDetailSummaryAsync(filter, page, pageSize, ct);
+    }
+
+    /// <inheritdoc/>
+    public async Task<PagedResult<PunchDetailReportDto>> GetLatenessDetailAsync(ReportFilterDto filter, int page, int pageSize, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        if (!filter.EmployeeId.HasValue || filter.EmployeeId.Value <= 0)
+            throw new BusinessRuleException("Indique el empleado del que desea ver el detalle de atrasos.");
+        if (!filter.StartDate.HasValue || !filter.EndDate.HasValue)
+            throw new BusinessRuleException("Indique el rango de fechas (desde y hasta).");
+        if (filter.EndDate.Value.Date < filter.StartDate.Value.Date)
+            throw new BusinessRuleException("La fecha \"hasta\" no puede ser anterior a la fecha \"desde\".");
+
+        return await _repository.GetLatenessDetailAsync(filter, page, pageSize, ct);
+    }
+
+    private static void ValidatePunchDetailRange(ReportFilterDto filter)
+    {
+        if (!filter.StartDate.HasValue || !filter.EndDate.HasValue)
+            throw new BusinessRuleException("Indique el rango de fechas (desde y hasta).");
+
+        var start = DateOnly.FromDateTime(filter.StartDate.Value);
+        var end = DateOnly.FromDateTime(filter.EndDate.Value);
+        if (end < start)
+            throw new BusinessRuleException("La fecha \"hasta\" no puede ser anterior a la fecha \"desde\".");
+        if (end.DayNumber - start.DayNumber + 1 > PunchDetailMaxDays)
+            throw new BusinessRuleException($"El rango máximo del reporte es de {PunchDetailMaxDays} días.");
+    }
+
     /// <inheritdoc/>
     public async Task<IReadOnlyList<AttendanceNoveltyReportDto>> GetAttendanceNoveltiesDataAsync(
         ReportFilterDto filter,

@@ -33,6 +33,15 @@ public interface IAttendanceCalculationsReportRepository
     /// <param name="filter">Filtros del reporte: StartDate, EndDate, EmployeeId, DepartmentId.</param>
     /// <param name="ct">Token de cancelación.</param>
     /// <returns>Colección proyectada de <see cref="LatenessReportDto"/>.</returns>
+    /// <summary>Jornadas con horario, las cuatro picadas y el atraso (incluye días programados sin picadas).</summary>
+    Task<IReadOnlyList<PunchDetailReportDto>> GetPunchDetailDataAsync(ReportFilterDto filter, CancellationToken ct = default);
+
+    /// <summary>Igual que <see cref="GetPunchDetailDataAsync"/> pero paginado en la base de datos (pantalla).</summary>
+    Task<PagedResult<PunchDetailReportDto>> GetPunchDetailSummaryAsync(ReportFilterDto filter, int page, int pageSize, CancellationToken ct = default);
+
+    /// <summary>Jornadas con atraso de un empleado (horario asignado, almuerzo y cuatro picadas), paginado.</summary>
+    Task<PagedResult<PunchDetailReportDto>> GetLatenessDetailAsync(ReportFilterDto filter, int page, int pageSize, CancellationToken ct = default);
+
     Task<IReadOnlyList<LatenessReportDto>> GetLatenessDataAsync(
         ReportFilterDto filter,
         CancellationToken ct = default);

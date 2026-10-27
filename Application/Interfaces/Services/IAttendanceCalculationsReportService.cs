@@ -25,6 +25,20 @@ public interface IAttendanceCalculationsReportService
     /// </summary>
     /// <param name="filter">Filtros del reporte.</param>
     /// <param name="ct">Token de cancelación.</param>
+    /// <summary>
+    /// Reporte detallado de picadas (PDF/Excel). Exige rango de fechas y admite como máximo 31 días.
+    /// </summary>
+    Task<IReadOnlyList<PunchDetailReportDto>> GetPunchDetailDataAsync(ReportFilterDto filter, CancellationToken ct = default);
+
+    /// <summary>Reporte detallado de picadas paginado para la pantalla (mismas validaciones).</summary>
+    Task<PagedResult<PunchDetailReportDto>> GetPunchDetailSummaryAsync(ReportFilterDto filter, int page, int pageSize, CancellationToken ct = default);
+
+    /// <summary>
+    /// Detalle de los días con atraso de un empleado: horario asignado ese día, si tiene almuerzo y sus picadas.
+    /// Exige <c>EmployeeId</c> y rango de fechas.
+    /// </summary>
+    Task<PagedResult<PunchDetailReportDto>> GetLatenessDetailAsync(ReportFilterDto filter, int page, int pageSize, CancellationToken ct = default);
+
     Task<IReadOnlyList<LatenessReportDto>> GetLatenessDataAsync(
         ReportFilterDto filter,
         CancellationToken ct = default);

@@ -28,7 +28,7 @@ namespace WsUtaSystem.Infrastructure.Repositories;
 /// El join a <c>Departments</c> permite filtrar por departamento cuando se especifica.
 /// </para>
 /// </remarks>
-public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculationsReportRepository
+public sealed partial class AttendanceCalculationsReportRepository : IAttendanceCalculationsReportRepository
 {
     private readonly AppDbContext _db;
 
@@ -337,7 +337,42 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
             })
             .ToListAsync(ct);
 
-        return result.AsReadOnly();
+        return (await AttachLunchPunchesAsync(result, startDate, endDate, ct)).AsReadOnly();
+    }
+
+    /// <summary>
+    /// Completa en cada jornada la salida a almuerzo y el regreso de almuerzo a partir de las picadas reales.
+    /// Las picadas se leen en una sola consulta para todos los empleados del resultado.
+    /// </summary>
+    private async Task<List<AttendanceReportDto>> AttachLunchPunchesAsync(
+        List<AttendanceReportDto> rows, DateOnly startDate, DateOnly endDate, CancellationToken ct)
+    {
+        if (rows.Count == 0) return rows;
+
+        var employeeIds = rows.Select(r => r.EmployeeId).Distinct().ToList();
+        var from = startDate.ToDateTime(TimeOnly.MinValue);
+        var to = endDate.AddDays(2).ToDateTime(TimeOnly.MinValue); // cubre jornadas que terminan al día siguiente
+
+        var punches = await _db.AttendancePunches.AsNoTracking()
+            .Where(p => employeeIds.Contains(p.EmployeeId) && p.PunchTime >= from && p.PunchTime < to)
+            .Select(p => new { p.EmployeeId, p.PunchTime, p.PunchType })
+            .ToListAsync(ct);
+        var byEmployee = punches.GroupBy(p => p.EmployeeId)
+            .ToDictionary(g => g.Key, g => g.Select(p => (p.PunchTime, (string?)p.PunchType)).ToList());
+
+        var result = new List<AttendanceReportDto>(rows.Count);
+        foreach (var r in rows)
+        {
+            if (!r.CheckIn.HasValue || !byEmployee.TryGetValue(r.EmployeeId, out var all))
+            {
+                result.Add(r);
+                continue;
+            }
+
+            var (_, lunchOut, lunchIn, _, _) = ResolveFourPunches(all, r.CheckIn.Value, r.CheckOut);
+            result.Add(r with { LunchOut = lunchOut, LunchIn = lunchIn });
+        }
+        return result;
     }
 
     /// <inheritdoc/>

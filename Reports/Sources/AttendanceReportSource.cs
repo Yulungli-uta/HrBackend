@@ -25,9 +25,10 @@ public sealed class AttendanceReportSource : IReportSource
     private const string ColDepartment = "department";
     private const string ColDate       = "date";
     private const string ColCheckIn    = "check_in";
+    private const string ColLunchOut   = "lunch_out";
+    private const string ColLunchIn    = "lunch_in";
     private const string ColCheckOut   = "check_out";
     private const string ColHours      = "hours";
-    private const string ColStatus     = "status";
 
     private static readonly IReadOnlyList<ReportColumn> _columns =
     [
@@ -35,10 +36,11 @@ public sealed class AttendanceReportSource : IReportSource
         new(ColIdCard,     "Cédula",           Width: 1.4f),
         new(ColDepartment, "Dependencia",      Width: 2.0f),
         new(ColDate,       "Fecha",            Width: 1.4f, Alignment: ColumnAlignment.Center),
-        new(ColCheckIn,    "Hora Entrada",     Width: 1.4f, Alignment: ColumnAlignment.Center),
-        new(ColCheckOut,   "Hora Salida",      Width: 1.4f, Alignment: ColumnAlignment.Center),
-        new(ColHours,      "Horas",            Width: 1.0f, Alignment: ColumnAlignment.Right),
-        new(ColStatus,     "Estado",           Width: 1.2f, Alignment: ColumnAlignment.Center),
+        new(ColCheckIn,    "Entrada",           Width: 1.3f, Alignment: ColumnAlignment.Center),
+        new(ColLunchOut,   "Salida almuerzo",   Width: 1.3f, Alignment: ColumnAlignment.Center),
+        new(ColLunchIn,    "Retorno almuerzo",  Width: 1.3f, Alignment: ColumnAlignment.Center),
+        new(ColCheckOut,   "Salida laboral",    Width: 1.3f, Alignment: ColumnAlignment.Center),
+        new(ColHours,      "Horas (HH:mm)",     Width: 1.1f, Alignment: ColumnAlignment.Right),
     ];
 
     public AttendanceReportSource(IAttendanceCalculationsReportService service, ILogger<AttendanceReportSource> logger)
@@ -89,12 +91,21 @@ public sealed class AttendanceReportSource : IReportSource
                 [ColDepartment] = string.IsNullOrWhiteSpace(r.DepartmentName) ? "Sin dependencia" : r.DepartmentName,
                 [ColDate]       = r.AttendanceDate.ToString("dd/MM/yyyy"),
                 [ColCheckIn]    = r.CheckIn?.ToString("HH:mm") ?? "-",
+                [ColLunchOut]   = r.LunchOut?.ToString("HH:mm") ?? "-",
+                [ColLunchIn]    = r.LunchIn?.ToString("HH:mm") ?? "-",
                 [ColCheckOut]   = r.CheckOut?.ToString("HH:mm") ?? "-",
-                [ColHours]      = r.HoursWorked.HasValue ? r.HoursWorked.Value.ToString("N2") : "-",
-                [ColStatus]     = r.Status,
+                [ColHours]      = FormatHours(r.HoursWorked),
             });
         }
         return rows;
+    }
+
+    /// <summary>Horas decimales (7.5) a HH:mm (07:30); evita leer "9.40" como 9 h 40 min.</summary>
+    private static string FormatHours(decimal? hours)
+    {
+        if (!hours.HasValue) return "-";
+        var totalMinutes = (int)Math.Round(hours.Value * 60m, MidpointRounding.AwayFromZero);
+        return $"{totalMinutes / 60:00}:{totalMinutes % 60:00}";
     }
 
     private static string BuildSubtitle(ReportFilterDto filter, int count)

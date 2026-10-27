@@ -367,6 +367,21 @@ public static class ReportEndpoints
         .WithSummary("Conteo de días con atraso por empleado en el rango de fechas indicado (paginado, admite SearchText por cédula/nombre)")
         .Produces<PagedResult<LatenessSummaryReportDto>>(StatusCodes.Status200OK, "application/json");
 
+        // Detalle de un empleado del resumen de atrasos: horario asignado, almuerzo y picadas de cada día con atraso.
+        group.MapPost("/lateness-detail", async (
+            [FromBody] ReportFilterDto filter,
+            [FromServices] IAttendanceCalculationsReportService attendanceReportService,
+            CancellationToken ct,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20) =>
+        {
+            var data = await attendanceReportService.GetLatenessDetailAsync(filter, page, pageSize, ct);
+            return Results.Ok(data);
+        })
+        .WithName("GetLatenessDetail")
+        .WithSummary("Detalle de los días con atraso de un empleado (horario asignado, almuerzo y cuatro picadas), paginado")
+        .Produces<PagedResult<PunchDetailReportDto>>(StatusCodes.Status200OK, "application/json");
+
         // ==================== NOVEDADES DE ASISTENCIA — PANTALLA EN VIVO (JSON, no PDF/Excel) ====================
         // Mismo criterio que /lateness-summary: la pantalla de novedades consulta directo,
         // no genera un documento descargable.
@@ -384,6 +399,21 @@ public static class ReportEndpoints
         .WithName("GetAttendanceNoveltiesSummary")
         .WithSummary("Novedades de asistencia (una fila por jornada+tipo) en el rango de fechas indicado, paginado, admite SearchText por cédula/nombre y NoveltyType")
         .Produces<PagedResult<AttendanceNoveltyReportDto>>(StatusCodes.Status200OK, "application/json");
+
+        // ==================== REPORTE DETALLADO DE PICADAS — PANTALLA EN VIVO (JSON) ====================
+        group.MapPost("/punch-detail-summary", async (
+            [FromBody] ReportFilterDto filter,
+            [FromServices] IAttendanceCalculationsReportService attendanceReportService,
+            CancellationToken ct,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20) =>
+        {
+            var data = await attendanceReportService.GetPunchDetailSummaryAsync(filter, page, pageSize, ct);
+            return Results.Ok(data);
+        })
+        .WithName("GetPunchDetailSummary")
+        .WithSummary("Reporte detallado de picadas (una fila por jornada con sus cuatro picadas y el atraso), paginado; rango máximo 31 días")
+        .Produces<PagedResult<PunchDetailReportDto>>(StatusCodes.Status200OK, "application/json");
 
         // ==================== AUDITORÍA ====================
 
