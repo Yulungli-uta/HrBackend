@@ -40,6 +40,13 @@ public record ReportFilterDto
     public string? SearchText { get; init; }
 
     /// <summary>
+    /// Filtra el reporte detallado de picadas por atraso: true = solo jornadas con atraso, false = solo jornadas
+    /// sin atraso (incluye los días programados sin picadas), null = todas. Hay atraso cuando
+    /// <c>MinutesLate</c> o <c>TardinessMin</c> es mayor que 0, el mismo criterio del resumen de atrasos.
+    /// </summary>
+    public bool? HasLateness { get; init; }
+
+    /// <summary>
     /// Filtra la pantalla de novedades de asistencia por un tipo específico (ej.
     /// "UNJUSTIFIED_ABSENCE", "LATE_ARRIVAL") — ver <c>AttendanceNoveltyReportDto.NoveltyType</c>
     /// para los valores válidos. Null o vacío = todos los tipos.

@@ -91,8 +91,10 @@ public sealed partial class AttendanceCalculationsReportRepository
                     select new { calc, ved };
 
         // Mismo criterio de atraso que el resumen (GetLatenessSummaryDataAsync) para que el detalle cuadre con sus totales.
-        if (onlyLate)
+        if (onlyLate || filter.HasLateness == true)
             query = query.Where(x => x.calc.MinutesLate > 0 || x.calc.TardinessMin > 0);
+        else if (filter.HasLateness == false)
+            query = query.Where(x => x.calc.MinutesLate <= 0 && x.calc.TardinessMin <= 0);
 
         if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
             query = query.Where(x => x.calc.EmployeeId == filter.EmployeeId.Value);
