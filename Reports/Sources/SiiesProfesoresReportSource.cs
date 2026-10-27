@@ -306,18 +306,8 @@ public abstract class SiiesProfesoresReportSourceBase
     protected static IReadOnlyList<ReportColumn> PasaporteColumns =>
         [.. HeadColumns, .. PasaporteNameColumns, .. GeneroSexoColumns, .. FechaNacimientoColumn, .. TailColumns];
 
-    protected static IReadOnlyDictionary<string, object?> BuildRowCedula(VwSiiesProfesor v, string codigoIes, bool withPasaporteColumns = false)
-    {
-        var row = BuildCommonRow(v, codigoIes);
-        if (withPasaporteColumns)
-        {
-            row["PRIMER_APELLIDO"] = string.Empty;
-            row["SEGUNDO_APELLIDO"] = string.Empty;
-            row["NOMBRES"] = string.Empty;
-            row["FECHA_NACIMIENTO"] = string.Empty;
-        }
-        return row;
-    }
+    protected static IReadOnlyDictionary<string, object?> BuildRowCedula(VwSiiesProfesor v, string codigoIes) =>
+        BuildCommonRow(v, codigoIes);
 
     protected static IReadOnlyDictionary<string, object?> BuildRowPasaporte(VwSiiesProfesor v, string codigoIes)
     {
@@ -357,10 +347,12 @@ public sealed class SiiesProfesoresReportSource : SiiesProfesoresReportSourceBas
 
         _logger.LogInformation("SiiesProfesoresReportSource: IdentType={IdentType}, {Count} registros.", identType, teachers.Count);
 
+        // "TODOS": columnas de la matriz de cédula (el nombre completo basta); los campos propios del pasaporte solo salen
+        // en PASAPORTE, que es lo que SIIES exige para cargar esa matriz.
         var rows = teachers
-            .Select(v => esPasaporte || (esTodos && v.IdentTypeName == "PASAPORTE")
+            .Select(v => esPasaporte
                 ? BuildRowPasaporte(v, codigoIes)
-                : BuildRowCedula(v, codigoIes, withPasaporteColumns: esTodos))
+                : BuildRowCedula(v, codigoIes))
             .ToList();
 
         return new ReportDefinition
@@ -372,9 +364,8 @@ public sealed class SiiesProfesoresReportSource : SiiesProfesoresReportSourceBas
             Subtitle = $"Total registros: {rows.Count}",
             GeneratedBy = context.User.Identity?.Name ?? "anonymous",
             GeneratedAt = DateTime.Now,
-            Columns = esPasaporte || esTodos ? PasaporteColumns : CedulaColumns,
-            PdfPagination = PdfPagination.Blocks,
-            PinnedColumnKeys = ["TIPO_IDENTIFICACION", "IDENTIFICACION", "NOMBRE_COMPLETO"],
+            Columns = esPasaporte ? PasaporteColumns : CedulaColumns,
+            PdfPagination = PdfPagination.Expand,
             Rows = rows,
             Orientation = PageOrientation.Landscape,
             VerticalHeaders = filter.VerticalHeaders ?? false,

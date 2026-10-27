@@ -71,12 +71,13 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             "SiiesFuncionariosReportSource: IdentType={IdentType}, {Count} registros.",
             identType, employees.Count);
 
-        // "TODOS": un solo archivo con cédula y pasaporte (columnas de la matriz 5.8). Las columnas propias del
-        // pasaporte quedan vacías en las filas de cédula. Es para revisión: SIIES exige cargarlos por separado.
+        // "TODOS": un solo archivo con cédula y pasaporte y las columnas de la matriz de cédula: el nombre completo basta
+        // para identificar a cada persona. PRIMER_APELLIDO, SEGUNDO_APELLIDO, NOMBRES y FECHA_NACIMIENTO solo salen en
+        // PASAPORTE, que es lo que SIIES exige para cargar esa matriz. Es para revisión: SIIES pide cargarlos por separado.
         var rows = employees
-            .Select(v => esPasaporte || (esTodos && v.IdentTypeName == "PASAPORTE")
+            .Select(v => esPasaporte
                 ? BuildPasaporteRow(v, codigoIes, codigoMatriz)
-                : (IReadOnlyDictionary<string, object?>)BuildCedulaRow(v, codigoIes, codigoMatriz, withPasaporteColumns: esTodos))
+                : BuildCedulaRow(v, codigoIes, codigoMatriz))
             .ToList();
 
         return new ReportDefinition
@@ -88,9 +89,8 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             Subtitle = $"Total registros: {rows.Count}",
             GeneratedBy = context.User.Identity?.Name ?? "anonymous",
             GeneratedAt = DateTime.Now,
-            Columns = esPasaporte || esTodos ? PasaporteColumns : CedulaColumns,
-            PdfPagination = PdfPagination.Blocks,
-            PinnedColumnKeys = ["TIPO_IDENTIFICACION", "IDENTIFICACION", "NOMBRE_COMPLETO"],
+            Columns = esPasaporte ? PasaporteColumns : CedulaColumns,
+            PdfPagination = PdfPagination.Expand,
             Rows = rows,
             Orientation = PageOrientation.Landscape,
             VerticalHeaders = filter.VerticalHeaders ?? false,
@@ -122,18 +122,8 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
         return row;
     }
 
-    private IReadOnlyDictionary<string, object?> BuildCedulaRow(VwSiiesFuncionario v, string codigoIes, string codigoMatriz, bool withPasaporteColumns)
-    {
-        var row = BuildCommonRow(v, codigoIes, codigoMatriz);
-        if (withPasaporteColumns)
-        {
-            row["PRIMER_APELLIDO"] = string.Empty;
-            row["SEGUNDO_APELLIDO"] = string.Empty;
-            row["NOMBRES"] = string.Empty;
-            row["FECHA_NACIMIENTO"] = string.Empty;
-        }
-        return row;
-    }
+    private IReadOnlyDictionary<string, object?> BuildCedulaRow(VwSiiesFuncionario v, string codigoIes, string codigoMatriz) =>
+        BuildCommonRow(v, codigoIes, codigoMatriz);
 
     private async Task<List<VwSiiesFuncionario>> GetEmployeesAsync(string identTypeName, ReportFilterDto filter, CancellationToken ct)
     {

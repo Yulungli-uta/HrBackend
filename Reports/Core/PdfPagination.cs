@@ -13,13 +13,14 @@ public enum PdfPagination
     /// <summary>
     /// Si las columnas caben legibles en una A4 se comporta como <see cref="FitA4"/>; si no, las parte en bloques de columnas,
     /// cada bloque en su propia(s) hoja(s) A4 y repitiendo las columnas fijas (<see cref="ReportDefinition.PinnedColumnKeys"/>).
-    /// Pensado para matrices anchas (SIIES, 35 a 39 columnas): se leen e imprimen en A4 sin desplazarse en horizontal.
+    /// Pensado para reportes anchos que se imprimen en A4. Con muchas columnas fijas deja pocas por bloque (SIIES quedaba en
+    /// 12 bloques y más de 1.000 hojas), por eso las matrices SIIES usan <see cref="Expand"/>.
     /// </summary>
     Blocks = 1,
 
     /// <summary>
     /// Una sola hoja tan ancha como haga falta (misma altura que la A4). Todas las columnas quedan en una línea por fila,
-    /// pero la hoja no se imprime en A4: solo sirve para revisar en pantalla con zoom.
+    /// pero la hoja no se imprime en A4: solo sirve para revisar en pantalla con zoom. Es la política de las matrices SIIES.
     /// </summary>
     Expand = 2,
 }

@@ -68,7 +68,7 @@ public sealed class ReportDefinition
 
     /// <summary>
     /// Cómo reparte el PDF las columnas en las hojas. Por defecto <see cref="Core.PdfPagination.FitA4"/> (comportamiento histórico);
-    /// las matrices anchas (SIIES) piden <see cref="Core.PdfPagination.Blocks"/>. El Excel y el CSV ignoran esta propiedad.
+    /// las matrices anchas (SIIES) piden <see cref="Core.PdfPagination.Expand"/>. El Excel y el CSV ignoran esta propiedad.
     /// </summary>
     public PdfPagination PdfPagination { get; init; } = PdfPagination.FitA4;
 
