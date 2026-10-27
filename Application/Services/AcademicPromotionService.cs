@@ -48,6 +48,9 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
     private readonly ITrainingsRepository _trainingsRepository;
     private readonly ILanguagesRepository _languagesRepository;
     private readonly ICurrentUserService _currentUser;
+    private readonly IResearchProjectsService _researchProjects;
+
+    private readonly IAppClock _clock;
 
     public AcademicPromotionService(
         IOptions<AcademicPromotionOptions> options,
@@ -59,8 +62,11 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
         IBooksRepository booksRepository,
         ITrainingsRepository trainingsRepository,
         ILanguagesRepository languagesRepository,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IResearchProjectsService researchProjects,
+        IAppClock clock)
     {
+        _clock = clock;
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _mockProvider = mockProvider ?? throw new ArgumentNullException(nameof(mockProvider));
         _academicPromotionRepository = academicPromotionRepository ?? throw new ArgumentNullException(nameof(academicPromotionRepository));
@@ -71,6 +77,7 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
         _trainingsRepository = trainingsRepository ?? throw new ArgumentNullException(nameof(trainingsRepository));
         _languagesRepository = languagesRepository ?? throw new ArgumentNullException(nameof(languagesRepository));
         _currentUser = currentUser ?? throw new ArgumentNullException(nameof(currentUser));
+        _researchProjects = researchProjects ?? throw new ArgumentNullException(nameof(researchProjects));
     }
 
     public Task<bool> IsCurrentUserAuthorizedAsync(CancellationToken ct = default)
@@ -84,10 +91,12 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
         var employee = await _academicPromotionRepository.FindEmployeeByIdentificationAsync(identification, ct);
         if (employee is null) return null;
 
-        var evaluationDate = DateOnly.FromDateTime(DateTime.Today);
+        var evaluationDate = _clock.Today;
 
         var teacherStructures = await _teacherStructureRepository.GetByEmployeeAsync(employee.EmployeeId, ct);
         var currentStructure = teacherStructures.FirstOrDefault(t => t.IsActive);
+
+        var authorities = await _academicPromotionRepository.GetCurrentAuthoritiesAsync(employee.EmployeeId, evaluationDate, ct);
 
         var dependency = await _academicPromotionRepository.FindFacultyDependencyAsync(
             currentStructure?.DepartmentId ?? employee.DepartmentId, ct);
@@ -139,6 +148,8 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
             WeeklyHours: currentStructure?.WeeklyClassHours,
             CurrentPosition: currentStructure?.Ladder is not null ? MapLadderCode(currentStructure.Ladder.Code) : null,
             CurrentPositionStartDate: currentStructure?.StartDate,
+            IsAuthority: authorities.Count > 0,
+            Authorities: authorities.Select(a => new TeacherAuthorityDto(a.Type, a.Denomination, a.StartDate, a.EndDate)).ToList(),
             EvaluationDate: evaluationDate,
             Experience: workExperiences.Select(w => MapExperience(w, ResolveName(w.ExperienceTypeId), evaluationDate)).ToList(),
             // Los libros se reportan como parte de "publications" (Type="BOOK") -- son un tipo
@@ -154,7 +165,7 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
                 .Where(t => IsDirection(t.TrainingDirectionTypeId, TrainingDirection.Given, refTypeNames))
                 .Select(t => MapTraining(t, TrainingDirection.Given, ResolveKnowledgeArea(t.KnowledgeAreaTypeId), ResolveName(t.CertificateTypeId), ResolveName(t.ModalityTypeId)))
                 .ToList(),
-            ResearchProjects: [], // modulo no implementado todavia
+            ResearchProjects: await _researchProjects.GetAcademicBlockAsync(employee.PersonId, ct),
             DoctoralTheses: [],   // modulo no implementado todavia
             Languages: languages.Select(l => MapLanguage(l, ResolveName(l.LanguageTypeId), ResolveName(l.LevelTypeId))).ToList(),
             Score: null // modulo de evaluacion de desempeno no implementado todavia

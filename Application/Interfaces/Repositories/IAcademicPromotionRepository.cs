@@ -15,6 +15,9 @@ public sealed record AcademicPromotionDependency(
     string Name
 );
 
+/// <summary>Autoridad institucional vigente del docente (Decano, Director, etc.).</summary>
+public sealed record AcademicPromotionAuthority(string Type, string Denomination, DateOnly StartDate, DateOnly? EndDate);
+
 /// <summary>
 /// Consultas de solo lectura, específicas del módulo de promoción académica docente,
 /// que no tienen un repositorio genérico existente (resolución de persona/empleado por
@@ -23,6 +26,13 @@ public sealed record AcademicPromotionDependency(
 public interface IAcademicPromotionRepository
 {
     Task<AcademicPromotionEmployeeLookup?> FindEmployeeByIdentificationAsync(string identification, CancellationToken ct = default);
+
+    /// <summary>
+    /// Autoridades vigentes del empleado en la fecha <paramref name="asOf"/>: registro activo, ya iniciado y
+    /// con fecha de fin vacía o no anterior a esa fecha (la autoridad cuenta solo hasta su EndDate).
+    /// Mismo criterio que usa la vista SIIES de profesores.
+    /// </summary>
+    Task<IReadOnlyList<AcademicPromotionAuthority>> GetCurrentAuthoritiesAsync(int employeeId, DateOnly asOf, CancellationToken ct = default);
 
     /// <summary>
     /// Sube por la jerarquía de departamentos (ParentID) desde <paramref name="departmentId"/>

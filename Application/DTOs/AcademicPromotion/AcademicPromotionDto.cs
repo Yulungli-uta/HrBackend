@@ -33,15 +33,25 @@ public sealed record TeacherAcademicProfileDto(
     decimal? WeeklyHours,
     string? CurrentPosition,
     DateOnly? CurrentPositionStartDate,
+    bool IsAuthority,
+    IReadOnlyList<TeacherAuthorityDto> Authorities,
     DateOnly EvaluationDate,
     IReadOnlyList<TeacherExperienceDto> Experience,
     IReadOnlyList<TeacherPublicationDto> Publications,
     IReadOnlyList<TeacherTrainingDto> ReceivedTrainings,
     IReadOnlyList<TeacherTrainingDto> GivenTrainings,
-    IReadOnlyList<TeacherResearchProjectDto> ResearchProjects,
+    IReadOnlyList<ResearchProjectParticipationBlockDto> ResearchProjects,
     IReadOnlyList<TeacherDoctoralThesisDto> DoctoralTheses,
     IReadOnlyList<TeacherLanguageDto> Languages,
     TeacherScoreDto? Score
+);
+
+/// <summary>Autoridad institucional vigente del docente; solo cuenta hasta su fecha de fin.</summary>
+public sealed record TeacherAuthorityDto(
+    string Type,
+    string Denomination,
+    DateOnly StartDate,
+    DateOnly? EndDate
 );
 
 public sealed record DependencyDto(
@@ -96,21 +106,29 @@ public sealed record TeacherTrainingDto(
     string? SupportingDocumentUrl
 );
 
-public sealed record TeacherResearchProjectDto(
+// ── Participación en proyectos de investigación (bloque adicional del perfil) ───
+
+public sealed record ResearchResolutionBlockDto(string Name, string? DocumentUrl);
+
+public sealed record ResearchExtensionBlockDto(DateOnly EndDate, string ResolutionNumber, string? DocumentUrl);
+
+public sealed record ResearchParticipationBlockDto(
     string Id,
-    string Type,
-    string Name,
-    string? ProjectCode,
-    string? Institution,
+    string Role,
     DateOnly StartDate,
-    DateOnly? EndDate,
-    int Months,
-    string? Role,
-    string? KnowledgeArea,
-    string? Status,
-    string? Country,
-    string? SupportingDocumentUrl
-);
+    DateOnly EndDate);
+
+/// <summary>Un proyecto de investigación con las participaciones del docente consultado.</summary>
+public sealed record ResearchProjectParticipationBlockDto(
+    string Id,
+    string Name,
+    DateOnly StartDate,
+    DateOnly EndDate,
+    ResearchResolutionBlockDto ApprovalResolution,
+    ResearchResolutionBlockDto CompletionResolution,
+    bool HasExtension,
+    ResearchExtensionBlockDto? Extension,
+    IReadOnlyList<ResearchParticipationBlockDto> Participations);
 
 public sealed record TeacherDoctoralThesisDto(
     string Id,

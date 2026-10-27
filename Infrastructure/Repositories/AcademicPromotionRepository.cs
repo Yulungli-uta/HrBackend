@@ -33,6 +33,19 @@ public sealed class AcademicPromotionRepository : IAcademicPromotionRepository
         return result;
     }
 
+    public async Task<IReadOnlyList<AcademicPromotionAuthority>> GetCurrentAuthoritiesAsync(int employeeId, DateOnly asOf, CancellationToken ct = default)
+    {
+        var rows = await (
+            from a in _db.DepartmentAuthorities.AsNoTracking()
+            where a.EmployeeId == employeeId && a.IsActive && a.StartDate <= asOf && (a.EndDate == null || a.EndDate >= asOf)
+            join t in _db.RefTypes.AsNoTracking() on a.AuthorityTypeId equals t.TypeId
+            orderby a.StartDate descending
+            select new { Type = t.Name, a.Denomination, a.StartDate, a.EndDate }
+        ).ToListAsync(ct);
+
+        return rows.Select(r => new AcademicPromotionAuthority(r.Type, r.Denomination ?? r.Type, r.StartDate, r.EndDate)).ToList();
+    }
+
     public async Task<AcademicPromotionDependency?> FindFacultyDependencyAsync(int? departmentId, CancellationToken ct = default)
     {
         if (departmentId is null) return null;

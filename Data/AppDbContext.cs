@@ -130,6 +130,8 @@ public class AppDbContext : DbContext
     public DbSet<Publications> Publications => Set<Publications>();
     public DbSet<Books> Books => Set<Books>();
     public DbSet<KnowledgeArea> KnowledgeAreas => Set<KnowledgeArea>();
+    public DbSet<ResearchProject> ResearchProjects => Set<ResearchProject>();
+    public DbSet<ResearchProjectParticipation> ResearchProjectParticipations => Set<ResearchProjectParticipation>();
 
     // ─────────────────────────────────────────────────────────────────────────
     // DbSets - Módulo HR: Referencia, Parámetros y Archivos

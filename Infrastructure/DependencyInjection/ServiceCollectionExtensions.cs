@@ -782,6 +782,8 @@ public static class ServiceCollectionExtensions
         // ── Módulo: Publicaciones ─────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPublicationsRepository, WsUtaSystem.Infrastructure.Repositories.PublicationsRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPublicationsService, WsUtaSystem.Application.Services.PublicationsService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IResearchProjectsRepository, WsUtaSystem.Infrastructure.Repositories.ResearchProjectsRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IResearchProjectsService, WsUtaSystem.Application.Services.ResearchProjectsService>();
 
         // ── Módulo: Justificaciones de Marcación ──────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPunchJustificationsRepository, WsUtaSystem.Infrastructure.Repositories.PunchJustificationsRepository>();

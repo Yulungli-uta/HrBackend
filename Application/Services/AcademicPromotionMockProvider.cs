@@ -89,12 +89,14 @@ public sealed class AcademicPromotionMockProvider : IAcademicPromotionMockProvid
             WeeklyHours: 40m,
             CurrentPosition: currentPosition,
             CurrentPositionStartDate: today.AddYears(-experienceYears),
+            IsAuthority: false,
+            Authorities: [],
             EvaluationDate: today,
             Experience: Experience(experienceYears),
             Publications: Publications(publicationsCount, foreignPublications),
             ReceivedTrainings: ReceivedTrainings(receivedHours, pedagogicalHours),
             GivenTrainings: GivenTrainings(givenHours),
-            ResearchProjects: ResearchProjects(researchWeightedMonths),
+            ResearchProjects: ResearchProjects(),
             DoctoralTheses: DoctoralTheses(thesisCount),
             Languages: Languages(languageLevel),
             Score: new TeacherScoreDto("PERFORMANCE_EVALUATION", "2024", score, "https://example.com/performance-evaluation.pdf")
@@ -123,6 +125,8 @@ public sealed class AcademicPromotionMockProvider : IAcademicPromotionMockProvid
             WeeklyHours: 40m,
             CurrentPosition: currentPosition,
             CurrentPositionStartDate: today.AddYears(-5),
+            IsAuthority: true,
+            Authorities: [new TeacherAuthorityDto("Decano", "DECANO DE LA FACULTAD DE INGENIERÍA EN SISTEMAS, ELECTRÓNICA E INDUSTRIAL", new DateOnly(2025, 1, 1), new DateOnly(2028, 12, 31))],
             EvaluationDate: today,
             Experience:
             [
@@ -136,7 +140,7 @@ public sealed class AcademicPromotionMockProvider : IAcademicPromotionMockProvid
             Publications: Publications(6, 2),
             ReceivedTrainings: ReceivedTrainings(160, 48),
             GivenTrainings: GivenTrainings(48),
-            ResearchProjects: ResearchProjects(36),
+            ResearchProjects: ResearchProjects(),
             DoctoralTheses: DoctoralTheses(2),
             Languages:
             [
@@ -219,21 +223,21 @@ public sealed class AcademicPromotionMockProvider : IAcademicPromotionMockProvid
         ];
     }
 
-    private static IReadOnlyList<TeacherResearchProjectDto> ResearchProjects(int weightedMonthsTarget)
-    {
-        if (weightedMonthsTarget <= 0) return [];
-
-        // 1 proyecto como COORDINATOR (factor x2 según las reglas de promoción) alcanza
-        // el objetivo ponderado con la mitad de meses reales.
-        var realMonths = Math.Max(1, weightedMonthsTarget / 2);
-        return
-        [
-            new("RES-001", "RESEARCH_PROJECT", "Proyecto de Investigación Institucional", "UTA-RES-MOCK-001",
-                "Universidad Técnica de Ambato", new DateOnly(2023, 1, 1), new DateOnly(2023, 1, 1).AddMonths(realMonths),
-                realMonths, "COORDINATOR", "Information and Communication Technologies", "COMPLETED", "EC",
-                "https://example.com/research-001.pdf"),
-        ];
-    }
+    private static IReadOnlyList<ResearchProjectParticipationBlockDto> ResearchProjects() =>
+    [
+        new("PRJ-0001",
+            "PLATAFORMA CLOUD PARA MONITOREO REMOTO DE SISTEMAS FOTOVOLTAICOS AISLADOS EN EL ECUADOR",
+            new DateOnly(2023, 1, 1), new DateOnly(2024, 12, 31),
+            new ResearchResolutionBlockDto("RES-123-2023", "https://example.com/research-projects/documents/approval-prj-0001.pdf"),
+            new ResearchResolutionBlockDto("RES-789-2025", "https://example.com/research-projects/documents/completion-prj-0001.pdf"),
+            true,
+            new ResearchExtensionBlockDto(new DateOnly(2025, 6, 30), "RES-456-2024", "https://example.com/research-projects/documents/extension-prj-0001.pdf"),
+            [
+                new("PAR-0001", "COORDINADOR_PRINCIPAL", new DateOnly(2023, 1, 1), new DateOnly(2024, 12, 31)),
+                new("PAR-0002", "COORDINADOR_SUBROGANTE", new DateOnly(2025, 1, 1), new DateOnly(2025, 6, 30)),
+                new("PAR-0003", "INVESTIGADOR", new DateOnly(2023, 1, 1), new DateOnly(2024, 12, 31)),
+            ]),
+    ];
 
     private static IReadOnlyList<TeacherDoctoralThesisDto> DoctoralTheses(int count)
     {
