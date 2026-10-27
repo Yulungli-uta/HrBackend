@@ -16,11 +16,15 @@ public class TeacherStructureService : ITeacherStructureService
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
 
+    private readonly IAppClock _clock;
+
     public TeacherStructureService(
         ITeacherStructureRepository repo,
         AppDbContext db,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IAppClock clock)
     {
+        _clock = clock;
         _repo = repo;
         _db = db;
         _currentUser = currentUser;
@@ -102,7 +106,7 @@ public class TeacherStructureService : ITeacherStructureService
             EndDate         = dto.EndDate,
             IsActive        = true,
             CreatedBy       = userId,
-            CreatedAt       = DateTime.UtcNow
+            CreatedAt       = _clock.Now
         };
 
         await _repo.AddAsync(entity, ct);
@@ -135,7 +139,7 @@ public class TeacherStructureService : ITeacherStructureService
         entity.EligibleRecategory = dto.EligibleRecategory;
         entity.EligibleDedicChg   = dto.EligibleDedicChg;
         entity.UpdatedBy        = userId;
-        entity.UpdatedAt        = DateTime.UtcNow;
+        entity.UpdatedAt        = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
 
@@ -152,9 +156,9 @@ public class TeacherStructureService : ITeacherStructureService
             ?? throw new KeyNotFoundException($"Estructura docente {id} no encontrada.");
 
         entity.IsActive   = false;
-        entity.EndDate    = entity.EndDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        entity.EndDate    = entity.EndDate ?? _clock.Today;
         entity.UpdatedBy  = userId;
-        entity.UpdatedAt  = DateTime.UtcNow;
+        entity.UpdatedAt  = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
     }

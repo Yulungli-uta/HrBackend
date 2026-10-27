@@ -3,6 +3,7 @@ using WsUtaSystem.Application.DTOs.PersonnelActions;
 using WsUtaSystem.Application.Interfaces.Repositories.Documents;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
+using WsUtaSystem.Application.Interfaces.Services;
 
 // ReSharper disable MethodHasAsyncOverload
 
@@ -16,8 +17,11 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
 {
     private readonly AppDbContext _db;
 
-    public PersonnelActionRepository(AppDbContext db)
+    private readonly IAppClock _clock;
+
+    public PersonnelActionRepository(AppDbContext db, IAppClock clock)
     {
+        _clock = clock;
         _db = db ?? throw new ArgumentNullException(nameof(db));
     }
 
@@ -450,7 +454,7 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             .ExecuteUpdateAsync(s => s
                 .SetProperty(a => a.Status, statusCode)
                 .SetProperty(a => a.StatusTypeId, statusTypeId)
-                .SetProperty(a => a.UpdatedAt, DateTime.UtcNow),
+                .SetProperty(a => a.UpdatedAt, _clock.Now),
             ct);
     }
 
@@ -461,7 +465,7 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             .Where(a => a.ActionId == actionId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(a => a.GeneratedDocumentId, documentId)
-                .SetProperty(a => a.UpdatedAt, DateTime.UtcNow),
+                .SetProperty(a => a.UpdatedAt, _clock.Now),
             ct);
     }
 
@@ -472,7 +476,7 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             .Where(a => a.ActionId == actionId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(a => a.SignedDocumentStoredFileId, storedFileId)
-                .SetProperty(a => a.UpdatedAt, DateTime.UtcNow),
+                .SetProperty(a => a.UpdatedAt, _clock.Now),
             ct);
     }
 
@@ -551,7 +555,7 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
         // Vicerrector, Decano, etc. en HR.tbl_DepartmentAuthorities), su denominación de
         // autoridad prevalece sobre el cargo genérico de HR.tbl_Employees.JobId — es la
         // que corresponde para firmar/aprobar documentos oficiales, no el puesto base.
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = _clock.Today;
         var authorityDenomination = await _db.DepartmentAuthorities.AsNoTracking()
             .Where(a => a.EmployeeId == employeeId.Value
                 && a.IsActive

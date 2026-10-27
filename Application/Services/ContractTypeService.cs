@@ -13,8 +13,11 @@ public class ContractTypeService : Service<ContractType, int>, IContractTypeServ
     private readonly IContractTypeRepository _repo;
     private readonly AppDbContext _db;
 
-    public ContractTypeService(IContractTypeRepository repo, AppDbContext db) : base(repo)
+    private readonly IAppClock _clock;
+
+    public ContractTypeService(IContractTypeRepository repo, AppDbContext db, IAppClock clock) : base(repo)
     {
+        _clock = clock;
         _repo = repo ?? throw new ArgumentNullException(nameof(repo));
         _db   = db   ?? throw new ArgumentNullException(nameof(db));
     }
@@ -72,7 +75,7 @@ public class ContractTypeService : Service<ContractType, int>, IContractTypeServ
 
     public async Task<ContractNextNumberDto> GetNextNumberAsync(int contractTypeId, CancellationToken ct = default)
     {
-        var year = DateTime.Now.Year;
+        var year = _clock.Now.Year;
         var (docNumber, y, seq) = await _repo.ConsumeNextNumberAsync(contractTypeId, year, ct);
         // Extraer el prefijo completo quitando los dos últimos segmentos (-año-seq)
         var lastDash       = docNumber.LastIndexOf('-');

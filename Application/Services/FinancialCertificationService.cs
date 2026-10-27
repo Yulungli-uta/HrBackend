@@ -32,12 +32,15 @@ public class FinancialCertificationService : Service<FinancialCertification, int
     private readonly AppDbContext _db;
     private readonly IRefTypesService _refTypes;
 
+    private readonly IAppClock _clock;
+
     public FinancialCertificationService(
         IFinancialCertificationRepository repo,
         AppDbContext db,
-        IRefTypesService refTypes
-    ) : base(repo)
+        IRefTypesService refTypes,
+        IAppClock clock) : base(repo)
     {
+        _clock = clock;
         _repo     = repo     ?? throw new ArgumentNullException(nameof(repo));
         _db       = db       ?? throw new ArgumentNullException(nameof(db));
         _refTypes = refTypes ?? throw new ArgumentNullException(nameof(refTypes));
@@ -162,7 +165,7 @@ public class FinancialCertificationService : Service<FinancialCertification, int
                 ?? throw new KeyNotFoundException($"Certificación id={certificationId} no existe.");
 
             cert.Status    = await GetCertStatusIdAsync(CertApproved, ct);
-            cert.UpdatedAt = DateTime.Now;
+            cert.UpdatedAt = _clock.Now;
             cert.UpdatedBy = userId;
 
             // Actualizar solicitud → PENDIENTE_CONTRATACION
@@ -174,7 +177,7 @@ public class FinancialCertificationService : Service<FinancialCertification, int
                 if (request is not null)
                 {
                     request.Status    = await GetRequestStatusIdAsync(RequestPendingHiring, ct);
-                    request.UpdatedAt = DateTime.Now;
+                    request.UpdatedAt = _clock.Now;
                     request.UpdatedBy = userId;
                 }
             }
@@ -197,7 +200,7 @@ public class FinancialCertificationService : Service<FinancialCertification, int
                 ?? throw new KeyNotFoundException($"Certificación id={certificationId} no existe.");
 
             cert.Status    = await GetCertStatusIdAsync(CertRejected, ct);
-            cert.UpdatedAt = DateTime.Now;
+            cert.UpdatedAt = _clock.Now;
             cert.UpdatedBy = userId;
 
             // Actualizar solicitud → CERT_RECHAZADA
@@ -209,7 +212,7 @@ public class FinancialCertificationService : Service<FinancialCertification, int
                 if (request is not null)
                 {
                     request.Status    = await GetRequestStatusIdAsync(RequestCertRejected, ct);
-                    request.UpdatedAt = DateTime.Now;
+                    request.UpdatedAt = _clock.Now;
                     request.UpdatedBy = userId;
                 }
             }
@@ -235,10 +238,10 @@ public class FinancialCertificationService : Service<FinancialCertification, int
 
             cert.Status          = await GetCertStatusIdAsync(CertPendingCorrection, ct);
             cert.RejectionReason = reason;
-            cert.RejectedAt      = DateTime.Now;
+            cert.RejectedAt      = _clock.Now;
             cert.RejectedBy      = userId;
             cert.RejectionTypeId = rejTypeId;
-            cert.UpdatedAt       = DateTime.Now;
+            cert.UpdatedAt       = _clock.Now;
             cert.UpdatedBy       = userId;
 
             // Registrar en historial
@@ -247,7 +250,7 @@ public class FinancialCertificationService : Service<FinancialCertification, int
                 CertificationId = certificationId,
                 RejectionTypeId = rejTypeId,
                 RejectionReason = reason,
-                RejectedAt      = DateTime.Now,
+                RejectedAt      = _clock.Now,
                 RejectedBy      = userId
             });
 
@@ -261,7 +264,7 @@ public class FinancialCertificationService : Service<FinancialCertification, int
                 {
                     request.Status               = await GetRequestStatusIdAsync(RequestPendingCorrection, ct);
                     request.PendingCorrectionReason = reason;
-                    request.UpdatedAt            = DateTime.Now;
+                    request.UpdatedAt            = _clock.Now;
                     request.UpdatedBy            = userId;
                 }
             }
@@ -291,7 +294,7 @@ public class FinancialCertificationService : Service<FinancialCertification, int
             cert.RejectedAt      = null;
             cert.RejectedBy      = null;
             cert.RejectionTypeId = null;
-            cert.UpdatedAt       = DateTime.Now;
+            cert.UpdatedAt       = _clock.Now;
             cert.UpdatedBy       = userId;
 
             // Actualizar solicitud → PENDIENTE_CERT_FINANCIERA
@@ -304,7 +307,7 @@ public class FinancialCertificationService : Service<FinancialCertification, int
                 {
                     request.Status                  = await GetRequestStatusIdAsync(RequestPendingCertFinanciera, ct);
                     request.PendingCorrectionReason = null;
-                    request.UpdatedAt               = DateTime.Now;
+                    request.UpdatedAt               = _clock.Now;
                     request.UpdatedBy               = userId;
                 }
             }

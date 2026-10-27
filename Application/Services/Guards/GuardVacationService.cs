@@ -22,6 +22,8 @@ public class GuardVacationService : IGuardVacationService
     private readonly IVacationsService _vacationsService;
     private readonly GuardVacationFlowContext _guardFlow;
 
+    private readonly IAppClock _clock;
+
     public GuardVacationService(
         IGuardVacationPlanRepository planRepo,
         IGuardVacationRequestRepository requestRepo,
@@ -29,8 +31,10 @@ public class GuardVacationService : IGuardVacationService
         ICurrentUserService currentUser,
         IHrBalanceService balanceService,
         IVacationsService vacationsService,
-        GuardVacationFlowContext guardFlow)
+        GuardVacationFlowContext guardFlow,
+        IAppClock clock)
     {
+        _clock = clock;
         _planRepo = planRepo;
         _requestRepo = requestRepo;
         _db = db;
@@ -121,7 +125,7 @@ public class GuardVacationService : IGuardVacationService
             StatusTypeId = plannedStatusId,
             Notes = dto.Notes,
             CreatedBy = userId,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = _clock.Now
         };
 
         await _planRepo.AddAsync(entity, ct);
@@ -150,7 +154,7 @@ public class GuardVacationService : IGuardVacationService
         entity.PlannedEndDate = dto.PlannedEndDate;
         entity.Notes = dto.Notes;
         entity.UpdatedBy = userId;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
 
@@ -175,10 +179,10 @@ public class GuardVacationService : IGuardVacationService
 
         entity.StatusTypeId = pendingStatusId;
         entity.SubmittedToDirectionBy = userId;
-        entity.SubmittedToDirectionAt = DateTime.UtcNow;
+        entity.SubmittedToDirectionAt = _clock.Now;
         if (dto.Notes is not null) entity.Notes = dto.Notes;
         entity.UpdatedBy = userId;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
 
@@ -211,10 +215,10 @@ public class GuardVacationService : IGuardVacationService
 
         entity.StatusTypeId = approvedStatusId;
         entity.DirectionApprovedBy = userId;
-        entity.DirectionApprovedAt = DateTime.UtcNow;
+        entity.DirectionApprovedAt = _clock.Now;
         if (dto.Notes is not null) entity.Notes = dto.Notes;
         entity.UpdatedBy = userId;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = _clock.Now;
 
         try
         {
@@ -254,7 +258,7 @@ public class GuardVacationService : IGuardVacationService
         entity.StatusTypeId = rejectedStatusId;
         entity.Notes = dto.Reason;
         entity.UpdatedBy = userId;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
 
@@ -365,9 +369,9 @@ public class GuardVacationService : IGuardVacationService
             Reason = dto.Reason,
             StatusTypeId = requestedStatusId,
             RequestedBy = userId,
-            RequestedAt = DateTime.UtcNow,
+            RequestedAt = _clock.Now,
             CreatedBy = userId,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = _clock.Now
         };
 
         await _requestRepo.AddAsync(entity, ct);
@@ -408,9 +412,9 @@ public class GuardVacationService : IGuardVacationService
             Reason = dto.Reason,
             StatusTypeId = requestedStatusId,
             RequestedBy = userId,
-            RequestedAt = DateTime.UtcNow,
+            RequestedAt = _clock.Now,
             CreatedBy = userId,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = _clock.Now
         };
 
         await _requestRepo.AddAsync(entity, ct);
@@ -437,9 +441,9 @@ public class GuardVacationService : IGuardVacationService
 
         entity.StatusTypeId = pendingStatusId;
         entity.SubmittedToDirectionBy = userId;
-        entity.SubmittedToDirectionAt = DateTime.UtcNow;
+        entity.SubmittedToDirectionAt = _clock.Now;
         entity.UpdatedBy = userId;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
 
@@ -465,9 +469,9 @@ public class GuardVacationService : IGuardVacationService
 
         entity.StatusTypeId = approvedStatusId;
         entity.DirectionApprovedBy = userId;
-        entity.DirectionApprovedAt = DateTime.UtcNow;
+        entity.DirectionApprovedAt = _clock.Now;
         entity.UpdatedBy = userId;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = _clock.Now;
 
         // Aprobar una solicitud de cambio de fechas o de acumulación ya modifica de verdad el plan,
         // el bloqueo de disponibilidad y la vacación; antes solo cambiaba el estado de la solicitud.
@@ -508,10 +512,10 @@ public class GuardVacationService : IGuardVacationService
 
         entity.StatusTypeId = rejectedStatusId;
         entity.RejectedBy = userId;
-        entity.RejectedAt = DateTime.UtcNow;
+        entity.RejectedAt = _clock.Now;
         entity.RejectionReason = dto.Reason;
         entity.UpdatedBy = userId;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
 
@@ -582,7 +586,7 @@ public class GuardVacationService : IGuardVacationService
             plan.PlannedStartDate = newStart;
             plan.PlannedEndDate = newEnd;
             plan.Notes = AppendNote(plan.Notes, $"Fechas cambiadas {oldStart:dd/MM/yyyy}-{oldEnd:dd/MM/yyyy} a {newStart:dd/MM/yyyy}-{newEnd:dd/MM/yyyy} (solicitud {request.GuardVacationRequestId})");
-            plan.UpdatedAt = DateTime.UtcNow;
+            plan.UpdatedAt = _clock.Now;
             await _db.SaveChangesAsync(ct);
             await SyncVacationBlockAsync(plan, ct);
         }
@@ -620,7 +624,7 @@ public class GuardVacationService : IGuardVacationService
 
         plan.StatusTypeId = await GetRefTypeIdAsync("GUARD_VACATION_PLAN_STATUS", "ACCUMULATED", ct);
         plan.Notes = AppendNote(plan.Notes, $"Acumulado al año {request.TargetYear?.ToString() ?? "siguiente"} (solicitud {request.GuardVacationRequestId})");
-        plan.UpdatedAt = DateTime.UtcNow;
+        plan.UpdatedAt = _clock.Now;
         await _db.SaveChangesAsync(ct);
         await CancelVacationBlocksAsync(plan.GuardVacationPlanId, ct);
 
@@ -729,7 +733,7 @@ public class GuardVacationService : IGuardVacationService
             DaysTaken = days,
             Status = "Planned",
             ApprovedBy = approvedBy,
-            ApprovedAt = DateTime.Now,
+            ApprovedAt = _clock.Now,
             CreatedBy = approvedBy
         }, ct);
 

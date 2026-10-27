@@ -14,11 +14,15 @@ public class AcademicLadderService : IAcademicLadderService
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
 
+    private readonly IAppClock _clock;
+
     public AcademicLadderService(
         IAcademicLadderRepository repo,
         AppDbContext db,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IAppClock clock)
     {
+        _clock = clock;
         _repo = repo;
         _db = db;
         _currentUser = currentUser;
@@ -72,7 +76,7 @@ public class AcademicLadderService : IAcademicLadderService
             MinYearsService  = dto.MinYearsService,
             IsActive         = true,
             CreatedBy        = userId,
-            CreatedAt        = DateTime.UtcNow
+            CreatedAt        = _clock.Now
         };
 
         await _repo.AddAsync(entity, ct);
@@ -108,7 +112,7 @@ public class AcademicLadderService : IAcademicLadderService
         entity.MinYearsService  = dto.MinYearsService;
         entity.IsActive         = dto.IsActive;
         entity.UpdatedBy        = userId;
-        entity.UpdatedAt        = DateTime.UtcNow;
+        entity.UpdatedAt        = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
 

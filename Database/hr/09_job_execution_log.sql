@@ -46,7 +46,7 @@ BEGIN
     SET NOCOUNT ON;
 
     INSERT INTO HR.tbl_JobExecutionLog (JobName, Source, StartedAt, Status)
-    VALUES (@JobName, @Source, SYSUTCDATETIME(), 'Started');
+    VALUES (@JobName, @Source, SYSDATETIME(), 'Started');
 
     SET @LogID = SCOPE_IDENTITY();
 END
@@ -65,10 +65,10 @@ BEGIN
     SET NOCOUNT ON;
 
     UPDATE HR.tbl_JobExecutionLog
-    SET FinishedAt   = SYSUTCDATETIME(),
+    SET FinishedAt   = SYSDATETIME(),
         Status       = @Status,
         ErrorMessage = @ErrorMessage,
-        DurationMs   = DATEDIFF(MILLISECOND, StartedAt, SYSUTCDATETIME())
+        DurationMs   = DATEDIFF(MILLISECOND, StartedAt, SYSDATETIME())
     WHERE JobLogID = @LogID;
 END
 GO

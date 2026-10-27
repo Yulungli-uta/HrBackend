@@ -31,6 +31,8 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
     private readonly IConfiguration _configuration;
     private readonly ILogger<PermissionsService> _logger;
 
+    private readonly IAppClock _clock;
+
     public PermissionsService(
         IPermissionsRepository repo,
         IVacationBalanceAdjustmentService balanceAdjustment,
@@ -41,9 +43,10 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
         IUserActionPermissionService actionPermissions,
         IHttpContextAccessor httpContextAccessor,
         IConfiguration configuration,
-        ILogger<PermissionsService> logger
-    ) : base(repo)
+        ILogger<PermissionsService> logger,
+        IAppClock clock) : base(repo)
     {
+        _clock = clock;
         _repository = repo ?? throw new ArgumentNullException(nameof(repo));
         _balanceAdjustment = balanceAdjustment ?? throw new ArgumentNullException(nameof(balanceAdjustment));
         _db = db ?? throw new ArgumentNullException(nameof(db));
@@ -336,7 +339,7 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
             //current.HourTaken = entity.HourTaken ?? 0;
             current.ApprovedBy = newStatus is "APPROVED" or "REJECTED" ? _currentUser.EmployeeId : entity.ApprovedBy;
             //current.ApprovedAt = entity.ApprovedAt;
-            current.ApprovedAt = DateTime.Now;
+            current.ApprovedAt = _clock.Now;
             current.Justification = entity.Justification ?? "";
             current.Status = entity.Status ?? current.Status;
 

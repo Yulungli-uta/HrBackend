@@ -3,6 +3,7 @@ using Microsoft.Data.SqlClient;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Reports;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories.Reports;
 
@@ -14,8 +15,11 @@ public class ReportRepository : IReportRepository
 {
     private readonly string _connectionString;
 
-    public ReportRepository(IConfiguration configuration)
+    private readonly IAppClock _clock;
+
+    public ReportRepository(IConfiguration configuration, IAppClock clock)
     {
+        _clock = clock;
         _connectionString = configuration.GetConnectionString("SqlServerConn")
             ?? throw new InvalidOperationException("Connection string 'SqlServerConn' not found.");
     }
@@ -43,8 +47,8 @@ public class ReportRepository : IReportRepository
         using var connection = new SqlConnection(_connectionString);
         var parameters = new
         {
-            StartDate    = filter.StartDate ?? DateTime.Now.AddMonths(-1),
-            EndDate      = filter.EndDate   ?? DateTime.Now,
+            StartDate    = filter.StartDate ?? _clock.Now.AddMonths(-1),
+            EndDate      = filter.EndDate   ?? _clock.Now,
             EmployeeId   = filter.EmployeeId,
             DepartmentId = filter.DepartmentId,
         };
@@ -69,8 +73,8 @@ public class ReportRepository : IReportRepository
         using var connection = new SqlConnection(_connectionString);
         var parameters = new
         {
-            StartDate    = filter.StartDate ?? DateTime.Now.AddMonths(-1),
-            EndDate      = filter.EndDate   ?? DateTime.Now,
+            StartDate    = filter.StartDate ?? _clock.Now.AddMonths(-1),
+            EndDate      = filter.EndDate   ?? _clock.Now,
             EmployeeId   = filter.EmployeeId,
             EmployeeType = filter.EmployeeTypeId
         };

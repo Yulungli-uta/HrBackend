@@ -10,8 +10,11 @@ public class SalaryHistoryService : Service<SalaryHistory, int>, ISalaryHistoryS
     private readonly ISalaryHistoryRepository _repository;
     private readonly AppDbContext _db;
 
-    public SalaryHistoryService(ISalaryHistoryRepository repo, AppDbContext db) : base(repo)
+    private readonly IAppClock _clock;
+
+    public SalaryHistoryService(ISalaryHistoryRepository repo, AppDbContext db, IAppClock clock) : base(repo)
     {
+        _clock = clock;
         _repository = repo;
         _db = db;
     }
@@ -27,7 +30,7 @@ public class SalaryHistoryService : Service<SalaryHistory, int>, ISalaryHistoryS
             existing.NewSalary = newSalary;
             existing.EmployeeId = employeeId;
             existing.ChangedBy = changedBy;
-            existing.ChangedAt = DateTime.UtcNow;
+            existing.ChangedAt = _clock.Now;
             existing.Reason = reason;
             await _repository.UpdateAsync(existing.SalaryHistoryId, existing, ct);
             return;
@@ -42,7 +45,7 @@ public class SalaryHistoryService : Service<SalaryHistory, int>, ISalaryHistoryS
             OldSalary = previous?.NewSalary ?? newSalary,
             NewSalary = newSalary,
             ChangedBy = changedBy,
-            ChangedAt = DateTime.UtcNow,
+            ChangedAt = _clock.Now,
             Reason = reason
         }, ct);
     }
@@ -66,7 +69,7 @@ public class SalaryHistoryService : Service<SalaryHistory, int>, ISalaryHistoryS
                 row.NewSalary = newSalary;
                 row.EmployeeId = employeeId;
                 row.ChangedBy = changedBy;
-                row.ChangedAt = DateTime.UtcNow;
+                row.ChangedAt = _clock.Now;
                 row.Reason = reason;
                 await _repository.UpdateAsync(row.SalaryHistoryId, row, ct);
             }
@@ -86,7 +89,7 @@ public class SalaryHistoryService : Service<SalaryHistory, int>, ISalaryHistoryS
             OldSalary = previous,
             NewSalary = newSalary,
             ChangedBy = changedBy,
-            ChangedAt = DateTime.UtcNow,
+            ChangedAt = _clock.Now,
             Reason = reason
         }, ct);
     }

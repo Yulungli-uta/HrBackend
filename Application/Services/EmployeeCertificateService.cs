@@ -28,13 +28,17 @@ public sealed class EmployeeCertificateService : IEmployeeCertificateService
     private readonly IvwEmployeeDetailsService _employeeDetails;
     private readonly IEmailBuilder _emailBuilder;
 
+    private readonly IAppClock _clock;
+
     public EmployeeCertificateService(
         IEmployeeCertificateRepository repository,
         IDocumentGenerationService documentGenerationService,
         IGeneratedDocumentRepository generatedDocumentRepository,
         IvwEmployeeDetailsService employeeDetails,
-        IEmailBuilder emailBuilder)
+        IEmailBuilder emailBuilder,
+        IAppClock clock)
     {
+        _clock = clock;
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _documentGenerationService = documentGenerationService ?? throw new ArgumentNullException(nameof(documentGenerationService));
         _generatedDocumentRepository = generatedDocumentRepository ?? throw new ArgumentNullException(nameof(generatedDocumentRepository));
@@ -70,7 +74,7 @@ public sealed class EmployeeCertificateService : IEmployeeCertificateService
             PreviousStatus = null,
             NewStatus = EmployeeCertificateStatus.Pendiente,
             Action = "CREATED",
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = employeeId
         }, ct);
 
@@ -119,7 +123,7 @@ public sealed class EmployeeCertificateService : IEmployeeCertificateService
             NewStatus = EmployeeCertificateStatus.Pendiente,
             Action = "DOCUMENT_GENERATED",
             Observation = "Documento pre-llenado generado, pendiente de revisión y firma de RRHH.",
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = employeeId
         }, ct);
         await _repository.SaveChangesAsync(ct);
@@ -146,7 +150,7 @@ public sealed class EmployeeCertificateService : IEmployeeCertificateService
             entity.GeneratedDocumentId.Value, request.StoredFileId, $"certificado_{requestId}_firmado.pdf", ct);
 
         entity.Status = EmployeeCertificateStatus.Emitido;
-        entity.IssuedAt = DateTime.Now;
+        entity.IssuedAt = _clock.Now;
         entity.IssuedBy = approvedBy;
 
         await _repository.SaveChangesAsync(ct);
@@ -158,7 +162,7 @@ public sealed class EmployeeCertificateService : IEmployeeCertificateService
             NewStatus = EmployeeCertificateStatus.Emitido,
             Action = "SIGNED_UPLOADED",
             Observation = request.Observation,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = approvedBy
         }, ct);
         await _repository.SaveChangesAsync(ct);
@@ -187,7 +191,7 @@ public sealed class EmployeeCertificateService : IEmployeeCertificateService
             throw new InvalidOperationException($"El certificado {requestId} está en estado '{entity.Status}', no se puede rechazar.");
 
         entity.Status = EmployeeCertificateStatus.Rechazado;
-        entity.RejectedAt = DateTime.Now;
+        entity.RejectedAt = _clock.Now;
         entity.RejectedBy = rejectedBy;
 
         await _repository.SaveChangesAsync(ct);
@@ -199,7 +203,7 @@ public sealed class EmployeeCertificateService : IEmployeeCertificateService
             NewStatus = EmployeeCertificateStatus.Rechazado,
             Action = "REJECTED",
             Observation = request.Reason,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = rejectedBy
         }, ct);
         await _repository.SaveChangesAsync(ct);

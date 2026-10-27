@@ -15,10 +15,14 @@ public class EmployeeSchedulesService : Service<EmployeeSchedules, int>, IEmploy
     private readonly IEmployeeSchedulesRepository _repository;
     private readonly AppDbContext _dbContext;
 
+    private readonly IAppClock _clock;
+
     public EmployeeSchedulesService(
         IEmployeeSchedulesRepository repo,
-        AppDbContext dbContext) : base(repo)
+        AppDbContext dbContext,
+        IAppClock clock) : base(repo)
     {
+        _clock = clock;
         _repository = repo;
         _dbContext = dbContext;
     }
@@ -35,7 +39,7 @@ public class EmployeeSchedulesService : Service<EmployeeSchedules, int>, IEmploy
         try
         {
             var maxDate = new DateOnly(9999, 12, 31);
-            var currentDate = DateOnly.FromDateTime(DateTime.Now);
+            var currentDate = _clock.Today;
 
             // Validar cancelaci�n temprana
             ct.ThrowIfCancellationRequested();
@@ -48,7 +52,7 @@ public class EmployeeSchedulesService : Service<EmployeeSchedules, int>, IEmploy
             {
                 // Cerrar vigencia del horario actual
                 activeSchedule.ValidTo = currentDate;
-                activeSchedule.UpdatedAt = DateTime.Now;
+                activeSchedule.UpdatedAt = _clock.Now;
                 activeSchedule.UpdatedBy = employeeSchedules.CreatedBy;
 
                 // Actualizar registro existente
@@ -61,7 +65,7 @@ public class EmployeeSchedulesService : Service<EmployeeSchedules, int>, IEmploy
             // Configurar nuevo registro
             employeeSchedules.ValidFrom = currentDate.AddDays(1);
             employeeSchedules.ValidTo = maxDate;
-            employeeSchedules.CreatedAt = DateTime.Now;
+            employeeSchedules.CreatedAt = _clock.Now;
 
             // Crear nuevo registro
             await CreateAsync(employeeSchedules, ct);
@@ -91,7 +95,7 @@ public class EmployeeSchedulesService : Service<EmployeeSchedules, int>, IEmploy
         // desde ahora (antes la relación era solo indirecta vía
         // EmployeeSchedules.EmployeeSpecialScheduleId).
         specialSchedule.EmployeeId = employeeSchedules.EmployeeId;
-        specialSchedule.CreatedAt = DateTime.Now;
+        specialSchedule.CreatedAt = _clock.Now;
         _dbContext.Set<EmployeeSpecialSchedule>().Add(specialSchedule);
         await _dbContext.SaveChangesAsync(ct);
 

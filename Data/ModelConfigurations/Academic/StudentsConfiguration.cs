@@ -64,7 +64,7 @@ public class StudentProvisioningConfiguration : IEntityTypeConfiguration<Student
         b.Property(x => x.AdObjectId).HasMaxLength(256);
         b.Property(x => x.SourceReference).HasMaxLength(256);
         b.Property(x => x.RequestedBy).HasMaxLength(320);
-        b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSUTCDATETIME()");
+        b.Property(x => x.CreatedAt).HasDefaultValueSql("SYSDATETIME()");
 
         b.HasOne(x => x.Student)
          .WithMany()

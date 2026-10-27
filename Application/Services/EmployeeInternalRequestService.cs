@@ -35,8 +35,11 @@ public sealed class EmployeeInternalRequestService : IEmployeeInternalRequestSer
 
     private readonly IEmployeeInternalRequestRepository _repository;
 
-    public EmployeeInternalRequestService(IEmployeeInternalRequestRepository repository)
+    private readonly IAppClock _clock;
+
+    public EmployeeInternalRequestService(IEmployeeInternalRequestRepository repository, IAppClock clock)
     {
+        _clock = clock;
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
     }
 
@@ -71,7 +74,7 @@ public sealed class EmployeeInternalRequestService : IEmployeeInternalRequestSer
             PreviousStatus = null,
             NewStatus = EmployeeInternalRequestStatus.Pendiente,
             Action = "CREATED",
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = employeeId
         }, ct);
         await _repository.SaveChangesAsync(ct);
@@ -115,7 +118,7 @@ public sealed class EmployeeInternalRequestService : IEmployeeInternalRequestSer
             NewStatus = entity.Status,
             Action = wasReturned ? "RESUBMITTED" : "UPDATED",
             Observation = wasReturned ? "Reenviada por el solicitante tras corrección." : null,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = employeeId
         }, ct);
         await _repository.SaveChangesAsync(ct);
@@ -144,7 +147,7 @@ public sealed class EmployeeInternalRequestService : IEmployeeInternalRequestSer
 
         var previousStatus = entity.Status;
         entity.Status = EmployeeInternalRequestStatus.Anulado;
-        entity.CancelledAt = DateTime.Now;
+        entity.CancelledAt = _clock.Now;
         entity.CancelledBy = employeeId;
 
         await _repository.SaveChangesAsync(ct);
@@ -156,7 +159,7 @@ public sealed class EmployeeInternalRequestService : IEmployeeInternalRequestSer
             NewStatus = EmployeeInternalRequestStatus.Anulado,
             Action = "CANCELLED",
             Observation = request.Reason,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = employeeId
         }, ct);
         await _repository.SaveChangesAsync(ct);
@@ -212,7 +215,7 @@ public sealed class EmployeeInternalRequestService : IEmployeeInternalRequestSer
         => await ChangeStatusAsync(requestId, resolvedBy,
             request, [EmployeeInternalRequestStatus.Aprobado],
             EmployeeInternalRequestStatus.Completado, "COMPLETED", requireObservation: false,
-            e => { e.ResolvedAt = DateTime.Now; e.ResolvedBy = resolvedBy; }, ct);
+            e => { e.ResolvedAt = _clock.Now; e.ResolvedBy = resolvedBy; }, ct);
 
     /// <inheritdoc/>
     public async Task<EmployeeInternalRequestDetailDto> HrCancelAsync(int requestId, int cancelledBy, CancelEmployeeInternalRequest request, CancellationToken ct = default)
@@ -231,7 +234,7 @@ public sealed class EmployeeInternalRequestService : IEmployeeInternalRequestSer
 
         var previousStatus = entity.Status;
         entity.Status = EmployeeInternalRequestStatus.Anulado;
-        entity.CancelledAt = DateTime.Now;
+        entity.CancelledAt = _clock.Now;
         entity.CancelledBy = cancelledBy;
 
         await _repository.SaveChangesAsync(ct);
@@ -243,7 +246,7 @@ public sealed class EmployeeInternalRequestService : IEmployeeInternalRequestSer
             NewStatus = EmployeeInternalRequestStatus.Anulado,
             Action = "CANCELLED",
             Observation = request.Reason,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = cancelledBy
         }, ct);
         await _repository.SaveChangesAsync(ct);
@@ -290,7 +293,7 @@ public sealed class EmployeeInternalRequestService : IEmployeeInternalRequestSer
             NewStatus = newStatus,
             Action = action,
             Observation = request.Observation,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = actorId
         }, ct);
         await _repository.SaveChangesAsync(ct);

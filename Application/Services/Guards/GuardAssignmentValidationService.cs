@@ -7,6 +7,7 @@ using WsUtaSystem.Application.Interfaces.Guards;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
 using WsUtaSystem.Models.Guards;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Application.Services.Guards;
 
@@ -18,13 +19,17 @@ public class GuardAssignmentValidationService : IGuardAssignmentValidationServic
     private readonly IGuardRotationGroupRepository _groupRepo;
     private readonly AppDbContext _db;
 
+    private readonly IAppClock _clock;
+
     public GuardAssignmentValidationService(
         IGuardAssignmentValidationRepository repo,
         IEmployeeAvailabilityBlockRepository blockRepo,
         IGuardShiftPlanningRepository planningRepo,
         IGuardRotationGroupRepository groupRepo,
-        AppDbContext db)
+        AppDbContext db,
+        IAppClock clock)
     {
+        _clock = clock;
         _repo = repo;
         _blockRepo = blockRepo;
         _planningRepo = planningRepo;
@@ -193,7 +198,7 @@ public class GuardAssignmentValidationService : IGuardAssignmentValidationServic
         return BuildResult(results, dto, typeIds, null);
     }
 
-    private static ValidateGuardAssignmentResultDto BuildResult(
+    private ValidateGuardAssignmentResultDto BuildResult(
         List<(string type, string result, string severity, string message)> results,
         ValidateGuardAssignmentRequestDto dto,
         Dictionary<string, int> typeIds,
@@ -202,7 +207,7 @@ public class GuardAssignmentValidationService : IGuardAssignmentValidationServic
         var dtos = results.Select(r => new GuardAssignmentValidationDto(
             0, dto.EmployeeId, "", planningId, null,
             r.type, r.result, r.severity,
-            DateTime.UtcNow, r.message, null
+            _clock.Now, r.message, null
         )).ToList();
 
         var hasBlocking = dtos.Any(v => v.Severity == "BLOCKING" && v.Result == "FAILED");

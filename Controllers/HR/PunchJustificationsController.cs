@@ -22,12 +22,16 @@ public class PunchJustificationsController : ControllerBase
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUser;
 
+    private readonly IAppClock _clock;
+
     public PunchJustificationsController(
         IPunchJustificationsService svc,
         IEmployeesService employeesSvc,
         IMapper mapper,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IAppClock clock)
     {
+        _clock = clock;
         _svc = svc;
         _employeesSvc = employeesSvc;
         _mapper = mapper;
@@ -137,7 +141,7 @@ public class PunchJustificationsController : ControllerBase
         entityObj.BossEmployeeId = current.BossEmployeeId;
 
         if (willBeDecided && !wasDecided)
-            entityObj.ApprovedAt = DateTime.Now;
+            entityObj.ApprovedAt = _clock.Now;
 
         await _svc.UpdateAsync(id, entityObj, ct);
         return NoContent();

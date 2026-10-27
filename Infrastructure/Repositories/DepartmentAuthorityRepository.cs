@@ -7,6 +7,7 @@ using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Data;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Models;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories;
 
@@ -20,11 +21,14 @@ public class DepartmentAuthorityRepository
     : ServiceAwareEfRepository<DepartmentAuthority, int>, IDepartmentAuthorityRepository
 {
     private readonly ILogger<DepartmentAuthorityRepository> _logger;
+    private readonly IAppClock _clock;
+
     public DepartmentAuthorityRepository(
         AppDbContext db,
-        ILogger<DepartmentAuthorityRepository> logger
-        ) : base(db) 
+        ILogger<DepartmentAuthorityRepository> logger,
+        IAppClock clock) : base(db) 
     {
+        _clock = clock;
         _logger = logger;        
     }
 
@@ -62,7 +66,7 @@ public class DepartmentAuthorityRepository
 
         if (onlyActive)
         {
-            var today = DateOnly.FromDateTime(DateTime.Now);
+            var today = _clock.Today;
             query = query.Where(a => a.IsActive && a.StartDate <= today && (a.EndDate == null || a.EndDate >= today));
         }
 
@@ -88,7 +92,7 @@ public class DepartmentAuthorityRepository
         int departmentId,
         CancellationToken ct)
     {
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = _clock.Today;
         return await QueryWithIncludes()
             .Where(a => a.DepartmentId == departmentId && a.IsActive
                 && a.StartDate <= today && (a.EndDate == null || a.EndDate >= today))
@@ -102,7 +106,7 @@ public class DepartmentAuthorityRepository
         CancellationToken ct)
     {
 
-        DateOnly hoy = DateOnly.FromDateTime(DateTime.Now);
+        DateOnly hoy = _clock.Today;
 
         //DepartmentAuthority? authority = await _db.DepartmentAuthorities.AsNoTracking()
         //    .Include(a => a.Department)
@@ -166,7 +170,7 @@ public class DepartmentAuthorityRepository
 
         if (onlyActive)
         {
-            var today = DateOnly.FromDateTime(DateTime.Now);
+            var today = _clock.Today;
             query = query.Where(a => a.IsActive && a.StartDate <= today && (a.EndDate == null || a.EndDate >= today));
         }
 

@@ -72,6 +72,8 @@ public sealed class PersonnelActionService : IPersonnelActionService
     /// </summary>
     private const string ResignationRetirementActionTypeCode = "RENUNCIA_JUBILACION";
 
+    private readonly IAppClock _clock;
+
     public PersonnelActionService(
         IPersonnelActionRepository actionRepository,
         IPersonnelActionTypeRepository personnelActionType,
@@ -87,8 +89,10 @@ public sealed class PersonnelActionService : IPersonnelActionService
         IPersonnelMovementsService movementsService,
         IContractsService contractsService,
         ICurrentUserService currentUser,
-        ISalaryHistoryService salaryHistory)
+        ISalaryHistoryService salaryHistory,
+        IAppClock clock)
     {
+        _clock = clock;
         _actionRepository          = actionRepository;
         _personnelActionType       = personnelActionType;
         _employeesRepository       = employeesRepository;
@@ -135,7 +139,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
 
         if (request.IsHistoricalEntry)
         {
-            var today = DateOnly.FromDateTime(DateTime.Today);
+            var today = _clock.Today;
             if (request.ActionDate >= today)
                 throw new ArgumentException("Un registro histórico debe tener fecha de acción anterior a hoy.");
             if (request.EffectiveDate is { } effectiveDate && effectiveDate >= today)
@@ -159,7 +163,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         else
         {
             (reservedNumber, _, _) = await _personnelActionType
-                .ConsumeNextNumberAsync(request.ActionTypeId, DateTime.Now.Year, ct);
+                .ConsumeNextNumberAsync(request.ActionTypeId, _clock.Now.Year, ct);
         }
 
         var action = new PersonnelAction
@@ -199,7 +203,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
             ReviewerId              = request.ReviewerId,
             RegistrarId             = request.RegistrarId,
             Status                  = "BORRADOR",
-            CreatedAt               = DateTime.UtcNow,
+            CreatedAt               = _clock.Now,
             CreatedBy               = createdBy
         };
 
@@ -289,7 +293,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         action.ElaboratorId            = request.ElaboratorId;
         action.ReviewerId              = request.ReviewerId;
         action.RegistrarId             = request.RegistrarId;
-        action.UpdatedAt               = DateTime.UtcNow;
+        action.UpdatedAt               = _clock.Now;
         action.UpdatedBy               = updatedBy;
 
         await _actionRepository.UpdateAsync(action, ct);
@@ -423,7 +427,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         action.ElaboratorId            = request.ElaboratorId;
         action.ReviewerId              = request.ReviewerId;
         action.RegistrarId             = request.RegistrarId;
-        action.UpdatedAt               = DateTime.UtcNow;
+        action.UpdatedAt               = _clock.Now;
         action.UpdatedBy               = correctedBy;
 
         await _actionRepository.UpdateAsync(action, ct);
@@ -637,7 +641,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
             // los históricos con EndDate en el pasado como cualquier acción normal cuyo
             // documento se cargó tarde y para entonces ya venció.
             var alreadyEnded = action.EndDate.HasValue
-                && action.EndDate.Value < DateOnly.FromDateTime(DateTime.Today);
+                && action.EndDate.Value < _clock.Today;
 
             if (isMostRecentForEmployee && !alreadyEnded)
             {
@@ -787,7 +791,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         var pdfBase64 = await _documentGenerationService.PreviewAsync(
             templates[0].TemplateId, employeeId, overrides, ct);
 
-        var fileName = $"preview-accion-personal-{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
+        var fileName = $"preview-accion-personal-{_clock.Now:yyyyMMddHHmmss}.pdf";
         return (pdfBase64, fileName);
     }
 
@@ -882,7 +886,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
             StatusTypeId = null,  // El repositorio resuelve desde ref_Types si está sembrado
             Comment      = comment,
             ChangedBy    = changedBy,
-            ChangedAt    = DateTime.UtcNow
+            ChangedAt    = _clock.Now
         };
 
         await _actionRepository.AddStatusHistoryAsync(entry, ct);
@@ -1337,7 +1341,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
                     PersonnelActionId = actionId,
                     IsActive = true,
                     CreatedBy = updatedBy,
-                    CreatedAt = DateTime.Now,
+                    CreatedAt = _clock.Now,
                 }, ct);
             }
             else
@@ -1521,7 +1525,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
                 return;
             }
 
-            var effectiveTo = action.EffectiveDate ?? DateOnly.FromDateTime(DateTime.Today);
+            var effectiveTo = action.EffectiveDate ?? _clock.Today;
 
             await _laborRegimeService.CloseAsync(
                 regimeId,

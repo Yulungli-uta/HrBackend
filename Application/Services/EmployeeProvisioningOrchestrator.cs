@@ -61,6 +61,8 @@ public sealed class EmployeeProvisioningOrchestrator : IEmployeeProvisioningOrch
     private readonly IPersonnelMovementsService _movementsService;
     private readonly ILogger<EmployeeProvisioningOrchestrator> _logger;
 
+    private readonly IAppClock _clock;
+
     public EmployeeProvisioningOrchestrator(
         AppDbContext db,
         IEmployeesService employeesService,
@@ -69,8 +71,10 @@ public sealed class EmployeeProvisioningOrchestrator : IEmployeeProvisioningOrch
         IParametersRepository parametersRepository,
         IEmployeeLaborRegimeService laborRegimeService,
         IPersonnelMovementsService movementsService,
-        ILogger<EmployeeProvisioningOrchestrator> logger)
+        ILogger<EmployeeProvisioningOrchestrator> logger,
+        IAppClock clock)
     {
+        _clock = clock;
         _db                   = db;
         _employeesService     = employeesService;
         _provisioningClient   = provisioningClient;
@@ -253,14 +257,14 @@ public sealed class EmployeeProvisioningOrchestrator : IEmployeeProvisioningOrch
             "PersonId={PersonId}. Creando nuevo registro...",
             request.PersonId);
 
-        var hireDate = request.HireDate ?? DateOnly.FromDateTime(DateTime.Today);
+        var hireDate = request.HireDate ?? _clock.Today;
 
         // Si nadie resolvió el jefe inmediato, buscarlo desde tbl_DepartmentAuthorities.
         // Prioridad: Director (237) sobre Decano (235). Aplica a cualquier caller automáticamente.
         var bossId = request.ImmediateBossId;
         if (bossId is null && request.DepartmentId.HasValue)
         {
-            var today = DateOnly.FromDateTime(DateTime.Today);
+            var today = _clock.Today;
             bossId = await _db.DepartmentAuthorities
                 .AsNoTracking()
                 .Where(a => a.DepartmentId == request.DepartmentId.Value
@@ -283,7 +287,7 @@ public sealed class EmployeeProvisioningOrchestrator : IEmployeeProvisioningOrch
             HireDate        = hireDate,
             IsActive        = true,
             CreatedBy       = request.UpdatedBy,
-            CreatedAt       = DateTime.Now
+            CreatedAt       = _clock.Now
         };
 
         var created = await _employeesService.CreateAsync(newEmployee, ct);
@@ -351,7 +355,7 @@ public sealed class EmployeeProvisioningOrchestrator : IEmployeeProvisioningOrch
                     PersonnelActionId = actionId,
                     IsActive = true,
                     CreatedBy = request.UpdatedBy,
-                    CreatedAt = DateTime.Now,
+                    CreatedAt = _clock.Now,
                 }, ct);
             }
             else
@@ -472,7 +476,7 @@ public sealed class EmployeeProvisioningOrchestrator : IEmployeeProvisioningOrch
             .ExecuteUpdateAsync(s => s
                 .SetProperty(e => e.Email,     institutionalEmail)
                 .SetProperty(e => e.UpdatedBy, updatedBy)
-                .SetProperty(e => e.UpdatedAt, DateTime.Now),
+                .SetProperty(e => e.UpdatedAt, _clock.Now),
                 ct);
 
         _logger.LogInformation(
@@ -608,10 +612,10 @@ public sealed class EmployeeProvisioningOrchestrator : IEmployeeProvisioningOrch
     /// Genera la contraseña temporal inicial con formato <c>Uta@YYYY!NNNN</c>.
     /// El empleado debe cambiarla en el primer inicio de sesión (ForcePasswordChange = true).
     /// </summary>
-    private static string GenerateInitialPassword()
+    private string GenerateInitialPassword()
     {
         var suffix = Random.Shared.Next(1000, 9999);
-        return $"Uta@{DateTime.Now.Year}!{suffix:D4}";
+        return $"Uta@{_clock.Now.Year}!{suffix:D4}";
     }
 
     /// <summary>Helper para construir un resultado de fallo uniforme.</summary>

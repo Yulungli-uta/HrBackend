@@ -12,6 +12,10 @@
     <PackageReference Include="ClosedXML" Version="0.105.0" />
     <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="MailKit" Version="4.16.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.10" />
     <PackageReference Include="PuppeteerSharp" Version="24.40.0" />
     <PackageReference Include="Quartz" Version="3.15.0" />
@@ -41,4 +45,11 @@
     <Compile Remove="bin_codex\**\*.cs" />
     <Compile Remove="obj_codex\**\*.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <AdditionalFiles Include="BannedSymbols.txt" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <!-- Estándar Fecha y hora UTA: DateTime.UtcNow / ToUniversalTime están prohibidos en código de negocio -->
+  </PropertyGroup>
 </Project>

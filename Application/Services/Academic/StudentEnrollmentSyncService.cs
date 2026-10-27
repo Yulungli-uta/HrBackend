@@ -4,6 +4,7 @@ using WsUtaSystem.Application.Interfaces.Services.Academic;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
 using WsUtaSystem.Models.Academic;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Application.Services.Academic;
 
@@ -21,12 +22,16 @@ public class StudentEnrollmentSyncService : IStudentEnrollmentSyncService
     private const string DefaultInitialPassword = "Uta2024*Estudiante!";
     private const int DefaultStudentTypeId = 0;
 
+    private readonly IAppClock _clock;
+
     public StudentEnrollmentSyncService(
         AppDbContext db,
         IStudentEnrollmentSource source,
         IStudentProvisioningClient provisioningClient,
-        ILogger<StudentEnrollmentSyncService> logger)
+        ILogger<StudentEnrollmentSyncService> logger,
+        IAppClock clock)
     {
+        _clock = clock;
         _db                 = db;
         _source             = source;
         _provisioningClient = provisioningClient;
@@ -86,7 +91,7 @@ public class StudentEnrollmentSyncService : IStudentEnrollmentSyncService
                     ProvisioningStatusId   = (int)StudentProvisioningStatus.Requested,
                     ProvisioningStatusName = nameof(StudentProvisioningStatus.Requested),
                     SourceReference        = req.SourceReference,
-                    CreatedAt              = DateTime.UtcNow,
+                    CreatedAt              = _clock.Now,
                 };
                 _db.StudentProvisionings.Add(provRecord);
                 await _db.SaveChangesAsync(ct);
@@ -105,7 +110,7 @@ public class StudentEnrollmentSyncService : IStudentEnrollmentSyncService
                     provRecord.ProvisioningStatusName = nameof(StudentProvisioningStatus.CreatedInAd);
                     provRecord.Email                  = result.Email ?? string.Empty;
                     provRecord.AdObjectId             = result.AdObjectId;
-                    provRecord.ProvisionedAt          = DateTime.UtcNow;
+                    provRecord.ProvisionedAt          = _clock.Now;
                     provisioned++;
 
                     _logger.LogInformation(
@@ -124,7 +129,7 @@ public class StudentEnrollmentSyncService : IStudentEnrollmentSyncService
                         student.StudentId, result.ErrorMessage);
                 }
 
-                provRecord.UpdatedAt = DateTime.UtcNow;
+                provRecord.UpdatedAt = _clock.Now;
                 await _db.SaveChangesAsync(ct);
             }
             catch (Exception ex)
@@ -205,8 +210,8 @@ public class StudentEnrollmentSyncService : IStudentEnrollmentSyncService
                 {
                     provRecord.ProvisioningStatusId   = (int)StudentProvisioningStatus.Disabled;
                     provRecord.ProvisioningStatusName = nameof(StudentProvisioningStatus.Disabled);
-                    provRecord.DisabledAt             = DateTime.UtcNow;
-                    provRecord.UpdatedAt              = DateTime.UtcNow;
+                    provRecord.DisabledAt             = _clock.Now;
+                    provRecord.UpdatedAt              = _clock.Now;
 
                     student.IsActive = false;
                     disabled++;
@@ -275,7 +280,7 @@ public class StudentEnrollmentSyncService : IStudentEnrollmentSyncService
                 StudentTypeId       = DefaultStudentTypeId,
                 ExternalStudentCode = enrollment.ExternalStudentCode,
                 IsActive            = true,
-                CreatedAt           = DateTime.UtcNow,
+                CreatedAt           = _clock.Now,
             };
             _db.Students.Add(student);
             await _db.SaveChangesAsync(ct);
@@ -291,11 +296,11 @@ public class StudentEnrollmentSyncService : IStudentEnrollmentSyncService
             {
                 StudentId      = student.StudentId,
                 PeriodCode     = periodCode,
-                EnrollmentDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                EnrollmentDate = _clock.Today,
                 Status         = "Activo",
                 Program        = enrollment.Program,
                 Faculty        = enrollment.Faculty,
-                CreatedAt      = DateTime.UtcNow,
+                CreatedAt      = _clock.Now,
             });
             await _db.SaveChangesAsync(ct);
         }

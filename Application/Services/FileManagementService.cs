@@ -14,12 +14,16 @@ public class FileManagementService : IFileManagementService
     private readonly FileManagementSettings _settings;
     private readonly ILogger<FileManagementService> _logger;
 
+    private readonly IAppClock _clock;
+
     public FileManagementService(
         IDirectoryParametersService directoryService,
         IEncryptionService encryptionService,
         IOptions<FileManagementSettings> settings,
-        ILogger<FileManagementService> logger)
+        ILogger<FileManagementService> logger,
+        IAppClock clock)
     {
+        _clock = clock;
         _directoryService = directoryService;
         _encryptionService = encryptionService;
         _settings = settings.Value;
@@ -85,7 +89,7 @@ public class FileManagementService : IFileManagementService
             }
 
             // 4. Preparar rutas (ResolveSafePath evita path traversal vía RelativePath)
-            int currentYear = DateTime.Now.Year;
+            int currentYear = _clock.Now.Year;
             var relativePath = request.RelativePath.TrimStart('/').TrimEnd('/');
             var safeRelativeBase = ResolveSafePath(effectivePhysicalPath, relativePath);
             var folderPath = Path.Combine(safeRelativeBase, currentYear.ToString());

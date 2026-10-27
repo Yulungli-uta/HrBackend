@@ -146,7 +146,7 @@ public sealed class AttendanceCrossReportSource : IReportSource
             FilePrefix  = "Reporte_Cruzado_Asistencia",
             Subtitle    = subtitle,
             GeneratedBy = userName,
-            GeneratedAt = DateTime.UtcNow,
+            GeneratedAt = DateTime.Now,
             Columns     = Columns,
             Rows        = rows,
             Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,

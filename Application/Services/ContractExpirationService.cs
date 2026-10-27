@@ -16,12 +16,16 @@ public sealed class ContractExpirationService : IContractExpirationService
     private readonly IEmployeeLaborRegimeService _laborRegimeService;
     private readonly ILogger<ContractExpirationService> _logger;
 
+    private readonly IAppClock _clock;
+
     public ContractExpirationService(
         AppDbContext db,
         IEmployeeProvisioningClient provisioningClient,
         IEmployeeLaborRegimeService laborRegimeService,
-        ILogger<ContractExpirationService> logger)
+        ILogger<ContractExpirationService> logger,
+        IAppClock clock)
     {
+        _clock = clock;
         _db                  = db                  ?? throw new ArgumentNullException(nameof(db));
         _provisioningClient  = provisioningClient   ?? throw new ArgumentNullException(nameof(provisioningClient));
         _laborRegimeService  = laborRegimeService   ?? throw new ArgumentNullException(nameof(laborRegimeService));
@@ -30,7 +34,7 @@ public sealed class ContractExpirationService : IContractExpirationService
 
     public async Task<int> ProcessExpiredContractsAsync(string serviceToken, CancellationToken ct = default)
     {
-        var today = DateTime.Today;
+        var today = _clock.Today.ToDateTime(TimeOnly.MinValue);
 
         var vigentStatusId = await _db.RefTypes
             .AsNoTracking()
@@ -172,7 +176,7 @@ public sealed class ContractExpirationService : IContractExpirationService
 
             await _laborRegimeService.CloseAsync(
                 regimeId,
-                new EmployeeLaborRegimeCloseDto { EffectiveTo = DateOnly.FromDateTime(DateTime.Today) },
+                new EmployeeLaborRegimeCloseDto { EffectiveTo = _clock.Today },
                 changedBy: null,
                 ct);
         }

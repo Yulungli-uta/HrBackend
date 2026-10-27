@@ -816,6 +816,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimeBalancesService, WsUtaSystem.Application.Services.TimeBalancesService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITimeService, WsUtaSystem.Application.Services.TimeService>();
 
+        // ── Reloj central (estándar "Fecha y hora UTA": hora de Ecuador, la decide el servidor) ──
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<WsUtaSystem.Application.Interfaces.Services.IAppClock, WsUtaSystem.Infrastructure.Services.AppClock>();
+
         // ── Módulo: Planificación de Tiempo ───────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimePlanningRepository, WsUtaSystem.Infrastructure.Repositories.TimePlanningRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITimePlanningEmployeeRepository, WsUtaSystem.Infrastructure.Repositories.TimePlanningEmployeeRepository>();

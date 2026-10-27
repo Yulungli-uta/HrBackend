@@ -34,10 +34,14 @@ public sealed class InstitutionalDocumentRenderer : IDocumentRenderer
     private static readonly string BorderColor    = "#CCCCCC";
     private static readonly string TextColor      = "#1A1A1A";
 
+    private readonly IAppClock _clock;
+
     public InstitutionalDocumentRenderer(
         IInstitutionalLogoService logoService,
-        ILogger<InstitutionalDocumentRenderer> logger)
+        ILogger<InstitutionalDocumentRenderer> logger,
+        IAppClock clock)
     {
+        _clock = clock;
         _logoService = logoService ?? throw new ArgumentNullException(nameof(logoService));
         _logger      = logger      ?? throw new ArgumentNullException(nameof(logger));
 
@@ -105,7 +109,7 @@ public sealed class InstitutionalDocumentRenderer : IDocumentRenderer
             });
 
             row.ConstantItem(100).AlignRight().AlignBottom()
-                .Text($"Fecha: {DateTime.Now:dd/MM/yyyy}")
+                .Text($"Fecha: {_clock.Now:dd/MM/yyyy}")
                 .FontSize(8).FontColor("#777777");
         });
     }

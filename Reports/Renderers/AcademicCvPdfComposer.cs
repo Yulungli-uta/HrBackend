@@ -29,11 +29,15 @@ public sealed class AcademicCvPdfComposer : IAcademicCvPdfComposer
     private const string ColorLanguages = "#6366f1";      // indigo-500 (Idiomas)
     private const string ColorKnowledgeAreas = "#16a34a"; // green-600  (Áreas de Conocimiento)
 
+    private readonly IAppClock _clock;
+
     public AcademicCvPdfComposer(
         ReportConfiguration config,
         IWebHostEnvironment env,
-        IInstitutionalLogoService logoService)
+        IInstitutionalLogoService logoService,
+        IAppClock clock)
     {
+        _clock = clock;
         _config = config ?? throw new ArgumentNullException(nameof(config));
         _env = env ?? throw new ArgumentNullException(nameof(env));
         _logoService = logoService ?? throw new ArgumentNullException(nameof(logoService));
@@ -81,7 +85,7 @@ public sealed class AcademicCvPdfComposer : IAcademicCvPdfComposer
                 });
 
                 row.ConstantItem(120).AlignRight().Text(
-                    $"Generado: {DateTime.Now:dd/MM/yyyy}")
+                    $"Generado: {_clock.Now:dd/MM/yyyy}")
                     .FontSize(8).FontColor(_config.Colors.TextSecondary);
             });
 

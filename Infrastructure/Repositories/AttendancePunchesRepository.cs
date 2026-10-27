@@ -2,13 +2,17 @@ using Microsoft.EntityFrameworkCore;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Models;
+using WsUtaSystem.Application.Interfaces.Services;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 namespace WsUtaSystem.Infrastructure.Repositories;
 public class AttendancePunchesRepository : ServiceAwareEfRepository<AttendancePunches, int>, IAttendancePunchesRepository
 {
     private readonly DbContext _db;
-    public AttendancePunchesRepository(WsUtaSystem.Data.AppDbContext db) : base(db)
+    private readonly IAppClock _clock;
+
+    public AttendancePunchesRepository(WsUtaSystem.Data.AppDbContext db, IAppClock clock) : base(db)
     {
+        _clock = clock;
         _db = db;
     }
 
@@ -22,8 +26,8 @@ public class AttendancePunchesRepository : ServiceAwareEfRepository<AttendancePu
 
     public async Task<IEnumerable<AttendancePunches>> GetTodayPunchesByEmployeeAsync(int employeeId, CancellationToken ct)
     {
-        //var today = DateTime.Today;
-        var today = DateTime.Now.Date;
+        //var today = _clock.Today.ToDateTime(TimeOnly.MinValue);
+        var today = _clock.Today.ToDateTime(TimeOnly.MinValue);
         var tomorrow = today.AddDays(1);
 
         return await _db.Set<AttendancePunches>()

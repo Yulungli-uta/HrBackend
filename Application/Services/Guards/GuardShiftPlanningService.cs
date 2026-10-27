@@ -6,6 +6,7 @@ using WsUtaSystem.Application.Interfaces.Guards;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
 using WsUtaSystem.Models.Guards;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Application.Services.Guards;
 
@@ -19,6 +20,8 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
 
+    private readonly IAppClock _clock;
+
     public GuardShiftPlanningService(
         IGuardShiftPlanningRepository repo,
         IGuardAssignmentValidationService validationService,
@@ -26,8 +29,10 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
         IGuardRotationGroupRepository groupRepo,
         IRotationPatternRepository patternRepo,
         AppDbContext db,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IAppClock clock)
     {
+        _clock = clock;
         _repo = repo;
         _validationService = validationService;
         _availabilityService = availabilityService;
@@ -67,7 +72,7 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
 
     public async Task<GuardShiftPlanningDto> CreateAsync(CreateGuardShiftPlanningDto dto, CancellationToken ct)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         if (dto.WorkDate < today)
             throw new InvalidOperationException($"No se puede planificar una fecha ya pasada. La fecha debe ser {today:dd/MM/yyyy} o posterior.");
 
@@ -132,7 +137,7 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
         if (dto.RepeatWeeks < 1 || dto.RepeatWeeks > 52)
             throw new InvalidOperationException("La cantidad de semanas a repetir debe estar entre 1 y 52.");
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         if (dto.StartDate < today)
             throw new InvalidOperationException($"No se puede planificar una fecha ya pasada. La fecha debe ser {today:dd/MM/yyyy} o posterior.");
 
@@ -364,7 +369,7 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
 
     public async Task<GeneratePreviewResponseDto> GeneratePreviewAsync(GeneratePreviewRequestDto dto, CancellationToken ct)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         if (dto.StartDate < today)
             throw new InvalidOperationException($"No se puede generar planificación para fechas pasadas. La fecha de inicio debe ser {today:dd/MM/yyyy} o posterior.");
 
@@ -374,7 +379,7 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
 
     public async Task<GuardShiftPlanningResultDto> GenerateConfirmAsync(GeneratePreviewRequestDto dto, CancellationToken ct)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         if (dto.StartDate < today)
             throw new InvalidOperationException($"No se puede generar planificación para fechas pasadas. La fecha de inicio debe ser {today:dd/MM/yyyy} o posterior.");
 
@@ -522,7 +527,7 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
 
     public async Task<GuardDashboardDto> GetDashboardAsync(CancellationToken ct)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         var filter = new GuardShiftCalendarFilterDto(today, today, null, null, null, null, null);
         var todayShifts = await GetCalendarAsync(filter, ct);
 

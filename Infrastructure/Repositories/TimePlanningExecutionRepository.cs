@@ -2,6 +2,7 @@
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Models;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories
 {
@@ -9,8 +10,11 @@ namespace WsUtaSystem.Infrastructure.Repositories
     {
         private readonly DbContext _db;
 
-        public TimePlanningExecutionRepository(WsUtaSystem.Data.AppDbContext db) : base(db)
+        private readonly IAppClock _clock;
+
+        public TimePlanningExecutionRepository(WsUtaSystem.Data.AppDbContext db, IAppClock clock) : base(db)
         {
+            _clock = clock;
             _db = db;
         }
 
@@ -65,7 +69,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
             if (execution == null) return false;
 
             execution.VerifiedBy = verifiedBy;
-            execution.VerifiedAt = DateTime.Now;
+            execution.VerifiedAt = _clock.Now;
             execution.Comments = comments;
 
             _db.Set<TimePlanningExecution>().Update(execution);

@@ -35,12 +35,16 @@ public class MassVacationPlanService : IMassVacationPlanService
     private readonly IParametersRepository _parametersRepository;
     private readonly AppDbContext _db;
 
+    private readonly IAppClock _clock;
+
     public MassVacationPlanService(
         IMassVacationPlanRepository repo,
         IVacationBalanceAdjustmentService balanceAdjustment,
         IParametersRepository parametersRepository,
-        AppDbContext db)
+        AppDbContext db,
+        IAppClock clock)
     {
+        _clock = clock;
         _repo = repo;
         _balanceAdjustment = balanceAdjustment;
         _parametersRepository = parametersRepository;
@@ -129,7 +133,7 @@ public class MassVacationPlanService : IMassVacationPlanService
             VacationYear = dto.VacationYear,
             StatusTypeId = plannedTypeId,
             CreatedBy = createdByEmployeeId,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = _clock.Now,
         };
 
         await _repo.AddAsync(entity, ct);
@@ -161,19 +165,19 @@ public class MassVacationPlanService : IMassVacationPlanService
         plan.EndTime = dto.EndTime;
         plan.VacationYear = dto.VacationYear;
         plan.UpdatedBy = performedByEmployeeId;
-        plan.UpdatedAt = DateTime.UtcNow;
+        plan.UpdatedAt = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
 
         return await MapToDtoAsync(plan, statusTypes, ct);
     }
 
-    private static void ValidateDates(DateOnly startDate, DateOnly endDate, TimeOnly? startTime, TimeOnly? endTime)
+    private void ValidateDates(DateOnly startDate, DateOnly endDate, TimeOnly? startTime, TimeOnly? endTime)
     {
         if (endDate < startDate)
             throw new BusinessRuleException("La fecha de fin no puede ser anterior a la fecha de inicio.");
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         if (startDate <= today)
             throw new BusinessRuleException("La fecha de inicio debe ser estrictamente futura (no hoy, no una fecha pasada).");
 
@@ -217,7 +221,7 @@ public class MassVacationPlanService : IMassVacationPlanService
                 EmployeeId = dto.EmployeeId,
                 Reason = dto.Reason,
                 CreatedBy = performedByEmployeeId,
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = _clock.Now,
             }, ct);
         }
         else
@@ -244,7 +248,7 @@ public class MassVacationPlanService : IMassVacationPlanService
 
         plan.StatusTypeId = cancelledTypeId;
         plan.UpdatedBy = performedByEmployeeId;
-        plan.UpdatedAt = DateTime.UtcNow;
+        plan.UpdatedAt = _clock.Now;
         if (!string.IsNullOrWhiteSpace(reason))
             plan.Description = string.IsNullOrWhiteSpace(plan.Description)
                 ? $"[Anulado: {reason.Trim()}]"
@@ -255,7 +259,7 @@ public class MassVacationPlanService : IMassVacationPlanService
 
     public async Task<MassVacationPlanTransitionRunResultDto> ProcessDueTransitionsAsync(int? performedByEmployeeId, CancellationToken ct)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         var result = new MassVacationPlanTransitionRunResultDto();
 
         var statusTypes = await GetStatusTypesAsync(ct);
@@ -284,7 +288,7 @@ public class MassVacationPlanService : IMassVacationPlanService
         foreach (var plan in toFinish)
         {
             plan.StatusTypeId = finishedTypeId;
-            plan.UpdatedAt = DateTime.UtcNow;
+            plan.UpdatedAt = _clock.Now;
             plan.UpdatedBy = performedByEmployeeId;
             result.FinishedPlanIds.Add(plan.PlanId);
         }
@@ -397,7 +401,7 @@ public class MassVacationPlanService : IMassVacationPlanService
 
         plan.StatusTypeId = inProgressTypeId;
         plan.ExecutedBy = performedByEmployeeId;
-        plan.ExecutedAt = DateTime.UtcNow;
+        plan.ExecutedAt = _clock.Now;
         await _db.SaveChangesAsync(ct);
 
         return new MassVacationPlanExecuteResultDto

@@ -42,6 +42,8 @@ namespace WsUtaSystem.Application.Services
             new(StringComparer.OrdinalIgnoreCase) { "BORRADOR", "GENERADO" };
         private const string ContractStatusCategory = "CONTRACT_STATUS";
 
+        private readonly IAppClock _clock;
+
         public DocumentOrchestratorService(
             IFileManagementService fileManagement,
             IStoredFileService storedFileService,
@@ -49,8 +51,10 @@ namespace WsUtaSystem.Application.Services
             IMapper mapper,
             AppDbContext db,
             IHttpContextAccessor httpContextAccessor,
-            IUserActionPermissionService permissionService)
+            IUserActionPermissionService permissionService,
+            IAppClock clock)
         {
+            _clock = clock;
             _fileManagement = fileManagement;
             _storedFileService = storedFileService;
             _logger = logger;
@@ -216,7 +220,7 @@ namespace WsUtaSystem.Application.Services
                         ContentType = original?.ContentType,
                         SizeBytes = pr.FileSize,
                         Status = 1,
-                        CreatedAt = DateTime.Now,
+                        CreatedAt = _clock.Now,
 
                         // ✅ tipo aplicado al batch
                         DocumentTypeId = request.DocumentTypeId,
@@ -319,7 +323,7 @@ namespace WsUtaSystem.Application.Services
                     ContentType = request.File.ContentType,
                     SizeBytes = pr.FileSize,
                     Status = 1,
-                    CreatedAt = DateTime.Now,
+                    CreatedAt = _clock.Now,
 
                     DocumentTypeId = request.DocumentTypeId,
                     DocumentReferenceNumber = request.DocumentReferenceNumber,
@@ -443,7 +447,7 @@ namespace WsUtaSystem.Application.Services
                         ContentType = it.File.ContentType,
                         SizeBytes = pr.FileSize,
                         Status = 1,
-                        CreatedAt = DateTime.Now,
+                        CreatedAt = _clock.Now,
 
                         DocumentTypeId = it.DocumentTypeId,
                         DocumentReferenceNumber = it.DocumentReferenceNumber,

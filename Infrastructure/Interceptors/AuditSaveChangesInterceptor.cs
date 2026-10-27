@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.Interfaces.Auditable;
+using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Models;
 
 namespace WsUtaSystem.Infrastructure.Interceptors
@@ -16,13 +17,16 @@ namespace WsUtaSystem.Infrastructure.Interceptors
 
         private readonly IServiceProvider _serviceProvider; // Cambiado para evitar circularidad
         private readonly ILogger<AuditSaveChangesInterceptor> _logger;
+        private readonly IAppClock _clock;
 
         public AuditSaveChangesInterceptor(
             IServiceProvider serviceProvider,
-            ILogger<AuditSaveChangesInterceptor> logger)
+            ILogger<AuditSaveChangesInterceptor> logger,
+            IAppClock clock)
         {
             _serviceProvider = serviceProvider;
             _logger = logger;
+            _clock = clock;
         }
 
         public override InterceptionResult<int> SavingChanges(
@@ -46,7 +50,7 @@ namespace WsUtaSystem.Infrastructure.Interceptors
         {
             if (context == null) return;
 
-            var timestamp = DateTime.Now;
+            var timestamp = _clock.Now;
             int? employeeId = null;
             string? actorName = null;
 

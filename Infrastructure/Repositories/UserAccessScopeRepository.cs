@@ -3,6 +3,7 @@ using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Data;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Models;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories;
 
@@ -12,12 +13,18 @@ public class UserAccessScopeRepository : ServiceAwareEfRepository<UserAccessScop
 
     private readonly AppDbContext _db;
 
-    public UserAccessScopeRepository(AppDbContext db) : base(db) => _db = db;
+    private readonly IAppClock _clock;
+
+    public UserAccessScopeRepository(AppDbContext db, IAppClock clock) : base(db)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<List<UserAccessScope>> GetActiveByEmployeeAndModuleAsync(
         int employeeId, string moduleCode, CancellationToken ct = default)
     {
-        var now = DateTime.Now;
+        var now = _clock.Now;
 
         var moduleTypeId = await _db.RefTypes
             .AsNoTracking()

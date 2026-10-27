@@ -3,6 +3,7 @@ using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models.Views;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories;
 
@@ -14,7 +15,13 @@ public class VwAuthorityRepository : IVwAuthorityRepository
 {
     private readonly AppDbContext _db;
 
-    public VwAuthorityRepository(AppDbContext db) => _db = db;
+    private readonly IAppClock _clock;
+
+    public VwAuthorityRepository(AppDbContext db, IAppClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     /// <inheritdoc/>
     public async Task<IEnumerable<VwAuthority>> GetAllAsync(CancellationToken ct = default) =>
@@ -25,7 +32,7 @@ public class VwAuthorityRepository : IVwAuthorityRepository
     /// <inheritdoc/>
     public async Task<IEnumerable<VwAuthority>> GetActiveAsync(CancellationToken ct = default)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = _clock.Today;
         return await _db.VwAuthority.AsNoTracking()
             .Where(a => a.IsActive && (a.EndDate == null || a.EndDate >= today))
             .OrderByDescending(a => a.StartDate)
@@ -65,7 +72,7 @@ public class VwAuthorityRepository : IVwAuthorityRepository
 
         if (onlyActive)
         {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var today = _clock.Today;
             query = query.Where(a => a.IsActive && (a.EndDate == null || a.EndDate >= today));
         }
 

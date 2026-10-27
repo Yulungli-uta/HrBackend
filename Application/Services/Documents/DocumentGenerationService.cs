@@ -26,6 +26,8 @@ public sealed class DocumentGenerationService : IDocumentGenerationService
     private readonly IFileManagementService _fileManagementService;
     private readonly ILogger<DocumentGenerationService> _logger;
 
+    private readonly IAppClock _clock;
+
     public DocumentGenerationService(
         IDocumentTemplateRepository templateRepository,
         IDocumentTemplateFieldRepository fieldRepository,
@@ -35,8 +37,10 @@ public sealed class DocumentGenerationService : IDocumentGenerationService
         IDocumentRendererFactory rendererFactory,
         IStoredFileService storedFileService,
         IFileManagementService fileManagementService,
-        ILogger<DocumentGenerationService> logger)
+        ILogger<DocumentGenerationService> logger,
+        IAppClock clock)
     {
+        _clock = clock;
         _templateRepository = templateRepository;
         _fieldRepository = fieldRepository;
         _documentRepository = documentRepository;
@@ -129,7 +133,7 @@ public sealed class DocumentGenerationService : IDocumentGenerationService
         var pdfBytes = await renderer.RenderToPdfAsync(renderedHtml, template.CssStyles);
 
         var docNumber = request.DocumentNumber
-            ?? $"DOC-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+            ?? $"DOC-{_clock.Now:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
 
         var fileName = BuildFileName(template.TemplateCode, docNumber);
 
@@ -145,7 +149,7 @@ public sealed class DocumentGenerationService : IDocumentGenerationService
             Notes = request.Notes,
             TemplateVersion = template.Version,
             HtmlSnapshot = renderedHtml,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = _clock.Now,
             CreatedBy = generatedBy,
             Fields = fields.Select(f =>
             {
@@ -356,11 +360,11 @@ public sealed class DocumentGenerationService : IDocumentGenerationService
         return Convert.ToBase64String(pdfBytes);
     }
 
-    private static string BuildFileName(string templateCode, string documentNumber)
+    private string BuildFileName(string templateCode, string documentNumber)
     {
         var safeName = string.Concat(
             documentNumber.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
 
-        return $"{templateCode}_{safeName}_{DateTime.UtcNow:yyyyMMdd}.pdf";
+        return $"{templateCode}_{safeName}_{_clock.Now:yyyyMMdd}.pdf";
     }
 }

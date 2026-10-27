@@ -18,7 +18,9 @@ public class ParametersController : ControllerBase
 {
     private readonly IParametersService _svc;
     private readonly IMapper _mapper;
-    public ParametersController(IParametersService svc, IMapper mapper) { _svc = svc; _mapper = mapper; }
+    private readonly IAppClock _clock;
+
+    public ParametersController(IParametersService svc, IMapper mapper, IAppClock clock) { _svc = svc; _mapper = mapper; _clock = clock; }
 
     /// <summary>Lista todos los registros de Parameters.</summary>
     [HttpGet]
@@ -96,7 +98,7 @@ public class ParametersController : ControllerBase
     public async Task<IActionResult> Create([FromBody] ParametersCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Parameters>(dto);
-        entityObj.CreatedAt = DateTime.Now;
+        entityObj.CreatedAt = _clock.Now;
         var created = await _svc.CreateAsync(entityObj, ct);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<ParametersDto>(created));
@@ -108,7 +110,7 @@ public class ParametersController : ControllerBase
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] ParametersUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<Parameters>(dto);
-        entityObj.UpdatedAt = DateTime.Now;
+        entityObj.UpdatedAt = _clock.Now;
         await _svc.UpdateAsync(id, entityObj, ct);
         return NoContent();
     }

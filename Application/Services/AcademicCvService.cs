@@ -29,6 +29,8 @@ public class AcademicCvService : IAcademicCvService
 
     private static readonly CultureInfo EsEc = CultureInfo.GetCultureInfo("es-EC");
 
+    private readonly IAppClock _clock;
+
     public AcademicCvService(
         IPeopleService people,
         IEmployeesService employees,
@@ -43,8 +45,10 @@ public class AcademicCvService : IAcademicCvService
         IRefTypesService refTypes,
         IInstitutionsService institutions,
         IKnowledgeAreaService knowledgeAreas,
-        IDocumentOrchestratorService documents)
+        IDocumentOrchestratorService documents,
+        IAppClock clock)
     {
+        _clock = clock;
         _people = people;
         _employees = employees;
         _laborRegime = laborRegime;
@@ -125,7 +129,7 @@ public class AcademicCvService : IAcademicCvService
             return string.IsNullOrEmpty(startLabel) ? endLabel : $"{startLabel} — {endLabel}";
         }
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
 
         int? CalculateAge(DateOnly? birthDate)
         {

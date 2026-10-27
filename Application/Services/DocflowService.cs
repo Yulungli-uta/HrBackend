@@ -42,6 +42,8 @@ namespace WsUtaSystem.Application.Services
         private readonly IMapper _mapper;
         private readonly ILogger<DocflowService> _logger;
 
+        private readonly IAppClock _clock;
+
         public DocflowService(
             IDocflowProcessRepository procRepo,
             IDocflowInstanceRepository instRepo,
@@ -52,8 +54,10 @@ namespace WsUtaSystem.Application.Services
             IDocumentOrchestratorService docOrchestrator,
             ICurrentUserService currentUser,
             IMapper mapper,
-            ILogger<DocflowService> logger)
+            ILogger<DocflowService> logger,
+            IAppClock clock)
         {
+            _clock = clock;
             _procRepo = procRepo ?? throw new ArgumentNullException(nameof(procRepo));
             _instRepo = instRepo ?? throw new ArgumentNullException(nameof(instRepo));
             _docRepo = docRepo ?? throw new ArgumentNullException(nameof(docRepo));
@@ -393,7 +397,7 @@ namespace WsUtaSystem.Application.Services
                 AssignedToUserId = req.AssignedToUserId,
                 DynamicMetadata = req.DynamicMetadata ?? "{}",
                 CreatedBy = userId,
-                CreatedAt = DateTime.Now
+                CreatedAt = _clock.Now
             };
 
             // 6. Validar metadata dinámica contra el esquema del proceso
@@ -679,10 +683,10 @@ namespace WsUtaSystem.Application.Services
         /// Genera un código de proceso a partir del nombre.
         /// Toma los primeros 3 caracteres (uppercase) + los últimos 10 dígitos del timestamp.
         /// </summary>
-        private static string GenerateProcessCode(string name)
+        private string GenerateProcessCode(string name)
         {
             var prefix = name[..Math.Min(3, name.Length)].ToUpperInvariant();
-            var ticks = DateTime.Now.Ticks.ToString();
+            var ticks = _clock.Now.Ticks.ToString();
             var suffix = ticks.Length >= 10 ? ticks[^10..] : ticks;
             return $"{prefix}{suffix}";
         }

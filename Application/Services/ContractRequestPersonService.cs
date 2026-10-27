@@ -28,11 +28,15 @@ public class ContractRequestPersonService
     private readonly AppDbContext _db;
     private readonly IRefTypesService _refTypes;
 
+    private readonly IAppClock _clock;
+
     public ContractRequestPersonService(
         IContractRequestPersonRepository repo,
         AppDbContext db,
-        IRefTypesService refTypes) : base(repo)
+        IRefTypesService refTypes,
+        IAppClock clock) : base(repo)
     {
+        _clock = clock;
         _repo     = repo     ?? throw new ArgumentNullException(nameof(repo));
         _db       = db       ?? throw new ArgumentNullException(nameof(db));
         _refTypes = refTypes ?? throw new ArgumentNullException(nameof(refTypes));
@@ -123,7 +127,7 @@ public class ContractRequestPersonService
             EntrySourceId       = sourceId,
             IsHired             = false,
             StatusId            = pendingId,
-            CreatedAt           = DateTime.Now,
+            CreatedAt           = _clock.Now,
             CreatedBy           = createdBy
         };
 
@@ -173,7 +177,7 @@ public class ContractRequestPersonService
             entity.MonthsPeriod        = months;
             entity.Rmu                 = rmu;
             entity.RmuPeriod           = rmuPeriod;
-            entity.UpdatedAt           = DateTime.Now;
+            entity.UpdatedAt           = _clock.Now;
             entity.UpdatedBy           = updatedBy;
 
             await _db.SaveChangesAsync(ct);
@@ -198,7 +202,7 @@ public class ContractRequestPersonService
             entity.IsHired   = true;
             entity.ContractId = contractId;
             entity.StatusId   = hiredId;
-            entity.UpdatedAt  = DateTime.Now;
+            entity.UpdatedAt  = _clock.Now;
             entity.UpdatedBy  = updatedBy;
 
             await _db.SaveChangesAsync(ct);
@@ -227,7 +231,7 @@ public class ContractRequestPersonService
             existing.ContractId = contractId;
             existing.IsHired    = true;
             existing.StatusId   = hiredId;
-            existing.UpdatedAt  = DateTime.Now;
+            existing.UpdatedAt  = _clock.Now;
             existing.UpdatedBy  = createdBy;
             await _db.SaveChangesAsync(ct);
             return;
@@ -247,7 +251,7 @@ public class ContractRequestPersonService
             IsHired             = true,
             ContractId          = contractId,
             StatusId            = hiredId,
-            CreatedAt           = DateTime.Now,
+            CreatedAt           = _clock.Now,
             CreatedBy           = createdBy
         };
 
@@ -272,7 +276,7 @@ public class ContractRequestPersonService
             {
                 p.IsHired    = false;
                 p.StatusId   = inactiveId;
-                p.UpdatedAt  = DateTime.Now;
+                p.UpdatedAt  = _clock.Now;
                 p.UpdatedBy  = updatedBy;
             }
 

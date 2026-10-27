@@ -26,6 +26,8 @@ namespace WsUtaSystem.Controllers.HR
         private readonly ILanguagesService _languagesSvc;
         private readonly IBooksService _booksSvc;
 
+        private readonly IAppClock _clock;
+
         public StoredFilesController(
             IStoredFileService svc,
             IMapper mapper,
@@ -37,8 +39,10 @@ namespace WsUtaSystem.Controllers.HR
             IWorkExperiencesService workExperiencesSvc,
             ITrainingsService trainingsSvc,
             ILanguagesService languagesSvc,
-            IBooksService booksSvc)
+            IBooksService booksSvc,
+            IAppClock clock)
         {
+            _clock = clock;
             _svc = svc;
             _mapper = mapper;
             _logger = logger;
@@ -152,7 +156,7 @@ namespace WsUtaSystem.Controllers.HR
 
             // Defaults mínimos (si no lo seteas en mapper)
             if (entityObj.UploadYear == 0)
-                entityObj.UploadYear = DateTime.Now.Year;
+                entityObj.UploadYear = _clock.Now.Year;
 
             var created = await _svc.CreateAsync(entityObj, ct);
 

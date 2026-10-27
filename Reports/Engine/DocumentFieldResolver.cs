@@ -32,12 +32,16 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
     private readonly IInstitutionalLogoService _logoService;
     private readonly ILogger<DocumentFieldResolver> _logger;
 
+    private readonly IAppClock _clock;
+
     public DocumentFieldResolver(
         AppDbContext db,
         IConfiguration config,
         IInstitutionalLogoService logoService,
-        ILogger<DocumentFieldResolver> logger)
+        ILogger<DocumentFieldResolver> logger,
+        IAppClock clock)
     {
+        _clock = clock;
         _db          = db          ?? throw new ArgumentNullException(nameof(db));
         _config      = config      ?? throw new ArgumentNullException(nameof(config));
         _logoService = logoService ?? throw new ArgumentNullException(nameof(logoService));
@@ -82,7 +86,7 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
                     EmployeeId = 0,
                     PersonID   = personId,
                     People     = person,
-                    HireDate   = DateOnly.FromDateTime(DateTime.Today),
+                    HireDate   = _clock.Today,
                 };
 
                 _logger.LogInformation(
@@ -308,7 +312,7 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
     /// </summary>
     private async Task<Dictionary<string, (string Name, string Title)>> LoadActiveAuthoritiesAsync(CancellationToken ct)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
 
         var rows = await _db.DepartmentAuthorities
             .AsNoTracking()
@@ -342,7 +346,7 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
         string fieldName,
         Dictionary<string, (string Name, string Title)>? authorities)
     {
-        var now = DateTime.Now;
+        var now = _clock.Now;
 
         // Leer config institucional (sección InstitutionalConfig en appsettings.json) — fallback
         // cuando no hay una autoridad activa registrada en HR.tbl_DepartmentAuthorities.

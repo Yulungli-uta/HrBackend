@@ -5,6 +5,7 @@ using WsUtaSystem.Data;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Models;
 using WsUtaSystem.Models.Guards;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories.Guards;
 
@@ -196,7 +197,13 @@ public class EmployeeAvailabilityBlockRepository
     : ServiceAwareEfRepository<EmployeeAvailabilityBlock, int>, IEmployeeAvailabilityBlockRepository
 {
     private readonly AppDbContext _db;
-    public EmployeeAvailabilityBlockRepository(AppDbContext db) : base(db) => _db = db;
+    private readonly IAppClock _clock;
+
+    public EmployeeAvailabilityBlockRepository(AppDbContext db, IAppClock clock) : base(db)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<List<EmployeeAvailabilityBlock>> GetActiveBlocksAsync(int employeeId, DateTime startDateTime, DateTime endDateTime, CancellationToken ct) =>
         await _db.EmployeeAvailabilityBlocks
@@ -235,7 +242,7 @@ public class EmployeeAvailabilityBlockRepository
         {
             block.StatusTypeId = cancelledTypeId;
             block.UpdatedBy = updatedBy;
-            block.UpdatedAt = DateTime.UtcNow;
+            block.UpdatedAt = _clock.Now;
         }
 
         await _db.SaveChangesAsync(ct);

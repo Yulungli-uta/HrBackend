@@ -19,10 +19,14 @@ public class AttendancePunchesService : Service<AttendancePunches, int>, IAttend
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, SemaphoreSlim> EmployeeGates = new();
     //private readonly EmailTemplatesOptions _emailTemplates;
 
+    private readonly IAppClock _clock;
+
     public AttendancePunchesService(IAttendancePunchesRepository repo, IEmailBuilder emailBuilder, ICurrentUserService currentUser,
         IPunchAccessPolicyService accessPolicy,
         //IOptions<EmailTemplatesOptions> emailTemplates,
-        ILogger<AttendancePunchesService> logger) : base(repo) {        
+        ILogger<AttendancePunchesService> logger,
+        IAppClock clock) : base(repo) {        
+        _clock = clock;
         _repository = repo;
         _emailBuilder = emailBuilder;
         _currentUser = currentUser;
@@ -89,7 +93,7 @@ public class AttendancePunchesService : Service<AttendancePunches, int>, IAttend
         try
         {
             // La hora la define el servidor (el cliente no puede adelantarla ni atrasarla).
-            var now = DateTime.Now;
+            var now = _clock.Now;
             now = now.AddTicks(-(now.Ticks % TimeSpan.TicksPerSecond));
 
             // Intervalo mínimo entre picadas (el trigger de BD que lo hacía está deshabilitado a propósito).

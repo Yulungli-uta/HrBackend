@@ -4,6 +4,7 @@ using WsUtaSystem.Application.DTOs.Documents.GeneratedDocuments;
 using WsUtaSystem.Application.Interfaces.Repositories.Documents;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories.Documents;
 
@@ -19,8 +20,11 @@ public sealed class GeneratedDocumentRepository : IGeneratedDocumentRepository
 {
     private readonly AppDbContext _db;
 
-    public GeneratedDocumentRepository(AppDbContext db)
+    private readonly IAppClock _clock;
+
+    public GeneratedDocumentRepository(AppDbContext db, IAppClock clock)
     {
+        _clock = clock;
         _db = db ?? throw new ArgumentNullException(nameof(db));
     }
 
@@ -205,7 +209,7 @@ public sealed class GeneratedDocumentRepository : IGeneratedDocumentRepository
             .ExecuteUpdateAsync(s => s
                 .SetProperty(d => d.Status, status)
                 .SetProperty(d => d.Notes, notes)
-                .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
+                .SetProperty(d => d.UpdatedAt, _clock.Now),
             ct);
     }
 
@@ -216,9 +220,9 @@ public sealed class GeneratedDocumentRepository : IGeneratedDocumentRepository
             .Where(d => d.DocumentId == documentId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(d => d.IsSigned, true)
-                .SetProperty(d => d.SignedAt, DateTime.UtcNow)
+                .SetProperty(d => d.SignedAt, _clock.Now)
                 .SetProperty(d => d.SignedBy, signedBy)
-                .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
+                .SetProperty(d => d.UpdatedAt, _clock.Now),
             ct);
     }
 
@@ -229,11 +233,11 @@ public sealed class GeneratedDocumentRepository : IGeneratedDocumentRepository
             .Where(d => d.DocumentId == documentId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(d => d.IsApproved, true)
-                .SetProperty(d => d.ApprovedAt, DateTime.UtcNow)
+                .SetProperty(d => d.ApprovedAt, _clock.Now)
                 .SetProperty(d => d.ApprovedBy, approvedBy)
                 .SetProperty(d => d.Status, "APPROVED")
                 .SetProperty(d => d.Notes, notes)
-                .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
+                .SetProperty(d => d.UpdatedAt, _clock.Now),
             ct);
     }
 
@@ -245,7 +249,7 @@ public sealed class GeneratedDocumentRepository : IGeneratedDocumentRepository
             .ExecuteUpdateAsync(s => s
                 .SetProperty(d => d.StoredFileId, storedFileId)
                 .SetProperty(d => d.FileName, fileName)
-                .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
+                .SetProperty(d => d.UpdatedAt, _clock.Now),
             ct);
     }
 
@@ -257,7 +261,7 @@ public sealed class GeneratedDocumentRepository : IGeneratedDocumentRepository
             .ExecuteUpdateAsync(s => s
                 .SetProperty(d => d.TemplateVersion, templateVersion)
                 .SetProperty(d => d.HtmlSnapshot, htmlSnapshot)
-                .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
+                .SetProperty(d => d.UpdatedAt, _clock.Now),
             ct);
     }
 }

@@ -29,15 +29,18 @@ public class JustificationsService : Service<PunchJustifications, int>, IJustifi
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    private readonly IAppClock _clock;
+
     public JustificationsService(
         IPunchJustificationsRepository repo,
         AppDbContext db,
         IEmailBuilder emailBuilder,
         ICurrentUserService currentUser,
         IvwEmployeeDetailsService employeeDetails,
-        ILogger<JustificationsService> logger
-    ) : base(repo)
+        ILogger<JustificationsService> logger,
+        IAppClock clock) : base(repo)
     {
+        _clock = clock;
         _repository = repo ?? throw new ArgumentNullException(nameof(repo));
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _emailBuilder = emailBuilder ?? throw new ArgumentNullException(nameof(emailBuilder));
@@ -82,7 +85,7 @@ public class JustificationsService : Service<PunchJustifications, int>, IJustifi
 
             entity.Status = NormalizeStatus(entity.Status);
             entity.Approved = entity.Status == "APPROVED";
-            entity.CreatedAt ??= DateTime.Now;
+            entity.CreatedAt ??= _clock.Now;
 
             created = await base.CreateAsync(entity, ct);
 

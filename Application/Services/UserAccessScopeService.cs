@@ -22,8 +22,11 @@ public class UserAccessScopeService : IUserAccessScopeService
     private readonly IUserAccessScopeRepository _repository;
     private readonly AppDbContext _db;
 
-    public UserAccessScopeService(IUserAccessScopeRepository repository, AppDbContext db)
+    private readonly IAppClock _clock;
+
+    public UserAccessScopeService(IUserAccessScopeRepository repository, AppDbContext db, IAppClock clock)
     {
+        _clock = clock;
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _db = db ?? throw new ArgumentNullException(nameof(db));
     }
@@ -51,7 +54,7 @@ public class UserAccessScopeService : IUserAccessScopeService
     {
         ValidateScopeDepartmentConsistency(dto.ScopeTypeId, dto.DepartmentId);
 
-        var now = DateTime.Now;
+        var now = _clock.Now;
         var existing = await _db.UserAccessScopes
             .FirstOrDefaultAsync(s => s.EmployeeId == dto.EmployeeId
                                    && s.ModuleTypeId == dto.ModuleTypeId
@@ -219,7 +222,7 @@ public class UserAccessScopeService : IUserAccessScopeService
             NewDepartmentId = newDepartmentId,
             ChangedBy = changedBy,
             ChangeReason = reason,
-            ChangeDateTime = DateTime.Now,
+            ChangeDateTime = _clock.Now,
         }, ct);
     }
 

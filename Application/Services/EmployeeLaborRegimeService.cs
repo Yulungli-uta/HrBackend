@@ -21,8 +21,11 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
     private readonly IEmployeeLaborRegimeRepository _repository;
     private readonly AppDbContext _db;
 
-    public EmployeeLaborRegimeService(IEmployeeLaborRegimeRepository repository, AppDbContext db)
+    private readonly IAppClock _clock;
+
+    public EmployeeLaborRegimeService(IEmployeeLaborRegimeRepository repository, AppDbContext db, IAppClock clock)
     {
+        _clock = clock;
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _db = db ?? throw new ArgumentNullException(nameof(db));
     }
@@ -77,7 +80,7 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
             IsActive = true,
             IngresoPorConcurso = dto.IngresoPorConcurso,
             CreatedBy = changedBy,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
         };
 
         _db.EmployeeLaborRegimes.Add(entity);
@@ -97,7 +100,7 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
         entity.EffectiveTo = dto.EffectiveTo;
         entity.IsPrincipal = false;
         entity.UpdatedBy = changedBy;
-        entity.UpdatedAt = DateTime.Now;
+        entity.UpdatedAt = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
 
@@ -113,7 +116,7 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
 
         entity.IngresoPorConcurso = dto.IngresoPorConcurso;
         entity.UpdatedBy = changedBy;
-        entity.UpdatedAt = DateTime.Now;
+        entity.UpdatedAt = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
 
@@ -156,7 +159,7 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
 
             regime.IsPrincipal = shouldBePrincipal;
             regime.UpdatedBy = changedBy;
-            regime.UpdatedAt = DateTime.Now;
+            regime.UpdatedAt = _clock.Now;
         }
 
         await _db.SaveChangesAsync(ct);

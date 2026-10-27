@@ -4,6 +4,7 @@ using WsUtaSystem.Application.DTOs.ResignationRetirement;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
+using WsUtaSystem.Application.Interfaces.Services;
 
 // ReSharper disable MethodHasAsyncOverload
 
@@ -24,8 +25,11 @@ public sealed class ResignationRetirementRepository : IResignationRetirementRepo
 
     private readonly AppDbContext _db;
 
-    public ResignationRetirementRepository(AppDbContext db)
+    private readonly IAppClock _clock;
+
+    public ResignationRetirementRepository(AppDbContext db, IAppClock clock)
     {
+        _clock = clock;
         _db = db ?? throw new ArgumentNullException(nameof(db));
     }
 
@@ -140,9 +144,9 @@ public sealed class ResignationRetirementRepository : IResignationRetirementRepo
             .SumAsync(t => (int?)t.VacationAvailableMin, ct) ?? 0;
         var vacationDays = Math.Round(vacationMinutes / 480m, 1); // jornada de 8h = 480min
 
-        var serviceSpan = DateOnly.FromDateTime(DateTime.Today).DayNumber - employee.HireDate.DayNumber;
+        var serviceSpan = _clock.Today.DayNumber - employee.HireDate.DayNumber;
         var serviceDate = employee.HireDate.AddDays(0);
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         var years = today.Year - employee.HireDate.Year;
         var months = today.Month - employee.HireDate.Month;
         if (today.Day < employee.HireDate.Day) months--;

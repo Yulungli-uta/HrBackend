@@ -3,6 +3,7 @@ using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Data;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Models;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories
 {
@@ -10,8 +11,11 @@ namespace WsUtaSystem.Infrastructure.Repositories
     {
         private readonly AppDbContext _db;
 
-        public TimePlanningRepository(AppDbContext db) : base(db)
+        private readonly IAppClock _clock;
+
+        public TimePlanningRepository(AppDbContext db, IAppClock clock) : base(db)
         {
+            _clock = clock;
             _db = db;
         }
 
@@ -72,10 +76,10 @@ namespace WsUtaSystem.Infrastructure.Repositories
             if (approvedBy.HasValue)
             {
                 planning.ApprovedBy = approvedBy;
-                planning.ApprovedAt = DateTime.Now;
+                planning.ApprovedAt = _clock.Now;
             }
 
-            planning.UpdatedAt = DateTime.Now;
+            planning.UpdatedAt = _clock.Now;
 
             return await _db.SaveChangesAsync(ct) > 0;
         }

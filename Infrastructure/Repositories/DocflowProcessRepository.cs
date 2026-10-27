@@ -4,6 +4,7 @@ using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Data;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Models.Docflow;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories
 {
@@ -15,8 +16,11 @@ namespace WsUtaSystem.Infrastructure.Repositories
     {
         private readonly AppDbContext _db;
 
-        public DocflowProcessRepository(AppDbContext db) : base(db)
+        private readonly IAppClock _clock;
+
+        public DocflowProcessRepository(AppDbContext db, IAppClock clock) : base(db)
         {
+            _clock = clock;
             _db = db ?? throw new ArgumentNullException(nameof(db));
         }
 
@@ -69,7 +73,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
                 ?? throw new KeyNotFoundException($"Proceso con ID {processId} no encontrado.");
 
             proc.DynamicFieldMetadata = json;
-            proc.UpdatedAt = DateTime.Now;
+            proc.UpdatedAt = _clock.Now;
 
             await _db.SaveChangesAsync(ct);
         }

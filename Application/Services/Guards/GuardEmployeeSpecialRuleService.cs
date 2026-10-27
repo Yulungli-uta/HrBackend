@@ -6,6 +6,7 @@ using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models.Guards;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Application.Services.Guards;
 
@@ -15,11 +16,15 @@ public class GuardEmployeeSpecialRuleService : IGuardEmployeeSpecialRuleService
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
 
+    private readonly IAppClock _clock;
+
     public GuardEmployeeSpecialRuleService(
         IGuardEmployeeSpecialRuleRepository repo,
         AppDbContext db,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IAppClock clock)
     {
+        _clock = clock;
         _repo = repo;
         _db = db;
         _currentUser = currentUser;
@@ -114,7 +119,7 @@ public class GuardEmployeeSpecialRuleService : IGuardEmployeeSpecialRuleService
             RequiresApproval = dto.RequiresApproval,
             IsActive = true,
             CreatedBy = userId,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = _clock.Now
         };
 
         await _repo.AddAsync(entity, ct);
@@ -145,7 +150,7 @@ public class GuardEmployeeSpecialRuleService : IGuardEmployeeSpecialRuleService
         entity.RequiresApproval = dto.RequiresApproval;
         entity.IsActive = dto.IsActive;
         entity.UpdatedBy = userId;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
 

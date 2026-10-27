@@ -78,6 +78,8 @@ public class ContractsService : Service<Contracts, int>, IContractsService
     private readonly ITramiteRequirementsService _tramiteRequirements;
     private readonly ISalaryHistoryService _salaryHistory;
 
+    private readonly IAppClock _clock;
+
     public ContractsService(
         IContractsRepository repo,
         AppDbContext db,
@@ -95,9 +97,10 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         IEmployeeLaborRegimeService laborRegimeService,
         IPersonnelMovementsService movementsService,
         ITramiteRequirementsService tramiteRequirements,
-        ISalaryHistoryService salaryHistory
-    ) : base(repo)
+        ISalaryHistoryService salaryHistory,
+        IAppClock clock) : base(repo)
     {
+        _clock = clock;
         _repository                = repo                       ?? throw new ArgumentNullException(nameof(repo));
         _db                        = db                         ?? throw new ArgumentNullException(nameof(db));
         _emailBuilder              = emailBuilder               ?? throw new ArgumentNullException(nameof(emailBuilder));
@@ -259,7 +262,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
 
         if (isHistoricalEntry)
         {
-            var today = DateTime.Today;
+            var today = _clock.Today.ToDateTime(TimeOnly.MinValue);
             if (entity.StartDate >= today)
                 throw new ArgumentException("Un contrato histórico debe tener fecha de inicio anterior a hoy.");
             if (entity.EndDate.Year < 9999 && entity.EndDate >= today)
@@ -320,7 +323,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         if (string.IsNullOrWhiteSpace(entity.ContractCode))
         {
             var (docNumber, _, _) = await _contractTypeRepository
-                .ConsumeNextNumberAsync(entity.ContractTypeID, DateTime.Now.Year, ct);
+                .ConsumeNextNumberAsync(entity.ContractTypeID, _clock.Now.Year, ct);
             entity.ContractCode = docNumber;
         }
 
@@ -417,7 +420,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
                 MovementTypeId = movementTypeId,
                 IsActive = true,
                 CreatedBy = _currentUser.EmployeeId,
-                CreatedAt = DateTime.Now,
+                CreatedAt = _clock.Now,
             }, ct);
         }
         catch (Exception ex)
@@ -522,7 +525,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         if (request is null) return;
 
         request.TotalPeopleHired++;
-        request.UpdatedAt = DateTime.Now;
+        request.UpdatedAt = _clock.Now;
 
         var newStatusName = request.TotalPeopleHired >= request.NumberOfPeopleToHire
             ? "COMPLETADO"
@@ -648,7 +651,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             StatusTypeID = toStatusTypeId,
             Comment = comment,
             ChangedBy = changedBy,
-            ChangedAt = DateTime.Now
+            ChangedAt = _clock.Now
         });
 
         await Task.CompletedTask;
@@ -768,7 +771,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
                     .Where(d => d.DocumentId == generatedDocId.Value)
                     .ExecuteUpdateAsync(s => s
                         .SetProperty(d => d.EmployeeId, result.EmployeeId.Value)
-                        .SetProperty(d => d.UpdatedAt, DateTime.UtcNow),
+                        .SetProperty(d => d.UpdatedAt, _clock.Now),
                     ct);
 
                 _logger.LogInformation(
@@ -1059,7 +1062,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         // Fecha de suscripción en palabras (autorización del contrato, o hoy si aún no se autoriza).
         // CONTRATO_PROFESOR_OCASIONAL usa CONTRACT_DATE_DAY_WORDS/CONTRACT_DATE_MONTH/CONTRACT_DATE_YEAR_WORDS
         // en vez de DATE_DAY_WORDS/DATE_MONTH_NAME/DATE_YEAR_WORDS; se escriben ambos nombres.
-        var subscriptionDate = contract.AuthorizationDate ?? DateTime.Now;
+        var subscriptionDate = contract.AuthorizationDate ?? _clock.Now;
         var dayWords   = SpanishTextHelper.DayToWords(subscriptionDate);
         var monthName  = SpanishTextHelper.MonthName(subscriptionDate);
         var yearWords  = SpanishTextHelper.YearToWords(subscriptionDate);
@@ -1072,7 +1075,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
 
         // CONTRATO_PROFESOR_OCASIONAL usa DTH_REGISTRY_DATE_LONG (formato largo en palabras) en vez
         // de DTH_REGISTRY_DATE (formato corto); se escriben ambos.
-        var registryNow = DateTime.Now;
+        var registryNow = _clock.Now;
         SetOv(mergedOverrides, "DTH_REGISTRY_DATE", SpanishTextHelper.ShortDate(registryNow));
         SetOv(mergedOverrides, "DTH_REGISTRY_DATE_LONG",
             $"{registryNow.Day} de {SpanishTextHelper.MonthName(registryNow)} de {registryNow.Year}");
@@ -1160,7 +1163,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         // en vez de hardcodear nombres/resoluciones.
         if (contract.IsDelegation && contract.AuthorityNominatorId.HasValue)
         {
-            var today = DateOnly.FromDateTime(DateTime.Today);
+            var today = _clock.Today;
             var delegateAuthority = await _db.DepartmentAuthorities
                 .AsNoTracking()
                 .Include(a => a.Employee).ThenInclude(e => e!.People)
@@ -1274,7 +1277,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         contract.TemplateVersionUsed = ParseTemplateVersion(template.Version);
         contract.IsDocumentFrozen = true;
         contract.Status = generatedStatusId;
-        contract.UpdatedAt = DateTime.Now;
+        contract.UpdatedAt = _clock.Now;
         contract.UpdatedBy = generatedBy > 0 ? generatedBy : null;
 
         await _db.SaveChangesAsync(ct);
@@ -1349,7 +1352,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         // debe anular a su padre, aprovisionar AD, ni quedar marcado VIGENTE. Esto también
         // cubre, de forma correcta, un contrato normal cuyo papeleo se cargó tarde y para
         // entonces ya venció.
-        var alreadyEnded = contract.EndDate < DateTime.Today;
+        var alreadyEnded = contract.EndDate < _clock.Today.ToDateTime(TimeOnly.MinValue);
 
         // 2026-07-06: un adendum firmado y cargado anula automáticamente a su
         // contrato padre — la cadena de vigencia pasa siempre al adendum más
@@ -1464,7 +1467,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
 
         var statusId = await GetContractStatusIdAsync(StatusAnulado, ct);
         contract.Status    = statusId;
-        contract.UpdatedAt = DateTime.Now;
+        contract.UpdatedAt = _clock.Now;
         contract.UpdatedBy = updatedBy > 0 ? updatedBy : null;
         await _db.SaveChangesAsync(ct);
 
@@ -1493,7 +1496,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         var statusId = await GetContractStatusIdAsync(statusName, ct);
 
         contract.Status = statusId;
-        contract.UpdatedAt = DateTime.Now;
+        contract.UpdatedAt = _clock.Now;
         contract.UpdatedBy = updatedBy > 0 ? updatedBy : null;
 
         // Auditoría: registrar el cambio de estado en el historial
@@ -1503,7 +1506,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             StatusTypeID = statusId,
             Comment     = comment,
             ChangedBy   = updatedBy > 0 ? updatedBy : _currentUser.EmployeeId,
-            ChangedAt   = DateTime.Now,
+            ChangedAt   = _clock.Now,
         });
 
         await _db.SaveChangesAsync(ct);
@@ -1542,7 +1545,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         var anuladoId = await GetContractStatusIdAsync(StatusAnulado, ct);
 
         parent.Status = anuladoId;
-        parent.UpdatedAt = DateTime.Now;
+        parent.UpdatedAt = _clock.Now;
         parent.UpdatedBy = updatedBy > 0 ? updatedBy : null;
 
         _db.ContractStatusHistories.Add(new ContractStatusHistory
@@ -1551,7 +1554,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             StatusTypeID = anuladoId,
             Comment      = $"Anulado automáticamente por adendum ContractID={addendumContractId}.",
             ChangedBy    = updatedBy > 0 ? updatedBy : _currentUser.EmployeeId,
-            ChangedAt    = DateTime.Now,
+            ChangedAt    = _clock.Now,
         });
 
         await _db.SaveChangesAsync(ct);
@@ -1684,7 +1687,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
 
             person.IsHired    = false;
             person.ContractId = null;
-            person.UpdatedAt  = DateTime.Now;
+            person.UpdatedAt  = _clock.Now;
             person.UpdatedBy  = _currentUser.EmployeeId;
 
             if (pendientePersonStatusId.HasValue)
@@ -1718,7 +1721,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         }
 
         contractRequest.TotalPeopleHired = Math.Max(0, contractRequest.TotalPeopleHired - 1);
-        contractRequest.UpdatedAt = DateTime.Now;
+        contractRequest.UpdatedAt = _clock.Now;
 
         // Nuevo estado según contadores
         var newRequestStatusName = contractRequest.TotalPeopleHired <= 0
@@ -1788,7 +1791,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         // Si la persona seleccionada tiene una autoridad institucional vigente (Rector,
         // Vicerrector, Decano, etc.), su denominación de autoridad prevalece sobre el
         // cargo genérico de HR.tbl_Employees.JobId.
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = _clock.Today;
         var authorityDenomination = await _db.DepartmentAuthorities.AsNoTracking()
             .Where(a => a.EmployeeId == employeeId.Value
                 && a.IsActive

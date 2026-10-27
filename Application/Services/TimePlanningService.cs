@@ -14,12 +14,15 @@ namespace WsUtaSystem.Application.Services
         private readonly ITimePlanningEmployeeService _timePlanningEmployeeService;
         private readonly AppDbContext _db;
 
+        private readonly IAppClock _clock;
+
         public TimePlanningService(
             ITimePlanningRepository repo,
             ITimePlanningEmployeeService timePlanningEmployeeService,
-            AppDbContext db
-        ) : base(repo)
+            AppDbContext db,
+            IAppClock clock) : base(repo)
         {
+            _clock = clock;
             _repository = repo;
             _timePlanningEmployeeService = timePlanningEmployeeService;
             _db = db;
@@ -236,7 +239,7 @@ namespace WsUtaSystem.Application.Services
             }
         }
 
-        private static void NormalizeEmployeeDetail(TimePlanningEmployee employee, TimePlanning createdPlan)
+        private void NormalizeEmployeeDetail(TimePlanningEmployee employee, TimePlanning createdPlan)
         {
             employee.PlanEmployeeID = 0;
             employee.PlanID = createdPlan.PlanID;
@@ -245,7 +248,7 @@ namespace WsUtaSystem.Application.Services
             employee.ActualHours ??= 0m;
             employee.ActualMinutes ??= 0;
             employee.IsEligible = true;
-            employee.CreatedAt = DateTime.Now;
+            employee.CreatedAt = _clock.Now;
         }
 
         private static void ValidateDuplicatedEmployeesInRequest(IEnumerable<TimePlanningEmployee> employees)

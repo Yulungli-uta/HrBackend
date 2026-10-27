@@ -2,6 +2,7 @@
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Models;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories
 {
@@ -9,8 +10,11 @@ namespace WsUtaSystem.Infrastructure.Repositories
     {
         private readonly DbContext _db;
 
-        public StoredFileRepository(WsUtaSystem.Data.AppDbContext db) : base(db)
+        private readonly IAppClock _clock;
+
+        public StoredFileRepository(WsUtaSystem.Data.AppDbContext db, IAppClock clock) : base(db)
         {
+            _clock = clock;
             _db = db;
         }
 
@@ -51,7 +55,7 @@ namespace WsUtaSystem.Infrastructure.Repositories
             if (entity is null) return;
 
             entity.Status = 2; // Deleted
-            entity.DeletedAt = DateTime.Now; // o DateTime.Now si tu sistema usa local time
+            entity.DeletedAt = _clock.Now; // o _clock.Now si tu sistema usa local time
             entity.DeletedBy = deletedBy;
 
             await _db.SaveChangesAsync(ct);

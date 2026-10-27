@@ -3,6 +3,7 @@ using Microsoft.Data.SqlClient;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Models;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories.Reports;
 
@@ -14,10 +15,14 @@ public class ReportAuditRepository
     private readonly string _connectionString;
     private readonly IRepository<ReportAudit, int> _reportAuditRepository;
 
+    private readonly IAppClock _clock;
+
     public ReportAuditRepository(
         IConfiguration configuration,
-        IRepository<ReportAudit, int> reportAuditRepository)
+        IRepository<ReportAudit, int> reportAuditRepository,
+        IAppClock clock)
     {
+        _clock = clock;
         _connectionString = configuration.GetConnectionString("SqlServerConn")
             ?? throw new InvalidOperationException("Connection string 'ConnectionStrings' not found.");
         _reportAuditRepository = reportAuditRepository;
@@ -58,7 +63,7 @@ public class ReportAuditRepository
             ReportType = audit.ReportType,
             ReportFormat = audit.ReportFormat,
             FiltersApplied = audit.FiltersApplied,
-            GeneratedAt = DateTime.UtcNow,
+            GeneratedAt = _clock.Now,
             FileSizeBytes = audit.FileSizeBytes,
             GenerationTimeMs = audit.GenerationTimeMs,
             ClientIp = audit.ClientIp,

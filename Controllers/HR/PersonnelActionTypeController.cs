@@ -15,8 +15,11 @@ public sealed class PersonnelActionTypeController : ControllerBase
     private readonly IPersonnelActionTypeService _svc;
     private readonly IMapper _mapper;
 
-    public PersonnelActionTypeController(IPersonnelActionTypeService svc, IMapper mapper)
+    private readonly IAppClock _clock;
+
+    public PersonnelActionTypeController(IPersonnelActionTypeService svc, IMapper mapper, IAppClock clock)
     {
+        _clock = clock;
         _svc = svc;
         _mapper = mapper;
     }
@@ -113,7 +116,7 @@ public sealed class PersonnelActionTypeController : ControllerBase
         [FromBody] PersonnelActionTypeCreateDto dto, CancellationToken ct)
     {
         var entity = _mapper.Map<PersonnelActionType>(dto);
-        entity.NumberingYear = DateTime.Now.Year;
+        entity.NumberingYear = _clock.Now.Year;
         entity.NumberingLastSequence = 0;
         var created = await _svc.CreateAsync(entity, ct);
         return CreatedAtAction(nameof(GetById),

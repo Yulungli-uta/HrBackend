@@ -32,7 +32,7 @@ public class StudentProvisioning
 
     public DateTime? ProvisionedAt { get; set; }
     public DateTime? DisabledAt { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
     public DateTime? UpdatedAt { get; set; }
 
     public virtual Students? Student { get; set; }

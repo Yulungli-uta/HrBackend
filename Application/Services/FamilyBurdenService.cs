@@ -24,14 +24,18 @@ public class FamilyBurdenService : Service<FamilyBurden, int>, IFamilyBurdenServ
     private readonly ITramiteRequirementsService _tramiteRequirements;
     private readonly WsUtaSystem.Data.AppDbContext _db;
 
+    private readonly IAppClock _clock;
+
     public FamilyBurdenService(
         IFamilyBurdenRepository repo,
         IFileManagementService fileManagement,
         TransactionalDocumentRepository txRepo,
         IPeopleService people,
         ITramiteRequirementsService tramiteRequirements,
-        WsUtaSystem.Data.AppDbContext db) : base(repo)
+        WsUtaSystem.Data.AppDbContext db,
+        IAppClock clock) : base(repo)
     {
+        _clock = clock;
         _repository = repo;
         _fileManagement = fileManagement;
         _txRepo = txRepo;
@@ -147,7 +151,7 @@ public class FamilyBurdenService : Service<FamilyBurden, int>, IFamilyBurdenServ
             ?? throw new KeyNotFoundException($"Carga familiar {burdenId} no encontrada.");
 
         entity.StatusTypeId = await ResolveRefTypeIdAsync(StatusCategory, "APROBADO", ct);
-        entity.ApprovedAt = DateTime.UtcNow;
+        entity.ApprovedAt = _clock.Now;
         entity.ApprovedBy = approvedByEmployeeId;
         entity.RejectedAt = null;
         entity.RejectedBy = null;
@@ -165,7 +169,7 @@ public class FamilyBurdenService : Service<FamilyBurden, int>, IFamilyBurdenServ
             ?? throw new KeyNotFoundException($"Carga familiar {burdenId} no encontrada.");
 
         entity.StatusTypeId = await ResolveRefTypeIdAsync(StatusCategory, "RECHAZADO", ct);
-        entity.RejectedAt = DateTime.UtcNow;
+        entity.RejectedAt = _clock.Now;
         entity.RejectedBy = rejectedByEmployeeId;
         entity.RejectionReason = reason.Trim();
         entity.ApprovedAt = null;

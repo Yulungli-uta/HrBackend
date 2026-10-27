@@ -15,7 +15,9 @@ public class RefTypesController : ControllerBase
 {
     private readonly IRefTypesService _svc;
     private readonly IMapper _mapper;
-    public RefTypesController(IRefTypesService svc, IMapper mapper) { _svc = svc; _mapper = mapper; }
+    private readonly IAppClock _clock;
+
+    public RefTypesController(IRefTypesService svc, IMapper mapper, IAppClock clock) { _svc = svc; _mapper = mapper; _clock = clock; }
 
     /// <summary>Lista todos los registros de RefTypes.</summary>
     [HttpGet]
@@ -57,7 +59,7 @@ public class RefTypesController : ControllerBase
     public async Task<IActionResult> Create([FromBody] RefTypesCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<RefTypes>(dto);
-        entityObj.CreatedAt = DateTime.Now;
+        entityObj.CreatedAt = _clock.Now;
         var created = await _svc.CreateAsync(entityObj, ct);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<RefTypesDto>(created));

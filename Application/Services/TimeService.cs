@@ -7,10 +7,12 @@ namespace WsUtaSystem.Application.Services
     {
         private readonly ILogger<TimeService> _logger;
         private readonly string _serverName;
+        private readonly IAppClock _clock;
 
-        public TimeService(ILogger<TimeService> logger, IConfiguration configuration)
+        public TimeService(ILogger<TimeService> logger, IConfiguration configuration, IAppClock clock)
         {
             _logger = logger;
+            _clock = clock;
             _serverName = configuration["ServerName"] ?? Environment.MachineName;
         }
 
@@ -18,12 +20,12 @@ namespace WsUtaSystem.Application.Services
         {
             _logger.LogDebug("Getting current server time");
 
-            var now = DateTime.Now;
+            var now = _clock.Now;
             return new TimeResponse
             {
                 DateTime = now,
-                Timestamp = ((DateTimeOffset)now).ToUnixTimeSeconds(),
-                TimeZone = TimeZoneInfo.Local.Id,
+                Timestamp = _clock.NowOffset.ToUnixTimeSeconds(),
+                TimeZone = _clock.Zone.Id,
                 FormattedTime = now.ToString("yyyy-MM-dd HH:mm:ss"),
                 IsUtc = false,
                 ServerName = _serverName
@@ -34,13 +36,13 @@ namespace WsUtaSystem.Application.Services
         {
             _logger.LogDebug("Getting current UTC time");
 
-            var now = DateTime.Now;
+            var utcNow = _clock.UtcNow;
             return new TimeResponse
             {
-                DateTime = now,
-                Timestamp = ((DateTimeOffset)now).ToUnixTimeSeconds(),
+                DateTime = utcNow.UtcDateTime,
+                Timestamp = utcNow.ToUnixTimeSeconds(),
                 TimeZone = "UTC",
-                FormattedTime = now.ToString("yyyy-MM-dd HH:mm:ss"),
+                FormattedTime = utcNow.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 IsUtc = true,
                 ServerName = _serverName
             };
@@ -53,15 +55,14 @@ namespace WsUtaSystem.Application.Services
             try
             {
                 var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-                var utcNow = DateTime.Now;
-                var zonedTime = TimeZoneInfo.ConvertTimeFromUtc(utcNow, timeZone);
+                var zonedTime = TimeZoneInfo.ConvertTime(_clock.UtcNow, timeZone);
 
                 return new TimeResponse
                 {
-                    DateTime = zonedTime,
-                    Timestamp = ((DateTimeOffset)zonedTime).ToUnixTimeSeconds(),
+                    DateTime = zonedTime.DateTime,
+                    Timestamp = zonedTime.ToUnixTimeSeconds(),
                     TimeZone = timeZoneId,
-                    FormattedTime = zonedTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                    FormattedTime = zonedTime.DateTime.ToString("yyyy-MM-dd HH:mm:ss"),
                     IsUtc = false,
                     ServerName = _serverName
                 };

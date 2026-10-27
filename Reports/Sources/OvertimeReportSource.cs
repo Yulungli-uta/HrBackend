@@ -118,7 +118,7 @@ public sealed class OvertimeReportSource : IReportSource
             FilePrefix  = "Reporte_Horas_Extras",
             Subtitle    = subtitle,
             GeneratedBy = userName,
-            GeneratedAt = DateTime.UtcNow,
+            GeneratedAt = DateTime.Now,
             Columns     = Columns,
             Rows        = rows,
             Orientation = filter.GetPageOrientation() ?? PageOrientation.Landscape,

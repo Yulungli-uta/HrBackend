@@ -23,7 +23,7 @@ public static class QuartzConfiguration
         {
             q.UseMicrosoftDependencyInjectionJobFactory();
 
-            const string timeZone = "America/Guayaquil";
+            var timeZone = configuration["Time:ZoneId"] ?? "America/Guayaquil";
 
             // ========================================
             // JOBS DIARIOS DE ASISTENCIA

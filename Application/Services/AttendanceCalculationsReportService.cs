@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;

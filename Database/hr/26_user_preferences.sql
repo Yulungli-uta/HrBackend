@@ -8,8 +8,8 @@ BEGIN
         UserId           UNIQUEIDENTIFIER  NOT NULL,
         SchemaVersion    SMALLINT          NOT NULL CONSTRAINT DF_tbl_UserPreferences_SchemaVersion DEFAULT (1),
         PreferencesJson  NVARCHAR(4000)    NOT NULL,
-        CreatedAt        DATETIME2         NOT NULL CONSTRAINT DF_tbl_UserPreferences_CreatedAt DEFAULT (SYSUTCDATETIME()),
-        UpdatedAt        DATETIME2         NOT NULL CONSTRAINT DF_tbl_UserPreferences_UpdatedAt DEFAULT (SYSUTCDATETIME()),
+        CreatedAt        DATETIME2         NOT NULL CONSTRAINT DF_tbl_UserPreferences_CreatedAt DEFAULT (SYSDATETIME()),
+        UpdatedAt        DATETIME2         NOT NULL CONSTRAINT DF_tbl_UserPreferences_UpdatedAt DEFAULT (SYSDATETIME()),
         CONSTRAINT CK_tbl_UserPreferences_Json CHECK (ISJSON(PreferencesJson) = 1)
     );
     CREATE UNIQUE INDEX UX_tbl_UserPreferences_UserId ON HR.tbl_UserPreferences (UserId);

@@ -22,7 +22,7 @@ CREATE TABLE [HR].[tbl_StudentProvisioning] (
     [RequestedBy]            NVARCHAR(320)    NULL,
     [ProvisionedAt]          DATETIME2        NULL,
     [DisabledAt]             DATETIME2        NULL,
-    [CreatedAt]              DATETIME2        DEFAULT (SYSUTCDATETIME()) NOT NULL,
+    [CreatedAt]              DATETIME2        DEFAULT (SYSDATETIME()) NOT NULL,
     [UpdatedAt]              DATETIME2        NULL,
     CONSTRAINT [PK_StudentProvisioning]  PRIMARY KEY ([Id]),
     CONSTRAINT [FK_StudentProv_Students] FOREIGN KEY ([StudentId])

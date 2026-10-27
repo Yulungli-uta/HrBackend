@@ -1,0 +1,15 @@
+root = true
+
+# Estándar "Fecha y hora UTA": BannedSymbols.txt prohíbe DateTime.Now/Today/UtcNow (RS0030 = error); se usa IAppClock.
+[*.cs]
+dotnet_diagnostic.RS0030.severity = error
+
+# Excepciones: contextos sin inyección de dependencias donde DateTime.Now es la hora local del servidor (Ecuador).
+#  - Reports/** y Models/**: valores por defecto de propiedades y fuentes de reportes (el renderizador necesita Kind=Local).
+#  - Migrations/**: código generado.
+[{Reports/**.cs,Models/**.cs,Migrations/**.cs}]
+dotnet_diagnostic.RS0030.severity = none
+
+# Archivos estáticos puntuales: nombres de archivo con marca de tiempo, /health, configuración EF estática, mocks y generadores con `new`.
+[{Application/Common/AuditSnapshotHelper.cs,Application/Common/FileNameGenerator.cs,Application/DTOs/Email/EmailDtos.cs,Application/Services/AcademicPromotionMockProvider.cs,Application/Services/Reports/Generators/Base/BaseExcelGenerator.cs,Application/Services/Reports/Generators/Base/BasePdfGenerator.cs,Data/ModelConfigurations/HR/ContractsConfiguration.cs,Endpoints/ReportEndpoints.cs,Infrastructure/Common/StoredFileBuilder.cs,Infrastructure/Jobs/BaseJob.cs,Program.cs}]
+dotnet_diagnostic.RS0030.severity = none

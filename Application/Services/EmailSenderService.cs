@@ -31,6 +31,8 @@ namespace WsUtaSystem.Application.Services
         private static readonly TimeSpan RenderTimeout = TimeSpan.FromSeconds(5);
         private static readonly TimeSpan UploadTimeout = TimeSpan.FromSeconds(60);
 
+        private readonly IAppClock _clock;
+
         public EmailSenderService(
             IEmailProvider provider,
             IEmailLayoutsService layoutsService,
@@ -38,8 +40,10 @@ namespace WsUtaSystem.Application.Services
             IDocumentOrchestratorService documents,
             ICurrentUserService currentUser,
             IOptions<EmailSettings> settings,
-            ILogger<EmailSenderService> logger)
+            ILogger<EmailSenderService> logger,
+            IAppClock clock)
         {
+            _clock = clock;
             _provider = provider ?? throw new ArgumentNullException(nameof(provider));
             _layoutsService = layoutsService ?? throw new ArgumentNullException(nameof(layoutsService));
             _logsService = logsService ?? throw new ArgumentNullException(nameof(logsService));
@@ -126,8 +130,8 @@ namespace WsUtaSystem.Application.Services
                 Recipient = (request.To ?? string.Empty).Trim(),
                 Subject = request.Subject ?? string.Empty,
                 BodyRendered = renderedHtml,
-                SentAt = DateTime.Now,
-                CreatedAt = DateTime.Now,
+                SentAt = _clock.Now,
+                CreatedAt = _clock.Now,
                 CreatedBy = createdBy,
                 Status = "Queued"
             };
@@ -299,7 +303,7 @@ namespace WsUtaSystem.Application.Services
                             StoredFileGuid = a.StoredFileGuid.Value,
                             FileName = file.Value.fileName,
                             ContentType = file.Value.contentType,
-                            CreatedAt = DateTime.Now,
+                            CreatedAt = _clock.Now,
                             CreatedBy = createdBy
                         });
 
@@ -370,7 +374,7 @@ namespace WsUtaSystem.Application.Services
                             StoredFileGuid = storedGuid.Value,
                             FileName = storedFile.Value.fileName,
                             ContentType = storedFile.Value.contentType,
-                            CreatedAt = DateTime.Now,
+                            CreatedAt = _clock.Now,
                             CreatedBy = createdBy
                         });
 
@@ -431,7 +435,7 @@ namespace WsUtaSystem.Application.Services
                             StoredFileGuid = storedGuid.Value,
                             FileName = storedFile.Value.fileName,
                             ContentType = storedFile.Value.contentType,
-                            CreatedAt = DateTime.Now,
+                            CreatedAt = _clock.Now,
                             CreatedBy = createdBy
                         });
                     }

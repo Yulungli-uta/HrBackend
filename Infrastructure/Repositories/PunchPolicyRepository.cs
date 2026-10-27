@@ -3,6 +3,7 @@ using WsUtaSystem.Application.DTOs.PunchPolicy;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories;
 
@@ -11,7 +12,13 @@ public sealed class PunchPolicyRepository : IPunchPolicyRepository
     private const string ModeParameterName = "PUNCH_NETWORK_MODE";
     private readonly AppDbContext _db;
 
-    public PunchPolicyRepository(AppDbContext db) => _db = db;
+    private readonly IAppClock _clock;
+
+    public PunchPolicyRepository(AppDbContext db, IAppClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     // ── Redes del campus ────────────────────────────────────────────────────
 
@@ -183,7 +190,7 @@ public sealed class PunchPolicyRepository : IPunchPolicyRepository
 
     public async Task SetModeAsync(string mode, CancellationToken ct)
     {
-        var now = DateTime.Now;
+        var now = _clock.Now;
         var updated = await _db.Parameters.Where(p => p.Name == ModeParameterName)
             .ExecuteUpdateAsync(s => s.SetProperty(p => p.Pvalues, mode).SetProperty(p => p.UpdatedAt, now), ct);
         if (updated == 0)

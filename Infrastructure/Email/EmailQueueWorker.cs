@@ -23,11 +23,15 @@ namespace WsUtaSystem.Infrastructure.Email
         private const int MaxRetries = 3;
         private static readonly TimeSpan InitialRetryDelay = TimeSpan.FromSeconds(2);
 
+        private readonly IAppClock _clock;
+
         public EmailQueueWorker(
             IBackgroundTaskQueue<EmailSendRequestDto> queue,
             IServiceScopeFactory scopeFactory,
-            ILogger<EmailQueueWorker> logger)
+            ILogger<EmailQueueWorker> logger,
+            IAppClock clock)
         {
+            _clock = clock;
             _queue = queue ?? throw new ArgumentNullException(nameof(queue));
             _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -50,7 +54,7 @@ namespace WsUtaSystem.Infrastructure.Email
                     await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
 
                     // Check if circuit should be reset
-                    if (DateTime.Now - _circuitOpenedAt >= CircuitBreakerResetTime)
+                    if (_clock.Now - _circuitOpenedAt >= CircuitBreakerResetTime)
                     {
                         ResetCircuitBreaker();
                         _logger.LogInformation("[EMAIL-WORKER] Circuit HALF-OPEN. Attempting recovery.");
@@ -220,7 +224,7 @@ namespace WsUtaSystem.Infrastructure.Email
 
             if (_consecutiveFailures >= MaxConsecutiveFailures && !_circuitOpenedAt.HasValue)
             {
-                _circuitOpenedAt = DateTime.Now;
+                _circuitOpenedAt = _clock.Now;
                 _logger.LogError(
                     "[EMAIL-WORKER] Circuit breaker OPENED after {Count} consecutive failures",
                     _consecutiveFailures);

@@ -30,9 +30,13 @@ public sealed class PunchAccessPolicyService : IPunchAccessPolicyService
     private readonly IHostEnvironment _env;
     private readonly ILogger<PunchAccessPolicyService> _logger;
 
+    private readonly IAppClock _clock;
+
     public PunchAccessPolicyService(
-        IPunchPolicyRepository repo, IMemoryCache cache, IHostEnvironment env, ILogger<PunchAccessPolicyService> logger)
+        IPunchPolicyRepository repo, IMemoryCache cache, IHostEnvironment env, ILogger<PunchAccessPolicyService> logger,
+        IAppClock clock)
     {
+        _clock = clock;
         _repo = repo;
         _cache = cache;
         _env = env;
@@ -60,7 +64,7 @@ public sealed class PunchAccessPolicyService : IPunchAccessPolicyService
 
         // Fuera del campus: solo pasa con autorización vigente del empleado.
         var policy = await _repo.GetPolicyAsync(employeeId, ct);
-        var today = DateTime.Today;
+        var today = _clock.Today.ToDateTime(TimeOnly.MinValue);
         var authorized = policy is { AllowExternalPunch: true }
             && (policy.ValidFrom is null || policy.ValidFrom.Value.Date <= today)
             && (policy.ValidTo is null || policy.ValidTo.Value.Date >= today);
@@ -86,7 +90,7 @@ public sealed class PunchAccessPolicyService : IPunchAccessPolicyService
     {
         var mode = await GetModeCachedAsync(ct);
         var policy = await _repo.GetPolicyAsync(employeeId, ct);
-        var today = DateTime.Today;
+        var today = _clock.Today.ToDateTime(TimeOnly.MinValue);
         return new PunchAccessInfoDto
         {
             Ip = clientIp,
@@ -114,7 +118,7 @@ public sealed class PunchAccessPolicyService : IPunchAccessPolicyService
             await _repo.AddLogAsync(new PunchAccessLog
             {
                 EmployeeId = employeeId,
-                AttemptedAt = DateTime.Now,
+                AttemptedAt = _clock.Now,
                 IpAddress = Truncate(ip, 64),
                 ForwardedFor = Truncate(forwardedFor, 200),
                 Result = result,
@@ -148,7 +152,7 @@ public sealed class PunchAccessPolicyService : IPunchAccessPolicyService
             IpOrCidr = normalized,
             Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim(),
             IsActive = dto.IsActive,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = userEmployeeId
         }, ct);
         InvalidateNetworks();
@@ -173,7 +177,7 @@ public sealed class PunchAccessPolicyService : IPunchAccessPolicyService
         entity.IpOrCidr = normalized;
         entity.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
         entity.IsActive = dto.IsActive;
-        entity.UpdatedAt = DateTime.Now;
+        entity.UpdatedAt = _clock.Now;
         entity.UpdatedBy = userEmployeeId;
         await _repo.UpdateNetworkAsync(entity, ct);
         InvalidateNetworks();
@@ -241,7 +245,7 @@ public sealed class PunchAccessPolicyService : IPunchAccessPolicyService
     public async Task<PagedResult<PunchPolicyItemDto>> GetPoliciesAsync(string? search, bool onlyEffective, int page, int pageSize, CancellationToken ct)
     {
         (page, pageSize) = NormalizePaging(page, pageSize);
-        var (items, total) = await _repo.GetPoliciesPagedAsync(search, onlyEffective, DateTime.Today, page, pageSize, ct);
+        var (items, total) = await _repo.GetPoliciesPagedAsync(search, onlyEffective, _clock.Today.ToDateTime(TimeOnly.MinValue), page, pageSize, ct);
         return new PagedResult<PunchPolicyItemDto> { Items = items, Page = page, PageSize = pageSize, TotalCount = total };
     }
 
@@ -256,17 +260,17 @@ public sealed class PunchAccessPolicyService : IPunchAccessPolicyService
 
         var policy = await _repo.GetPolicyAsync(employeeId, ct);
         var isNew = policy is null;
-        policy ??= new EmployeePunchPolicy { EmployeeId = employeeId, CreatedAt = DateTime.Now };
+        policy ??= new EmployeePunchPolicy { EmployeeId = employeeId, CreatedAt = _clock.Now };
 
         policy.AllowExternalPunch = dto.AllowExternalPunch;
         policy.Reason = string.IsNullOrWhiteSpace(dto.Reason) ? null : dto.Reason.Trim();
         policy.ValidFrom = dto.ValidFrom?.Date;
         policy.ValidTo = dto.ValidTo?.Date;
         policy.AuthorizedBy = authorizedBy;
-        if (!isNew) { policy.UpdatedAt = DateTime.Now; policy.UpdatedBy = authorizedBy; }
+        if (!isNew) { policy.UpdatedAt = _clock.Now; policy.UpdatedBy = authorizedBy; }
 
         await _repo.UpsertPolicyAsync(policy, ct);
-        return await _repo.GetPolicyItemAsync(employeeId, DateTime.Today, ct);
+        return await _repo.GetPolicyItemAsync(employeeId, _clock.Today.ToDateTime(TimeOnly.MinValue), ct);
     }
 
     public Task<bool> DeletePolicyAsync(int employeeId, CancellationToken ct) => _repo.DeletePolicyAsync(employeeId, ct);

@@ -10,9 +10,13 @@ namespace WsUtaSystem.Application.Services
         private readonly ITimePlanningExecutionRepository _repository;
         private readonly IHolidayService _holidayService;
 
+        private readonly IAppClock _clock;
+
         public TimePlanningExecutionService(ITimePlanningExecutionRepository repo,
-                                          IHolidayService holidayService) : base(repo)
+                                          IHolidayService holidayService,
+            IAppClock clock) : base(repo)
         {
+            _clock = clock;
             _repository = repo;
             _holidayService = holidayService;
         }
@@ -36,7 +40,7 @@ namespace WsUtaSystem.Application.Services
                 StartTime = startTime,
                 EndTime = endTime,
                 Comments = comments,
-                CreatedAt = DateTime.Now
+                CreatedAt = _clock.Now
             };
 
             execution.TotalMinutes = (int)(endTime - startTime).TotalMinutes;

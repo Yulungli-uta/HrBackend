@@ -6,6 +6,7 @@ using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models.Guards;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Application.Services.Guards;
 
@@ -23,8 +24,11 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         "Guardia", "Guardián", "Guardián/Guardián Administrativo", "Guardias de Seguridad", "Supervisor"
     };
 
-    public GuardRotationGroupService(IGuardRotationGroupRepository repo, AppDbContext db)
+    private readonly IAppClock _clock;
+
+    public GuardRotationGroupService(IGuardRotationGroupRepository repo, AppDbContext db, IAppClock clock)
     {
+        _clock = clock;
         _repo = repo;
         _db = db;
     }
@@ -40,7 +44,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                       && ge.IsActive
                       && ge.GroupId != excludeGroupId
                       && ge.Group!.IsActive
-                      && (ge.ValidTo == null || ge.ValidTo >= DateOnly.FromDateTime(DateTime.Today)))
+                      && (ge.ValidTo == null || ge.ValidTo >= _clock.Today))
             .Select(ge => ge.Group!.Name)
             .Distinct()
             .ToListAsync(ct);
@@ -313,7 +317,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
                 $"Ya existe un grupo activo con el código \"{dto.NewGroupCode}\". Elige otro código.");
         }
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         foreach (var emp in baseGroup.Employees)
         {
             await _db.GuardRotationGroupEmployees.AddAsync(new GuardRotationGroupEmployee
@@ -614,7 +618,7 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             ?? throw new KeyNotFoundException("Asignación de patrón no encontrada.");
 
         entity.IsActive = false;
-        entity.ValidTo ??= DateOnly.FromDateTime(DateTime.Today);
+        entity.ValidTo ??= _clock.Today;
         await _db.SaveChangesAsync(ct);
     }
 

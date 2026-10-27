@@ -21,8 +21,11 @@ public class VacationBalanceAdjustmentService : IVacationBalanceAdjustmentServic
     private readonly AppDbContext _db;
     private readonly ILogger<VacationBalanceAdjustmentService> _logger;
 
-    public VacationBalanceAdjustmentService(AppDbContext db, ILogger<VacationBalanceAdjustmentService> logger)
+    private readonly IAppClock _clock;
+
+    public VacationBalanceAdjustmentService(AppDbContext db, ILogger<VacationBalanceAdjustmentService> logger, IAppClock clock)
     {
+        _clock = clock;
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -474,7 +477,7 @@ public class VacationBalanceAdjustmentService : IVacationBalanceAdjustmentServic
             EmployeeID = reservation.EmployeeID,
             DeltaVacationMin = 0,
             DeltaRecoveryMin = 0,
-            MovementAt = DateTime.Now,
+            MovementAt = _clock.Now,
             SourceModule = "RESERVATION_CONSUME",
             SourceTable = "SYSTEM",
             SourceID = consumeSourceId,
@@ -643,7 +646,7 @@ public class VacationBalanceAdjustmentService : IVacationBalanceAdjustmentServic
                     LaborRegimeId = regimeId,
                     VacationAvailableMin = field == TimeBalanceField.Vacation ? newBalance : 0,
                     RecoveryPendingMin = field == TimeBalanceField.Recovery ? newBalance : 0,
-                    LastUpdated = DateTime.Now
+                    LastUpdated = _clock.Now
                 };
                 _db.TimeBalances.Add(balance);
             }
@@ -654,7 +657,7 @@ public class VacationBalanceAdjustmentService : IVacationBalanceAdjustmentServic
                 else
                     balance.VacationAvailableMin = newBalance;
 
-                balance.LastUpdated = DateTime.Now;
+                balance.LastUpdated = _clock.Now;
             }
 
             _db.TimeBalanceMovements.Add(new TimeBalanceMovements
@@ -662,7 +665,7 @@ public class VacationBalanceAdjustmentService : IVacationBalanceAdjustmentServic
                 EmployeeID = employeeId,
                 DeltaVacationMin = field == TimeBalanceField.Vacation ? delta : 0,
                 DeltaRecoveryMin = field == TimeBalanceField.Recovery ? delta : 0,
-                MovementAt = DateTime.Now,
+                MovementAt = _clock.Now,
                 SourceModule = sourceModule,
                 SourceTable = "MANUAL",
                 SourceID = sourceId,

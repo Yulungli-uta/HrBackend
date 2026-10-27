@@ -16,7 +16,9 @@ public class DirectoryParametersController : ControllerBase
 {
     private readonly IDirectoryParametersService _svc;
     private readonly IMapper _mapper;
-    public DirectoryParametersController(IDirectoryParametersService svc, IMapper mapper) { _svc = svc; _mapper = mapper; }
+    private readonly IAppClock _clock;
+
+    public DirectoryParametersController(IDirectoryParametersService svc, IMapper mapper, IAppClock clock) { _svc = svc; _mapper = mapper; _clock = clock; }
 
     /// <summary>Lista todos los registros de DirectoryParameters.</summary>
     [HttpGet]
@@ -47,7 +49,7 @@ public class DirectoryParametersController : ControllerBase
     public async Task<IActionResult> Create([FromBody] DirectoryParametersCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<DirectoryParameters>(dto);
-        entityObj.CreatedAt = DateTime.Now;
+        entityObj.CreatedAt = _clock.Now;
         var created = await _svc.CreateAsync(entityObj, ct);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<DirectoryParametersDto>(created));
@@ -59,7 +61,7 @@ public class DirectoryParametersController : ControllerBase
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] DirectoryParametersUpdateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<DirectoryParameters>(dto);
-        entityObj.UpdatedAt = DateTime.Now;
+        entityObj.UpdatedAt = _clock.Now;
         await _svc.UpdateAsync(id, entityObj, ct);
         return NoContent();
     }

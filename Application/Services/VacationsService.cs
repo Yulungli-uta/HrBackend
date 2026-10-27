@@ -29,6 +29,8 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
 
     private readonly ILogger<VacationsService> _logger;
 
+    private readonly IAppClock _clock;
+
     public VacationsService(
         IVacationsRepository repo,
         IParametersRepository paramRepo,
@@ -39,9 +41,10 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
         IvwEmployeeDetailsService employeeDetails,
         IGuardMembershipRepository guardMembership,
         GuardVacationFlowContext guardFlow,
-        ILogger<VacationsService> logger
-    ) : base(repo)
+        ILogger<VacationsService> logger,
+        IAppClock clock) : base(repo)
     {
+        _clock = clock;
         _repository = repo ?? throw new ArgumentNullException(nameof(repo));
         _paramRepo = paramRepo ?? throw new ArgumentNullException(nameof(paramRepo));
         _balanceAdjustment = balanceAdjustment ?? throw new ArgumentNullException(nameof(balanceAdjustment));
@@ -156,7 +159,7 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
     {
         if (_guardFlow.IsActive) return;
 
-        if (await _guardMembership.IsGuardAsync(employeeId, DateOnly.FromDateTime(DateTime.Today), ct))
+        if (await _guardMembership.IsGuardAsync(employeeId, _clock.Today, ct))
             throw new BusinessRuleException(
                 "Las vacaciones de los guardias las planifica el supervisor en el módulo de Guardias y las aprueba la dirección.");
     }
@@ -206,7 +209,7 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
 
             _logger.LogInformation("VAC CREATE BEGIN TX TraceId={TraceId} EmpId={EmpId}", traceId, entity.EmployeeId);
 
-            entity.CreatedAt = DateTime.Now;
+            entity.CreatedAt = _clock.Now;
 
             // 1) Crear (aún sin commit)
             created = await base.CreateAsync(entity, ct);
@@ -308,10 +311,10 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
                     throw new BusinessRuleException("No puede aprobar su propia solicitud de vacaciones.");
 
                 entity.ApprovedBy = _currentUser.EmployeeId;
-                entity.ApprovedAt = DateTime.Now;
+                entity.ApprovedAt = _clock.Now;
             }
 
-            entity.UpdatedAt = DateTime.Now;
+            entity.UpdatedAt = _clock.Now;
 
             // La reserva activa (si hay) ANTES de aplicar el update — el sourceId ya no es
             // fijo por VacationID, se busca por el estado real de los movimientos.

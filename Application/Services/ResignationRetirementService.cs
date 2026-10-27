@@ -61,6 +61,8 @@ public sealed class ResignationRetirementService : IResignationRetirementService
     private readonly AppDbContext _db;
     private readonly ILogger<ResignationRetirementService> _logger;
 
+    private readonly IAppClock _clock;
+
     public ResignationRetirementService(
         IResignationRetirementRepository repository,
         IDocumentGenerationService documentGenerationService,
@@ -68,8 +70,10 @@ public sealed class ResignationRetirementService : IResignationRetirementService
         IPersonnelActionService personnelActionService,
         IEmailBuilder emailBuilder,
         AppDbContext db,
-        ILogger<ResignationRetirementService> logger)
+        ILogger<ResignationRetirementService> logger,
+        IAppClock clock)
     {
+        _clock = clock;
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _documentGenerationService = documentGenerationService ?? throw new ArgumentNullException(nameof(documentGenerationService));
         _parametersRepository = parametersRepository ?? throw new ArgumentNullException(nameof(parametersRepository));
@@ -135,7 +139,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
         var employeeInfo = await _repository.GetEmployeeConsolidatedInfoAsync(employeeId, ct)
             ?? throw new InvalidOperationException("El usuario autenticado no tiene un empleado asociado en el sistema.");
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         if (request.ProposedExitDate < today)
             throw new InvalidOperationException("La fecha propuesta de salida no puede ser anterior a la fecha de solicitud.");
 
@@ -171,7 +175,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
             NewStatus = ResignationRetirementStatus.Pendiente,
             Action = "CREATED",
             Observation = null,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = employeeId
         }, ct);
         await _repository.SaveChangesAsync(ct);
@@ -213,7 +217,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
         {
             EmployeeId = request.EmployeeId,
             RequestType = request.RequestType,
-            RequestDate = DateOnly.FromDateTime(DateTime.Today),
+            RequestDate = _clock.Today,
             // A diferencia de CreateAsync: aquí SÍ se permite una fecha ya pasada — el
             // objetivo es registrar cuanto antes una salida real ya ocurrida (empleado no
             // localizable, abandono de puesto) para que la acreditación mensual de
@@ -235,7 +239,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
             NewStatus = ResignationRetirementStatus.Pendiente,
             Action = "CREATED_BY_HR",
             Observation = "Solicitud generada por Recursos Humanos en representación del empleado (no la creó el propio empleado).",
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = createdByEmployeeId
         }, ct);
         await _repository.SaveChangesAsync(ct);
@@ -264,7 +268,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
 
         EnsureRowVersionMatches(entity.RowVersion, request.RowVersion);
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         if (request.ProposedExitDate < today)
             throw new InvalidOperationException("La fecha propuesta de salida no puede ser anterior a la fecha de solicitud.");
 
@@ -286,7 +290,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
             NewStatus = entity.Status,
             Action = wasReturned ? "RESUBMITTED" : "UPDATED",
             Observation = wasReturned ? "Reenviada por el solicitante tras corrección." : null,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = employeeId
         }, ct);
         await _repository.SaveChangesAsync(ct);
@@ -315,7 +319,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
 
         var previousStatus = entity.Status;
         entity.Status = ResignationRetirementStatus.Anulado;
-        entity.CancelledAt = DateTime.Now;
+        entity.CancelledAt = _clock.Now;
         entity.CancelledBy = employeeId;
 
         await _repository.SaveChangesAsync(ct);
@@ -327,7 +331,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
             NewStatus = ResignationRetirementStatus.Anulado,
             Action = "CANCELLED",
             Observation = request.Reason,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = employeeId
         }, ct);
         await _repository.SaveChangesAsync(ct);
@@ -385,7 +389,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
 
         var previousStatus = entity.Status;
         entity.Status = ResignationRetirementStatus.Aprobado;
-        entity.ApprovedAt = DateTime.Now;
+        entity.ApprovedAt = _clock.Now;
         entity.ApprovedBy = reviewedBy;
 
         await _repository.SaveChangesAsync(ct);
@@ -397,7 +401,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
             NewStatus = ResignationRetirementStatus.Aprobado,
             Action = "APPROVED",
             Observation = request.Observation,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = reviewedBy
         }, ct);
         await _repository.SaveChangesAsync(ct);
@@ -451,7 +455,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
                 EmployeeId: entity.EmployeeId,
                 ActionTypeId: actionTypeId,
                 ActionNumber: null,
-                ActionDate: DateOnly.FromDateTime(DateTime.Today),
+                ActionDate: _clock.Today,
                 EffectiveDate: entity.ProposedExitDate,
                 EndDate: null,
                 OriginDepartmentId: employeeInfo.DepartmentId,
@@ -502,7 +506,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
         var previousStatus = entity.Status;
         entity.LinkedPersonnelActionId = actionId;
         entity.Status = ResignationRetirementStatus.Aprobado;
-        entity.ApprovedAt = DateTime.Now;
+        entity.ApprovedAt = _clock.Now;
         entity.ApprovedBy = reviewedBy;
 
         await _repository.SaveChangesAsync(ct);
@@ -514,7 +518,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
             NewStatus = ResignationRetirementStatus.Aprobado,
             Action = "SIGNED_UPLOADED",
             Observation = request.Observation,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = reviewedBy
         }, ct);
         await _repository.SaveChangesAsync(ct);
@@ -531,7 +535,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
         {
             var isResignation = entity.RequestType == ResignationRetirementRequestType.Resignation;
             var typeLabelLower = isResignation ? "renuncia" : "jubilación";
-            var approvedDate = (entity.ApprovedAt ?? DateTime.Now).ToString("dd/MM/yyyy");
+            var approvedDate = (entity.ApprovedAt ?? _clock.Now).ToString("dd/MM/yyyy");
 
             var body =
                 $"<p>Estimado/a {employeeInfo.FullName}:</p>" +
@@ -567,7 +571,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
         => await ChangeStatusWithMandatoryObservationAsync(
             requestId, reviewedBy, request, ReviewableStatuses,
             ResignationRetirementStatus.Rechazado, "REJECTED",
-            (e) => { e.RejectedAt = DateTime.Now; e.RejectedBy = reviewedBy; }, ct);
+            (e) => { e.RejectedAt = _clock.Now; e.RejectedBy = reviewedBy; }, ct);
 
     /// <inheritdoc/>
     public async Task<ResignationRetirementDetailDto> ReturnAsync(int requestId, int reviewedBy, ReviewResignationRetirementRequest request, CancellationToken ct = default)
@@ -593,7 +597,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
 
         var previousStatus = entity.Status;
         entity.Status = ResignationRetirementStatus.Anulado;
-        entity.CancelledAt = DateTime.Now;
+        entity.CancelledAt = _clock.Now;
         entity.CancelledBy = cancelledBy;
 
         await _repository.SaveChangesAsync(ct);
@@ -605,7 +609,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
             NewStatus = ResignationRetirementStatus.Anulado,
             Action = "CANCELLED",
             Observation = request.Reason,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = cancelledBy
         }, ct);
         await _repository.SaveChangesAsync(ct);
@@ -720,7 +724,7 @@ public sealed class ResignationRetirementService : IResignationRetirementService
             NewStatus = newStatus,
             Action = action,
             Observation = request.Observation,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = reviewedBy
         }, ct);
         await _repository.SaveChangesAsync(ct);

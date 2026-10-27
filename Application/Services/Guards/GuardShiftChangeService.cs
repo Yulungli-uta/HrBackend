@@ -7,6 +7,7 @@ using WsUtaSystem.Application.Interfaces.Guards;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
 using WsUtaSystem.Models.Guards;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Application.Services.Guards;
 
@@ -17,12 +18,16 @@ public class GuardShiftChangeService : IGuardShiftChangeService
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
 
+    private readonly IAppClock _clock;
+
     public GuardShiftChangeService(
         IGuardShiftChangeRepository repo,
         IGuardAssignmentValidationService validationService,
         AppDbContext db,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IAppClock clock)
     {
+        _clock = clock;
         _repo = repo;
         _validationService = validationService;
         _db = db;
@@ -164,7 +169,7 @@ public class GuardShiftChangeService : IGuardShiftChangeService
             IsActiveForAttendance = false,
             Reason = dto.Reason,
             RequestedBy = _currentUser.EmployeeId,
-            RequestedAt = DateTime.UtcNow
+            RequestedAt = _clock.Now
         };
 
         await _db.GuardShiftChanges.AddAsync(entity, ct);
@@ -223,7 +228,7 @@ public class GuardShiftChangeService : IGuardShiftChangeService
         change.StatusTypeId = approvedTypeId;
         change.IsActiveForAttendance = true;
         change.ApprovedBy = _currentUser.EmployeeId;
-        change.ApprovedAt = DateTime.UtcNow;
+        change.ApprovedAt = _clock.Now;
 
         var planning = await _db.GuardShiftPlannings.FindAsync(new object[] { change.PlanningId }, ct);
         if (planning is not null)
@@ -326,7 +331,7 @@ public class GuardShiftChangeService : IGuardShiftChangeService
         if (!planning.IsActiveForAssignment)
             throw new InvalidOperationException("No se puede reasignar un turno cancelado.");
 
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         if (planning.WorkDate < today)
             throw new InvalidOperationException(
                 $"No se puede reasignar un turno de una fecha ya pasada ({planning.WorkDate:dd/MM/yyyy}). La planificación pasada queda congelada; si el turno no se cumplió, cancélalo en vez de reasignarlo.");
@@ -377,9 +382,9 @@ public class GuardShiftChangeService : IGuardShiftChangeService
             IsActiveForAttendance = true,
             Reason = reason,
             RequestedBy = _currentUser.EmployeeId,
-            RequestedAt = DateTime.UtcNow,
+            RequestedAt = _clock.Now,
             ApprovedBy = _currentUser.EmployeeId,
-            ApprovedAt = DateTime.UtcNow
+            ApprovedAt = _clock.Now
         };
 
         planning.WorkDate = newWorkDate;
@@ -411,7 +416,7 @@ public class GuardShiftChangeService : IGuardShiftChangeService
         // No se puede deshacer si la fecha original ya pasó: volver el turno a ese día
         // alteraría el horario ya ocurrido de la persona (pedido del usuario 2026-10-05,
         // QA obs. 49).
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         if (change.OriginalWorkDate.HasValue && change.OriginalWorkDate.Value < today)
             throw new InvalidOperationException(
                 $"No se puede deshacer esta reasignación: la fecha original ({change.OriginalWorkDate.Value:dd/MM/yyyy}) ya pasó, " +
@@ -468,7 +473,7 @@ public class GuardShiftChangeService : IGuardShiftChangeService
         change.StatusTypeId = rejectedTypeId;
         change.RejectionReason = dto.RejectionReason;
         change.ApprovedBy = _currentUser.EmployeeId;
-        change.ApprovedAt = DateTime.UtcNow;
+        change.ApprovedAt = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
         return MapToDto(change);

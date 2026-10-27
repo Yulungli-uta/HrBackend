@@ -19,14 +19,18 @@ namespace WsUtaSystem.Application.Services
         private readonly ISchedulesService _schedulesService;
         private readonly IEmployeeLaborRegimeService _employeeLaborRegimeService;
 
+        private readonly IAppClock _clock;
+
         public ScheduleChangePlanService(
             IScheduleChangePlanRepository repository,
             IRefTypesService refTypesService,
             IEmployeeCurrentScheduleService employeeCurrentScheduleService,
             ISchedulesService schedulesService,
             IEmployeeLaborRegimeService employeeLaborRegimeService,
-            ILogger<ScheduleChangePlanService> logger)
+            ILogger<ScheduleChangePlanService> logger,
+            IAppClock clock)
         {
+            _clock = clock;
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
             _refTypesService = refTypesService ?? throw new ArgumentNullException(nameof(refTypesService));
             _employeeCurrentScheduleService = employeeCurrentScheduleService ?? throw new ArgumentNullException(nameof(employeeCurrentScheduleService));
@@ -126,7 +130,7 @@ namespace WsUtaSystem.Application.Services
                     "Pendiente",
                     ct);
 
-                var now = DateTime.Now;
+                var now = _clock.Now;
 
                 var employeeIds = request.Details
                     .Select(d => d.EmployeeID)
@@ -179,7 +183,7 @@ namespace WsUtaSystem.Application.Services
                 var created = await _repository.CreateAsync(plan, ct);
 
                 created.PlanCode = $"SCP-{created.PlanID:D6}";
-                created.UpdatedAt = DateTime.Now;
+                created.UpdatedAt = _clock.Now;
                 created.UpdatedBy = request.RequestedByBossID;
 
                 await _repository.UpdateAsync(created, ct);
@@ -215,9 +219,9 @@ namespace WsUtaSystem.Application.Services
 
                 plan.StatusTypeID = request.IsApproved ? approvedStatusId : rejectedStatusId;
                 plan.ApprovedByID = request.ApprovedByID;
-                plan.ApprovedAt = DateTime.Now;
+                plan.ApprovedAt = _clock.Now;
                 plan.RejectionReason = request.IsApproved ? null : request.RejectionReason?.Trim();
-                plan.UpdatedAt = DateTime.Now;
+                plan.UpdatedAt = _clock.Now;
                 plan.UpdatedBy = request.ApprovedByID;
 
                 await _repository.UpdateAsync(plan, ct);
@@ -243,7 +247,7 @@ namespace WsUtaSystem.Application.Services
 
                 plan.StatusTypeID = cancelledStatusId;
                 plan.RejectionReason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
-                plan.UpdatedAt = DateTime.Now;
+                plan.UpdatedAt = _clock.Now;
 
                 await _repository.UpdateAsync(plan, ct);
             }

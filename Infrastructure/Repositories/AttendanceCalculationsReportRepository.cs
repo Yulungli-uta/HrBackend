@@ -5,6 +5,7 @@ using WsUtaSystem.Application.DTOs.Reports.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories;
 
@@ -31,8 +32,11 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
 {
     private readonly AppDbContext _db;
 
-    public AttendanceCalculationsReportRepository(AppDbContext db)
+    private readonly IAppClock _clock;
+
+    public AttendanceCalculationsReportRepository(AppDbContext db, IAppClock clock)
     {
+        _clock = clock;
         _db = db ?? throw new ArgumentNullException(nameof(db));
     }
 
@@ -45,11 +49,11 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
 
         var startDate = filter.StartDate.HasValue
             ? DateOnly.FromDateTime(filter.StartDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            : _clock.Today.AddMonths(-1);
 
         var endDate = filter.EndDate.HasValue
             ? DateOnly.FromDateTime(filter.EndDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today);
+            : _clock.Today;
 
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
                     join emp in _db.Employees.AsNoTracking()
@@ -115,11 +119,11 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
 
         var startDate = filter.StartDate.HasValue
             ? DateOnly.FromDateTime(filter.StartDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            : _clock.Today.AddMonths(-1);
 
         var endDate = filter.EndDate.HasValue
             ? DateOnly.FromDateTime(filter.EndDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today);
+            : _clock.Today;
 
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
                     join emp in _db.Employees.AsNoTracking()
@@ -192,11 +196,11 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
 
         var startDate = filter.StartDate.HasValue
             ? DateOnly.FromDateTime(filter.StartDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            : _clock.Today.AddMonths(-1);
 
         var endDate = filter.EndDate.HasValue
             ? DateOnly.FromDateTime(filter.EndDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today);
+            : _clock.Today;
 
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
                     join emp in _db.Employees.AsNoTracking()
@@ -277,11 +281,11 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
 
         var startDate = filter.StartDate.HasValue
             ? DateOnly.FromDateTime(filter.StartDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            : _clock.Today.AddMonths(-1);
 
         var endDate = filter.EndDate.HasValue
             ? DateOnly.FromDateTime(filter.EndDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today);
+            : _clock.Today;
 
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
                     join emp in _db.Employees.AsNoTracking()
@@ -345,11 +349,11 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
 
         var startDate = filter.StartDate.HasValue
             ? DateOnly.FromDateTime(filter.StartDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            : _clock.Today.AddMonths(-1);
 
         var endDate = filter.EndDate.HasValue
             ? DateOnly.FromDateTime(filter.EndDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today);
+            : _clock.Today;
 
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
                     join ved in _db.vwEmployeeDetails.AsNoTracking()
@@ -418,11 +422,11 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
 
         var startDate = filter.StartDate.HasValue
             ? DateOnly.FromDateTime(filter.StartDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            : _clock.Today.AddMonths(-1);
 
         var endDate = filter.EndDate.HasValue
             ? DateOnly.FromDateTime(filter.EndDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today);
+            : _clock.Today;
 
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
                     join ved in _db.vwEmployeeDetails.AsNoTracking()
@@ -496,11 +500,11 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
 
         var startDate = filter.StartDate.HasValue
             ? DateOnly.FromDateTime(filter.StartDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            : _clock.Today.AddMonths(-1);
 
         var endDate = filter.EndDate.HasValue
             ? DateOnly.FromDateTime(filter.EndDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today);
+            : _clock.Today;
 
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
                     join ved in _db.vwEmployeeDetails.AsNoTracking()
@@ -628,11 +632,11 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
     {
         var startDate = filter.StartDate.HasValue
             ? DateOnly.FromDateTime(filter.StartDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            : _clock.Today.AddMonths(-1);
 
         var endDate = filter.EndDate.HasValue
             ? DateOnly.FromDateTime(filter.EndDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today);
+            : _clock.Today;
 
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
                     join ved in _db.vwEmployeeDetails.AsNoTracking()
@@ -829,11 +833,11 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
 
         var startDate = filter.StartDate.HasValue
             ? DateOnly.FromDateTime(filter.StartDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today.AddMonths(-1));
+            : _clock.Today.AddMonths(-1);
 
         var endDate = filter.EndDate.HasValue
             ? DateOnly.FromDateTime(filter.EndDate.Value)
-            : DateOnly.FromDateTime(DateTime.Today);
+            : _clock.Today;
 
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
                     join ved in _db.vwEmployeeDetails.AsNoTracking()
@@ -952,8 +956,8 @@ public sealed class AttendanceCalculationsReportRepository : IAttendanceCalculat
         // detalle diario sí lo respeta.
         if (applyDateFilter)
         {
-            var startDate = filter.StartDate ?? DateTime.Today.AddMonths(-1);
-            var endDate = filter.EndDate ?? DateTime.Today;
+            var startDate = filter.StartDate ?? _clock.Today.ToDateTime(TimeOnly.MinValue).AddMonths(-1);
+            var endDate = filter.EndDate ?? _clock.Today.ToDateTime(TimeOnly.MinValue);
             query = query.Where(x => x.tex.WorkDate.Date >= startDate.Date && x.tex.WorkDate.Date <= endDate.Date);
         }
 

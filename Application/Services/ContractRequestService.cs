@@ -27,12 +27,15 @@ public class ContractRequestService : Service<ContractRequest, int>, IContractRe
     private readonly AppDbContext _db;
     private readonly IRefTypesService _refTypes;
 
+    private readonly IAppClock _clock;
+
     public ContractRequestService(
         IContractRequestRepository repo,
         AppDbContext db,
-        IRefTypesService refTypes
-    ) : base(repo)
+        IRefTypesService refTypes,
+        IAppClock clock) : base(repo)
     {
+        _clock = clock;
         _repo     = repo     ?? throw new ArgumentNullException(nameof(repo));
         _db       = db       ?? throw new ArgumentNullException(nameof(db));
         _refTypes = refTypes ?? throw new ArgumentNullException(nameof(refTypes));
@@ -117,7 +120,7 @@ public class ContractRequestService : Service<ContractRequest, int>, IContractRe
                 ?? throw new KeyNotFoundException($"ContractRequest id={requestId} no existe.");
 
             entity.TotalPeopleHired++;
-            entity.UpdatedAt = DateTime.Now;
+            entity.UpdatedAt = _clock.Now;
 
             // Transición de estado según cupo
             if (entity.TotalPeopleHired >= entity.NumberOfPeopleToHire)
@@ -195,7 +198,7 @@ public class ContractRequestService : Service<ContractRequest, int>, IContractRe
 
             entity.Status                  = await GetStatusIdAsync(StatusPendingCorrec, ct);
             entity.PendingCorrectionReason = reason;
-            entity.UpdatedAt               = DateTime.Now;
+            entity.UpdatedAt               = _clock.Now;
             entity.UpdatedBy               = userId;
 
             await _db.SaveChangesAsync(ct);

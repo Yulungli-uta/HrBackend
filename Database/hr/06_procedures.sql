@@ -73,7 +73,7 @@ AS
 BEGIN
   SET NOCOUNT ON;
   
-  DECLARE @StartTime DATETIME2 = SYSUTCDATETIME();
+  DECLARE @StartTime DATETIME2 = SYSDATETIME();
   DECLARE @ErrorMsg NVARCHAR(4000);
   DECLARE @ErrorSeverity INT;
   DECLARE @ErrorState INT;
@@ -676,7 +676,7 @@ BEGIN
       OffScheduleMin = C.MinutosFueraHorario,
       Status = 'Approved'
       -- Comentado porque ModifiedDate no existe en la tabla
-      -- ModifiedDate = SYSUTCDATETIME()
+      -- ModifiedDate = SYSDATETIME()
     FROM HR.tbl_AttendanceCalculations T WITH (UPDLOCK, ROWLOCK)
     INNER JOIN #ResultadosCalculados C
       ON C.EmpleadoID = T.EmployeeID AND C.FechaTrabajo = T.WorkDate;
@@ -720,7 +720,7 @@ BEGIN
       'Approved',
       0
       -- Comentado porque CreatedDate y ModifiedDate no existen en la tabla
-      -- SYSUTCDATETIME(), SYSUTCDATETIME()
+      -- SYSDATETIME(), SYSDATETIME()
     FROM #ResultadosCalculados C
     WHERE NOT EXISTS (
       SELECT 1 
@@ -837,7 +837,7 @@ BEGIN
        SECCIÓN 10: SALIDA Y REPORTE FINAL
     ============================================================================ */
 
-    DECLARE @EndTime DATETIME2 = SYSUTCDATETIME();
+    DECLARE @EndTime DATETIME2 = SYSDATETIME();
     DECLARE @DurationMs INT = DATEDIFF(MILLISECOND, @StartTime, @EndTime);
 
     IF @Debug = 1

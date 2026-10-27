@@ -21,12 +21,16 @@ public class StudentProvisioningController : ControllerBase
     private readonly IEmployeeProvisioningClient _authClient;
     private readonly ILogger<StudentProvisioningController> _logger;
 
+    private readonly IAppClock _clock;
+
     public StudentProvisioningController(
         AppDbContext db,
         IStudentProvisioningClient adClient,
         IEmployeeProvisioningClient authClient,
-        ILogger<StudentProvisioningController> logger)
+        ILogger<StudentProvisioningController> logger,
+        IAppClock clock)
     {
+        _clock = clock;
         _db         = db;
         _adClient   = adClient;
         _authClient = authClient;
@@ -131,8 +135,8 @@ public class StudentProvisioningController : ControllerBase
         {
             provRecord.ProvisioningStatusId   = (int)StudentProvisioningStatus.Disabled;
             provRecord.ProvisioningStatusName = nameof(StudentProvisioningStatus.Disabled);
-            provRecord.DisabledAt             = DateTime.UtcNow;
-            provRecord.UpdatedAt              = DateTime.UtcNow;
+            provRecord.DisabledAt             = _clock.Now;
+            provRecord.UpdatedAt              = _clock.Now;
 
             var student = await _db.Students.FindAsync([studentId], ct);
             if (student is not null)

@@ -6,6 +6,7 @@ using WsUtaSystem.Application.DTOs.Guards;
 using WsUtaSystem.Application.Interfaces.Guards;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models.Guards;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Application.Services.Guards;
 
@@ -16,12 +17,16 @@ public class GuardLocationRotationService : IGuardLocationRotationService
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
 
+    private readonly IAppClock _clock;
+
     public GuardLocationRotationService(
         IGuardLocationRotationPeriodRepository periodRepo,
         IGuardLocationRotationAssignmentRepository assignmentRepo,
         AppDbContext db,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        IAppClock clock)
     {
+        _clock = clock;
         _periodRepo = periodRepo;
         _assignmentRepo = assignmentRepo;
         _db = db;
@@ -103,7 +108,7 @@ public class GuardLocationRotationService : IGuardLocationRotationService
             Notes = dto.Notes,
             IsActive = true,
             CreatedBy = userId,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = _clock.Now
         };
 
         await _periodRepo.AddAsync(entity, ct);
@@ -141,7 +146,7 @@ public class GuardLocationRotationService : IGuardLocationRotationService
         entity.Notes = dto.Notes;
         entity.IsActive = dto.IsActive;
         entity.UpdatedBy = userId;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
 
@@ -204,7 +209,7 @@ public class GuardLocationRotationService : IGuardLocationRotationService
         {
             prev.IsActive = false;
             prev.UpdatedBy = userId;
-            prev.UpdatedAt = DateTime.UtcNow;
+            prev.UpdatedAt = _clock.Now;
         }
 
         var entity = new GuardLocationRotationAssignment
@@ -219,7 +224,7 @@ public class GuardLocationRotationService : IGuardLocationRotationService
             Notes = dto.Notes,
             IsActive = true,
             CreatedBy = userId,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = _clock.Now
         };
 
         await _assignmentRepo.AddAsync(entity, ct);
@@ -253,7 +258,7 @@ public class GuardLocationRotationService : IGuardLocationRotationService
         entity.Notes = dto.Notes;
         entity.IsActive = dto.IsActive;
         entity.UpdatedBy = userId;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
 
@@ -280,7 +285,7 @@ public class GuardLocationRotationService : IGuardLocationRotationService
 
         entity.IsActive = false;
         entity.UpdatedBy = userId;
-        entity.UpdatedAt = DateTime.UtcNow;
+        entity.UpdatedAt = _clock.Now;
 
         await _db.SaveChangesAsync(ct);
     }

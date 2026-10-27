@@ -14,10 +14,14 @@ public class TramiteRequirementsService : ITramiteRequirementsService
     private readonly ITramiteRequirementsRepository _repository;
     private readonly AppDbContext _db;
 
+    private readonly IAppClock _clock;
+
     public TramiteRequirementsService(
         ITramiteRequirementsRepository repository,
-        AppDbContext db)
+        AppDbContext db,
+        IAppClock clock)
     {
+        _clock = clock;
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _db = db ?? throw new ArgumentNullException(nameof(db));
     }
@@ -76,7 +80,7 @@ public class TramiteRequirementsService : ITramiteRequirementsService
             DocumentTypeId = dto.DocumentTypeId,
             IsRequired = dto.IsRequired,
             IsActive = true,
-            CreatedAt = DateTime.Now,
+            CreatedAt = _clock.Now,
             CreatedBy = createdBy,
         };
 
@@ -106,7 +110,7 @@ public class TramiteRequirementsService : ITramiteRequirementsService
 
         current.IsRequired = dto.IsRequired;
         current.IsActive = dto.IsActive;
-        current.UpdatedAt = DateTime.Now;
+        current.UpdatedAt = _clock.Now;
         current.UpdatedBy = updatedBy;
 
         await _db.SaveChangesAsync(ct);

@@ -11,8 +11,13 @@ public sealed class PersonnelActionTypeService
 {
     private readonly IPersonnelActionTypeRepository _repo;
 
-    public PersonnelActionTypeService(IPersonnelActionTypeRepository repo) : base(repo)
-        => _repo = repo ?? throw new ArgumentNullException(nameof(repo));
+    private readonly IAppClock _clock;
+
+    public PersonnelActionTypeService(IPersonnelActionTypeRepository repo, IAppClock clock) : base(repo)
+    {
+        _repo = repo ?? throw new ArgumentNullException(nameof(repo));
+        _clock = clock;
+    }
 
     public Task<List<PersonnelActionType>> GetAllActiveAsync(CancellationToken ct = default)
         => _repo.GetAllActiveAsync(ct);
@@ -24,7 +29,7 @@ public sealed class PersonnelActionTypeService
         int personnelActionTypeId,
         CancellationToken ct = default)
     {
-        var year = DateTime.Now.Year;
+        var year = _clock.Now.Year;
         var (docNumber, y, seq) = await _repo.ConsumeNextNumberAsync(personnelActionTypeId, year, ct);
         return new NextDocumentNumberDto(docNumber, docNumber.Split('-')[0], y, seq);
     }

@@ -33,14 +33,17 @@ public class DepartmentAuthorityService
     private readonly AppDbContext _db;
     private readonly IRefTypesService _refTypes;
 
+    private readonly IAppClock _clock;
+
     public DepartmentAuthorityService(
         IDepartmentAuthorityRepository repository,
         IMapper mapper,
         ILogger<DepartmentAuthorityService> logger,
         AppDbContext db,
-        IRefTypesService refTypes
-        ) : base(repository)
+        IRefTypesService refTypes,
+        IAppClock clock) : base(repository)
     {
+        _clock = clock;
         _authorityRepository = repository;
         _mapper = mapper;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -85,7 +88,7 @@ public class DepartmentAuthorityService
     /// </summary>
     private async Task SyncImmediateBossIfVigenteAsync(DepartmentAuthority created, CancellationToken ct)
     {
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var today = _clock.Today;
         var esVigente = created.IsActive
             && created.StartDate <= today
             && (created.EndDate == null || created.EndDate >= today);

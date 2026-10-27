@@ -4,6 +4,7 @@ using WsUtaSystem.Application.DTOs.Documents.Templates;
 using WsUtaSystem.Application.Interfaces.Repositories.Documents;
 using WsUtaSystem.Data;
 using WsUtaSystem.Models;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Infrastructure.Repositories.Documents;
 
@@ -18,8 +19,11 @@ public sealed class DocumentTemplateRepository : IDocumentTemplateRepository
 {
     private readonly AppDbContext _db;
 
-    public DocumentTemplateRepository(AppDbContext db)
+    private readonly IAppClock _clock;
+
+    public DocumentTemplateRepository(AppDbContext db, IAppClock clock)
     {
+        _clock = clock;
         _db = db ?? throw new ArgumentNullException(nameof(db));
     }
 
@@ -214,7 +218,7 @@ public sealed class DocumentTemplateRepository : IDocumentTemplateRepository
             .Where(t => t.TemplateId == templateId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(t => t.Status, status)
-                .SetProperty(t => t.UpdatedAt, DateTime.UtcNow),
+                .SetProperty(t => t.UpdatedAt, _clock.Now),
             ct);
     }
 
@@ -244,7 +248,7 @@ public sealed class DocumentTemplateRepository : IDocumentTemplateRepository
                      && t.Status == DocumentTemplateStatus.Published)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(t => t.Status, DocumentTemplateStatus.Archived)
-                .SetProperty(t => t.UpdatedAt, DateTime.UtcNow),
+                .SetProperty(t => t.UpdatedAt, _clock.Now),
             ct);
 
     /// <inheritdoc/>

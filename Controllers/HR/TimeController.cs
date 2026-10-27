@@ -11,8 +11,11 @@ namespace WsUtaSystem.Controllers.HR
         private readonly ITimeService _timeService;
         private readonly ILogger<TimeController> _logger;
 
-        public TimeController(ITimeService timeService, ILogger<TimeController> logger)
+        private readonly IAppClock _clock;
+
+        public TimeController(ITimeService timeService, ILogger<TimeController> logger, IAppClock clock)
         {
+            _clock = clock;
             _timeService = timeService;
             _logger = logger;
         }
@@ -79,7 +82,7 @@ namespace WsUtaSystem.Controllers.HR
             return Ok(new
             {
                 status = "healthy",
-                timestamp = DateTime.Now,
+                timestamp = _clock.Now,
                 service = "TimeService"
             });
         }

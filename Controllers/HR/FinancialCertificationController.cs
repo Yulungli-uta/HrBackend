@@ -18,12 +18,16 @@ public class FinancialCertificationController : ControllerBase
     private readonly ICurrentUserService _user;
     private readonly ILogger<FinancialCertificationController> _logger;
 
+    private readonly IAppClock _clock;
+
     public FinancialCertificationController(
         IFinancialCertificationService svc,
         IMapper mapper,
         ICurrentUserService userService,
-        ILogger<FinancialCertificationController> logger)
+        ILogger<FinancialCertificationController> logger,
+        IAppClock clock)
     {
+        _clock = clock;
         _svc    = svc;
         _mapper = mapper;
         _user   = userService;
@@ -79,7 +83,7 @@ public class FinancialCertificationController : ControllerBase
         _logger.LogInformation("Creando certificación financiera por empleado {EmployeeId}", _user.EmployeeId);
 
         var entityObj      = _mapper.Map<FinancialCertification>(dto);
-        entityObj.CreatedAt = DateTime.Now;
+        entityObj.CreatedAt = _clock.Now;
         entityObj.CreatedBy = _user.IsAuthenticated ? _user.EmployeeId : null;
 
         var created = await _svc.CreateAsync(entityObj, ct);
@@ -92,7 +96,7 @@ public class FinancialCertificationController : ControllerBase
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] FinancialCertificationUpdateDto dto, CancellationToken ct)
     {
         var entityObj      = _mapper.Map<FinancialCertification>(dto);
-        entityObj.UpdatedAt = DateTime.Now;
+        entityObj.UpdatedAt = _clock.Now;
         entityObj.UpdatedBy = _user.IsAuthenticated ? _user.EmployeeId : null;
 
         await _svc.UpdateAsync(id, entityObj, ct);

@@ -16,8 +16,11 @@ public sealed class UserPreferencesService : IUserPreferencesService
     private readonly IUserPreferenceRepository _repo;
     private readonly ILogger<UserPreferencesService> _logger;
 
-    public UserPreferencesService(IUserPreferenceRepository repo, ILogger<UserPreferencesService> logger)
+    private readonly IAppClock _clock;
+
+    public UserPreferencesService(IUserPreferenceRepository repo, ILogger<UserPreferencesService> logger, IAppClock clock)
     {
+        _clock = clock;
         _repo = repo;
         _logger = logger;
     }
@@ -45,7 +48,7 @@ public sealed class UserPreferencesService : IUserPreferencesService
             throw new ArgumentException(string.Join(" ", errors));
 
         var json = JsonSerializer.Serialize(dto, JsonOptions);
-        var now = DateTime.UtcNow;
+        var now = _clock.Now;
 
         var row = await _repo.GetByUserAsync(userId, track: true, ct);
         if (row is null)

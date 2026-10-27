@@ -5,6 +5,7 @@ using WsUtaSystem.Application.Interfaces.Repositories.Documents;
 using WsUtaSystem.Application.Interfaces.Services.Documents;
 using WsUtaSystem.Models;
 using WsUtaSystem.Reports.Abstractions;
+using WsUtaSystem.Application.Interfaces.Services;
 
 namespace WsUtaSystem.Application.Services.Documents;
 
@@ -20,13 +21,17 @@ public sealed class DocumentTemplateService : IDocumentTemplateService
     private readonly IDocumentTemplateEngine _templateEngine;
     private readonly ILogger<DocumentTemplateService> _logger;
 
+    private readonly IAppClock _clock;
+
     public DocumentTemplateService(
         IDocumentTemplateRepository templateRepository,
         IDocumentTemplateFieldRepository fieldRepository,
         IDocumentFieldResolver fieldResolver,
         IDocumentTemplateEngine templateEngine,
-        ILogger<DocumentTemplateService> logger)
+        ILogger<DocumentTemplateService> logger,
+        IAppClock clock)
     {
+        _clock = clock;
         _templateRepository = templateRepository;
         _fieldRepository    = fieldRepository;
         _fieldResolver      = fieldResolver;
@@ -81,7 +86,7 @@ public sealed class DocumentTemplateService : IDocumentTemplateService
             MetaJson          = request.MetaJson,
             RequiresSignature = request.RequiresSignature,
             RequiresApproval  = request.RequiresApproval,
-            CreatedAt         = DateTime.UtcNow,
+            CreatedAt         = _clock.Now,
             CreatedBy         = createdBy
         };
 
@@ -140,7 +145,7 @@ public sealed class DocumentTemplateService : IDocumentTemplateService
         template.MetaJson          = request.MetaJson;
         template.RequiresSignature = request.RequiresSignature;
         template.RequiresApproval  = request.RequiresApproval;
-        template.UpdatedAt         = DateTime.UtcNow;
+        template.UpdatedAt         = _clock.Now;
         template.UpdatedBy         = updatedBy;
 
         await _templateRepository.UpdateAsync(template, ct);
@@ -309,7 +314,7 @@ public sealed class DocumentTemplateService : IDocumentTemplateService
             MetaJson          = source.MetaJson,
             RequiresSignature = source.RequiresSignature,
             RequiresApproval  = source.RequiresApproval,
-            CreatedAt         = DateTime.UtcNow,
+            CreatedAt         = _clock.Now,
             CreatedBy         = createdBy
         };
 
