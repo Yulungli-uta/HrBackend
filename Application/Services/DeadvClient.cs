@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using WsUtaSystem.Application.DTOs.Trainings;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -12,23 +13,66 @@ public sealed class DeadvClient : IDeadvClient
     private const int MaxPdfBytes = 15 * 1024 * 1024;
     private const string DateTimeFormat = "yyyy-MM-dd HH:mm:ss";
 
+    // La URL se administra en HR.tbl_Parameters (lleva el año, p. ej. /DEaDV/2026/, y cambia). Como cualquiera
+    // con acceso a Parámetros puede editarla, solo se aceptan hosts institucionales (anti-SSRF).
+    private const string ApiUrlParameterName = "DEADV_API_URL";
+    private const string AllowedHostSuffix = "uta.edu.ec";
+    private const int ApiUrlCacheMinutes = 5;
+    private const string ApiUrlCacheKey = "Deadv_ApiUrl";
+
     private readonly HttpClient _http;
+    private readonly IParametersService _parameters;
+    private readonly IMemoryCache _cache;
     private readonly ILogger<DeadvClient> _logger;
 
-    public DeadvClient(HttpClient http, ILogger<DeadvClient> logger)
+    public DeadvClient(HttpClient http, IParametersService parameters, IMemoryCache cache, ILogger<DeadvClient> logger)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
+        _parameters = parameters ?? throw new ArgumentNullException(nameof(parameters));
+        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    /// <summary>
+    /// Host institucional permitido: HTTPS, nombre DNS (no IP), puerto por defecto, sin usuario/contraseña
+    /// y dominio uta.edu.ec o un subdominio.
+    /// </summary>
+    private static bool IsAllowedUri(Uri uri) =>
+        uri.Scheme == Uri.UriSchemeHttps
+        && uri.HostNameType == UriHostNameType.Dns
+        && uri.IsDefaultPort
+        && string.IsNullOrEmpty(uri.UserInfo)
+        && (uri.Host.Equals(AllowedHostSuffix, StringComparison.OrdinalIgnoreCase)
+            || uri.Host.EndsWith("." + AllowedHostSuffix, StringComparison.OrdinalIgnoreCase));
+
+    private async Task<Uri?> GetApiUrlAsync(CancellationToken ct)
+    {
+        if (_cache.TryGetValue(ApiUrlCacheKey, out Uri? cached) && cached is not null) return cached;
+
+        var value = (await _parameters.GetByNameAsync(ApiUrlParameterName, ct))
+            .Select(p => p.Pvalues?.Trim())
+            .FirstOrDefault(v => !string.IsNullOrEmpty(v));
+        if (value is null)
+        {
+            _logger.LogWarning("Parámetro {Name} no configurado o inactivo en HR.tbl_Parameters.", ApiUrlParameterName);
+            return null;
+        }
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || !IsAllowedUri(uri))
+        {
+            _logger.LogWarning("El parámetro {Name} no es una URL HTTPS válida de un host de {Suffix}.", ApiUrlParameterName, AllowedHostSuffix);
+            return null;
+        }
+
+        _cache.Set(ApiUrlCacheKey, uri, TimeSpan.FromMinutes(ApiUrlCacheMinutes));
+        return uri;
     }
 
     public async Task<IReadOnlyList<DeadvCertificateDto>?> GetCertificatesAsync(string idCard, CancellationToken ct = default)
     {
-        if (_http.BaseAddress is null)
-        {
-            _logger.LogWarning("Deadv:ApiUrl no configurado. Consulta a DEaDV omitida.");
-            return null;
-        }
         if (string.IsNullOrWhiteSpace(idCard)) return Array.Empty<DeadvCertificateDto>();
+
+        var apiUrl = await GetApiUrlAsync(ct);
+        if (apiUrl is null) return null;
 
         try
         {
@@ -41,7 +85,7 @@ public sealed class DeadvClient : IDeadvClient
                 sr = new { ir = 1, er = 20, rp = 20, ip = "true" },
             });
             using var content = new StringContent(body, Encoding.UTF8, "application/json");
-            using var response = await _http.PostAsync(string.Empty, content, ct);
+            using var response = await _http.PostAsync(apiUrl, content, ct);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("DEaDV respondió {Status} al consultar certificados.", (int)response.StatusCode);
@@ -61,12 +105,9 @@ public sealed class DeadvClient : IDeadvClient
 
     public async Task<byte[]?> DownloadCertificatePdfAsync(string certificateUrl, CancellationToken ct = default)
     {
-        if (_http.BaseAddress is null
-            || !Uri.TryCreate(certificateUrl, UriKind.Absolute, out var uri)
-            || uri.Scheme != Uri.UriSchemeHttps
-            || !string.Equals(uri.Host, _http.BaseAddress.Host, StringComparison.OrdinalIgnoreCase))
+        if (!Uri.TryCreate(certificateUrl, UriKind.Absolute, out var uri) || !IsAllowedUri(uri))
         {
-            _logger.LogWarning("Se rechazó una URL de certificado fuera del host permitido de DEaDV.");
+            _logger.LogWarning("Se rechazó una URL de certificado fuera de los hosts institucionales permitidos.");
             return null;
         }
 

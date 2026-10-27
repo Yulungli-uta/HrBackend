@@ -27,4 +27,11 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_Trainings_Person_Sourc
     EXEC('CREATE UNIQUE INDEX UX_Trainings_Person_Source_ExternalId
           ON HR.tbl_Trainings (PersonID, [Source], ExternalId) WHERE ExternalId IS NOT NULL');
 
+-- URL del servicio DEaDV: se edita en Parámetros del Sistema (lleva el año y cambia). Solo se aceptan URLs
+-- HTTPS de hosts uta.edu.ec.
+IF NOT EXISTS (SELECT 1 FROM HR.tbl_Parameters WHERE [name] = 'DEADV_API_URL')
+    INSERT INTO HR.tbl_Parameters ([name], Pvalues, Description, DataType, IsActive, CreatedAt)
+    VALUES ('DEADV_API_URL', 'https://deadv.uta.edu.ec/DEaDV/2026/uta/index.php',
+            'URL del servicio DEaDV (certificados de capacitación). Debe ser HTTPS de un host uta.edu.ec.', 'TEXTO', 1, SYSDATETIME());
+
 COMMIT;
