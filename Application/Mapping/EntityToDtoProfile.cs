@@ -120,7 +120,13 @@ public class EntityToDtoProfile : Profile
         CreateMap<WsUtaSystem.Models.TimeRecoveryPlans, WsUtaSystem.Application.DTOs.TimeRecoveryPlans.TimeRecoveryPlansDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.TimeRecoveryPlans, WsUtaSystem.Application.DTOs.TimeRecoveryPlans.TimeRecoveryPlansCreateDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.TimeRecoveryPlans, WsUtaSystem.Application.DTOs.TimeRecoveryPlans.TimeRecoveryPlansUpdateDto>().ReverseMap();
-        CreateMap<WsUtaSystem.Models.Trainings, WsUtaSystem.Application.DTOs.Trainings.TrainingsDto>().ReverseMap();
+        // HasDeadvCertificate: la URL real del certificado nunca sale del backend (se sirve por proxy).
+        CreateMap<WsUtaSystem.Models.Trainings, WsUtaSystem.Application.DTOs.Trainings.TrainingsDto>()
+            .ForMember(d => d.HasDeadvCertificate, o => o.MapFrom(s => s.CertificateUrl != null && s.CertificateUrl != ""))
+            .ReverseMap()
+            .ForMember(d => d.Source, o => o.Ignore())
+            .ForMember(d => d.ExternalId, o => o.Ignore())
+            .ForMember(d => d.CertificateUrl, o => o.Ignore());
         CreateMap<WsUtaSystem.Models.Trainings, WsUtaSystem.Application.DTOs.Trainings.TrainingsCreateDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.Trainings, WsUtaSystem.Application.DTOs.Trainings.TrainingsUpdateDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.Languages, WsUtaSystem.Application.DTOs.Languages.LanguagesDto>().ReverseMap();

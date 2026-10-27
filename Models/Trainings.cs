@@ -22,6 +22,12 @@ public class Trainings : IAuditable
   public string? CountryId{get;set;}
   /// <summary>Pedagógica (true) o Específica (false) -- null = sin definir (registro viejo).</summary>
   public bool? IsPedagogical{get;set;}
+  /// <summary>Origen del registro: Manual (digitado), DEaDV (sincronizado) o Importado (carga masiva histórica).</summary>
+  public string Source{get;set;}="Manual";
+  /// <summary>Identificador en el sistema de origen (cert_code de DEaDV); clave anti-duplicado al sincronizar.</summary>
+  public string? ExternalId{get;set;}
+  /// <summary>URL del certificado en DEaDV. Nunca se expone al navegador: se sirve por proxy del backend.</summary>
+  public string? CertificateUrl{get;set;}
   public DateTime? CreatedAt { get; set; }
   public int? CreatedBy { get; set; }
   public DateTime? UpdatedAt { get; set; }

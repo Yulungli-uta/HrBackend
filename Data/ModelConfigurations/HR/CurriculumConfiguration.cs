@@ -141,6 +141,9 @@ public sealed class TrainingsConfiguration : IEntityTypeConfiguration<Trainings>
         e.Property(x => x.TrainingDirectionTypeId).HasColumnName("TrainingDirectionTypeID");
         e.Property(x => x.ModalityTypeId).HasColumnName("ModalityTypeID");
         e.Property(x => x.CountryId).HasColumnName("CountryID");
+        e.Property(x => x.Source).HasMaxLength(20).IsRequired().HasDefaultValue("Manual");
+        e.Property(x => x.ExternalId).HasMaxLength(50);
+        e.Property(x => x.CertificateUrl).HasMaxLength(500);
     }
 }
 

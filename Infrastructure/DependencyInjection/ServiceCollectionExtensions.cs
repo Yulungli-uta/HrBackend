@@ -1085,6 +1085,18 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEducationLevelClassifierService, EducationLevelClassifierService>();
         services.AddScoped<IEducationLevelSyncService, EducationLevelSyncService>();
 
+        // Integración DEaDV (certificados de capacitación) - 2026-10-26. Sin redirecciones: el
+        // descargador de PDF valida el host de la URL y un redirect lo saltaría (anti-SSRF).
+        var deadvUrl = configuration["Deadv:ApiUrl"] ?? string.Empty;
+        services.AddHttpClient<IDeadvClient, DeadvClient>(client =>
+        {
+            if (Uri.TryCreate(deadvUrl, UriKind.Absolute, out var deadvUri) && deadvUri.Scheme == Uri.UriSchemeHttps)
+                client.BaseAddress = deadvUri;
+
+            client.Timeout = TimeSpan.FromSeconds(30);
+        }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddScoped<ITrainingSyncService, TrainingSyncService>();
+
         return services;
     }
 

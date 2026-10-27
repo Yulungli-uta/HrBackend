@@ -19,12 +19,78 @@ public class TrainingsController : ControllerBase
     private readonly ITrainingsService _svc;
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUser;
-    public TrainingsController(ITrainingsService svc, IMapper mapper, ICurrentUserService currentUser)
+    private readonly ITrainingSyncService _sync;
+    public TrainingsController(ITrainingsService svc, IMapper mapper, ICurrentUserService currentUser, ITrainingSyncService sync)
     {
         _svc = svc;
         _mapper = mapper;
         _currentUser = currentUser;
+        _sync = sync;
     }
+
+    /// <summary>
+    /// Previsualiza la sincronización con DEaDV: cuántos certificados hay, cuántos ya están
+    /// registrados y cuántos faltan. No persiste nada.
+    /// </summary>
+    [HttpGet("person/{personId:int}/deadv-sync/preview")]
+    [RequirePermission("EMPLOYEE_PROFILE.CREATE")]
+    public async Task<IActionResult> PreviewDeadvSync([FromRoute] int personId, CancellationToken ct)
+    {
+        if (!await CanActOnPersonAsync(personId, ct))
+            return Forbid403("No puede sincronizar capacitaciones de otra persona.");
+        try
+        {
+            return Ok(await _sync.PreviewAsync(personId, ct));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>Confirma la sincronización con DEaDV: crea los faltantes y completa los históricos vinculables.</summary>
+    [HttpPost("person/{personId:int}/deadv-sync/confirm")]
+    [RequirePermission("EMPLOYEE_PROFILE.CREATE")]
+    public async Task<IActionResult> ConfirmDeadvSync([FromRoute] int personId, CancellationToken ct)
+    {
+        if (!await CanActOnPersonAsync(personId, ct))
+            return Forbid403("No puede sincronizar capacitaciones de otra persona.");
+        try
+        {
+            return Ok(await _sync.ConfirmAsync(personId, ct));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Sirve el PDF del certificado de una capacitación sincronizada. El navegador no puede
+    /// incrustar directamente el de DEaDV (X-Frame-Options), así que lo descarga el backend; la
+    /// URL almacenada nunca se expone.
+    /// </summary>
+    [HttpGet("{id:int}/certificate")]
+    [RequirePermission("EMPLOYEE_PROFILE.READ")]
+    public async Task<IActionResult> GetCertificate([FromRoute] int id, CancellationToken ct)
+    {
+        var training = await _svc.GetByIdAsync(id, ct);
+        if (training is null || string.IsNullOrWhiteSpace(training.CertificateUrl)) return NotFound();
+
+        if (!await CanActOnPersonAsync(training.PersonId, ct))
+            return Forbid403("No puede consultar certificados de otra persona.");
+
+        var pdf = await _sync.GetCertificatePdfAsync(training, ct);
+        if (pdf is null)
+            return StatusCode(502, new { message = "No se pudo obtener el certificado desde DEaDV. Intente nuevamente más tarde." });
+
+        Response.Headers["Cache-Control"] = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        return File(pdf, "application/pdf");
+    }
+
+    private async Task<bool> CanActOnPersonAsync(int personId, CancellationToken ct) =>
+        ElevatedRoles.Any(User.IsInRole) || await _currentUser.GetPersonIdAsync(ct) == personId;
 
     /// <summary>Lista todos los registros de Trainings. Requiere rol de RRHH/administración.</summary>
     [HttpGet]

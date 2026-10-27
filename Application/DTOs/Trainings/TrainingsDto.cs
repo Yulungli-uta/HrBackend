@@ -22,4 +22,8 @@ public class TrainingsDto
     public int? TrainingDirectionTypeId { get; set; }
     public int? ModalityTypeId { get; set; }
     public string? CountryId { get; set; }
+    /// <summary>Manual, DEaDV o Importado.</summary>
+    public string Source { get; set; } = "Manual";
+    /// <summary>true si hay certificado de DEaDV consultable (la URL real nunca sale del backend).</summary>
+    public bool HasDeadvCertificate { get; set; }
 }

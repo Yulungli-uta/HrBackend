@@ -48,10 +48,19 @@ public class TrainingsService : Service<Trainings, int>, ITrainingsService
         return await base.CreateAsync(entity, ct);
     }
 
-    public override Task UpdateAsync(int id, Trainings entity, CancellationToken ct)
+    public override async Task UpdateAsync(int id, Trainings entity, CancellationToken ct)
     {
         NormalizePedagogy(entity);
-        return base.UpdateAsync(id, entity, ct);
+
+        // El origen del registro (Source/ExternalId/CertificateUrl) no viaja en el DTO de edición;
+        // sin esto, SetValues lo reiniciaría a "Manual" y borraría el vínculo con DEaDV.
+        var existing = await _repository.GetByIdAsync(id, ct)
+            ?? throw new KeyNotFoundException($"Trainings con clave [{id}] no encontrado para actualización.");
+        entity.Source = existing.Source;
+        entity.ExternalId = existing.ExternalId;
+        entity.CertificateUrl = existing.CertificateUrl;
+
+        await base.UpdateAsync(id, entity, ct);
     }
 
     public async Task<(Trainings entity, StoredFile? storedFile, string? error)> CreateWithDocumentAsync(
