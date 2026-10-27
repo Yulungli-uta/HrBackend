@@ -162,7 +162,7 @@ public class JustificationsService : Service<PunchJustifications, int>, IJustifi
             incomingHasStatus = !string.IsNullOrWhiteSpace(patch.Status);
             newStatus = incomingHasStatus ? NormalizeStatus(patch.Status) : oldStatus;
 
-            // 4) AplicaciÛn parcial (no pisar null/default)
+            // 4) Aplicaci√≥n parcial (no pisar null/default)
             if (incomingHasStatus)
                 current.Status = newStatus;
 
@@ -196,12 +196,12 @@ public class JustificationsService : Service<PunchJustifications, int>, IJustifi
             await base.UpdateAsync(id, current, ct);
 
             updated = await _repository.GetByIdAsync(id, ct)
-                ?? throw new InvalidOperationException("Error al recargar la justificaciÛn actualizada.");
+                ?? throw new InvalidOperationException("Error al recargar la justificaci√≥n actualizada.");
 
             await tx.CommitAsync(ct);
         });
 
-        // 5) DecisiÛn de envÌo
+        // 5) Decisi√≥n de env√≠o
         var statusChanged = updated is not null &&
             !string.Equals(oldStatus, newStatus, StringComparison.OrdinalIgnoreCase);
 
@@ -222,7 +222,7 @@ public class JustificationsService : Service<PunchJustifications, int>, IJustifi
                 approvedAtJustSet
             }, LogJsonOptions));
 
-        // RecomendaciÛn: enviar si cambia estado o si se aprobÛ por primera vez (ApprovedAt set)
+        // Recomendaci√≥n: enviar si cambia estado o si se aprob√≥ por primera vez (ApprovedAt set)
         if (updated is not null && (statusChanged || approvedAtJustSet))
         {
             await NotifyOnStatusChangedAsync(updated, oldStatus, newStatus, ct);
@@ -244,7 +244,7 @@ public class JustificationsService : Service<PunchJustifications, int>, IJustifi
             var bossEmail = await GetBossEmailAsync(created.BossEmployeeId, ct);
             if (string.IsNullOrWhiteSpace(bossEmail))
             {
-                _logger.LogWarning("JUST CREATE => BossEmail vacÌo. PunchJustId={Id}", created.PunchJustId);
+                _logger.LogWarning("JUST CREATE => BossEmail vac√≠o. PunchJustId={Id}", created.PunchJustId);
                 return;
             }
 
@@ -253,7 +253,7 @@ public class JustificationsService : Service<PunchJustifications, int>, IJustifi
 
             await _emailBuilder.TryNotifyAsync(
                 EmailTemplateKey.AttendancePunch,
-                $"JustificaciÛn #{created.PunchJustId} para aprobaciÛn",
+                $"Justificaci√≥n #{created.PunchJustId} para aprobaci√≥n",
                 body,
                 to: bossEmail,
                 timeoutSeconds: 15,
@@ -283,7 +283,7 @@ public class JustificationsService : Service<PunchJustifications, int>, IJustifi
 
                 await _emailBuilder.TryNotifyAsync(
                     EmailTemplateKey.AttendancePunch,
-                    $"JustificaciÛn #{updated.PunchJustId} para aprobaciÛn",
+                    $"Justificaci√≥n #{updated.PunchJustId} para aprobaci√≥n",
                     body,
                     to: bossEmail,
                     timeoutSeconds: 15,
@@ -303,7 +303,7 @@ public class JustificationsService : Service<PunchJustifications, int>, IJustifi
 
                 await _emailBuilder.TryNotifyAsync(
                     EmailTemplateKey.AttendancePunch,
-                    $"Estado de justificaciÛn #{updated.PunchJustId}: {newStatus}",
+                    $"Estado de justificaci√≥n #{updated.PunchJustId}: {newStatus}",
                     body,
                     to: toEmployee,
                     timeoutSeconds: 15,
@@ -369,9 +369,9 @@ public class JustificationsService : Service<PunchJustifications, int>, IJustifi
         var date = just.JustificationDate ?? just.StartDate ?? just.EndDate;
 
         return
-            $"<p>Registro de JustificaciÛn.</p>" +
+            $"<p>Registro de Justificaci√≥n.</p>" +
             $"<ul>" +
-            $"<p>Se ha registrado una justificaciÛn para su aprobaciÛn.</p>" +
+            $"<p>Se ha registrado una justificaci√≥n para su aprobaci√≥n.</p>" +
             $"<li><b>Empleado:</b> {requesterName}</li>" +
             (date.HasValue ? $"<li><b>Fecha:</b> {date:yyyy-MM-dd}</li>" : "") +
             (just.StartDate.HasValue ? $"<li><b>Desde:</b> {just.StartDate:yyyy-MM-dd HH:mm}</li>" : "") +
@@ -387,9 +387,9 @@ public class JustificationsService : Service<PunchJustifications, int>, IJustifi
         var date = just.JustificationDate ?? just.StartDate ?? just.EndDate;
 
         return
-            $"<p>Estado de JustificaciÛn.</p>" +
+            $"<p>Estado de Justificaci√≥n.</p>" +
             $"<ul>" +
-            $"<p>El estado de la justificaciÛn #{just.PunchJustId} cambiÛ de <b>{oldStatus}</b> a <b>{newStatus}</b>.</p>" +
+            $"<p>El estado de la justificaci√≥n #{just.PunchJustId} cambi√≥ de <b>{oldStatus}</b> a <b>{newStatus}</b>.</p>" +
             (date.HasValue ? $"<li><b>Fecha:</b> {date:yyyy-MM-dd}</li>" : "") +
             (just.StartDate.HasValue ? $"<li><b>Desde:</b> {just.StartDate:yyyy-MM-dd HH:mm}</li>" : "") +
             (just.EndDate.HasValue ? $"<li><b>Hasta:</b> {just.EndDate:yyyy-MM-dd HH:mm}</li>" : "") +
