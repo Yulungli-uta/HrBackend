@@ -4,7 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using WsUtaSystem.Application.Interfaces.Services.Academic;
 
-namespace WsUtaSystem.Application.Services.Academic;
+namespace WsUtaSystem.Infrastructure.ExternalServices.Provisioning;
 
 /// <summary>
 /// Typed HttpClient que delega operaciones AD de estudiantes a RepositoryUta.

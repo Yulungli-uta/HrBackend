@@ -174,7 +174,12 @@ public interface IAttendanceCalculationsReportRepository
     /// Identification (cédula) y LaborRegimeId (todos opcionales).
     /// </param>
     /// <param name="ct">Token de cancelación.</param>
-    Task<IReadOnlyList<NightHoursSummaryReportDto>> GetNightHoursSummaryDataAsync(
+    /// <returns>
+    /// Las filas por empleado y, si <c>ExcludeGuards</c> es true, los cargos excluidos con el total de personas y horas
+    /// que se dejaron fuera. Si se pide excluir y el parámetro <c>GUARD_JOB_NAMES</c> no está configurado, lanza
+    /// <c>BusinessRuleException</c> en vez de excluir en silencio.
+    /// </returns>
+    Task<NightHoursSummaryResultDto> GetNightHoursSummaryDataAsync(
         ReportFilterDto filter,
         CancellationToken ct = default);
 

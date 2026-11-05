@@ -20,6 +20,12 @@ public interface ITeacherStructureService
     /// <summary>Actualiza una estructura docente existente.</summary>
     Task<TeacherStructureDto> UpdateAsync(int id, TeacherStructureUpdateDto dto, CancellationToken ct);
 
+    /// <summary>
+    /// Aplica un cambio de escalafón/dedicación: cierra la estructura vigente y crea una nueva en una sola
+    /// transacción, con auditoría. Devuelve la estructura nueva.
+    /// </summary>
+    Task<TeacherStructureDto> ApplyChangeAsync(int id, TeacherStructureApplyChangeDto dto, CancellationToken ct);
+
     /// <summary>Inactiva (soft-delete) una estructura docente.</summary>
     Task DeactivateAsync(int id, CancellationToken ct);
 }

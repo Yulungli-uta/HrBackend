@@ -15,6 +15,18 @@ public interface IContractsService : IService<Contracts, int> {
     Task<int?> ResolvePersonIdByEmployeeIdAsync(int employeeId, CancellationToken ct);
 
     /// <summary>
+    /// Nombre completo y cédula de las personas indicadas, en una sola consulta (para los listados de contratos).
+    /// Las personas que no existan no aparecen en el resultado.
+    /// </summary>
+    Task<IReadOnlyDictionary<int, (string FullName, string IdCard)>> GetPersonSummariesAsync(IEnumerable<int> personIds, CancellationToken ct);
+
+    /// <summary>
+    /// PersonId de las personas cuya cédula o nombre contienen el texto buscado (mínimo 3 caracteres,
+    /// tope de 500). Permite que el buscador de contratos encuentre por titular además de por código.
+    /// </summary>
+    Task<IReadOnlyList<int>> SearchPersonIdsByTextAsync(string term, CancellationToken ct);
+
+    /// <summary>
     /// Corrige los datos de un contrato en CUALQUIER estado (a diferencia de
     /// <see cref="UpdateAsync(int, ContractsUpdateDto, CancellationToken)"/>, que solo permite
     /// BORRADOR/GENERADO). Exige motivo obligatorio y queda registrada en HR.Audit

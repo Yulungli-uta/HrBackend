@@ -84,10 +84,12 @@ public sealed partial class AttendanceCalculationsReportRepository
         var startDate = filter.StartDate.HasValue ? DateOnly.FromDateTime(filter.StartDate.Value) : _clock.Today.AddDays(-7);
         var endDate = filter.EndDate.HasValue ? DateOnly.FromDateTime(filter.EndDate.Value) : _clock.Today;
 
+        var activeIds = ActiveEmployeeIds();
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
-                    join ved in _db.vwEmployeeDetails.AsNoTracking() on calc.EmployeeId equals ved.EmployeeID
+                    join ved in EmployeeDetailsIncludingInactive() on calc.EmployeeId equals ved.EmployeeID
                     where calc.WorkDate >= startDate && calc.WorkDate <= endDate
                           && (calc.ScheduledEntryTime != null || calc.FirstPunchIn != null)
+                          && (calc.FirstPunchIn != null || activeIds.Contains(calc.EmployeeId))
                     select new { calc, ved };
 
         // Mismo criterio de atraso que el resumen (GetLatenessSummaryDataAsync) para que el detalle cuadre con sus totales.

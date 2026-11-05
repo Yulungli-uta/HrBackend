@@ -25,4 +25,21 @@ public class PublicationsDto
     public DateOnly PublicationDate { get; set; }
     public bool UTAffiliation { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>Origen del registro (ref_Types SCIENTIFIC_PROVIDER): MANUAL, MIGRACION o un proveedor como SCOPUS.</summary>
+    public int SourceProviderTypeId { get; set; }
+    public string? ExternalId { get; set; }
+    /// <summary>SIN_REVISION, APROBADA (congelada) o RECHAZADA.</summary>
+    public string ApprovalStatus { get; set; } = "SIN_REVISION";
+    public DateTime? ApprovedAt { get; set; }
+    public int? ApprovedBy { get; set; }
+    public string? ReviewNotes { get; set; }
+    public DateTime? LastSyncedAt { get; set; }
+
+    /// <summary>La publicación no se puede modificar ni eliminar (aprobada o rechazada).</summary>
+    public bool IsLocked { get; set; }
+    /// <summary>El origen exige revisión de la Dirección de Investigación (lo sincronizado de un proveedor).</summary>
+    public bool RequiresApproval { get; set; }
+    /// <summary>Cuenta en el CV en PDF y en la promoción docente.</summary>
+    public bool CountsForCv { get; set; }
 }

@@ -39,8 +39,20 @@ public sealed record LatenessReportDto
     /// <summary>Hora de entrada del horario programado.</summary>
     public TimeOnly? ScheduledEntryTime { get; init; }
 
+    /// <summary>Hora de salida del horario programado.</summary>
+    public TimeOnly? ScheduledExitTime { get; init; }
+
     /// <summary>Hora real de primera marcación de entrada.</summary>
     public DateTime? FirstPunchIn { get; init; }
+
+    /// <summary>Hora real de la última marcación de salida de la jornada.</summary>
+    public DateTime? LastPunchOut { get; init; }
+
+    /// <summary>Hora real de salida a almuerzo (null si no hay picada).</summary>
+    public DateTime? LunchOut { get; init; }
+
+    /// <summary>Hora real de regreso de almuerzo (null si no hay picada).</summary>
+    public DateTime? LunchIn { get; init; }
 
     /// <summary>Minutos de salida anticipada del turno.</summary>
     public int EarlyLeaveMinutes { get; init; }

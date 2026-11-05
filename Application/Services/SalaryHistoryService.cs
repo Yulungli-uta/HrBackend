@@ -95,6 +95,74 @@ public class SalaryHistoryService : Service<SalaryHistory, int>, ISalaryHistoryS
     }
 
     /// <inheritdoc/>
+    public async Task<SalaryHistory> CreateManualAsync(SalaryHistory entity, string changedBy, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+
+        var reason = entity.Reason?.Trim();
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length < 5)
+            throw new InvalidOperationException("Debe indicar el motivo del registro (mínimo 5 caracteres).");
+        if (entity.NewSalary <= 0)
+            throw new InvalidOperationException("El sueldo debe ser mayor a 0.");
+        if (!entity.EmployeeId.HasValue)
+            throw new InvalidOperationException("Indique el empleado al que pertenece el sueldo.");
+        if (entity.ActionId.HasValue == entity.ContractId.HasValue)
+            throw new InvalidOperationException("Indique exactamente un documento fuente: una acción de personal o un contrato.");
+
+        var employeeId = entity.EmployeeId.Value;
+
+        if (entity.ActionId.HasValue)
+        {
+            var action = await _db.PersonnelActions.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.ActionId == entity.ActionId.Value && !a.IsDeleted, ct)
+                ?? throw new KeyNotFoundException($"La acción de personal {entity.ActionId} no existe.");
+            if (action.EmployeeId != employeeId)
+                throw new InvalidOperationException("La acción de personal indicada no pertenece a ese empleado.");
+            if (await _repository.GetByActionIdAsync(entity.ActionId.Value, ct) is not null)
+                throw new InvalidOperationException(
+                    "Esa acción ya tiene su sueldo en el libro. Para cambiarlo, corrija la acción de personal desde su pantalla de Corrección.");
+        }
+        else
+        {
+            var contractId = entity.ContractId!.Value;
+            var contract = await _db.Contracts.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.ContractID == contractId, ct)
+                ?? throw new KeyNotFoundException($"El contrato {contractId} no existe.");
+            var belongs = await _db.Employees.AsNoTracking()
+                .AnyAsync(e => e.EmployeeId == employeeId && e.PersonID == contract.PersonID, ct);
+            if (!belongs)
+                throw new InvalidOperationException("El contrato indicado no pertenece a ese empleado.");
+            if (await _repository.GetByContractIdAsync(contractId, ct) is not null)
+                throw new InvalidOperationException(
+                    "Ese contrato ya tiene su sueldo en el libro. Para cambiarlo, corrija el contrato desde su pantalla de Corrección.");
+        }
+
+        var previous = await _repository.GetLatestByEmployeeIdAsync(employeeId, ct);
+
+        // Usuario, fecha y sueldo anterior los decide el servidor, nunca el cliente.
+        entity.SalaryHistoryId = 0;
+        entity.Reason          = reason;
+        entity.ChangedBy       = changedBy;
+        entity.ChangedAt       = _clock.Now;
+        entity.OldSalary       = previous?.NewSalary ?? entity.NewSalary;
+
+        await _repository.AddAsync(entity, ct);
+        return entity;
+    }
+
+    /// <summary>
+    /// Toda fila del libro depende de un documento fuente (CK_SalaryHistory_HasSource), así que editarla directamente
+    /// dejaría el documento y el libro en desacuerdo. El cambio correcto es corregir el documento.
+    /// </summary>
+    public override Task UpdateAsync(int id, SalaryHistory entity, CancellationToken ct) =>
+        throw new InvalidOperationException(
+            "No se puede editar una fila del libro de sueldos directamente: corrija el documento fuente (acción de personal o contrato) desde su pantalla de Corrección.");
+
+    /// <summary>Misma razón que <see cref="UpdateAsync"/>: borrar una fila dejaría un documento sin su sueldo registrado.</summary>
+    public override Task DeleteAsync(int id, CancellationToken ct) =>
+        throw new InvalidOperationException(
+            "No se puede eliminar una fila del libro de sueldos: corrija o anule el documento fuente (acción de personal o contrato).");
+
     public async Task<decimal?> GetReferenceRmuAsync(int? employeeId, int? jobId, CancellationToken ct = default)
     {
         if (!employeeId.HasValue && !jobId.HasValue)

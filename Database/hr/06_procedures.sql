@@ -4420,6 +4420,84 @@ RETURN
 );
 GO
 
+-- [vw_SalaryConsistency]
+-- 2026-10-29: inconsistencias de sueldo para revisión de RRHH (SOLO LECTURA, no corrige nada). El libro
+-- HR.tbl_SalaryHistory (leído por HR.vw_EmployeeCurrentSalary) es la fuente única de "sueldo actual"; esta vista
+-- lista dónde otra fuente no coincide con él. Se filtra por IssueType:
+--   NOMINA_DISTINTA_DEL_LIBRO      empleado activo: la tarifa de nómina (fn_ResolveEmployeeRate) difiere del libro.
+--                                  Causa más común: la acción del libro no tiene NewRmu y la nómina solo mira NewRmu.
+--   SOLO_EN_LIBRO                  empleado activo con sueldo en el libro y sin tarifa de nómina.
+--   LIBRO_POR_REVISAR              el sueldo del libro es de respaldo (sin documento válido) o ambiguo (empate real).
+--   ESTRUCTURA_DOCENTE_DISTINTA    HR.tbl_TeacherStructure.Rmu (campo duplicado, no se usa para mostrar) difiere del libro.
+--   CORRECCION_NO_PREVALECE        una acción dejada VIGENTE por una corrección de pantalla no es el origen del sueldo y
+--                                  su monto difiere del que rige (debe quedar en 0 filas tras el ajuste de vw_EmployeeCurrentSalary).
+CREATE OR ALTER VIEW HR.vw_SalaryConsistency AS
+WITH payroll AS (
+    SELECT r.EmployeeID, r.RMU, r.SourceType,
+           ROW_NUMBER() OVER (PARTITION BY r.EmployeeID ORDER BY r.IsPrincipal DESC, r.RMU DESC) AS rn
+    FROM HR.fn_ResolveEmployeeRate(CAST(SYSDATETIME() AS date), NULL) r
+),
+ledger AS (
+    SELECT cs.EmployeeID, cs.SalaryHistoryID, cs.NewSalary, cs.SourceType, cs.InForce, cs.IsFallback, cs.IsAmbiguous,
+           sh.ActionID, pa.ActionNumber, pa.NewRmu AS ActionNewRmu
+    FROM HR.vw_EmployeeCurrentSalary cs
+    JOIN HR.tbl_SalaryHistory sh ON sh.SalaryHistoryID = cs.SalaryHistoryID
+    LEFT JOIN HR.tbl_PersonnelActions pa ON pa.ActionID = sh.ActionID
+),
+issues AS (
+    -- 1) Nómina distinta del libro
+    SELECT 'NOMINA_DISTINTA_DEL_LIBRO' AS IssueType, l.EmployeeID, l.NewSalary AS LedgerSalary, p.RMU AS OtherSalary,
+           CASE WHEN l.SourceType = 'ACCION' AND l.ActionNewRmu IS NULL
+                THEN N'La acción ' + ISNULL(l.ActionNumber, N'') + N' del libro no tiene NewRmu: la nómina no la ve.'
+                ELSE N'Nómina (' + p.SourceType + N') y libro (' + l.SourceType + N') eligen documentos distintos.' END AS Detail
+    FROM ledger l
+    JOIN payroll p ON p.EmployeeID = l.EmployeeID AND p.rn = 1
+    WHERE p.RMU <> l.NewSalary
+    UNION ALL
+    -- 2) Solo en el libro
+    SELECT 'SOLO_EN_LIBRO', l.EmployeeID, l.NewSalary, NULL,
+           CASE WHEN l.SourceType = 'ACCION' AND l.ActionNewRmu IS NULL
+                THEN N'La acción ' + ISNULL(l.ActionNumber, N'') + N' no tiene NewRmu: la nómina no la ve.'
+                ELSE N'Sin tarifa de nómina para este empleado.' END
+    FROM ledger l
+    WHERE NOT EXISTS (SELECT 1 FROM payroll p WHERE p.EmployeeID = l.EmployeeID)
+    UNION ALL
+    -- 3) Libro de respaldo o ambiguo
+    SELECT 'LIBRO_POR_REVISAR', l.EmployeeID, l.NewSalary, NULL,
+           CASE WHEN l.IsFallback = 1 THEN N'Sueldo de respaldo: no hay un documento válido que rija.'
+                ELSE N'Dos documentos empatan en fecha con montos distintos; se tomó el mayor.' END
+    FROM ledger l
+    WHERE l.IsFallback = 1 OR l.IsAmbiguous = 1
+    UNION ALL
+    -- 4) RMU duplicado en la estructura docente
+    SELECT 'ESTRUCTURA_DOCENTE_DISTINTA', t.EmployeeID, l.NewSalary, t.Rmu,
+           N'TeacherStructure.Rmu difiere del libro; el libro es la fuente.'
+    FROM HR.tbl_TeacherStructure t
+    JOIN ledger l ON l.EmployeeID = t.EmployeeID
+    WHERE t.IsActive = 1 AND t.Rmu IS NOT NULL AND t.Rmu <> l.NewSalary
+    UNION ALL
+    -- 5) Corrección de pantalla que no prevalece (control de regresión)
+    SELECT 'CORRECCION_NO_PREVALECE', pa.EmployeeID, l.NewSalary, pa.NewRmu,
+           N'La acción ' + ISNULL(pa.ActionNumber, N'') + N' fue dejada VIGENTE por corrección y no es el origen del sueldo.'
+    FROM HR.tbl_PersonnelActions pa
+    JOIN ledger l ON l.EmployeeID = pa.EmployeeID
+    WHERE pa.Status = 'VIGENTE' AND pa.IsDeleted = 0 AND pa.NewRmu IS NOT NULL AND pa.NewRmu <> l.NewSalary
+      AND ISNULL(l.ActionID, 0) <> pa.ActionID
+      AND EXISTS (SELECT 1 FROM (SELECT TOP 1 h.ToStatus, h.Notes
+                                 FROM HR.tbl_PersonnelActionStatusHistory h
+                                 WHERE h.ActionId = pa.ActionID
+                                 ORDER BY h.ChangedAt DESC, h.HistoryId DESC) lh
+                  WHERE lh.ToStatus = 'VIGENTE' AND lh.Notes LIKE N'CORRECCI%')
+)
+SELECT i.IssueType, i.EmployeeID, pe.IDCard, LTRIM(RTRIM(CONCAT(pe.LastName, N' ', pe.FirstName))) AS FullName,
+       e.IsActive AS EmployeeIsActive, i.LedgerSalary, i.OtherSalary, i.Detail
+FROM issues i
+JOIN HR.tbl_Employees e ON e.EmployeeID = i.EmployeeID
+JOIN HR.tbl_People pe ON pe.PersonID = e.PersonID
+WHERE (i.IssueType IN ('NOMINA_DISTINTA_DEL_LIBRO', 'SOLO_EN_LIBRO') AND e.IsActive = 1)
+   OR i.IssueType IN ('LIBRO_POR_REVISAR', 'ESTRUCTURA_DOCENTE_DISTINTA', 'CORRECCION_NO_PREVALECE');
+GO
+
 -- [sp_Overtime_Price]
 
 
@@ -5211,7 +5289,8 @@ BEGIN
     -- 2026-10-08: @RequiredMin > 0 evita falso positivo en días de descanso
     -- (fin de semana sin horario asignado) donde Regular/Tardiness/Required
     -- son todos 0 y "0 >= 0" calificaba como jornada cumplida.
-    IF (@ContractType = N'Código Trabajo' AND @RequiredMin > 0 AND (@RegularMinutes + @TardinessMin) >= @RequiredMin)
+    -- 2026-11-05: el atraso ya no se suma de vuelta; quien no cumple la jornada completa asignada no recibe subsidio.
+    IF (@ContractType = N'Código Trabajo' AND @RequiredMin > 0 AND @RegularMinutes >= @RequiredMin)
         SET @FoodSubsidy = 1;
     ELSE
         SET @FoodSubsidy = 0;
@@ -5802,7 +5881,8 @@ BEGIN
 
 	--IF (@ContractType = N'Código Trabajo' AND (@InsideMinutes + @TardinessMin) >= @RequiredMinutes)
 	-- 2026-10-08: @RequiredMinutes > 0 evita falso positivo en días de descanso (ver FinalizeDay).
-	IF (@ContractType = N'Código Trabajo' AND @RequiredMinutes > 0 AND (@RegularMinutes + @TardinessMin) >= @RequiredMinutes)
+	-- 2026-11-05: el atraso ya no se suma de vuelta (ver FinalizeDay).
+	IF (@ContractType = N'Código Trabajo' AND @RequiredMinutes > 0 AND @RegularMinutes >= @RequiredMinutes)
 		SET @FoodSubsidy = 1;
 	ELSE
 		SET @FoodSubsidy = 0;
@@ -5966,7 +6046,8 @@ BEGIN
     -- descanso (fin de semana sin horario asignado) donde Regular/Tardiness/Required
     -- son todos 0 y "0 >= 0" calificaba el día como jornada cumplida.
     IF (@ContractType = N'Código Trabajo' AND ISNULL(@RequiredMinutes,0) > 0
-        AND ISNULL(@RegularMinutes,0) + ISNULL(@TardinessMin,0) >= ISNULL(@RequiredMinutes,0)
+        -- 2026-11-05: jornada completa efectiva; el atraso ya no se suma de vuelta ni se recupera sin planificación.
+        AND ISNULL(@RegularMinutes,0) >= ISNULL(@RequiredMinutes,0)
         -- 2026-10-16: un día con permiso (aunque sea por horas), vacación o licencia médica no genera subsidio.
         AND ISNULL(@LeaveMinutes,0) = 0)
         SET @FoodSubsidy = 1;
@@ -6417,20 +6498,35 @@ BEGIN
         ), 0)
     FROM VacationWindows;
 
+    /* 2026-11-05: permiso de día completo (o de varios días) guardado solo con fechas.
+       El formulario guarda Inicio y Fin a las 00:00 (sin hora); con el Fin crudo la ventana medía 0 minutos
+       y el permiso no justificaba la ausencia. Igual que las vacaciones, el Fin de un permiso sin hora es
+       INCLUSIVO: la ventana llega hasta el final de ese día.
+       Solo aplica si Inicio y Fin vienen exactamente a las 00:00 y HourTaken es nulo, 0 o una jornada completa
+       o más. Un HourTaken entre 1 y (jornada - 1) con fechas sin hora es un permiso por horas guardado sin
+       horario: ese no se interpreta como día completo (se conserva el comportamiento anterior). */
+    DECLARE @WorkMinPerDay INT =
+        ISNULL((SELECT TOP 1 TRY_CAST(Pvalues AS INT) FROM HR.tbl_Parameters WHERE Name = 'WORK_MINUTES_PER_DAY' AND IsActive = 1), 480);
+    IF @WorkMinPerDay IS NULL OR @WorkMinPerDay <= 0 SET @WorkMinPerDay = 480;
+
     ;WITH PermissionWindows AS
     (
         SELECT
             pt.IsMedical,
             p.ChargedToVacation,
             OverlapStart = CASE WHEN p.StartDate > @ShiftStart THEN p.StartDate ELSE @ShiftStart END,
-            OverlapEnd   = CASE WHEN p.EndDate   < @ShiftEnd   THEN p.EndDate   ELSE @ShiftEnd   END
+            OverlapEnd   = CASE WHEN x.EffEnd    < @ShiftEnd   THEN x.EffEnd    ELSE @ShiftEnd   END
         FROM HR.tbl_Permissions p
         INNER JOIN HR.tbl_PermissionTypes pt
             ON pt.TypeID = p.PermissionTypeID
+        CROSS APPLY (SELECT EffEnd = CASE WHEN CAST(p.StartDate AS TIME) = '00:00:00'
+                                           AND CAST(p.EndDate   AS TIME) = '00:00:00'
+                                           AND (p.HourTaken IS NULL OR p.HourTaken = 0 OR p.HourTaken >= @WorkMinPerDay)
+                                          THEN DATEADD(DAY, 1, p.EndDate) ELSE p.EndDate END) x
         WHERE p.EmployeeID = @EmployeeID
           AND p.Status = 'Approved'
           AND p.StartDate < @ShiftEnd
-          AND p.EndDate   > @ShiftStart
+          AND x.EffEnd    > @ShiftStart
     )
     SELECT
         @PermissionMinutes = ISNULL(SUM(
@@ -6517,14 +6613,18 @@ BEGIN
         (
             SELECT
                 LateStart  = CASE WHEN p.StartDate > @ShiftStart THEN p.StartDate ELSE @ShiftStart END,
-                LateEnd    = CASE WHEN p.EndDate < @FirstPunchIn THEN p.EndDate ELSE @FirstPunchIn END,
+                LateEnd    = CASE WHEN x.EffEnd < @FirstPunchIn THEN x.EffEnd ELSE @FirstPunchIn END,
                 EarlyStart = CASE WHEN p.StartDate > @LastPunchOut THEN p.StartDate ELSE @LastPunchOut END,
-                EarlyEnd   = CASE WHEN p.EndDate < @ShiftEnd THEN p.EndDate ELSE @ShiftEnd END
+                EarlyEnd   = CASE WHEN x.EffEnd < @ShiftEnd THEN x.EffEnd ELSE @ShiftEnd END
             FROM HR.tbl_Permissions p
+            CROSS APPLY (SELECT EffEnd = CASE WHEN CAST(p.StartDate AS TIME) = '00:00:00'
+                                               AND CAST(p.EndDate   AS TIME) = '00:00:00'
+                                               AND (p.HourTaken IS NULL OR p.HourTaken = 0 OR p.HourTaken >= @WorkMinPerDay)
+                                              THEN DATEADD(DAY, 1, p.EndDate) ELSE p.EndDate END) x
             WHERE p.EmployeeID = @EmployeeID
               AND p.Status = 'Approved'
               AND p.StartDate < @ShiftEnd
-              AND p.EndDate   > @ShiftStart
+              AND x.EffEnd    > @ShiftStart
         )
         SELECT
             @LateCovered = ISNULL(SUM(CASE WHEN @FirstPunchIn IS NOT NULL AND LateEnd > LateStart

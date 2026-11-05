@@ -10,6 +10,11 @@ public class TeacherStructure : IAuditable
     public int DedicationTypeId { get; set; }
     public decimal? WeeklyClassHours { get; set; }
     public decimal? HourValue { get; set; }
+    /// <summary>
+    /// LEGADO: no es fuente de lectura. El sueldo vigente del docente se lee de <c>HR.vw_EmployeeCurrentSalary</c> (libro
+    /// <c>HR.tbl_SalaryHistory</c>); este campo puede estar vacío o desactualizado y no se sincroniza. Los cambios de
+    /// escalafón (<c>ApplyChangeAsync</c>) lo dejan en NULL a propósito.
+    /// </summary>
     public decimal? Rmu { get; set; }
     public int? DepartmentId { get; set; }
     public DateOnly StartDate { get; set; }

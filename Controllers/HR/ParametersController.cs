@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 using System.Linq.Expressions;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.DTOs.Parameters;
 using WsUtaSystem.Application.DTOs.RefTypes;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -22,10 +23,26 @@ public class ParametersController : ControllerBase
 
     public ParametersController(IParametersService svc, IMapper mapper, IAppClock clock) { _svc = svc; _mapper = mapper; _clock = clock; }
 
+    /// <summary>
+    /// Mapea a DTO ocultando el valor de las credenciales (claves de API, tokens): cualquier usuario autenticado puede leer
+    /// los parámetros, así que un secreto nunca sale en claro; solo se informa si tiene valor.
+    /// </summary>
+    private ParametersDto ToSafeDto(Parameters entity)
+    {
+        var dto = _mapper.Map<ParametersDto>(entity);
+        if (ParameterSecrecy.IsSecret(dto.Name))
+        {
+            dto.IsSecret = true;
+            dto.HasValue = !string.IsNullOrEmpty(dto.Pvalues);
+            dto.Pvalues = null;
+        }
+        return dto;
+    }
+
     /// <summary>Lista todos los registros de Parameters.</summary>
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
-        Ok(_mapper.Map<List<ParametersDto>>(await _svc.GetAllAsync(ct)));
+        Ok((await _svc.GetAllAsync(ct)).Select(ToSafeDto).ToList());
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
@@ -33,7 +50,7 @@ public class ParametersController : ControllerBase
     public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken ct)
     {
         var e = await _svc.GetByIdAsync(id, ct);
-        return e is null ? NotFound() : Ok(_mapper.Map<ParametersDto>(e));
+        return e is null ? NotFound() : Ok(ToSafeDto(e));
     }
 
     /// <summary>Retorna un resultado paginado de parámetros.</summary>
@@ -63,7 +80,7 @@ public class ParametersController : ControllerBase
             ? await _svc.GetPagedAsync(predicate, page, pageSize, ct)
             : await _svc.GetPagedAsync(page, pageSize, ct);
 
-        var dtoItems = _mapper.Map<List<ParametersDto>>(pagedEntities.Items);
+        var dtoItems = pagedEntities.Items.Select(ToSafeDto).ToList();
 
         return Ok(new
         {
@@ -89,7 +106,7 @@ public class ParametersController : ControllerBase
             return NotFound($"No se encontraron parámetros con el nombre '{name}'");
 
         // ✅ devuelve DTOs, no entidades
-        return Ok(_mapper.Map<List<ParametersDto>>(entities));
+        return Ok(entities.Select(ToSafeDto).ToList());
     }
 
     /// <summary>Crea un nuevo registro.</summary>
@@ -101,7 +118,7 @@ public class ParametersController : ControllerBase
         entityObj.CreatedAt = _clock.Now;
         var created = await _svc.CreateAsync(entityObj, ct);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
-        return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<ParametersDto>(created));
+        return CreatedAtAction(nameof(GetById), new { id = idVal }, created is null ? null : ToSafeDto(created));
     }
 
     /// <summary>Actualiza un registro existente.</summary>
@@ -111,6 +128,15 @@ public class ParametersController : ControllerBase
     {
         var entityObj = _mapper.Map<Parameters>(dto);
         entityObj.UpdatedAt = _clock.Now;
+
+        // La pantalla nunca recibe el valor de una credencial, así que un valor vacío al guardar significa "no cambiar".
+        if (string.IsNullOrEmpty(dto.Pvalues))
+        {
+            var current = await _svc.GetByIdAsync(id, ct);
+            if (current is not null && (ParameterSecrecy.IsSecret(current.Name) || ParameterSecrecy.IsSecret(dto.Name)))
+                entityObj.Pvalues = current.Pvalues;
+        }
+
         await _svc.UpdateAsync(id, entityObj, ct);
         return NoContent();
     }

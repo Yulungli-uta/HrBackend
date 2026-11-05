@@ -33,34 +33,34 @@ public sealed class LatenessReportSource : IReportSource
     public ReportType ReportType => ReportType.Lateness;
 
     // ─── Claves de columna ────────────────────────────────────────────────────
-    private const string ColEmployeeId         = "employee_id";
     private const string ColIdCard             = "id_card";
     private const string ColFullName           = "full_name";
     private const string ColWorkDate           = "work_date";
-    private const string ColScheduledEntry     = "scheduled_entry";
+    private const string ColScheduled          = "scheduled";
     private const string ColFirstPunchIn       = "first_punch_in";
-    private const string ColMinutesLate        = "minutes_late";
-    private const string ColTardinessMin       = "tardiness_min";
+    private const string ColLunchOut           = "lunch_out";
+    private const string ColLunchIn            = "lunch_in";
+    private const string ColLastPunchOut       = "last_punch_out";
+    private const string ColMinutesLate       = "minutes_late";
     private const string ColEarlyLeave         = "early_leave_min";
     private const string ColHasJustification   = "has_justification";
     private const string ColJustificationMin   = "justification_min";
-    private const string ColStatus             = "status";
 
     /// <summary>Columnas del reporte en orden de visualización.</summary>
     private static readonly IReadOnlyList<ReportColumn> Columns =
     [
-        new(ColEmployeeId,       "ID Emp.",          40f,  ColumnAlignment.Center),
         new(ColIdCard,           "Cédula",           70f,  ColumnAlignment.Left),
         new(ColFullName,         "Nombre Completo",  130f, ColumnAlignment.Left),
         new(ColWorkDate,         "Fecha",            60f,  ColumnAlignment.Center),
-        new(ColScheduledEntry,   "Hora Prog.",       55f,  ColumnAlignment.Center),
-        new(ColFirstPunchIn,     "Entrada Real",     65f,  ColumnAlignment.Center),
+        new(ColScheduled,        "Horario Prog.",    75f,  ColumnAlignment.Center),
+        new(ColFirstPunchIn,     "Entrada Real",     55f,  ColumnAlignment.Center),
+        new(ColLunchOut,         "Sal. Almuerzo",    55f,  ColumnAlignment.Center),
+        new(ColLunchIn,          "Ret. Almuerzo",    55f,  ColumnAlignment.Center),
+        new(ColLastPunchOut,     "Salida Real",      55f,  ColumnAlignment.Center),
         new(ColMinutesLate,      "Min. Atraso",      55f,  ColumnAlignment.Right),
-        new(ColTardinessMin,     "Min. Tardanza",    60f,  ColumnAlignment.Right),
         new(ColEarlyLeave,       "Min. Sal. Ant.",   60f,  ColumnAlignment.Right),
         new(ColHasJustification, "Justificado",      55f,  ColumnAlignment.Center),
         new(ColJustificationMin, "Min. Justif.",     55f,  ColumnAlignment.Right),
-        new(ColStatus,           "Estado",           60f,  ColumnAlignment.Center),
     ];
 
     public LatenessReportSource(
@@ -87,18 +87,18 @@ public sealed class LatenessReportSource : IReportSource
         var rows = data.Select(d => (IReadOnlyDictionary<string, object?>)
             new Dictionary<string, object?>
             {
-                [ColEmployeeId]       = d.EmployeeId,
                 [ColIdCard]           = d.IdCard,
                 [ColFullName]         = d.FullName,
                 [ColWorkDate]         = d.WorkDate.ToString("dd/MM/yyyy"),
-                [ColScheduledEntry]   = d.ScheduledEntryTime?.ToString("HH:mm") ?? "—",
+                [ColScheduled]        = FormatSchedule(d.ScheduledEntryTime, d.ScheduledExitTime),
                 [ColFirstPunchIn]     = d.FirstPunchIn?.ToString("HH:mm") ?? "—",
+                [ColLunchOut]         = d.LunchOut?.ToString("HH:mm") ?? "—",
+                [ColLunchIn]          = d.LunchIn?.ToString("HH:mm") ?? "—",
+                [ColLastPunchOut]     = d.LastPunchOut?.ToString("HH:mm") ?? "—",
                 [ColMinutesLate]      = d.MinutesLate,
-                [ColTardinessMin]     = d.TardinessMin,
                 [ColEarlyLeave]       = d.EarlyLeaveMinutes,
                 [ColHasJustification] = d.HasJustification ? "Sí" : "No",
                 [ColJustificationMin] = d.JustificationMinutes,
-                [ColStatus]           = d.Status,
             })
             .ToList()
             .AsReadOnly();
@@ -123,6 +123,11 @@ public sealed class LatenessReportSource : IReportSource
             RepeatHeaderOnEveryPage = filter.RepeatHeaderOnEveryPage ?? true
         };
     }
+
+    private static string FormatSchedule(TimeOnly? entry, TimeOnly? exit) =>
+        entry.HasValue && exit.HasValue ? $"{entry.Value:HH:mm} - {exit.Value:HH:mm}"
+        : entry.HasValue ? $"{entry.Value:HH:mm}"
+        : "—";
 
     private static string BuildSubtitle(ReportFilterDto filter, int totalRows)
     {

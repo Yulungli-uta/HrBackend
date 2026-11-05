@@ -65,45 +65,24 @@ public sealed class DepartmentsReportRepository : IDepartmentsReportRepository
             .Select(e => new { e.EmployeeId, e.PersonID, e.DepartmentId, e.IsActive })
             .ToListAsync(ct);
 
-        var personIds = employees.Select(e => e.PersonID).Distinct().ToList();
+        // Sueldo: el "último sueldo" vigente de cada EMPLEADO según la regla única del sistema (HR.vw_EmployeeCurrentSalary, que lee
+        // el libro HR.tbl_SalaryHistory por vigencia del documento). Antes se tomaba el último sueldo del contrato más reciente por
+        // persona (ordenado por ChangedAt), lo que dejaba sin sueldo a quien solo tiene nombramiento o acción de personal.
+        var employeeIds = employees.Select(e => e.EmployeeId).ToList();
 
-        // "Top 1 por grupo" no es traducible a SQL por EF Core — se trae a memoria
-        // el conjunto acotado (contratos de estas personas) y se agrupa en LINQ-to-Objects.
-        var contractsByPerson = await _db.Set<Contracts>()
+        var salaryByEmployee = await _db.CurrentSalaries()
             .AsNoTracking()
-            .Where(c => personIds.Contains(c.PersonID))
-            .Select(c => new { c.PersonID, c.ContractID, c.StartDate })
-            .ToListAsync(ct);
-
-        var latestContractByPerson = contractsByPerson
-            .GroupBy(c => c.PersonID)
-            .Select(g => g.OrderByDescending(c => c.StartDate).ThenByDescending(c => c.ContractID).First())
-            .ToList();
-
-        var contractIds = latestContractByPerson.Select(c => c.ContractID).ToList();
-
-        var salariesByContract = await _db.SalaryHistory
-            .AsNoTracking()
-            .Where(s => s.ContractId.HasValue && contractIds.Contains(s.ContractId.Value))
-            .Select(s => new { ContractId = s.ContractId!.Value, s.NewSalary, s.ChangedAt })
-            .ToListAsync(ct);
-
-        var latestSalaryByContract = salariesByContract
-            .GroupBy(s => s.ContractId)
-            .Select(g => g.OrderByDescending(s => s.ChangedAt).First())
-            .ToList();
-
-        var salaryByPerson = latestContractByPerson
-            .Join(latestSalaryByContract, c => c.ContractID, s => s.ContractId, (c, s) => new { c.PersonID, s.NewSalary })
-            .ToDictionary(x => x.PersonID, x => x.NewSalary);
+            .Where(s => s.EmployeeId.HasValue && employeeIds.Contains(s.EmployeeId.Value))
+            .Select(s => new { EmployeeId = s.EmployeeId!.Value, s.NewSalary })
+            .ToDictionaryAsync(s => s.EmployeeId, s => s.NewSalary, ct);
 
         var result = new List<DepartmentReportDto>(departments.Count);
         foreach (var dept in departments)
         {
             var deptEmployees = employees.Where(e => e.DepartmentId == dept.DepartmentId).ToList();
             var salaries = deptEmployees
-                .Where(e => salaryByPerson.ContainsKey(e.PersonID))
-                .Select(e => salaryByPerson[e.PersonID])
+                .Where(e => salaryByEmployee.ContainsKey(e.EmployeeId))
+                .Select(e => salaryByEmployee[e.EmployeeId])
                 .ToList();
 
             result.Add(new DepartmentReportDto

@@ -145,5 +145,11 @@ public enum ReportType
     /// Reporte detallado de picadas: por persona y día, horario programado, si tiene almuerzo, las cuatro
     /// picadas (entrada, salida a almuerzo, regreso de almuerzo y salida) y si tuvo atraso. Incluye días sin picadas.
     /// </summary>
-    PunchDetail = 35
+    PunchDetail = 35,
+
+    /// <summary>
+    /// Reporte de docentes titulares: categoría, nivel, dedicación, horas, dependencia y nombramiento por docente
+    /// (RMU solo con permiso SALARY_HISTORY.READ). Usa la misma consulta que la página "Personal Docente Titular".
+    /// </summary>
+    TeacherRoster = 36
 }

@@ -25,6 +25,7 @@ using WsUtaSystem.Filters;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Infrastructure.Controller;
 using WsUtaSystem.Infrastructure.Email;
+using WsUtaSystem.Infrastructure.ExternalServices;
 using WsUtaSystem.Infrastructure.Filters;
 using WsUtaSystem.Infrastructure.Interceptors;
 using WsUtaSystem.Infrastructure.Jobs;
@@ -485,6 +486,10 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<
             WsUtaSystem.Reports.Abstractions.IReportSource,
+            WsUtaSystem.Reports.Sources.TeacherRosterReportSource>();
+
+        services.AddScoped<
+            WsUtaSystem.Reports.Abstractions.IReportSource,
             WsUtaSystem.Reports.Sources.OvertimePlanDailyReportSource>();
 
         services.AddScoped<
@@ -782,6 +787,16 @@ public static class ServiceCollectionExtensions
         // ── Módulo: Publicaciones ─────────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPublicationsRepository, WsUtaSystem.Infrastructure.Repositories.PublicationsRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPublicationsService, WsUtaSystem.Application.Services.PublicationsService>();
+        // Perfil de investigador (ORCID + IDs por plataforma) y catálogo de proveedores de publicaciones científicas.
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IResearcherProfilesRepository, WsUtaSystem.Infrastructure.Repositories.ResearcherProfilesRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IResearcherProfilesService, WsUtaSystem.Application.Services.ResearcherProfilesService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IScientificProviderCatalog, WsUtaSystem.Application.Services.ScientificProviderCatalog>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPublicationReviewRepository, WsUtaSystem.Infrastructure.Repositories.PublicationReviewRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPublicationReviewService, WsUtaSystem.Application.Services.PublicationReviewService>();
+        // Sincronización de publicaciones científicas (el adaptador de cada proveedor se registra en AddExternalServices).
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPublicationSyncRepository, WsUtaSystem.Infrastructure.Repositories.PublicationSyncRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPublicationSyncService, WsUtaSystem.Application.Services.PublicationSyncService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPublicationMassSyncService, WsUtaSystem.Application.Services.PublicationMassSyncService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IResearchProjectsRepository, WsUtaSystem.Infrastructure.Repositories.ResearchProjectsRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IResearchProjectsService, WsUtaSystem.Application.Services.ResearchProjectsService>();
 
@@ -857,6 +872,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IAcademicLadderService, WsUtaSystem.Application.Services.AcademicLadderService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITeacherStructureRepository, WsUtaSystem.Infrastructure.Repositories.TeacherStructureRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITeacherStructureService, WsUtaSystem.Application.Services.TeacherStructureService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ITeacherRosterRepository, WsUtaSystem.Infrastructure.Repositories.TeacherRosterRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITeacherRosterService, WsUtaSystem.Application.Services.TeacherRosterService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.INonTitularRosterRepository, WsUtaSystem.Infrastructure.Repositories.NonTitularRosterRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.INonTitularRosterService, WsUtaSystem.Application.Services.NonTitularRosterService>();
 
         // ── Módulo: Experiencia Laboral ───────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IWorkExperiencesRepository, WsUtaSystem.Infrastructure.Repositories.WorkExperiencesRepository>();
@@ -1055,47 +1074,16 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var baseUrl = configuration["AuthService:Url"] ?? string.Empty;
-
-        services.AddHttpClient<IEmployeeProvisioningClient, EmployeeProvisioningClient>(client =>
-        {
-            if (!string.IsNullOrWhiteSpace(baseUrl))
-                client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
-
-            client.Timeout = TimeSpan.FromSeconds(30);
-        });
-
-        services.AddHttpClient<IStudentProvisioningClient, StudentProvisioningClient>(client =>
-        {
-            if (!string.IsNullOrWhiteSpace(baseUrl))
-                client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
-
-            client.Timeout = TimeSpan.FromSeconds(30);
-        });
+        // Clientes HTTP hacia RepositoryUta, DINARDAP y DEaDV: ver Infrastructure/ExternalServices.
+        services.AddExternalServices(configuration);
 
         // Origen de datos de matrícula: cambiar a ApiStudentEnrollmentSource cuando la API esté lista
         services.AddScoped<IStudentEnrollmentSource, DbStudentEnrollmentSource>();
         services.AddScoped<IStudentEnrollmentSyncService, StudentEnrollmentSyncService>();
 
-        // Integración DINARDAP (WsUtaDinardap.Api) - 2026-09-16. Reusa el mismo JWT de cuenta
-        // de servicio ya configurado arriba (AuthService:ServiceAccount) vía
-        // IEmployeeProvisioningClient.GetServiceTokenAsync().
-        var dinardapUrl = configuration["Dinardap:ApiUrl"] ?? string.Empty;
-        services.AddHttpClient<IHrDinardapClient, HrDinardapClient>(client =>
-        {
-            if (!string.IsNullOrWhiteSpace(dinardapUrl) && dinardapUrl != "VARIABLE_DE_ENTORNO")
-                client.BaseAddress = new Uri(dinardapUrl.TrimEnd('/') + "/");
-
-            client.Timeout = TimeSpan.FromSeconds(30);
-        });
         services.AddScoped<IEducationLevelClassifierService, EducationLevelClassifierService>();
         services.AddScoped<IEducationLevelSyncService, EducationLevelSyncService>();
 
-        // Integración DEaDV (certificados de capacitación) - 2026-10-26. La URL vive en el parámetro
-        // DEADV_API_URL (HR.tbl_Parameters). Sin redirecciones: el descargador de PDF valida el host de la URL
-        // y un redirect lo saltaría (anti-SSRF).
-        services.AddHttpClient<IDeadvClient, DeadvClient>(client => client.Timeout = TimeSpan.FromSeconds(30))
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.AddScoped<ITrainingSyncService, TrainingSyncService>();
 
         return services;

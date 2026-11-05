@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
@@ -88,7 +89,9 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
                 MinutesLate           = x.calc.MinutesLate,
                 TardinessMin          = x.calc.TardinessMin,
                 ScheduledEntryTime    = x.calc.ScheduledEntryTime,
+                ScheduledExitTime     = x.calc.ScheduledExitTime,
                 FirstPunchIn          = x.calc.FirstPunchIn,
+                LastPunchOut          = x.calc.LastPunchOut,
                 EarlyLeaveMinutes     = x.calc.EarlyLeaveMinutes,
                 Status                = x.calc.Status,
                 HasJustification      = x.calc.HasJustification,
@@ -97,7 +100,49 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
             })
             .ToListAsync(ct);
 
-        return result.AsReadOnly();
+        return (await AttachLunchPunchesAsync(result, startDate, endDate, ct)).AsReadOnly();
+    }
+
+    /// <summary>
+    /// Completa en cada jornada con atraso la salida a almuerzo y el regreso de almuerzo a partir de las picadas reales,
+    /// con la misma resolución de picadas que el reporte de asistencia.
+    /// </summary>
+    private async Task<List<LatenessReportDto>> AttachLunchPunchesAsync(
+        List<LatenessReportDto> rows, DateOnly startDate, DateOnly endDate, CancellationToken ct)
+    {
+        if (rows.Count == 0) return rows;
+
+        var byEmployee = await LoadPunchesByEmployeeAsync(rows.Select(r => r.EmployeeId), startDate, endDate, ct);
+
+        var result = new List<LatenessReportDto>(rows.Count);
+        foreach (var r in rows)
+        {
+            if (!r.FirstPunchIn.HasValue || !byEmployee.TryGetValue(r.EmployeeId, out var all))
+            {
+                result.Add(r);
+                continue;
+            }
+
+            var (_, lunchOut, lunchIn, _, _) = ResolveFourPunches(all, r.FirstPunchIn.Value, r.LastPunchOut);
+            result.Add(r with { LunchOut = lunchOut, LunchIn = lunchIn });
+        }
+        return result;
+    }
+
+    /// <summary>Lee en una sola consulta las picadas del rango (más dos días, por jornadas que cruzan medianoche) agrupadas por empleado.</summary>
+    private async Task<Dictionary<int, List<(DateTime PunchTime, string? PunchType)>>> LoadPunchesByEmployeeAsync(
+        IEnumerable<int> employeeIdList, DateOnly startDate, DateOnly endDate, CancellationToken ct)
+    {
+        var employeeIds = employeeIdList.Distinct().ToList();
+        var from = startDate.ToDateTime(TimeOnly.MinValue);
+        var to = endDate.AddDays(2).ToDateTime(TimeOnly.MinValue);
+
+        var punches = await _db.AttendancePunches.AsNoTracking()
+            .Where(p => employeeIds.Contains(p.EmployeeId) && p.PunchTime >= from && p.PunchTime < to)
+            .Select(p => new { p.EmployeeId, p.PunchTime, p.PunchType })
+            .ToListAsync(ct);
+        return punches.GroupBy(p => p.EmployeeId)
+            .ToDictionary(g => g.Key, g => g.Select(p => (p.PunchTime, (string?)p.PunchType)).ToList());
     }
 
     /// <inheritdoc/>
@@ -308,16 +353,7 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
     {
         if (rows.Count == 0) return rows;
 
-        var employeeIds = rows.Select(r => r.EmployeeId).Distinct().ToList();
-        var from = startDate.ToDateTime(TimeOnly.MinValue);
-        var to = endDate.AddDays(2).ToDateTime(TimeOnly.MinValue); // cubre jornadas que terminan al día siguiente
-
-        var punches = await _db.AttendancePunches.AsNoTracking()
-            .Where(p => employeeIds.Contains(p.EmployeeId) && p.PunchTime >= from && p.PunchTime < to)
-            .Select(p => new { p.EmployeeId, p.PunchTime, p.PunchType })
-            .ToListAsync(ct);
-        var byEmployee = punches.GroupBy(p => p.EmployeeId)
-            .ToDictionary(g => g.Key, g => g.Select(p => (p.PunchTime, (string?)p.PunchType)).ToList());
+        var byEmployee = await LoadPunchesByEmployeeAsync(rows.Select(r => r.EmployeeId), startDate, endDate, ct);
 
         var result = new List<AttendanceReportDto>(rows.Count);
         foreach (var r in rows)
@@ -350,7 +386,7 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
             : _clock.Today;
 
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
-                    join ved in _db.vwEmployeeDetails.AsNoTracking()
+                    join ved in EmployeeDetailsIncludingInactive()
                         on calc.EmployeeId equals ved.EmployeeID
                     where calc.WorkDate >= startDate && calc.WorkDate <= endDate
                     select new { calc, ved };
@@ -410,7 +446,7 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
             : _clock.Today;
 
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
-                    join ved in _db.vwEmployeeDetails.AsNoTracking()
+                    join ved in EmployeeDetailsIncludingInactive()
                         on calc.EmployeeId equals ved.EmployeeID
                     where calc.WorkDate >= startDate && calc.WorkDate <= endDate
                        && calc.FoodSubsidy > 0
@@ -467,7 +503,7 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<NightHoursSummaryReportDto>> GetNightHoursSummaryDataAsync(
+    public async Task<NightHoursSummaryResultDto> GetNightHoursSummaryDataAsync(
         ReportFilterDto filter,
         CancellationToken ct = default)
     {
@@ -482,7 +518,7 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
             : _clock.Today;
 
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
-                    join ved in _db.vwEmployeeDetails.AsNoTracking()
+                    join ved in EmployeeDetailsIncludingInactive()
                         on calc.EmployeeId equals ved.EmployeeID
                     where calc.WorkDate >= startDate && calc.WorkDate <= endDate
                        && calc.NightMinutes > 0
@@ -501,6 +537,27 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
         // Filtro opcional por cédula exacta
         if (!string.IsNullOrWhiteSpace(filter.Identification))
             query = query.Where(x => x.ved.IDCard == filter.Identification);
+
+        // Exclusión opcional por cargo (guardias y supervisor): se separa lo excluido para declararlo en el reporte,
+        // con los mismos filtros de período, dependencia, régimen, empleado y cédula que lo mostrado.
+        IReadOnlyList<string> excludedJobNames = [];
+        var excludedPeople = 0;
+        var excludedMinutes = 0;
+        if (filter.ExcludeGuards == true)
+        {
+            var jobNames = await GetGuardJobNamesAsync(ct);
+            excludedJobNames = jobNames;
+
+            var minutesPerExcludedPerson = await query
+                .Where(x => x.ved.JobName != null && jobNames.Contains(x.ved.JobName))
+                .GroupBy(x => x.calc.EmployeeId)
+                .Select(g => g.Sum(x => x.calc.NightMinutes))
+                .ToListAsync(ct);
+            excludedPeople = minutesPerExcludedPerson.Count;
+            excludedMinutes = minutesPerExcludedPerson.Sum();
+
+            query = query.Where(x => x.ved.JobName == null || !jobNames.Contains(x.ved.JobName));
+        }
 
         var grouped = await query
             .GroupBy(x => new
@@ -525,10 +582,57 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
             .OrderBy(r => r.FullName)
             .ToListAsync(ct);
 
-        return grouped
-            .Select(r => r with { TotalNightHours = Math.Round(r.TotalNightMinutes / 60m, 2) })
+        // Horarios realmente aplicados en las jornadas con horas nocturnas (los de la misma consulta, ya sin excluidos).
+        var schedules = await query
+            .Where(x => x.calc.ScheduledEntryTime != null && x.calc.ScheduledExitTime != null)
+            .Select(x => new { x.calc.EmployeeId, Entry = x.calc.ScheduledEntryTime!.Value, Exit = x.calc.ScheduledExitTime!.Value })
+            .Distinct()
+            .ToListAsync(ct);
+        var schedulesByEmployee = schedules
+            .GroupBy(s => s.EmployeeId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<NightHoursScheduleRange>)g
+                    .OrderBy(s => s.Entry).ThenBy(s => s.Exit)
+                    .Select(s => new NightHoursScheduleRange(s.Entry, s.Exit))
+                    .ToList());
+
+        var rows = grouped
+            .Select(r => r with
+            {
+                TotalNightHours = Math.Round(r.TotalNightMinutes / 60m, 2),
+                AssignedSchedules = schedulesByEmployee.GetValueOrDefault(r.EmployeeId) ?? [],
+            })
             .ToList()
             .AsReadOnly();
+
+        return new NightHoursSummaryResultDto(rows, excludedJobNames, excludedPeople, Math.Round(excludedMinutes / 60m, 2));
+    }
+
+    private const string GuardJobNamesParameter = "GUARD_JOB_NAMES";
+
+    /// <summary>
+    /// Cargos de guardias y supervisor (parámetro <c>GUARD_JOB_NAMES</c>, separados por ';'). Si falta, falla con un
+    /// mensaje claro en vez de devolver un reporte que dice excluir sin hacerlo.
+    /// </summary>
+    private async Task<List<string>> GetGuardJobNamesAsync(CancellationToken ct)
+    {
+        var raw = await _db.Parameters.AsNoTracking()
+            .Where(p => p.Name == GuardJobNamesParameter && p.IsActive)
+            .Select(p => p.Pvalues)
+            .FirstOrDefaultAsync(ct);
+
+        var names = (raw ?? string.Empty)
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (names.Count == 0)
+            throw new BusinessRuleException(
+                $"No está configurado el parámetro {GuardJobNamesParameter} (cargos de guardias y supervisor). " +
+                "Configúrelo en Parámetros del Sistema o desmarque «Excluir guardias».");
+
+        return names;
     }
 
     /// <inheritdoc/>
@@ -603,10 +707,12 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
             ? DateOnly.FromDateTime(filter.EndDate.Value)
             : _clock.Today;
 
+        var activeIds = ActiveEmployeeIds();
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
-                    join ved in _db.vwEmployeeDetails.AsNoTracking()
+                    join ved in EmployeeDetailsIncludingInactive()
                         on calc.EmployeeId equals ved.EmployeeID
                     where calc.WorkDate >= startDate && calc.WorkDate <= endDate
+                       && (calc.FirstPunchIn != null || activeIds.Contains(calc.EmployeeId))
                     select new { calc, ved };
 
         if (filter.EmployeeId.HasValue && filter.EmployeeId.Value > 0)
@@ -686,7 +792,7 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
 
         var originalNames = originalIds.Count == 0
             ? new Dictionary<int, string>()
-            : await _db.vwEmployeeDetails.AsNoTracking()
+            : await EmployeeDetailsIncludingInactive()
                 .Where(v => originalIds.Contains(v.EmployeeID))
                 .ToDictionaryAsync(v => v.EmployeeID, v => v.LastName + " " + v.FirstName, ct);
 
@@ -799,7 +905,7 @@ public sealed partial class AttendanceCalculationsReportRepository : IAttendance
             : _clock.Today;
 
         var query = from calc in _db.AttendanceCalculations.AsNoTracking()
-                    join ved in _db.vwEmployeeDetails.AsNoTracking()
+                    join ved in EmployeeDetailsIncludingInactive()
                         on calc.EmployeeId equals ved.EmployeeID
                     where calc.WorkDate >= startDate
                        && calc.WorkDate <= endDate

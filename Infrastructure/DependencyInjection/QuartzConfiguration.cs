@@ -76,6 +76,13 @@ public static class QuartzConfiguration
                 .WithIdentity(dinardapSenescytKey)
                 .StoreDurably());
 
+            // 3c. Sincronización masiva de publicaciones científicas — manual/bajo demanda (sin cron hasta definir periodicidad).
+            // Se dispara desde /scheduled-jobs/publication-sync/run.
+            var publicationSyncKey = new JobKey("PublicationSyncJob");
+            q.AddJob<PublicationSyncJob>(opts => opts
+                .WithIdentity(publicationSyncKey)
+                .StoreDurably());
+
             // 4. Acreditacion de vacaciones - Día 1 del mes a las 00:30
             var accrueVacation = new JobKey("MonthlyAccrueVacationBalanceJob");
             q.AddJob<DailyAccrueVacationBalance>(opts => opts.WithIdentity(accrueVacation));

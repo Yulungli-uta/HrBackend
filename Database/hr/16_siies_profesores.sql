@@ -629,6 +629,14 @@ IF EXISTS (
     ALTER TABLE [HR].[tbl_EducationLevels] ALTER COLUMN [Title] NVARCHAR(500) NOT NULL;
 GO
 
+-- 8.6) URL del servicio WsUtaDinardap.Api: se administra en Parámetros del Sistema (reemplaza Dinardap:ApiUrl de
+-- appsettings). Solo se acepta HTTPS de un host uta.edu.ec; el cliente envía el JWT de servicio a esa URL.
+IF NOT EXISTS (SELECT 1 FROM HR.tbl_Parameters WHERE [name] = 'DINARDAP_API_URL')
+    INSERT INTO HR.tbl_Parameters ([name], Pvalues, Description, DataType, IsActive, CreatedAt)
+    VALUES ('DINARDAP_API_URL', 'https://servicios.uta.edu.ec/WsUtaDinardap',
+            'URL base del servicio WsUtaDinardap.Api (DINARDAP). Debe ser HTTPS de un host uta.edu.ec.', 'TEXTO', 1, SYSDATETIME());
+GO
+
 -- ============================================================
 -- 9) Corrección de vw_SiiesFormacionProfesional/fn_SiiesFormacionProfesional ya
 --    aplicada arriba (secciones 7/7.1) tras agregar las columnas DINARDAP (sección 8).
@@ -718,4 +726,79 @@ VALUES
 (207860, 2022, N'MASTER UNIVERSITARIO EN MICROBIOLOGIA AVANZADA ESPECIALIDAD EN MICROBIOLOGIA SANITARIA', N'724184849', 2192, '2016-07-25', N'UNIVERSITAT DE BARCELONA', N'ESPAÑA', N'1-9A', NULL, N'Manual', GETDATE()),
 (217121, 2022, N'ESPECIALISTA EN MEDICINA INTERNA', N'1006-14-5001', 2196, '2014-06-22', N'UNIVERSIDAD DE GUAYAQUIL', N'ECUADOR', N'1-9A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1006'), N'Manual', GETDATE()),
 (186002, 2022, N'ESPECIALISTA EN CIRUGIA GENERAL', N'1005-08-678557', 2196, '2008-07-21', N'UNIVERSIDAD CENTRAL DEL ECUADOR', N'ECUADOR', N'1-9A', (SELECT TypeID FROM [HR].[ref_Types] WHERE Category='SIIES_INSTITUTION_CODE' AND Name=N'1005'), N'Manual', GETDATE());
+GO
+
+-- ============================================================
+-- 11) Personal Docente (titulares y no titulares): opciones de menú (esquema auth, compartido con RepositoryUta)
+--     * Página /teacher-roster bajo Talento Humano (copia los roles de "Empleados" + R_RH_ESPECIALISTA).
+--     * Reporte /reports/teacher-roster bajo Reportes > Empleados (copia los roles de "RptEmpleados").
+--     El listado y el reporte usan los permisos existentes (EMPLOYEES.READ / REPORTS.READ); el RMU solo se entrega con
+--     SALARY_HISTORY.READ (verificado en el servidor). Sin permisos ni tablas nuevas. Idempotente.
+-- ============================================================
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+
+DECLARE @RosterRefId INT = (SELECT TOP 1 Id FROM auth.tbl_MenuItems WHERE Url = '/employees' AND IsDeleted = 0);
+DECLARE @RosterId    INT;
+
+IF @RosterRefId IS NULL
+    THROW 50001, 'No se encontró el menú de referencia /employees.', 1;
+
+SELECT @RosterId = Id FROM auth.tbl_MenuItems WHERE Url = '/teacher-roster' AND IsDeleted = 0;
+
+IF @RosterId IS NULL
+BEGIN
+    INSERT INTO auth.tbl_MenuItems (Name, Url, Icon, ParentId, [Order], IsVisible, ModuleName, IsDeleted)
+    SELECT N'Personal Docente', '/teacher-roster', 'BadgeCheck', ParentId,
+           (SELECT ISNULL(MAX([Order]), 0) + 1 FROM auth.tbl_MenuItems WHERE ParentId = s.ParentId AND IsDeleted = 0),
+           1, ModuleName, 0
+    FROM auth.tbl_MenuItems s WHERE s.Id = @RosterRefId;
+    SET @RosterId = SCOPE_IDENTITY();
+END
+
+-- La página pasó de "Personal Docente Titular" a "Personal Docente" (pestañas Titulares / No titulares): renombra el menú existente.
+UPDATE auth.tbl_MenuItems SET Name = N'Personal Docente' WHERE Id = @RosterId AND Name <> N'Personal Docente';
+
+INSERT INTO auth.tbl_RoleMenuItems (RoleId, MenuItemId, IsVisible)
+SELECT rm.RoleId, @RosterId, rm.IsVisible
+FROM auth.tbl_RoleMenuItems rm
+WHERE rm.MenuItemId = @RosterRefId
+  AND NOT EXISTS (SELECT 1 FROM auth.tbl_RoleMenuItems x WHERE x.RoleId = rm.RoleId AND x.MenuItemId = @RosterId);
+
+-- R_RH_ESPECIALISTA gestiona los sueldos del libro: también ve la página.
+INSERT INTO auth.tbl_RoleMenuItems (RoleId, MenuItemId, IsVisible)
+SELECT r.Id, @RosterId, 1
+FROM auth.tbl_Roles r
+WHERE r.Name = 'R_RH_ESPECIALISTA'
+  AND NOT EXISTS (SELECT 1 FROM auth.tbl_RoleMenuItems x WHERE x.RoleId = r.Id AND x.MenuItemId = @RosterId);
+
+-- Reporte "Docentes Titulares" (misma regla: copia ubicación y roles del reporte de referencia).
+DECLARE @RosterRptRefId INT = (SELECT TOP 1 Id FROM auth.tbl_MenuItems WHERE Url = '/reports/employees' AND IsDeleted = 0);
+DECLARE @RosterRptId    INT;
+
+IF @RosterRptRefId IS NULL
+    THROW 50002, 'No se encontró el menú de referencia /reports/employees.', 1;
+
+SELECT @RosterRptId = Id FROM auth.tbl_MenuItems WHERE Url = '/reports/teacher-roster' AND IsDeleted = 0;
+
+IF @RosterRptId IS NULL
+BEGIN
+    INSERT INTO auth.tbl_MenuItems (Name, Url, Icon, ParentId, [Order], IsVisible, ModuleName, IsDeleted)
+    SELECT N'RptPersonalDocente', '/reports/teacher-roster', 'BadgeCheck', ParentId,
+           (SELECT ISNULL(MAX([Order]), 0) + 1 FROM auth.tbl_MenuItems WHERE ParentId = s.ParentId AND IsDeleted = 0),
+           1, ModuleName, 0
+    FROM auth.tbl_MenuItems s WHERE s.Id = @RosterRptRefId;
+    SET @RosterRptId = SCOPE_IDENTITY();
+END
+
+-- El reporte cubre titulares y no titulares: mismo criterio de nombre.
+UPDATE auth.tbl_MenuItems SET Name = N'RptPersonalDocente' WHERE Id = @RosterRptId AND Name <> N'RptPersonalDocente';
+
+INSERT INTO auth.tbl_RoleMenuItems (RoleId, MenuItemId, IsVisible)
+SELECT rm.RoleId, @RosterRptId, rm.IsVisible
+FROM auth.tbl_RoleMenuItems rm
+WHERE rm.MenuItemId = @RosterRptRefId
+  AND NOT EXISTS (SELECT 1 FROM auth.tbl_RoleMenuItems x WHERE x.RoleId = rm.RoleId AND x.MenuItemId = @RosterRptId);
+
+COMMIT TRANSACTION;
 GO

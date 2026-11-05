@@ -64,11 +64,16 @@ public class JwtAuthenticationMiddleware
 
         var swTotal = Stopwatch.StartNew();
 
+        // true cuando la autenticación terminó y el request pasa al resto del pipeline: desde ahí una
+        // excepción ya no es un fallo de autenticación (la propaga hacia aquí cualquier controlador o consulta).
+        var authenticationCompleted = false;
+
         try
         {
             // 1. Bypass para OPTIONS (CORS)
             if (HttpMethods.IsOptions(method))
             {
+                authenticationCompleted = true;
                 await _next(context);
                 return;
             }
@@ -76,6 +81,7 @@ public class JwtAuthenticationMiddleware
             // 2. Bypass para rutas públicas
             if (TryMatchPublicEndpoint(path, out _))
             {
+                authenticationCompleted = true;
                 await _next(context);
                 return;
             }
@@ -161,11 +167,29 @@ public class JwtAuthenticationMiddleware
             }
 
             // 10. Continuar la cadena
+            authenticationCompleted = true;
             await _next(context);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[AUTH-MW] Error crítico en el pipeline de autenticación");
+            if (!authenticationCompleted)
+            {
+                _logger.LogError(ex, "[AUTH-MW] Error crítico en el pipeline de autenticación");
+            }
+            else if (ex is OperationCanceledException && context.RequestAborted.IsCancellationRequested)
+            {
+                // El cliente cerró la conexión o canceló la petición: no es un error del servidor.
+                _logger.LogInformation("[AUTH-MW] Solicitud cancelada por el cliente: {Method} {Path}", method, path);
+            }
+            else
+            {
+                // La autenticación ya había terminado bien: el fallo es del procesamiento posterior (controlador,
+                // consulta, etc.). Sin la traza completa para no duplicarla: el manejador global de errores,
+                // que va antes en el pipeline, la registra al recibir la excepción que se vuelve a lanzar.
+                _logger.LogWarning(
+                    "[AUTH-MW] Excepción {ExceptionType} posterior a la autenticación en {Method} {Path} (no es un fallo de autenticación)",
+                    ex.GetType().Name, method, path);
+            }
             throw;
         }
         finally

@@ -91,6 +91,14 @@ public sealed class ReportServiceV2 : IReportServiceV2
         ArgumentNullException.ThrowIfNull(filter);
         ArgumentNullException.ThrowIfNull(context);
 
+        // El frontend ya lo valida, pero el control real vive aquí: una llamada directa a la API no debe
+        // devolver un reporte vacío con un rango invertido. ArgumentException se responde como 400.
+        if (filter.StartDate.HasValue && filter.EndDate.HasValue
+            && filter.StartDate.Value.Date > filter.EndDate.Value.Date)
+        {
+            throw new ArgumentException("La fecha de inicio no puede ser mayor que la fecha de fin.");
+        }
+
         _logger.LogInformation(
             "ReportServiceV2.GenerateAsync: ReportType={ReportType}, Format={Format}.",
             reportType, format);

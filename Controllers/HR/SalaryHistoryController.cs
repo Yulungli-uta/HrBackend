@@ -1,6 +1,7 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.SalaryHistory;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
@@ -15,7 +16,9 @@ public class SalaryHistoryController : ControllerBase
 {
     private readonly ISalaryHistoryService _svc;
     private readonly IMapper _mapper;
-    public SalaryHistoryController(ISalaryHistoryService svc, IMapper mapper) { _svc = svc; _mapper = mapper; }
+    private readonly ICurrentUserService _currentUser;
+    public SalaryHistoryController(ISalaryHistoryService svc, IMapper mapper, ICurrentUserService currentUser)
+    { _svc = svc; _mapper = mapper; _currentUser = currentUser; }
 
     /// <summary>Lista todos los registros de SalaryHistory.</summary>
     [HttpGet]
@@ -52,18 +55,22 @@ public class SalaryHistoryController : ControllerBase
         return Ok(new { rmu });
     }
 
-    /// <summary>Crea un nuevo registro.</summary>
+    /// <summary>
+    /// Alta manual ligada a un documento fuente existente (acción de personal o contrato) del empleado, con motivo.
+    /// Usuario y fecha los fija el servidor. Para cambiar un sueldo ya registrado se corrige el documento.
+    /// </summary>
     [HttpPost]
     [RequirePermission("SALARY_HISTORY.CREATE")]
     public async Task<IActionResult> Create([FromBody] SalaryHistoryCreateDto dto, CancellationToken ct)
     {
         var entityObj = _mapper.Map<SalaryHistory>(dto);
-        var created = await _svc.CreateAsync(entityObj, ct);
+        var changedBy = _currentUser.UserName ?? _currentUser.Email ?? "unknown";
+        var created = await _svc.CreateManualAsync(entityObj, changedBy, ct);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<SalaryHistoryDto>(created));
     }
 
-    /// <summary>Actualiza un registro existente.</summary>
+    /// <summary>Rechazado (409): una fila del libro se cambia corrigiendo su documento fuente, no editándola.</summary>
     [HttpPut("{id:int}")]
     [RequirePermission("SALARY_HISTORY.UPDATE")]
     public async Task<IActionResult> Update([FromRoute] int id, [FromBody] SalaryHistoryUpdateDto dto, CancellationToken ct)
@@ -73,7 +80,7 @@ public class SalaryHistoryController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Elimina un registro por ID.</summary>
+    /// <summary>Rechazado (409): una fila del libro no se elimina; se corrige o anula su documento fuente.</summary>
     [HttpDelete("{id:int}")]
     [RequirePermission("SALARY_HISTORY.DELETE")]
     public async Task<IActionResult> Delete([FromRoute] int id, CancellationToken ct)

@@ -32,4 +32,11 @@ public interface ISalaryHistoryService : IService<SalaryHistory, int>
     /// <param name="employeeId">Empleado para resolver su RMU individual real. Null si es un cargo prospectivo (ej. destino de una acción).</param>
     /// <param name="jobId">Cargo para el respaldo referencial. Si es null y se pasó employeeId, se resuelve el cargo actual de ese empleado.</param>
     Task<decimal?> GetReferenceRmuAsync(int? employeeId, int? jobId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Alta MANUAL de una fila del libro. Solo se admite ligada a un documento fuente existente (una acción de personal
+    /// o un contrato) del empleado indicado, con motivo, y si ese documento aún no tiene fila (para cambiar una existente
+    /// se corrige el documento desde su pantalla de Corrección). Usuario y fecha los fija el servidor.
+    /// </summary>
+    Task<SalaryHistory> CreateManualAsync(SalaryHistory entity, string changedBy, CancellationToken ct = default);
 }

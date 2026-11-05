@@ -9,6 +9,13 @@ public class ContractsDto
     public string ContractCode { get; set; } = string.Empty;
 
     public int PersonID { get; set; }
+
+    /// <summary>Nombre del titular. Solo se completa en los listados paginados (<c>paged</c> y <c>my/paged</c>).</summary>
+    public string? PersonFullName { get; set; }
+
+    /// <summary>Cédula/pasaporte del titular. Solo se completa en los listados paginados.</summary>
+    public string? PersonIdCard { get; set; }
+
     public int ContractTypeID { get; set; }
 
     public int? JobID { get; set; }

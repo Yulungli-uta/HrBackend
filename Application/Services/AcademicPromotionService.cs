@@ -43,7 +43,7 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
     private readonly IAcademicPromotionRepository _academicPromotionRepository;
     private readonly ITeacherStructureRepository _teacherStructureRepository;
     private readonly IWorkExperiencesRepository _workExperiencesRepository;
-    private readonly IPublicationsRepository _publicationsRepository;
+    private readonly IPublicationsService _publicationsService;
     private readonly IBooksRepository _booksRepository;
     private readonly ITrainingsRepository _trainingsRepository;
     private readonly ILanguagesRepository _languagesRepository;
@@ -58,7 +58,7 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
         IAcademicPromotionRepository academicPromotionRepository,
         ITeacherStructureRepository teacherStructureRepository,
         IWorkExperiencesRepository workExperiencesRepository,
-        IPublicationsRepository publicationsRepository,
+        IPublicationsService publicationsService,
         IBooksRepository booksRepository,
         ITrainingsRepository trainingsRepository,
         ILanguagesRepository languagesRepository,
@@ -72,7 +72,7 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
         _academicPromotionRepository = academicPromotionRepository ?? throw new ArgumentNullException(nameof(academicPromotionRepository));
         _teacherStructureRepository = teacherStructureRepository ?? throw new ArgumentNullException(nameof(teacherStructureRepository));
         _workExperiencesRepository = workExperiencesRepository ?? throw new ArgumentNullException(nameof(workExperiencesRepository));
-        _publicationsRepository = publicationsRepository ?? throw new ArgumentNullException(nameof(publicationsRepository));
+        _publicationsService = publicationsService ?? throw new ArgumentNullException(nameof(publicationsService));
         _booksRepository = booksRepository ?? throw new ArgumentNullException(nameof(booksRepository));
         _trainingsRepository = trainingsRepository ?? throw new ArgumentNullException(nameof(trainingsRepository));
         _languagesRepository = languagesRepository ?? throw new ArgumentNullException(nameof(languagesRepository));
@@ -102,7 +102,8 @@ public sealed class AcademicPromotionService : IAcademicPromotionService
             currentStructure?.DepartmentId ?? employee.DepartmentId, ct);
 
         var workExperiences = (await _workExperiencesRepository.GetByPersonIdAsync(employee.PersonId)).ToList();
-        var publications = (await _publicationsRepository.GetByPersonIdAsync(employee.PersonId)).ToList();
+        // Solo lo que cuenta: aprobadas y sin revisión de origen histórico/manual (lo sincronizado sin aprobar queda fuera).
+        var publications = (await _publicationsService.GetCountableByPersonIdAsync(employee.PersonId, ct)).ToList();
         var books = (await _booksRepository.GetByPersonIdAsync(employee.PersonId)).ToList();
         var trainings = (await _trainingsRepository.GetByPersonIdAsync(employee.PersonId)).ToList();
         var languages = (await _languagesRepository.GetByPersonIdAsync(employee.PersonId)).ToList();

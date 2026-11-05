@@ -62,7 +62,7 @@ public class Service<TEntity, TKey> : IService<TEntity, TKey> where TEntity : cl
         _repo.GetPagedAsync(predicate, page, pageSize, ct, orderBy, ascending, includes);
 
     /// <inheritdoc/>
-    public async Task DeleteAsync(TKey id, CancellationToken ct)
+    public virtual async Task DeleteAsync(TKey id, CancellationToken ct)
     {
         var entity = await _repo.GetByIdAsync(id, ct)
             ?? throw new KeyNotFoundException(

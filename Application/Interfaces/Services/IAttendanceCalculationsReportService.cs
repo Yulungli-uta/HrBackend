@@ -138,7 +138,8 @@ public interface IAttendanceCalculationsReportService
     /// </summary>
     /// <param name="filter">Filtros del reporte.</param>
     /// <param name="ct">Token de cancelación.</param>
-    Task<IReadOnlyList<NightHoursSummaryReportDto>> GetNightHoursSummaryDataAsync(
+    /// <returns>Las filas por empleado y el detalle de lo excluido cuando se piden excluir guardias.</returns>
+    Task<NightHoursSummaryResultDto> GetNightHoursSummaryDataAsync(
         ReportFilterDto filter,
         CancellationToken ct = default);
 

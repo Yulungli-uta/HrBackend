@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Quartz;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Interfaces.Services.Academic;
 using WsUtaSystem.Infrastructure.Security;
@@ -18,8 +19,10 @@ public class ScheduledJobsController : ControllerBase
     private readonly IEmployeeProvisioningClient _provisioningClient;
     private readonly IEducationLevelSyncService _educationLevelSync;
     private readonly ILogger<ScheduledJobsController> _logger;
+    private readonly ISchedulerFactory _schedulerFactory;
 
     public ScheduledJobsController(
+        ISchedulerFactory schedulerFactory,
         IContractExpirationService contractExpiration,
         IStudentEnrollmentSyncService studentSync,
         IEmployeeProvisioningClient provisioningClient,
@@ -31,6 +34,22 @@ public class ScheduledJobsController : ControllerBase
         _provisioningClient  = provisioningClient  ?? throw new ArgumentNullException(nameof(provisioningClient));
         _educationLevelSync  = educationLevelSync  ?? throw new ArgumentNullException(nameof(educationLevelSync));
         _logger              = logger              ?? throw new ArgumentNullException(nameof(logger));
+        _schedulerFactory    = schedulerFactory    ?? throw new ArgumentNullException(nameof(schedulerFactory));
+    }
+
+    /// <summary>
+    /// Dispara la sincronización masiva de publicaciones científicas en segundo plano (puede tardar varios minutos). El
+    /// resultado queda en el registro de ejecución de trabajos y en el log; los docentes importados quedan en revisión.
+    /// </summary>
+    [HttpPost("publication-sync/run")]
+    [RequirePermission("SCHEDULED_JOBS.MANAGE")]
+    public async Task<IActionResult> RunPublicationSync(CancellationToken ct)
+    {
+        _logger.LogInformation("Ejecución manual de la sincronización masiva de publicaciones. Usuario={User}", User.Identity?.Name ?? "desconocido");
+
+        var scheduler = await _schedulerFactory.GetScheduler(ct);
+        await scheduler.TriggerJob(new JobKey("PublicationSyncJob"), ct);
+        return Accepted(new { success = true, message = "La sincronización masiva de publicaciones se inició en segundo plano." });
     }
 
     /// <summary>

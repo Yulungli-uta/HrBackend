@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.StoredFile;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -81,6 +82,19 @@ namespace WsUtaSystem.Controllers.HR
             };
         }
 
+        /// <summary>
+        /// Los adjuntos de una publicación aprobada (congelada) o rechazada no se agregan, cambian ni eliminan.
+        /// Solo aplica a PUBLICATION; el resto de entidades queda sin cambios.
+        /// </summary>
+        private async Task EnsurePublicationNotLockedAsync(string? entityType, string? entityId, CancellationToken ct)
+        {
+            if (!string.Equals(entityType, "PUBLICATION", StringComparison.OrdinalIgnoreCase) || !int.TryParse(entityId, out var publicationId))
+                return;
+
+            var publication = await _publicationsSvc.GetByIdAsync(publicationId, ct);
+            if (publication is not null) PublicationRules.EnsureEditable(publication, "modificar sus archivos adjuntos");
+        }
+
         private ObjectResult Forbid403(string message) => StatusCode(403, new
         {
             status = "error",
@@ -152,6 +166,7 @@ namespace WsUtaSystem.Controllers.HR
         [RequirePermission("DOCUMENTS.CREATE")]
         public async Task<IActionResult> Create([FromBody] StoredFileCreateDto dto, CancellationToken ct)
         {
+            await EnsurePublicationNotLockedAsync(dto.EntityType, dto.EntityId, ct);
             var entityObj = _mapper.Map<StoredFile>(dto);
 
             // Defaults mínimos (si no lo seteas en mapper)
@@ -168,6 +183,9 @@ namespace WsUtaSystem.Controllers.HR
         [RequirePermission("DOCUMENTS.UPDATE")]
         public async Task<IActionResult> Update([FromRoute] int id, [FromBody] StoredFileUpdateDto dto, CancellationToken ct)
         {
+            var existingFile = await _svc.GetByIdAsync(id, ct);
+            if (existingFile is not null) await EnsurePublicationNotLockedAsync(existingFile.EntityType, existingFile.EntityId, ct);
+
             var entityObj = _mapper.Map<StoredFile>(dto);
             await _svc.UpdateAsync(id, entityObj, ct);
             return NoContent();
@@ -178,6 +196,9 @@ namespace WsUtaSystem.Controllers.HR
         [RequirePermission("DOCUMENTS.DELETE")]
         public async Task<IActionResult> SoftDelete([FromRoute] int id, CancellationToken ct)
         {
+            var existingFile = await _svc.GetByIdAsync(id, ct);
+            if (existingFile is not null) await EnsurePublicationNotLockedAsync(existingFile.EntityType, existingFile.EntityId, ct);
+
             // Si manejas usuario autenticado, aquí sacas el userId y lo pasas
             int? deletedBy = null;
 

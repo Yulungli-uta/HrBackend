@@ -58,14 +58,32 @@ public sealed partial class AttendanceCalculationsReportRepository
     }
 
     /// <summary>
-    /// Igual que <see cref="ResolveEmployeeScopeAsync"/> pero sobre <c>HR.vw_EmployeeDetails</c>, que es la fila de
-    /// empleado que usan las consultas basadas en esa vista.
+    /// Fila de detalle de empleado (cédula, nombre, dependencia, cargo) INCLUYENDO inactivos, de
+    /// <c>HR.vw_EmployeeDetailsAll</c>. Los reportes de lo picado deben mostrar a quien ya no está activo (ej. renunció a
+    /// mitad de mes y nómina necesita sus días trabajados): la vista normal solo trae activos y los dejaba fuera.
+    /// </summary>
+    private IQueryable<WsUtaSystem.Models.Views.VwEmployeeDetails> EmployeeDetailsIncludingInactive() =>
+        _db.vwEmployeeDetails
+            .FromSqlRaw("SELECT * FROM HR.vw_EmployeeDetailsAll")
+            .AsNoTracking();
+
+    /// <summary>
+    /// IDs de empleados activos hoy. Con <see cref="EmployeeDetailsIncludingInactive"/> los reportes por jornada incluyen
+    /// a quien ya no está activo SOLO en los días en que picó: sus días programados sin picada (ausencias posteriores a la
+    /// salida) no son trabajo y no deben listarse.
+    /// </summary>
+    private IQueryable<int> ActiveEmployeeIds() =>
+        _db.Employees.AsNoTracking().Where(e => e.IsActive).Select(e => e.EmployeeId);
+
+    /// <summary>
+    /// Igual que <see cref="ResolveEmployeeScopeAsync"/> pero sobre el detalle de empleados incluyendo inactivos
+    /// (<see cref="EmployeeDetailsIncludingInactive"/>), la fila de empleado que usan las consultas basadas en esa vista.
     /// </summary>
     private async Task<List<int>?> ResolveEmployeeScopeFromViewAsync(ReportFilterDto filter, CancellationToken ct)
     {
         if (filter.DepartmentId is not > 0 && filter.LaborRegimeId is not > 0) return null;
 
-        var query = _db.vwEmployeeDetails.AsNoTracking().AsQueryable();
+        var query = EmployeeDetailsIncludingInactive();
 
         if (filter.DepartmentId is > 0)
         {

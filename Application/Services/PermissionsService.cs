@@ -175,13 +175,23 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
     /// Bloquea crear un permiso que se superponga con otro permiso activo, o con una
     /// vacación activa, del mismo empleado. Antes solo se validaba en el frontend.
     /// </summary>
-    private async Task EnsureNoOverlapAsync(int employeeId, DateTime startDate, DateTime endDate, CancellationToken ct)
+    private async Task EnsureNoOverlapAsync(
+        int employeeId, DateTime startDate, DateTime endDate, decimal? hourTaken, int minutesPerDay, CancellationToken ct)
     {
-        var overlapsPermission = await _db.Permissions.AsNoTracking()
+        // Un permiso de día completo guardado solo con fechas (Fin a las 00:00) ocupa todo ese día: se compara con su
+        // fin efectivo, tanto el solicitado como el de los ya registrados (misma regla que el cálculo de asistencia).
+        var requestedEnd = PermissionWindowRules.EffectiveEndInclusive(startDate, endDate, hourTaken, minutesPerDay);
+
+        var candidates = await _db.Permissions.AsNoTracking()
             .Where(p => p.EmployeeId == employeeId
                      && ActivePermissionStatuses.Contains(p.Status.ToUpper())
-                     && p.StartDate <= endDate && p.EndDate >= startDate)
-            .AnyAsync(ct);
+                     && p.StartDate <= requestedEnd && p.EndDate >= startDate.Date)
+            .Select(p => new { p.StartDate, p.EndDate, p.HourTaken })
+            .ToListAsync(ct);
+
+        var overlapsPermission = candidates.Any(p =>
+            p.StartDate <= requestedEnd
+            && PermissionWindowRules.EffectiveEndInclusive(p.StartDate, p.EndDate, p.HourTaken, minutesPerDay) >= startDate);
 
         if (overlapsPermission)
             throw new BusinessRuleException("Ya existe un permiso activo que se superpone con estas fechas.");
@@ -206,18 +216,24 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
     /// </summary>
     private async Task<int> ComputePermissionChargedMinutesAsync(Permissions p, CancellationToken ct)
     {
-        var minutesPerDayStr = await _db.Parameters.AsNoTracking()
-            .Where(x => x.Name == "WORK_MINUTES_PER_DAY" && x.IsActive)
-            .Select(x => x.Pvalues)
-            .FirstOrDefaultAsync(ct);
-
-        var minutesPerDay = int.TryParse(minutesPerDayStr, out var parsed) && parsed > 0 ? parsed : 480;
+        var minutesPerDay = await GetMinutesPerDayAsync(ct);
 
         var baseMinutes = p.HourTaken.HasValue
             ? (int)p.HourTaken.Value
             : CountWorkingDays(DateOnly.FromDateTime(p.StartDate), DateOnly.FromDateTime(p.EndDate)) * minutesPerDay;
 
         return (int)Math.Ceiling(baseMinutes * (7.0 / 5.0));
+    }
+
+    /// <summary>Minutos de una jornada (parámetro WORK_MINUTES_PER_DAY; 480 si falta o no es válido).</summary>
+    private async Task<int> GetMinutesPerDayAsync(CancellationToken ct)
+    {
+        var minutesPerDayStr = await _db.Parameters.AsNoTracking()
+            .Where(x => x.Name == "WORK_MINUTES_PER_DAY" && x.IsActive)
+            .Select(x => x.Pvalues)
+            .FirstOrDefaultAsync(ct);
+
+        return int.TryParse(minutesPerDayStr, out var parsed) && parsed > 0 ? parsed : 480;
     }
 
     private static int CountWorkingDays(DateOnly start, DateOnly end)
@@ -237,7 +253,14 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
         if (entity is null) throw new ArgumentNullException(nameof(entity));
         ValidateDates(entity);
 
-        await EnsureNoOverlapAsync(entity.EmployeeId, entity.StartDate, entity.EndDate, ct);
+        // Si la solicitud no trae los minutos (nulo o 0) se calculan: antes se guardaba 0 y la reserva de saldo
+        // cobraba 0 minutos de vacaciones.
+        var minutesPerDay = await GetMinutesPerDayAsync(ct);
+        entity.HourTaken = PermissionWindowRules.ResolveHourTaken(
+            entity.StartDate, entity.EndDate, entity.HourTaken, minutesPerDay,
+            (s, e) => CountWorkingDays(DateOnly.FromDateTime(s), DateOnly.FromDateTime(e)));
+
+        await EnsureNoOverlapAsync(entity.EmployeeId, entity.StartDate, entity.EndDate, entity.HourTaken, minutesPerDay, ct);
 
         var strategy = _db.Database.CreateExecutionStrategy();
         Permissions? created = null;
@@ -245,8 +268,6 @@ public class PermissionsService : Service<Permissions, int>, IPermissionsService
         await strategy.ExecuteAsync(async () =>
         {
             await using var tx = await _db.Database.BeginTransactionAsync(ct);
-
-            entity.HourTaken ??= 0;
 
             created = await base.CreateAsync(entity, ct);
 

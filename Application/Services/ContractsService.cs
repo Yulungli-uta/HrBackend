@@ -252,6 +252,45 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             .FirstOrDefaultAsync(ct);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyDictionary<int, (string FullName, string IdCard)>> GetPersonSummariesAsync(
+        IEnumerable<int> personIds, CancellationToken ct)
+    {
+        var ids = personIds.Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<int, (string, string)>();
+
+        var rows = await _db.People
+            .AsNoTracking()
+            .Where(p => ids.Contains(p.PersonId))
+            .Select(p => new { p.PersonId, p.LastName, p.FirstName, p.IdCard })
+            .ToListAsync(ct);
+
+        // Mismo orden que ya muestra la pantalla: apellidos y luego nombres.
+        return rows.ToDictionary(r => r.PersonId, r => ($"{r.LastName} {r.FirstName}".Trim(), r.IdCard));
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<int>> SearchPersonIdsByTextAsync(string term, CancellationToken ct)
+    {
+        term = term?.Trim() ?? string.Empty;
+        if (term.Length < 3) return Array.Empty<int>();
+
+        // Cada palabra debe aparecer en la cédula o en el nombre completo (en cualquier orden y sin
+        // exigir que sean contiguas: «diana garces» encuentra «DIANA MARGARITA GARCES MONCAYO»).
+        // La collation de la BD no distingue mayúsculas.
+        var query = _db.People.AsNoTracking().AsQueryable();
+        foreach (var word in term.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var w = word;
+            query = query.Where(p => p.IdCard.Contains(w) || (p.FirstName + " " + p.LastName).Contains(w));
+        }
+
+        return await query
+            .Select(p => p.PersonId)
+            .Take(500)
+            .ToListAsync(ct);
+    }
+
     // -------------------------------------------------------
     // Métodos de negocio existentes (entity)
     // -------------------------------------------------------

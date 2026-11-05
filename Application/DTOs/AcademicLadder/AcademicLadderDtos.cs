@@ -17,8 +17,10 @@ public record AcademicLadderDto(
     string? NextLadderName,
     int? MinYearsService,
     bool IsActive,
-    /// <summary>Titular = CategoryTypeId IN (2012,2013,2014). No Titular = resto.</summary>
-    bool IsTitular
+    /// <summary>Titular = categoría TITULAR_PRINCIPAL / TITULAR_AGREGADO / TITULAR_AUXILIAR (por nombre). No Titular = resto.</summary>
+    bool IsTitular,
+    /// <summary>Docentes con estructura docente activa asignada a este escalón.</summary>
+    int ActiveTeachers = 0
 );
 
 /// <summary>Datos para crear un cargo docente LOES.</summary>

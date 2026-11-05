@@ -313,7 +313,7 @@ public sealed class AttendanceCalculationsReportService : IAttendanceCalculation
     }
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<NightHoursSummaryReportDto>> GetNightHoursSummaryDataAsync(
+    public async Task<NightHoursSummaryResultDto> GetNightHoursSummaryDataAsync(
         ReportFilterDto filter,
         CancellationToken ct = default)
     {
@@ -331,7 +331,8 @@ public sealed class AttendanceCalculationsReportService : IAttendanceCalculation
         var data = await _repository.GetNightHoursSummaryDataAsync(filter, ct);
 
         _logger.LogInformation(
-            "Reporte de horas nocturnas generado. Total empleados: {Count}", data.Count);
+            "Reporte de horas nocturnas generado. Total empleados: {Count}. Excluidos: {Excluded}",
+            data.Rows.Count, data.ExcludedPeople);
 
         return data;
     }

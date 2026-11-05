@@ -12,6 +12,12 @@ namespace WsUtaSystem.Application.DTOs.Parameters
         public int? CreatedBy { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public string? UpdatedBy { get; set; }
+
+        /// <summary>Es una credencial: su valor nunca se devuelve (<see cref="Pvalues"/> va vacío).</summary>
+        public bool IsSecret { get; set; }
+
+        /// <summary>Solo para secretos: indica si ya tiene un valor guardado.</summary>
+        public bool HasValue { get; set; }
     }
 }
 

@@ -1496,8 +1496,18 @@ CREATE TABLE [HR].[TBL_PARAMETERS] (
     [CreatedAt] DATETIME DEFAULT (getdate()) NOT NULL,
     [CreatedBy] INT NULL,
     [UpdatedAt] DATETIME2 NULL,
-    [UpdatedBy] NVARCHAR(50) NULL
+    [UpdatedBy] INT NULL
 );
+GO
+
+-- UpdatedBy es el EmployeeId que escribe la auditoría (INT, como en el resto de tablas). Corrige instalaciones donde
+-- quedó como NVARCHAR: EF no puede leer filas editadas y falla toda página de Parámetros que las incluya.
+IF EXISTS (SELECT 1 FROM sys.columns c JOIN sys.types t ON t.user_type_id = c.user_type_id
+           WHERE c.object_id = OBJECT_ID('[HR].[TBL_PARAMETERS]') AND c.name = 'UpdatedBy' AND t.name <> 'int')
+BEGIN
+    UPDATE [HR].[TBL_PARAMETERS] SET [UpdatedBy] = NULL WHERE TRY_CONVERT(INT, [UpdatedBy]) IS NULL;
+    ALTER TABLE [HR].[TBL_PARAMETERS] ALTER COLUMN [UpdatedBy] INT NULL;
+END
 GO
 
 -- ============================================================
@@ -1510,6 +1520,17 @@ GO
 IF NOT EXISTS (SELECT 1 FROM [HR].[tbl_Parameters] WHERE [name] = 'FOOD_SUBSIDY_DAILY_VALUE')
 INSERT INTO [HR].[tbl_Parameters] ([name], [Pvalues], [Description], [DataType], [IsActive])
 VALUES ('FOOD_SUBSIDY_DAILY_VALUE', '3.50', 'VALOR DIARIO DEL SUBSIDIO DE ALIMENTACION PARA PERSONAL DE CODIGO DE TRABAJO', 'NUMERO', 1);
+GO
+
+-- ============================================================
+-- Cargos con horario rotativo (guardias y su supervisor), separados por ';' y comparados por nombre exacto
+-- con el cargo del empleado. Los reportes que ofrecen "excluir guardias" (hoy: Horas Nocturnas) lo usan,
+-- y RRHH puede agregar o quitar cargos sin cambios de codigo.
+-- ============================================================
+IF NOT EXISTS (SELECT 1 FROM [HR].[tbl_Parameters] WHERE [name] = 'GUARD_JOB_NAMES')
+INSERT INTO [HR].[tbl_Parameters] ([name], [Pvalues], [Description], [DataType], [IsActive])
+VALUES ('GUARD_JOB_NAMES', 'GUARDIAS DE SEGURIDAD;SUPERVISOR',
+        'CARGOS CON HORARIO ROTATIVO (GUARDIAS Y SUPERVISOR) QUE LOS REPORTES PUEDEN EXCLUIR, SEPARADOS POR PUNTO Y COMA', 'TEXTO', 1);
 GO
 
 -- ------------------------------------------------------------
@@ -1610,7 +1631,7 @@ CREATE TABLE [HR].[tbl_Permissions] (
     [VacationID] INT NULL,
     [RowVersion] TIMESTAMP NOT NULL,
     [ApprovedAt] DATETIME2 NULL,
-    [HourTaken] DECIMAL(5,2) NULL,
+    [HourTaken] DECIMAL(9,2) NULL,
     [CreatedBy] INT NULL,
     [UpdatedAt] DATETIME2 NULL,
     [UpdatedBy] INT NULL

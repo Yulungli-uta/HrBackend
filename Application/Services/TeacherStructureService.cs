@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Extensions;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Common;
@@ -145,6 +146,124 @@ public class TeacherStructureService : ITeacherStructureService
 
         return await GetByIdAsync(id, ct)
             ?? throw new InvalidOperationException("Error al recuperar la estructura docente actualizada.");
+    }
+
+    public async Task<TeacherStructureDto> ApplyChangeAsync(int id, TeacherStructureApplyChangeDto dto, CancellationToken ct)
+    {
+        var userId = _currentUser.EmployeeId
+            ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede actualizar estructuras docentes.");
+
+        var reason = dto.Reason?.Trim();
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length < 5)
+            throw new InvalidOperationException("Debe indicar el motivo o documento que respalda el cambio (mínimo 5 caracteres).");
+        if (reason.Length > 500)
+            throw new InvalidOperationException("El motivo no puede superar los 500 caracteres.");
+
+        var current = await _db.TeacherStructures.FirstOrDefaultAsync(t => t.TeacherStructureId == id, ct)
+            ?? throw new KeyNotFoundException($"Estructura docente {id} no encontrada.");
+        if (!current.IsActive)
+            throw new InvalidOperationException("Solo se puede actualizar la estructura docente vigente del empleado.");
+
+        var today = _clock.Today;
+        if (dto.EffectiveDate > today)
+            throw new InvalidOperationException("La fecha efectiva no puede ser futura: la estructura nueva rige desde ese día.");
+        if (dto.EffectiveDate <= current.StartDate)
+            throw new InvalidOperationException(
+                $"La fecha efectiva debe ser posterior al inicio de la estructura vigente ({current.StartDate:dd/MM/yyyy}).");
+
+        var ladder = await _db.AcademicLadders.AsNoTracking()
+            .Include(l => l.CategoryType)
+            .FirstOrDefaultAsync(l => l.LadderId == dto.NewLadderId, ct)
+            ?? throw new KeyNotFoundException($"El escalón {dto.NewLadderId} no existe.");
+        if (!ladder.IsActive)
+            throw new InvalidOperationException("El escalón seleccionado está inactivo.");
+        if (!AcademicCategories.IsTitular(ladder.CategoryType?.Name))
+            throw new InvalidOperationException("Este cambio solo admite escalones de docentes titulares.");
+
+        var dedication = await _db.RefTypes.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.TypeId == dto.NewDedicationTypeId && r.Category == "ACADEMIC_DEDICATION" && r.IsActive, ct)
+            ?? throw new InvalidOperationException($"La dedicación indicada (Id={dto.NewDedicationTypeId}) no es válida o está inactiva.");
+        if (ladder.DedicationTypeId.HasValue && ladder.DedicationTypeId.Value != dto.NewDedicationTypeId)
+            throw new InvalidOperationException("La dedicación no coincide con la del escalón seleccionado.");
+
+        var hours = dto.WeeklyClassHours ?? dedication.Name switch
+        {
+            "TC" => 40m,
+            "MT" => 20m,
+            _ => (decimal?)null,
+        };
+        if (!hours.HasValue || hours.Value <= 0 || hours.Value > 60)
+            throw new InvalidOperationException("Indique las horas semanales (mayores a 0 y hasta 60).");
+
+        var departmentId = dto.DepartmentId ?? current.DepartmentId;
+        if (dto.DepartmentId.HasValue && !await _db.Departments.AnyAsync(d => d.DepartmentId == dto.DepartmentId.Value, ct))
+            throw new KeyNotFoundException($"La dependencia {dto.DepartmentId} no existe.");
+
+        var unchanged = current.LadderId == dto.NewLadderId
+                        && current.DedicationTypeId == dto.NewDedicationTypeId
+                        && current.WeeklyClassHours == hours
+                        && current.DepartmentId == departmentId;
+        if (unchanged)
+            throw new InvalidOperationException("No hay cambios: el escalón, la dedicación, las horas y la dependencia son los mismos.");
+
+        if (await _repo.HasOverlapAsync(current.EmployeeId, dto.EffectiveDate, null, current.TeacherStructureId, ct))
+            throw new InvalidOperationException("Ya existe otra estructura docente activa que se solapa con la fecha indicada.");
+
+        var now = _clock.Now;
+        var before = new
+        {
+            current.LadderId, current.DedicationTypeId, current.WeeklyClassHours, current.DepartmentId,
+            StartDate = current.StartDate.ToString("yyyy-MM-dd"),
+        };
+
+        // Se cierra la vigente el día anterior; el historial queda intacto.
+        current.IsActive  = false;
+        current.EndDate   = dto.EffectiveDate.AddDays(-1);
+        current.UpdatedBy = userId;
+        current.UpdatedAt = now;
+
+        // El RMU no se copia: el sueldo vive en el libro (HR.tbl_SalaryHistory). Los datos SIIES de categoría solo se
+        // conservan si el escalón no cambió; con otro escalón se recalculan desde Ladder.SiiesLabel.
+        var next = new TeacherStructure
+        {
+            EmployeeId       = current.EmployeeId,
+            LadderId         = dto.NewLadderId,
+            DedicationTypeId = dto.NewDedicationTypeId,
+            WeeklyClassHours = hours,
+            HourValue        = current.HourValue,
+            DepartmentId     = departmentId,
+            StartDate        = dto.EffectiveDate,
+            IsActive         = true,
+            SiiesTipoEscalafonNombramientoTypeId = current.SiiesTipoEscalafonNombramientoTypeId,
+            SiiesNivelTypeId                     = current.SiiesNivelTypeId,
+            SiiesCategoriaTypeId                 = current.LadderId == dto.NewLadderId ? current.SiiesCategoriaTypeId : null,
+            CreatedBy = userId,
+            CreatedAt = now,
+        };
+        _db.TeacherStructures.Add(next);
+
+        _db.Set<Audit>().Add(new Audit
+        {
+            TableName = "TeacherStructure",
+            Action    = "SCALE_CHANGE",
+            RecordId  = id.ToString(),
+            UserName  = string.IsNullOrWhiteSpace(_currentUser.UserName ?? _currentUser.Email) ? "unknown" : (_currentUser.UserName ?? _currentUser.Email)!,
+            DateTime  = now,
+            Details   = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                Reason = reason,
+                EmployeeId = current.EmployeeId,
+                EffectiveDate = dto.EffectiveDate.ToString("yyyy-MM-dd"),
+                Before = before,
+                After = new { dto.NewLadderId, dto.NewDedicationTypeId, WeeklyClassHours = hours, DepartmentId = departmentId },
+            }),
+        });
+
+        // Un solo SaveChanges: cerrar la vigente, crear la nueva y auditar son atómicos.
+        await _db.SaveChangesAsync(ct);
+
+        return await GetByIdAsync(next.TeacherStructureId, ct)
+            ?? throw new InvalidOperationException("Error al recuperar la estructura docente creada.");
     }
 
     public async Task DeactivateAsync(int id, CancellationToken ct)

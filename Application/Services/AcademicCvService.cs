@@ -98,7 +98,8 @@ public class AcademicCvService : IAcademicCvService
             .OrderByDescending(e => e.StartDate).ToList();
         var experience = (await _workExperiences.GetByPersonIdAsync(personId))
             .OrderByDescending(e => e.StartDate).ToList();
-        var publications = (await _publications.GetByPersonIdAsync(personId))
+        // Solo lo que cuenta: aprobadas y sin revisión de origen histórico/manual (lo sincronizado sin aprobar queda fuera).
+        var publications = (await _publications.GetCountableByPersonIdAsync(personId, ct))
             .OrderByDescending(p => p.PublicationDate).ToList();
         var books = (await _books.GetByPersonIdAsync(personId))
             .OrderByDescending(b => b.PublicationDate).ToList();

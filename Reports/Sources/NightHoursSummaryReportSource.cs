@@ -31,6 +31,7 @@ public sealed class NightHoursSummaryReportSource : IReportSource
     private const string ColIdCard     = "id_card";
     private const string ColFullName   = "full_name";
     private const string ColDepartment = "department";
+    private const string ColSchedule   = "assigned_schedule";
     private const string ColDays       = "days_with_night_hours";
     private const string ColTotalHours = "total_night_hours";
 
@@ -40,7 +41,8 @@ public sealed class NightHoursSummaryReportSource : IReportSource
         new(ColIdCard,     "Cédula",                     Width: 1.3f),
         new(ColFullName,   "Nombres y Apellidos",        Width: 2.6f),
         new(ColDepartment, "Dependencia",                Width: 2.0f),
-        new(ColDays,       "Jornadas con Horas Nocturnas", Width: 1.3f, Alignment: ColumnAlignment.Right),
+        new(ColSchedule,   "Horario Asignado",           Width: 1.5f, Alignment: ColumnAlignment.Center),
+        new(ColDays,      "Jornadas con Horas Nocturnas", Width: 1.3f, Alignment: ColumnAlignment.Right),
         new(ColTotalHours, "Total Horas Nocturnas",      Width: 1.2f, Alignment: ColumnAlignment.Right),
     ];
 
@@ -61,16 +63,17 @@ public sealed class NightHoursSummaryReportSource : IReportSource
             "Building NightHoursSummary report. Start={Start}, End={End}, DepartmentId={DeptId}, EmployeeId={EmpId}",
             filter.StartDate, filter.EndDate, filter.DepartmentId, filter.EmployeeId);
 
-        var data    = await _service.GetNightHoursSummaryDataAsync(filter, context.RequestAborted);
-        var records = data?.ToList() ?? [];
+        var result  = await _service.GetNightHoursSummaryDataAsync(filter, context.RequestAborted);
+        var records = result.Rows.ToList();
 
-        _logger.LogInformation("NightHoursSummary report: {Count} records.", records.Count);
+        _logger.LogInformation(
+            "NightHoursSummary report: {Count} records. Excluded: {Excluded} people.", records.Count, result.ExcludedPeople);
 
         return new ReportDefinition
         {
             Title       = "Horas Nocturnas por Empleado",
             FilePrefix  = "Reporte_Horas_Nocturnas",
-            Subtitle    = BuildSubtitle(filter, records),
+            Subtitle    = BuildSubtitle(filter, records, result),
             GeneratedBy = context.User.Identity?.Name ?? "anonymous",
             GeneratedAt = DateTime.Now,
             Columns     = _columns,
@@ -94,6 +97,7 @@ public sealed class NightHoursSummaryReportSource : IReportSource
                 [ColIdCard]     = r.IdCard,
                 [ColFullName]   = r.FullName,
                 [ColDepartment] = r.DepartmentName ?? "-",
+                [ColSchedule]   = FormatSchedules(r.AssignedSchedules),
                 [ColDays]       = r.DaysWithNightHours,
                 [ColTotalHours] = r.TotalNightHours.ToString("N2", CultureInfo.InvariantCulture),
             });
@@ -101,7 +105,18 @@ public sealed class NightHoursSummaryReportSource : IReportSource
         return rows;
     }
 
-    private static string BuildSubtitle(ReportFilterDto filter, IReadOnlyList<NightHoursSummaryReportDto> records)
+    /// <summary>Más de este número de horarios distintos en el período se resume como «Varios».</summary>
+    private const int MaxSchedulesListed = 3;
+
+    private static string FormatSchedules(IReadOnlyList<NightHoursScheduleRange> schedules)
+    {
+        if (schedules.Count == 0) return "-";
+        if (schedules.Count > MaxSchedulesListed) return "Varios";
+        return string.Join(" / ", schedules.Select(s => $"{s.Entry:HH:mm} - {s.Exit:HH:mm}"));
+    }
+
+    private static string BuildSubtitle(
+        ReportFilterDto filter, IReadOnlyList<NightHoursSummaryReportDto> records, NightHoursSummaryResultDto result)
     {
         var parts = new List<string>();
 
@@ -113,6 +128,18 @@ public sealed class NightHoursSummaryReportSource : IReportSource
         else if (filter.EndDate.HasValue)
         {
             parts.Add($"Hasta: {filter.EndDate:dd/MM/yyyy}");
+        }
+
+        // Siempre se declara si se excluyó o no, para que quien lea el archivo sepa qué está viendo y los totales cuadren.
+        if (filter.ExcludeGuards == true)
+        {
+            parts.Add(
+                $"Excluidos por cargo ({string.Join(", ", result.ExcludedJobNames)}): " +
+                $"{result.ExcludedPeople} personas, {result.ExcludedHours.ToString("N2", CultureInfo.InvariantCulture)} h");
+        }
+        else if (filter.ExcludeGuards == false)
+        {
+            parts.Add("Incluye guardias y supervisor");
         }
 
         parts.Add($"Total empleados: {records.Count}");

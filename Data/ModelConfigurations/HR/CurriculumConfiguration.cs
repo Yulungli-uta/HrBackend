@@ -213,6 +213,12 @@ public sealed class PublicationsConfiguration : IEntityTypeConfiguration<Publica
         e.Property(x => x.OrganizedBy).HasMaxLength(150);
         e.Property(x => x.EventName).HasMaxLength(200);
         e.Property(x => x.EventEdition).HasMaxLength(50);
+        e.Property(x => x.SourceProviderTypeId).HasColumnName("SourceProviderTypeID");
+        e.Property(x => x.ExternalId).HasMaxLength(60);
+        // Columna calculada (persistida) en la BD: EF no la escribe nunca.
+        e.Property(x => x.DoiNormalized).HasMaxLength(255).ValueGeneratedOnAddOrUpdate();
+        e.Property(x => x.ApprovalStatus).HasMaxLength(12).IsRequired();
+        e.Property(x => x.ReviewNotes).HasMaxLength(300);
     }
 }
 

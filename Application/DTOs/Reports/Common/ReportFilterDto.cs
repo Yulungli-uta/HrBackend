@@ -47,6 +47,13 @@ public record ReportFilterDto
     public bool? HasLateness { get; init; }
 
     /// <summary>
+    /// Excluye de los reportes que lo soportan (hoy: Horas Nocturnas) al personal con los cargos indicados en el
+    /// parámetro <c>GUARD_JOB_NAMES</c> (guardias y su supervisor, de horario rotativo). <c>true</c> = excluir,
+    /// <c>false</c> o null = incluirlos.
+    /// </summary>
+    public bool? ExcludeGuards { get; init; }
+
+    /// <summary>
     /// Filtra la pantalla de novedades de asistencia por un tipo específico (ej.
     /// "UNJUSTIFIED_ABSENCE", "LATE_ARRIVAL") — ver <c>AttendanceNoveltyReportDto.NoveltyType</c>
     /// para los valores válidos. Null o vacío = todos los tipos.
@@ -99,6 +106,18 @@ public record ReportFilterDto
     /// Null o vacío = usa el período más reciente disponible por cada profesor.
     /// </summary>
     public string? PeriodCode { get; init; }
+
+    /// <summary>Tipo de docente del reporte de personal docente: TITULAR (por defecto) o NO_TITULAR (contrato ocasional).</summary>
+    public string? TeacherKind { get; init; }
+
+    /// <summary>Filtra por categoría académica (TypeId de ref_Types ACADEMIC_CATEGORY). Null = todas. Reporte de docentes titulares.</summary>
+    public int? CategoryTypeId { get; init; }
+
+    /// <summary>Filtra por nivel académico (TypeId de ref_Types ACADEMIC_LEVEL). Null = todos. Reporte de docentes titulares.</summary>
+    public int? LevelTypeId { get; init; }
+
+    /// <summary>Filtra por dedicación (TypeId de ref_Types ACADEMIC_DEDICATION). Null = todas. Reporte de docentes titulares.</summary>
+    public int? DedicationTypeId { get; init; }
 
     /// <summary>Año calendario — usado por el resumen mensual de horas extra en vez de un rango de fechas. Null = todos los años.</summary>
     public int? Year { get; init; }

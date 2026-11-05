@@ -1,8 +1,10 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Publications;
+using WsUtaSystem.Application.DTOs.ScientificProviders;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Controller;
 using WsUtaSystem.Infrastructure.Security;
@@ -19,11 +21,29 @@ public class PublicationsController : ControllerBase
     private readonly IPublicationsService _svc;
     private readonly IMapper _mapper;
     private readonly ICurrentUserService _currentUser;
-    public PublicationsController(IPublicationsService svc, IMapper mapper, ICurrentUserService currentUser)
+    private readonly IScientificProviderCatalog _providers;
+    public PublicationsController(IPublicationsService svc, IMapper mapper, ICurrentUserService currentUser, IScientificProviderCatalog providers)
     {
         _svc = svc;
         _mapper = mapper;
         _currentUser = currentUser;
+        _providers = providers;
+    }
+
+    /// <summary>Mapea a DTO y completa lo derivado del estado de revisión (bloqueo, si exige aprobación y si cuenta en el CV).</summary>
+    private async Task<List<PublicationsDto>> ToDtosAsync(IEnumerable<Publications> items, CancellationToken ct)
+    {
+        var providers = await _providers.GetAllAsync(ct);
+        return items.Select(e => ToDto(e, providers)).ToList();
+    }
+
+    private PublicationsDto ToDto(Publications entity, IReadOnlyList<ScientificProviderInfo> providers)
+    {
+        var dto = _mapper.Map<PublicationsDto>(entity);
+        dto.IsLocked = PublicationRules.IsLocked(entity.ApprovalStatus);
+        dto.RequiresApproval = PublicationRules.RequiresApproval(entity, providers);
+        dto.CountsForCv = PublicationRules.CountsForCv(entity.ApprovalStatus, dto.RequiresApproval);
+        return dto;
     }
 
     /// <summary>Lista todos los registros de Publications. Requiere rol de RRHH/administración.</summary>
@@ -34,7 +54,7 @@ public class PublicationsController : ControllerBase
         if (!ElevatedRoles.Any(User.IsInRole))
             return Forbid403("No tiene permisos para ver todas las publicaciones del sistema.");
 
-        return Ok(_mapper.Map<List<PublicationsDto>>(await _svc.GetAllAsync(ct)));
+        return Ok(await ToDtosAsync(await _svc.GetAllAsync(ct), ct));
     }
 
     /// <summary>Obtiene un registro por ID.</summary>
@@ -49,7 +69,7 @@ public class PublicationsController : ControllerBase
         if (!ElevatedRoles.Any(User.IsInRole) && await _currentUser.GetPersonIdAsync(ct) != e.PersonId)
             return Forbid403("No puede consultar publicaciones de otra persona.");
 
-        return Ok(_mapper.Map<PublicationsDto>(e));
+        return Ok(ToDto(e, await _providers.GetAllAsync(ct)));
     }
 
     /// <summary>Obtiene todas las publicaciones de una persona.</summary>
@@ -62,7 +82,7 @@ public class PublicationsController : ControllerBase
             return Forbid403("No puede consultar publicaciones de otra persona.");
 
         var publications = await _svc.GetByPersonIdAsync(personId);
-        return Ok(_mapper.Map<List<PublicationsDto>>(publications));
+        return Ok(await ToDtosAsync(publications, ct));
     }
 
     /// <summary>Crea un nuevo registro. El PersonId del payload se ignora salvo rol elevado —
@@ -81,7 +101,7 @@ public class PublicationsController : ControllerBase
 
         var created = await _svc.CreateAsync(entityObj, ct);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
-        return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<PublicationsDto>(created));
+        return CreatedAtAction(nameof(GetById), new { id = idVal }, ToDto(created, await _providers.GetAllAsync(ct)));
     }
 
     /// <summary>Crea una publicación junto con su documento de respaldo en una sola llamada transaccional.</summary>
@@ -125,7 +145,7 @@ public class PublicationsController : ControllerBase
 
         var result = new PublicationWithDocumentResultDto
         {
-            Publication = _mapper.Map<PublicationsDto>(created),
+            Publication = ToDto(created, await _providers.GetAllAsync(ct)),
             StoredFile = storedFile != null ? _mapper.Map<Application.DTOs.StoredFile.StoredFileDto>(storedFile) : null,
         };
         return CreatedAtAction(nameof(GetById), new { id = created.PublicationId }, result);

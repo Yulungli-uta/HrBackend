@@ -449,6 +449,12 @@ CREATE OR ALTER VIEW HR.vw_EmployeeCurrentSalary AS
   fecha de inicio): IsAmbiguous = 1 y se toma el MAYOR NewSalary como desempate determinista;
   esos casos se revisan filtrando IsAmbiguous = 1.
   Alineado con HR.fn_ResolveEmployeeRate (nómina), que también ordena por EffectiveDate y vigencia.
+
+  2026-10-29: una acción cuya ÚLTIMA entrada en HR.tbl_PersonnelActionStatusHistory es una corrección de estado
+  hecha por pantalla (nota "CORRECCIÓN: …", ver PersonnelActionService.CorrectStatusAsync) a VIGENTE queda
+  "fijada" (IsPinned): dentro de su nivel gana sobre las demás, aunque su fecha sea anterior. Es la decisión
+  explícita de una persona de RRHH sobre cuál documento rige; el estado VIGENTE que dejó la migración NO cuenta
+  (no tiene esa nota). Un documento en vigor por fechas (Tier 3) sigue ganando a uno fijado ya concluido.
 */
 WITH cand AS (
     SELECT
@@ -459,7 +465,15 @@ WITH cand AS (
         CASE WHEN sh.ActionID IS NOT NULL THEN 'ACCION' ELSE 'CONTRATO' END AS SourceType,
         COALESCE(CAST(pa.EffectiveDate AS date), CAST(c.StartDate AS date), CAST(sh.ChangedAt AS date)) AS EffectiveFrom,
         COALESCE(CAST(pa.EndDate AS date), CAST(c.EndDate AS date)) AS EffectiveTo,
-        CASE WHEN pa.Status IN ('ANULADO', 'BORRADOR', 'GENERADO', 'PENDIENTE_FIRMAS') OR rt.Name = 'ANULADO' THEN 1 ELSE 0 END AS IsVoided
+        CASE WHEN pa.Status IN ('ANULADO', 'BORRADOR', 'GENERADO', 'PENDIENTE_FIRMAS') OR rt.Name = 'ANULADO' THEN 1 ELSE 0 END AS IsVoided,
+        CASE WHEN pa.Status = 'VIGENTE' AND EXISTS (
+                 SELECT 1
+                 FROM (SELECT TOP 1 h.ToStatus, h.Notes
+                       FROM HR.tbl_PersonnelActionStatusHistory h
+                       WHERE h.ActionId = sh.ActionID
+                       ORDER BY h.ChangedAt DESC, h.HistoryId DESC) lh
+                 WHERE lh.ToStatus = 'VIGENTE' AND lh.Notes LIKE N'CORRECCI%')
+             THEN 1 ELSE 0 END AS IsPinned
     FROM HR.tbl_SalaryHistory sh
     LEFT JOIN HR.tbl_PersonnelActions pa ON pa.ActionID = sh.ActionID
     LEFT JOIN HR.tbl_Contracts c         ON c.ContractID = sh.ContractID
@@ -476,9 +490,9 @@ flagged AS (
 ),
 ranked AS (
     SELECT *,
-        ROW_NUMBER() OVER (PARTITION BY EmployeeID ORDER BY Tier DESC, EffectiveFrom DESC, NewSalary DESC) AS rn,
-        MIN(NewSalary) OVER (PARTITION BY EmployeeID, Tier, EffectiveFrom) AS MinSal,
-        MAX(NewSalary) OVER (PARTITION BY EmployeeID, Tier, EffectiveFrom) AS MaxSal
+        ROW_NUMBER() OVER (PARTITION BY EmployeeID ORDER BY Tier DESC, IsPinned DESC, EffectiveFrom DESC, NewSalary DESC, SalaryHistoryID DESC) AS rn,
+        MIN(NewSalary) OVER (PARTITION BY EmployeeID, Tier, IsPinned, EffectiveFrom) AS MinSal,
+        MAX(NewSalary) OVER (PARTITION BY EmployeeID, Tier, IsPinned, EffectiveFrom) AS MaxSal
     FROM flagged
 )
 SELECT
@@ -772,11 +786,18 @@ LEFT JOIN HR.tbl_Degrees d              ON og.DegreeID = d.DegreeID;
 GO
 
 -- [vw_LeaveWindows]
-CREATE   VIEW HR.vw_LeaveWindows AS
+-- 2026-11-05: el Fin de un permiso sin hora (00:00) es INCLUSIVO, igual que en las vacaciones. Misma regla que
+-- HR.sp_ProcessAttendanceLeavesDay: solo si Inicio y Fin vienen a las 00:00 y HourTaken es nulo, 0 o una jornada o más.
+CREATE OR ALTER VIEW HR.vw_LeaveWindows AS
 SELECT v.EmployeeID, v.StartDate AS FromDT, DATEADD(DAY,1,v.EndDate) AS ToDT, 'VACATION' AS LeaveType
 FROM HR.tbl_Vacations v WHERE v.Status IN ('Planned','InProgress')
 UNION ALL
-SELECT p.EmployeeID, p.StartDate, p.EndDate, 'PERMISSION'
+SELECT p.EmployeeID, p.StartDate,
+       CASE WHEN CAST(p.StartDate AS TIME) = '00:00:00' AND CAST(p.EndDate AS TIME) = '00:00:00'
+                 AND (p.HourTaken IS NULL OR p.HourTaken = 0
+                      OR p.HourTaken >= ISNULL((SELECT TOP 1 TRY_CAST(Pvalues AS INT) FROM HR.tbl_Parameters WHERE Name = 'WORK_MINUTES_PER_DAY' AND IsActive = 1), 480))
+            THEN DATEADD(DAY, 1, p.EndDate) ELSE p.EndDate END,
+       'PERMISSION'
 FROM HR.tbl_Permissions p WHERE p.Status='Approved';
 GO
 

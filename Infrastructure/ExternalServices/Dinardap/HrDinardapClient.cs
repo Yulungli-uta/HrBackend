@@ -5,12 +5,13 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using WsUtaSystem.Application.DTOs.Dinardap;
 using WsUtaSystem.Application.Interfaces.Services;
+using WsUtaSystem.Infrastructure.ExternalServices.Common;
 
-namespace WsUtaSystem.Application.Services;
+namespace WsUtaSystem.Infrastructure.ExternalServices.Dinardap;
 
 /// <summary>
-/// Typed HttpClient hacia WsUtaDinardap.Api. La URL base se lee de "Dinardap:ApiUrl" en
-/// appsettings.json. Nunca lanza excepción al llamador: cualquier falla (red, timeout,
+/// Typed HttpClient hacia WsUtaDinardap.Api. La URL base se lee del parámetro DINARDAP_API_URL
+/// (HR.tbl_Parameters) y solo se acepta si es HTTPS de un host uta.edu.ec. Nunca lanza excepción al llamador: cualquier falla (red, timeout,
 /// permiso rechazado, DINARDAP caído) se registra como advertencia y retorna null/vacío —
 /// mismo patrón que EmployeeProvisioningClient. Un DTO no-null (aunque tenga propiedades
 /// internas en null) significa que el servicio SÍ respondió; null significa que no se pudo
@@ -20,8 +21,10 @@ namespace WsUtaSystem.Application.Services;
 public sealed class HrDinardapClient : IHrDinardapClient
 {
     private const string ServiceTokenCacheKey = "HrDinardapClient_ServiceToken";
+    private const string ApiUrlParameterName = "DINARDAP_API_URL";
 
     private readonly HttpClient _http;
+    private readonly ExternalServiceUrlResolver _urls;
     private readonly IEmployeeProvisioningClient _serviceAuth;
     private readonly IMemoryCache _cache;
     private readonly ILogger<HrDinardapClient> _logger;
@@ -29,9 +32,11 @@ public sealed class HrDinardapClient : IHrDinardapClient
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public HrDinardapClient(
-        HttpClient http, IEmployeeProvisioningClient serviceAuth, IMemoryCache cache, ILogger<HrDinardapClient> logger)
+        HttpClient http, ExternalServiceUrlResolver urls, IEmployeeProvisioningClient serviceAuth, IMemoryCache cache,
+        ILogger<HrDinardapClient> logger)
     {
         _http        = http        ?? throw new ArgumentNullException(nameof(http));
+        _urls        = urls        ?? throw new ArgumentNullException(nameof(urls));
         _serviceAuth = serviceAuth ?? throw new ArgumentNullException(nameof(serviceAuth));
         _cache       = cache       ?? throw new ArgumentNullException(nameof(cache));
         _logger      = logger      ?? throw new ArgumentNullException(nameof(logger));
@@ -66,9 +71,10 @@ public sealed class HrDinardapClient : IHrDinardapClient
 
     private async Task<T?> GetAsync<T>(string relativeUrl, CancellationToken ct) where T : class
     {
-        if (_http.BaseAddress is null)
+        var baseUrl = await _urls.ResolveAsync(ApiUrlParameterName, ct, allowLoopbackInDevelopment: true);
+        if (baseUrl is null)
         {
-            _logger.LogWarning("Dinardap:ApiUrl no configurado. Consulta a DINARDAP omitida.");
+            _logger.LogWarning("{Name} no configurado o inválido. Consulta a DINARDAP omitida.", ApiUrlParameterName);
             return null;
         }
 
@@ -81,7 +87,7 @@ public sealed class HrDinardapClient : IHrDinardapClient
 
         try
         {
-            var response = await SendAsync(relativeUrl, token, ct);
+            var response = await SendAsync(baseUrl, relativeUrl, token, ct);
 
             // El token cacheado pudo expirar a mitad de una corrida larga (ej. sincronización
             // masiva) - un solo reintento con token fresco antes de rendirse.
@@ -90,7 +96,7 @@ public sealed class HrDinardapClient : IHrDinardapClient
                 _cache.Remove(ServiceTokenCacheKey);
                 var freshToken = await GetCachedServiceTokenAsync(ct);
                 if (!string.IsNullOrWhiteSpace(freshToken))
-                    response = await SendAsync(relativeUrl, freshToken, ct);
+                    response = await SendAsync(baseUrl, relativeUrl, freshToken, ct);
             }
 
             using (response)
@@ -114,9 +120,11 @@ public sealed class HrDinardapClient : IHrDinardapClient
         }
     }
 
-    private async Task<HttpResponseMessage> SendAsync(string relativeUrl, string token, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendAsync(Uri baseUrl, string relativeUrl, string token, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, relativeUrl);
+        // La ruta base lleva un segmento (p. ej. /WsUtaDinardap): sin la barra final, Uri lo descartaría al combinar.
+        var root = new UriBuilder(baseUrl) { Path = baseUrl.AbsolutePath.TrimEnd('/') + "/" }.Uri;
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(root, relativeUrl));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return await _http.SendAsync(request, ct);
     }

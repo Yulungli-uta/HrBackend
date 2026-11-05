@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.AcademicLadder;
 using WsUtaSystem.Application.Interfaces.Repositories;
@@ -31,8 +32,17 @@ public class AcademicLadderService : IAcademicLadderService
     public async Task<List<AcademicLadderDto>> GetAllAsync(CancellationToken ct)
     {
         var items = await _repo.GetAllOrderedAsync(ct);
-        return items.Select(MapToDto).ToList();
+        var teachers = await CountActiveTeachersAsync(ct);
+        return items.Select(a => MapToDto(a, teachers.GetValueOrDefault(a.LadderId))).ToList();
     }
+
+    /// <summary>Docentes con estructura activa agrupados por escalón (una sola consulta para todo el catálogo).</summary>
+    private async Task<Dictionary<int, int>> CountActiveTeachersAsync(CancellationToken ct) =>
+        await _db.TeacherStructures.AsNoTracking()
+            .Where(t => t.IsActive && t.LadderId != null)
+            .GroupBy(t => t.LadderId!.Value)
+            .Select(g => new { LadderId = g.Key, Total = g.Count() })
+            .ToDictionaryAsync(x => x.LadderId, x => x.Total, ct);
 
     public async Task<AcademicLadderDto?> GetByIdAsync(int id, CancellationToken ct)
     {
@@ -43,13 +53,17 @@ public class AcademicLadderService : IAcademicLadderService
             .Include(a => a.NextLadder)
             .FirstOrDefaultAsync(a => a.LadderId == id, ct);
 
-        return entity is null ? null : MapToDto(entity);
+        if (entity is null) return null;
+
+        var activeTeachers = await _db.TeacherStructures.AsNoTracking()
+            .CountAsync(t => t.IsActive && t.LadderId == id, ct);
+        return MapToDto(entity, activeTeachers);
     }
 
     public async Task<AcademicLadderDto?> GetNextAsync(int currentLadderId, CancellationToken ct)
     {
         var next = await _repo.GetNextAsync(currentLadderId, ct);
-        return next is null ? null : MapToDto(next);
+        return next is null ? null : MapToDto(next, 0);
     }
 
     public async Task<AcademicLadderDto> CreateAsync(AcademicLadderCreateDto dto, CancellationToken ct)
@@ -62,6 +76,8 @@ public class AcademicLadderService : IAcademicLadderService
 
         if (dto.NextLadderId.HasValue && !await _db.AcademicLadders.AnyAsync(a => a.LadderId == dto.NextLadderId, ct))
             throw new KeyNotFoundException($"El escalafón siguiente (Id={dto.NextLadderId}) no existe.");
+
+        await ValidateTypeReferencesAsync(dto.CategoryTypeId, dto.LevelTypeId, dto.DedicationTypeId, ct);
 
         var entity = new AcademicLadder
         {
@@ -102,6 +118,14 @@ public class AcademicLadderService : IAcademicLadderService
                 throw new KeyNotFoundException($"El escalafón siguiente (Id={dto.NextLadderId}) no existe.");
         }
 
+        // Red de seguridad contra el borrado accidental: un cliente que no envía la categoría
+        // (formulario antiguo o payload parcial) no debe dejar el escalón sin categoría.
+        if (entity.CategoryTypeId.HasValue && !dto.CategoryTypeId.HasValue)
+            throw new InvalidOperationException(
+                "La categoría del escalón no puede quedar vacía. Envíe la categoría actual o seleccione una nueva.");
+
+        await ValidateTypeReferencesAsync(dto.CategoryTypeId, dto.LevelTypeId, dto.DedicationTypeId, ct);
+
         entity.Name             = dto.Name;
         entity.CategoryTypeId   = dto.CategoryTypeId;
         entity.LevelTypeId      = dto.LevelTypeId;
@@ -120,10 +144,28 @@ public class AcademicLadderService : IAcademicLadderService
             ?? throw new InvalidOperationException("Error al recuperar el escalafón actualizado.");
     }
 
-    // CategoryTypeIds para Titulares según ref_Types ACADEMIC_CATEGORY
-    private static readonly HashSet<int> TitularCategoryIds = [2012, 2013, 2014];
+    /// <summary>
+    /// Verifica que cada Id exista, esté activo y pertenezca a la categoría de catálogo esperada
+    /// (ACADEMIC_CATEGORY / ACADEMIC_LEVEL / ACADEMIC_DEDICATION), para no guardar un tipo de otro catálogo.
+    /// </summary>
+    private async Task ValidateTypeReferencesAsync(int? categoryId, int? levelId, int? dedicationId, CancellationToken ct)
+    {
+        await EnsureTypeAsync(categoryId, "ACADEMIC_CATEGORY", "categoría", ct);
+        await EnsureTypeAsync(levelId, "ACADEMIC_LEVEL", "nivel", ct);
+        await EnsureTypeAsync(dedicationId, "ACADEMIC_DEDICATION", "dedicación", ct);
+    }
 
-    private static AcademicLadderDto MapToDto(AcademicLadder a) => new(
+    private async Task EnsureTypeAsync(int? typeId, string category, string label, CancellationToken ct)
+    {
+        if (!typeId.HasValue) return;
+
+        var ok = await _db.RefTypes.AsNoTracking()
+            .AnyAsync(r => r.TypeId == typeId.Value && r.Category == category && r.IsActive, ct);
+        if (!ok)
+            throw new InvalidOperationException($"La {label} indicada (Id={typeId}) no es válida o está inactiva.");
+    }
+
+    private static AcademicLadderDto MapToDto(AcademicLadder a, int activeTeachers) => new(
         a.LadderId,
         a.Code,
         a.Name,
@@ -139,6 +181,7 @@ public class AcademicLadderService : IAcademicLadderService
         a.NextLadder?.Name,
         a.MinYearsService,
         a.IsActive,
-        IsTitular: a.CategoryTypeId.HasValue && TitularCategoryIds.Contains(a.CategoryTypeId.Value)
+        IsTitular: AcademicCategories.IsTitular(a.CategoryType?.Name),
+        ActiveTeachers: activeTeachers
     );
 }

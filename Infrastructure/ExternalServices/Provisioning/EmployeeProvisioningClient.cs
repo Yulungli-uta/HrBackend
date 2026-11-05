@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 using WsUtaSystem.Application.DTOs.Provisioning;
 using WsUtaSystem.Application.Interfaces.Services;
 
-namespace WsUtaSystem.Application.Services;
+namespace WsUtaSystem.Infrastructure.ExternalServices.Provisioning;
 
 /// <summary>
 /// Typed HttpClient que delega el aprovisionamiento de empleados a RepositoryUta.

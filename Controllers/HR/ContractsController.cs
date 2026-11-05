@@ -60,6 +60,18 @@ public class ContractsController : ControllerBase
         return entity;
     }
 
+    /// <summary>Completa nombre y cédula del titular en los listados paginados (una consulta por página).</summary>
+    private async Task FillPersonSummariesAsync(List<ContractsDto> items, CancellationToken ct)
+    {
+        var people = await _service.GetPersonSummariesAsync(items.Select(i => i.PersonID), ct);
+        foreach (var item in items)
+        {
+            if (!people.TryGetValue(item.PersonID, out var person)) continue;
+            item.PersonFullName = person.FullName;
+            item.PersonIdCard = person.IdCard;
+        }
+    }
+
     private ObjectResult Forbid403(string message) => StatusCode(403, new
     {
         status = "error",
@@ -75,7 +87,7 @@ public class ContractsController : ControllerBase
     /// <summary>Retorna un resultado paginado de contratos.</summary>
     /// <param name="page">Número de página (base 1).</param>
     /// <param name="pageSize">Cantidad de registros por página. Máximo 200.</param>
-    /// <param name="search">Texto libre sobre código o descripción (NO busca cédula/nombre — usar <paramref name="personId"/> para filtrar por empleado).</param>
+    /// <param name="search">Texto libre sobre código, descripción, o cédula/nombre del titular (cédula/nombre desde 3 caracteres).</param>
     /// <param name="statusTypeId">Filtro por TypeId del estado (CONTRACT_STATUS).</param>
     /// <param name="certificationId">Filtro por CertificationID vinculado.</param>
     /// <param name="year">Filtro por año de creación (0 = todos).</param>
@@ -118,6 +130,11 @@ public class ContractsController : ControllerBase
             : null;
         var hasDeptScope = allowedDeptIds is not null;
 
+        // La búsqueda también encuentra por titular (cédula o nombre), no solo por código/descripción.
+        IReadOnlyList<int> searchPersonIds = hasSearch
+            ? await _service.SearchPersonIdsByTextAsync(term, ct)
+            : Array.Empty<int>();
+
         System.Linq.Expressions.Expression<Func<Contracts, bool>>? predicate = null;
 
         if (hasSearch || statusTypeId.HasValue || certificationId.HasValue || hasYear
@@ -125,7 +142,8 @@ public class ContractsController : ControllerBase
         {
             predicate = c =>
                 (!hasSearch || c.ContractCode.ToLower().Contains(term) ||
-                    (c.ContractDescription != null && c.ContractDescription.ToLower().Contains(term))) &&
+                    (c.ContractDescription != null && c.ContractDescription.ToLower().Contains(term)) ||
+                    searchPersonIds.Contains(c.PersonID)) &&
                 (!statusTypeId.HasValue    || c.Status == statusTypeId.Value) &&
                 (!certificationId.HasValue || c.CertificationID == certificationId.Value) &&
                 (!hasYear                  || (c.CreatedAt != null && c.CreatedAt.Value.Year == year!.Value)) &&
@@ -141,6 +159,7 @@ public class ContractsController : ControllerBase
             : await _service.GetPagedAsync(page, pageSize, ct, orderBy: c => (object)c.CreatedAt!, ascending: ascending);
 
         var dtoItems = _mapper.Map<List<ContractsDto>>(pagedEntities.Items);
+        await FillPersonSummariesAsync(dtoItems, ct);
 
         return Ok(new
         {
@@ -193,6 +212,7 @@ public class ContractsController : ControllerBase
             orderBy: c => (object)c.CreatedAt!, ascending: ascending);
 
         var dtoItems = _mapper.Map<List<ContractsDto>>(pagedEntities.Items);
+        await FillPersonSummariesAsync(dtoItems, ct);
 
         return Ok(new
         {

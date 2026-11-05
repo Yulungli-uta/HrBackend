@@ -128,6 +128,8 @@ public class AppDbContext : DbContext
     public DbSet<WorkExperiences> WorkExperiences => Set<WorkExperiences>();
     public DbSet<BankAccounts> BankAccounts => Set<BankAccounts>();
     public DbSet<Publications> Publications => Set<Publications>();
+    public DbSet<ResearcherProfile> ResearcherProfiles => Set<ResearcherProfile>();
+    public DbSet<ResearcherProviderId> ResearcherProviderIds => Set<ResearcherProviderId>();
     public DbSet<Books> Books => Set<Books>();
     public DbSet<KnowledgeArea> KnowledgeAreas => Set<KnowledgeArea>();
     public DbSet<ResearchProject> ResearchProjects => Set<ResearchProject>();

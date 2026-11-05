@@ -52,6 +52,15 @@ public class TeacherStructureController : ControllerBase
         return Ok(updated);
     }
 
+    /// <summary>
+    /// Aplica un cambio de escalafón y/o dedicación: cierra la estructura vigente el día anterior a la fecha efectiva
+    /// y crea una nueva (el historial queda intacto). Exige motivo y queda auditado.
+    /// </summary>
+    [HttpPost("{id:int}/apply-change")]
+    [RequirePermission("EMPLOYEES.UPDATE")]
+    public async Task<IActionResult> ApplyChange(int id, [FromBody] TeacherStructureApplyChangeDto dto, CancellationToken ct) =>
+        Ok(await _svc.ApplyChangeAsync(id, dto, ct));
+
     /// <summary>Inactiva (soft-delete) una estructura docente.</summary>
     [HttpDelete("{id:int}")]
     [RequirePermission("EMPLOYEES.DELETE")]
