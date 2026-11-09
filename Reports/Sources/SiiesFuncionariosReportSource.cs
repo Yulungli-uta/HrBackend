@@ -314,23 +314,20 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             -- contra el rango: si el nombramiento actual es posterior al fin del rango se usa el primer permanente ya vigente
             -- en esa fecha (aproximacion: exacta cuando hubo a lo mas un reinicio de cadena). Sin nombramiento o con salida
             -- posterior queda la cascada anterior.
-            OUTER APPLY (
-                SELECT TOP 1 x.[ActionId], x.[ActionNumber], x.[ActionDate]
-                FROM (
-                    SELECT ap.[AppointmentActionId] AS [ActionId], ap.[AppointmentActionNumber] AS [ActionNumber], ap.[AppointmentDate] AS [ActionDate], 1 AS [Pri]
-                    FROM [HR].[vw_EmployeeAppointment] ap
-                    WHERE ap.[EmployeeID] = e.[EmployeeID] AND ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] <= @FechaHasta
-                    UNION ALL
-                    SELECT ap.[FirstPermanentActionId], ap.[FirstPermanentActionNumber], ap.[FirstPermanentDate], 2
-                    FROM [HR].[vw_EmployeeAppointment] ap
-                    WHERE ap.[EmployeeID] = e.[EmployeeID] AND ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] > @FechaHasta
-                      AND ap.[FirstPermanentDate] <= @FechaHasta
-                ) x
-                -- Con varias filas por persona, el nombramiento ganador solo reemplaza al documento de la fila del regimen
-                -- principal (o de quien no tiene ninguna fila de regimen); los demas documentos conservan el suyo.
-                WHERE (elr.[Id] IS NULL OR elr.[IsPrincipal] = 1)
-                ORDER BY x.[Pri]
-            ) apt
+            -- Se calcula UNA vez para todos los empleados (la vista devuelve una fila por empleado) y se une; como OUTER APPLY correlacionado
+            -- se ejecutaba por cada fila de documento y recorria HR.tbl_PersonnelActions miles de veces (timeout de 30 s con rangos amplios).
+            -- Con varias filas por persona, el nombramiento ganador solo reemplaza al documento de la fila del regimen principal
+            -- (o de quien no tiene ninguna fila de regimen); los demas documentos conservan el suyo.
+            LEFT JOIN (
+                SELECT ap.[EmployeeID],
+                       CASE WHEN ap.[AppointmentDate] <= @FechaHasta THEN ap.[AppointmentActionId]     ELSE ap.[FirstPermanentActionId]     END AS [ActionId],
+                       CASE WHEN ap.[AppointmentDate] <= @FechaHasta THEN ap.[AppointmentActionNumber] ELSE ap.[FirstPermanentActionNumber] END AS [ActionNumber],
+                       CASE WHEN ap.[AppointmentDate] <= @FechaHasta THEN ap.[AppointmentDate]         ELSE ap.[FirstPermanentDate]         END AS [ActionDate]
+                FROM [HR].[vw_EmployeeAppointment] ap
+                WHERE ap.[HasLaterExit] = 0
+                  AND (ap.[AppointmentDate] <= @FechaHasta
+                       OR (ap.[AppointmentDate] > @FechaHasta AND ap.[FirstPermanentDate] <= @FechaHasta))
+            ) apt ON apt.[EmployeeID] = e.[EmployeeID] AND (elr.[Id] IS NULL OR elr.[IsPrincipal] = 1)
             LEFT JOIN [HR].[tbl_PersonnelActions] aptPa           ON aptPa.[ActionID] = apt.[ActionId]
             LEFT JOIN [HR].[tbl_personnel_action_type] aptPat     ON aptPat.[PersonnelActionTypeId] = aptPa.[ActionTypeID]
             LEFT JOIN [HR].[ref_Types] aptRel                     ON aptRel.[TypeID] = aptPat.[SiiesRelacionIesTypeId]
