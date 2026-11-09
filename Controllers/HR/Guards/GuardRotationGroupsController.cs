@@ -31,6 +31,13 @@ public class GuardRotationGroupsController : ControllerBase
     public async Task<IActionResult> GetActiveGroupEmployees([FromQuery] string? search, CancellationToken ct) =>
         Ok(await _svc.GetActiveGroupEmployeesAsync(search, ct));
 
+    /// <summary>Guardias y supervisores activos para la asignación manual de turnos: con membresía activa en un grupo
+    /// activo o con cargo de guardia/supervisor (marca si aún no tienen grupo).</summary>
+    [HttpGet("planning-employees")]
+    [RequirePermission("GUARDS.READ")]
+    public async Task<IActionResult> GetPlanningEmployees([FromQuery] string? search, CancellationToken ct) =>
+        Ok(await _svc.GetPlanningEmployeesAsync(search, ct));
+
     [HttpGet("paged")]
     [RequirePermission("GUARDS.READ")]
     public async Task<IActionResult> GetPaged(

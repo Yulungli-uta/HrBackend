@@ -38,6 +38,10 @@ public interface IGuardRotationGroupService
     Task<List<EligibleEmployeeDto>> GetEligibleEmployeesAsync(string? search, CancellationToken ct);
     Task<List<EligibleEmployeeDto>> GetActiveGroupEmployeesAsync(string? search, CancellationToken ct);
 
+    /// <summary>Guardias y supervisores activos para la asignación manual de turnos: quien tiene membresía activa en
+    /// un grupo activo O cargo de guardia/supervisor (aunque todavía no esté en un grupo).</summary>
+    Task<List<PlanningEmployeeDto>> GetPlanningEmployeesAsync(string? search, CancellationToken ct);
+
     /// <summary>Crea un grupo nuevo copiando configuración (y empleados activos) de un grupo base existente.</summary>
     Task<GuardRotationGroupDto> DuplicateAsync(int baseGroupId, DuplicateGuardRotationGroupDto dto, CancellationToken ct);
 }

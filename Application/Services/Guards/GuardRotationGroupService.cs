@@ -120,6 +120,43 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             .ToListAsync(ct);
     }
 
+    // La asignación manual de un turno no exige grupo (el grupo es opcional al crear el turno), así que un guardia
+    // activo debe poder asignarse aunque su membresía en el grupo haya terminado o aún no exista. A diferencia de
+    // GetActiveGroupEmployeesAsync, aquí basta el cargo de guardia/supervisor O la membresía activa.
+    public async Task<List<PlanningEmployeeDto>> GetPlanningEmployeesAsync(string? search, CancellationToken ct)
+    {
+        var guardJobIds = _db.Set<WsUtaSystem.Models.Job>()
+            .AsNoTracking()
+            .Where(j => j.Description != null && GuardJobNames.Contains(j.Description))
+            .Select(j => j.JobID);
+
+        var query = _db.Set<WsUtaSystem.Models.Employees>()
+            .AsNoTracking()
+            .Include(e => e.People)
+            .Where(e => e.IsActive && (
+                (e.JobId != null && guardJobIds.Contains(e.JobId.Value)) ||
+                _db.Set<GuardRotationGroupEmployee>().Any(ge => ge.EmployeeId == e.EmployeeId && ge.IsActive && ge.Group!.IsActive)));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(e =>
+                (e.People!.LastName + " " + e.People.FirstName).ToLower().Contains(term) ||
+                (e.People.IdCard != null && e.People.IdCard.ToLower().Contains(term)));
+        }
+
+        return await query
+            .OrderBy(e => e.People!.LastName).ThenBy(e => e.People!.FirstName)
+            .Take(20)
+            .Select(e => new PlanningEmployeeDto(
+                e.EmployeeId,
+                e.People!.LastName + " " + e.People.FirstName,
+                e.People.IdCard,
+                e.Email ?? e.People.Email,
+                _db.Set<GuardRotationGroupEmployee>().Any(ge => ge.EmployeeId == e.EmployeeId && ge.IsActive && ge.Group!.IsActive)))
+            .ToListAsync(ct);
+    }
+
     public async Task<List<GuardRotationGroupDto>> GetAllAsync(CancellationToken ct) =>
         await _db.GuardRotationGroups
             .OrderBy(g => g.Name)

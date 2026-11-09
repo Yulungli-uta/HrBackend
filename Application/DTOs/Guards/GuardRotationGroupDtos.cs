@@ -9,6 +9,16 @@ public record EligibleEmployeeDto(
     string? Email
 );
 
+/// <summary>Empleado ofrecido en la asignación manual de turnos: guardia o supervisor activo. <paramref name="HasActiveGroup"/>
+/// indica si pertenece hoy a algún grupo de rotación activo (false = guardia que aún no está en un grupo).</summary>
+public record PlanningEmployeeDto(
+    int EmployeeID,
+    string FullName,
+    string? IdCard,
+    string? Email,
+    bool HasActiveGroup
+);
+
 public record GuardRotationGroupDto(
     int GroupId,
     string? GroupCode,
