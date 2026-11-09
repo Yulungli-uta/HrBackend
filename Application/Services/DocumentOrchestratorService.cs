@@ -31,6 +31,7 @@ namespace WsUtaSystem.Application.Services
         private readonly AppDbContext _db;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IUserActionPermissionService _permissionService;
+        private readonly IEntityDocumentLayoutPolicy _layoutPolicy;
 
         // Estados en los que todavía se puede adjuntar archivos desde las pantallas de Nueva
         // Acción/Nuevo Contrato (fuera de estos, el registro ya avanzó de trámite — solo debe
@@ -52,8 +53,10 @@ namespace WsUtaSystem.Application.Services
             AppDbContext db,
             IHttpContextAccessor httpContextAccessor,
             IUserActionPermissionService permissionService,
-            IAppClock clock)
+            IAppClock clock,
+            IEntityDocumentLayoutPolicy layoutPolicy)
         {
+            _layoutPolicy = layoutPolicy ?? throw new ArgumentNullException(nameof(layoutPolicy));
             _clock = clock;
             _fileManagement = fileManagement;
             _storedFileService = storedFileService;
@@ -176,7 +179,28 @@ namespace WsUtaSystem.Application.Services
                 Files = request.Files
             };
 
-            var physicalResults = await _fileManagement.UploadMultipleFilesAsync(uploadMultiple, ct);
+            List<FileUploadResponseDto> physicalResults;
+            if (AppliesLayoutPolicy(request.DirectoryCode, request.EntityType))
+            {
+                // Contratos y acciones: carpeta y nombre por archivo según su rol (firmado, anexo, anulación, renuncia).
+                physicalResults = new List<FileUploadResponseDto>();
+                foreach (var file in request.Files)
+                {
+                    var uploadReq = new FileUploadRequestDto
+                    {
+                        DirectoryCode = request.DirectoryCode,
+                        RelativePath = uploadMultiple.RelativePath,
+                        FileName = file.FileName,
+                        File = file
+                    };
+                    await ApplyLayoutAsync(uploadReq, request.EntityType, request.EntityId, request.DocumentRole, request.DocumentTypeId, ct);
+                    physicalResults.Add(await _fileManagement.UploadFileAsync(uploadReq, ct));
+                }
+            }
+            else
+            {
+                physicalResults = await _fileManagement.UploadMultipleFilesAsync(uploadMultiple, ct);
+            }
 
             var result = new DocumentUploadResultDto { Total = physicalResults.Count };
 
@@ -283,6 +307,9 @@ namespace WsUtaSystem.Application.Services
                 FileName = request.File.FileName,
                 File = request.File
             };
+
+            if (AppliesLayoutPolicy(request.DirectoryCode, request.EntityType))
+                await ApplyLayoutAsync(uploadReq, request.EntityType, request.EntityId, request.DocumentRole, request.DocumentTypeId, ct);
 
             var pr = await _fileManagement.UploadFileAsync(uploadReq, ct);
 
@@ -410,6 +437,9 @@ namespace WsUtaSystem.Application.Services
                     FileName = it.File.FileName,
                     File = it.File
                 };
+
+                if (AppliesLayoutPolicy(request.DirectoryCode, request.EntityType))
+                    await ApplyLayoutAsync(uploadReq, request.EntityType, request.EntityId, it.DocumentRole, it.DocumentTypeId, ct);
 
                 var pr = await _fileManagement.UploadFileAsync(uploadReq, ct);
 
@@ -557,6 +587,34 @@ namespace WsUtaSystem.Application.Services
                     "Physical cleanup failed. DirectoryCode={DirectoryCode}, RelativePath={RelativePath}",
                     directoryCode, relativePath);
             }
+        }
+
+        /// <summary>
+        /// La política de ubicación solo aplica a los archivos de contratos y acciones de personal (directorio y tipo de entidad
+        /// coherentes entre sí); el resto de módulos conserva su ruta de siempre.
+        /// </summary>
+        private static bool AppliesLayoutPolicy(string directoryCode, string entityType) =>
+            (string.Equals(directoryCode, "HRCONTRACT", StringComparison.Ordinal) && string.Equals(entityType, "HRCONTRACT", StringComparison.Ordinal))
+            || (string.Equals(directoryCode, "HRPERSONNEL_ACTION", StringComparison.Ordinal) && string.Equals(entityType, "PersonnelAction", StringComparison.Ordinal));
+
+        /// <summary>
+        /// Pide a la política la carpeta y el nombre del archivo y los deja en la solicitud de subida. Si la política no puede resolverlos
+        /// (registro inexistente, id inválido) no cambia nada y la subida sigue como antes.
+        /// </summary>
+        private async Task ApplyLayoutAsync(
+            FileUploadRequestDto uploadReq,
+            string entityType,
+            string entityId,
+            string? documentRole,
+            int? documentTypeId,
+            CancellationToken ct)
+        {
+            var layout = await _layoutPolicy.ResolveAsync(entityType, entityId, documentRole, documentTypeId, uploadReq.FileName, ct);
+            if (layout is null) return;
+
+            uploadReq.TargetRelativeFolder = layout.RelativeFolder;
+            uploadReq.TargetFileName = layout.FileName;
+            uploadReq.TargetYear = layout.Year;
         }
 
         private static string NormalizeRelativePath(string? relativePath)

@@ -928,103 +928,6 @@ END;
 
 GO
 
--- [sp_GetAttendanceReport]
-
-CREATE PROCEDURE [HR].[sp_GetAttendanceReport]
-    @StartDate DATE,
-    @EndDate DATE,
-    @EmployeeId INT = NULL,
-    @DepartmentId INT = NULL,
-    @FacultyId INT = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    WITH AttendanceSummary AS (
-        SELECT 
-            a.AttendanceDate,
-            a.EmployeeId,
-            MIN(CASE WHEN a.PunchType = 'In' THEN a.PunchTime END) AS CheckIn,
-            MAX(CASE WHEN a.PunchType = 'Out' THEN a.PunchTime END) AS CheckOut,
-            a.AttendanceType
-        FROM [HR].[tbl_Attendance] a
-        WHERE a.AttendanceDate BETWEEN @StartDate AND @EndDate
-        GROUP BY a.AttendanceDate, a.EmployeeId, a.AttendanceType
-    )
-    SELECT 
-        a.AttendanceDate,
-        e.Id AS EmployeeId,
-        CONCAT(p.FirstName, ' ', p.LastName) AS EmployeeName,
-        p.IdNumber AS IdentificationNumber,
-        d.Name AS DepartmentName,
-        f.Name AS FacultyName,
-        a.CheckIn,
-        a.CheckOut,
-        CASE 
-            WHEN a.CheckIn IS NOT NULL AND a.CheckOut IS NOT NULL THEN
-                CAST(DATEDIFF(MINUTE, a.CheckIn, a.CheckOut) / 60.0 AS DECIMAL(10,2))
-            ELSE NULL
-        END AS HoursWorked,
-        a.AttendanceType,
-        CASE 
-            WHEN a.CheckIn IS NULL THEN 'Sin Entrada'
-            WHEN a.CheckOut IS NULL THEN 'Sin Salida'
-            WHEN CAST(a.CheckIn AS TIME) > '08:30:00' THEN 'Tardanza'
-            ELSE 'Normal'
-        END AS Status
-    FROM AttendanceSummary a
-    INNER JOIN [HR].[tbl_Employees] e ON a.EmployeeId = e.Id
-    INNER JOIN [HR].[tbl_People] p ON e.PersonId = p.Id
-    LEFT JOIN [HR].[tbl_Departments] d ON e.DepartmentId = d.Id
-    LEFT JOIN [HR].[tbl_Faculties] f ON d.FacultyId = f.Id
-    WHERE 
-        (@EmployeeId IS NULL OR a.EmployeeId = @EmployeeId)
-        AND (@DepartmentId IS NULL OR e.DepartmentId = @DepartmentId)
-        AND (@FacultyId IS NULL OR d.FacultyId = @FacultyId)
-    ORDER BY a.AttendanceDate DESC, EmployeeName;
-END
-
-GO
-
--- [sp_GetDepartmentsReport]
-
-CREATE PROCEDURE [HR].[sp_GetDepartmentsReport]
-    @FacultyId INT = NULL,
-    @IncludeInactive BIT = 0
-AS
-BEGIN
-    SET NOCOUNT ON;
-    
-    SELECT 
-        d.Id,
-        d.Name AS DepartmentName,
-        d.Code AS DepartmentCode,
-        f.Name AS FacultyName,
-        f.Code AS FacultyCode,
-        d.IsActive,
-        COUNT(DISTINCT e.Id) AS TotalEmployees,
-        COUNT(DISTINCT CASE WHEN e.IsActive = 1 THEN e.Id END) AS ActiveEmployees,
-        COUNT(DISTINCT CASE WHEN e.IsActive = 0 THEN e.Id END) AS InactiveEmployees,
-        ISNULL(AVG(CASE WHEN c.IsActive = 1 THEN c.BaseSalary END), 0) AS AverageSalary,
-        ISNULL(SUM(CASE WHEN c.IsActive = 1 THEN c.BaseSalary END), 0) AS TotalSalaries,
-        ISNULL(MIN(CASE WHEN c.IsActive = 1 THEN c.BaseSalary END), 0) AS MinSalary,
-        ISNULL(MAX(CASE WHEN c.IsActive = 1 THEN c.BaseSalary END), 0) AS MaxSalary,
-        d.CreatedAt,
-        d.UpdatedAt
-    FROM [HR].[tbl_Departments] d
-    LEFT JOIN [HR].[tbl_Faculties] f ON d.FacultyId = f.Id
-    LEFT JOIN [HR].[tbl_Employees] e ON d.Id = e.DepartmentId
-    LEFT JOIN [HR].[tbl_Contracts] c ON e.Id = c.EmployeeId AND c.IsActive = 1
-    WHERE 
-        (@FacultyId IS NULL OR d.FacultyId = @FacultyId)
-        AND (@IncludeInactive = 1 OR d.IsActive = 1)
-    GROUP BY 
-        d.Id, d.Name, d.Code, f.Name, f.Code, d.IsActive, d.CreatedAt, d.UpdatedAt
-    ORDER BY f.Name, d.Name;
-END
-
-GO
-
 -- [sp_GetEmployeesReport]
 CREATE OR ALTER PROCEDURE [HR].[sp_GetEmployeesReport]
     @StartDate DATE = NULL,
@@ -1037,7 +940,9 @@ CREATE OR ALTER PROCEDURE [HR].[sp_GetEmployeesReport]
     -- (mismo bug que en sp_GetReportAttendanceSumary). Corregido a INT para
     -- que coincida con la columna real, sin depender de conversión implícita.
     @EmployeeType INT = NULL,
-    @IsActive BIT = NULL
+    @IsActive BIT = NULL,
+    -- 0 (defecto): oculta empleados de prueba (tbl_Employees.IsTestData); la app pasa 1 solo si TestData:Visible
+    @IncludeTestData BIT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -1080,6 +985,7 @@ BEGIN
         --AND (@FacultyId IS NULL OR d.FacultyId = @FacultyId)
         AND (@EmployeeType IS NULL OR e.EmployeeType = @EmployeeType)
         AND (@IsActive IS NULL OR e.IsActive = @IsActive)
+        AND (@IncludeTestData = 1 OR e.IsTestData = 0)
     ORDER BY d.Name, FullName;
 END
 
@@ -1091,9 +997,10 @@ CREATE   PROCEDURE [HR].[sp_GetReportAttendanceSumary]
     @StartDate DATETIME2 = NULL,
     @EndDate DATETIME2 = NULL,
     @EmployeeID INT = NULL,
-    @EmployeeType INT = NULL
+    @EmployeeType INT = NULL,
 	--@DepartmentId INT = NULL
-    
+    -- 0 (defecto): oculta empleados de prueba (vw_EmployeeDetails.IsTestData); la app pasa 1 solo si TestData:Visible
+    @IncludeTestData BIT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -1120,6 +1027,7 @@ BEGIN
         AND (@EndDate IS NULL OR tac.WorkDate <= @EndDate)        
         AND (@EmployeeID IS NULL OR tac.EmployeeID = @EmployeeID)
 		AND (@EmployeeType IS NULL OR ved.EmployeeType = @EmployeeType)
+		AND (@IncludeTestData = 1 OR ved.IsTestData = 0)
 		--AND (@DepartmentId IS NULL OR tac.DepartmentId = @DepartmentId)
     ORDER BY tac.WorkDate DESC;
 END

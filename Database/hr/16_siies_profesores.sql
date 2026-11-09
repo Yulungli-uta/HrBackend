@@ -199,7 +199,7 @@ SELECT
     -- Si no hay RelacionIes mapeada y el documento es Acción de Personal, se asume "Nombramiento"
     -- (solo Nombramiento/Designación/Nombramiento Provisional tienen mapeo propio a propósito).
     COALESCE(
-        aptRel.[SiiesLabel], ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel],
+        elrRel.[SiiesLabel], aptRel.[SiiesLabel], ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel],
         -- Si el contrato es un ADENDUM/PRORROGA/RENOVACIÓN sin RelacionIes propia, sube por ParentID.
         ctRelChainType.[SiiesLabel],
         CASE WHEN COALESCE(elr.[DocumentType],
@@ -210,6 +210,7 @@ SELECT
     COALESCE(ctr.[ContractedHours], ctrFallback.[ContractedHours]) AS [ContractedHours],
     e.[IsActive]                    AS [EmployeeIsActive],
     e.[HireDate],
+    e.[IsTestData],
     -- Período académico más reciente con distributivo real (mismo criterio que fn_SiiesProfesoresHoras sin @PeriodCode).
     latestPeriod.[PeriodCode]       AS [LatestPeriodCode],
     latestPeriod.[PeriodStart]      AS [LatestPeriodStart],
@@ -266,6 +267,8 @@ OUTER APPLY (
     WHERE r.[EmployeeId] = e.[EmployeeID]
     ORDER BY CASE WHEN r.[IsPrincipal] = 1 AND r.[IsActive] = 1 THEN 0 ELSE 1 END, r.[EffectiveFrom] DESC
 ) elr
+-- RELACION_IES manual por régimen (tbl_EmployeeLaborRegime.SiiesRelacionIesTypeId, 35_laborregime_siies_relacion.sql): manda sobre la derivación.
+LEFT JOIN [HR].[ref_Types] elrRel             ON elrRel.[TypeID] = elr.[SiiesRelacionIesTypeId]
 LEFT JOIN [HR].[tbl_Contracts] ctr            ON elr.[DocumentType] = 'CONTRACT' AND ctr.[ContractID] = elr.[SourceContractId]
 LEFT JOIN [HR].[tbl_contract_type] ct         ON ct.[ContractTypeID] = ctr.[ContractTypeID]
 LEFT JOIN [HR].[ref_Types] ctRel              ON ctRel.[TypeID] = ct.[SiiesRelacionIesTypeId]

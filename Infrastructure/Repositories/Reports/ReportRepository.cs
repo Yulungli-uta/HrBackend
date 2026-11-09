@@ -16,10 +16,12 @@ public class ReportRepository : IReportRepository
     private readonly string _connectionString;
 
     private readonly IAppClock _clock;
+    private readonly ITestDataPolicy _testDataPolicy;
 
-    public ReportRepository(IConfiguration configuration, IAppClock clock)
+    public ReportRepository(IConfiguration configuration, IAppClock clock, ITestDataPolicy testDataPolicy)
     {
         _clock = clock;
+        _testDataPolicy = testDataPolicy ?? throw new ArgumentNullException(nameof(testDataPolicy));
         _connectionString = configuration.GetConnectionString("SqlServerConn")
             ?? throw new InvalidOperationException("Connection string 'SqlServerConn' not found.");
     }
@@ -34,7 +36,8 @@ public class ReportRepository : IReportRepository
             EndDate      = filter.EndDate,
             DepartmentId = filter.DepartmentId,
             EmployeeType = filter.EmployeeTypeId,
-            IsActive     = filter.IsActive
+            IsActive     = filter.IsActive,
+            IncludeTestData = _testDataPolicy.IncludeTestData
         };
         return await connection.QueryAsync<EmployeeReportDto>(
             "[HR].[sp_GetEmployeesReport]", parameters,
@@ -76,7 +79,8 @@ public class ReportRepository : IReportRepository
             StartDate    = filter.StartDate ?? _clock.Now.AddMonths(-1),
             EndDate      = filter.EndDate   ?? _clock.Now,
             EmployeeId   = filter.EmployeeId,
-            EmployeeType = filter.EmployeeTypeId
+            EmployeeType = filter.EmployeeTypeId,
+            IncludeTestData = _testDataPolicy.IncludeTestData
         };
         return await connection.QueryAsync<AttendanceSumaryDto>(
             "[HR].[sp_GetReportAttendanceSumary]", parameters,

@@ -9,6 +9,12 @@
 
         public int? DocumentTypeId { get; set; }
 
+        /// <summary>
+        /// Opcional. Rol del archivo dentro de un contrato o una acción de personal: "signed" (documento firmado), "attachment" (anexo),
+        /// "cancellation" (oficio de anulación) o "resignation" (renuncia). Sin valor se asume anexo (o el rol que indique el tipo de documento).
+        /// </summary>
+        public string? DocumentRole { get; set; }
+
         /// <summary>Número de resolución/oficio (opcional).</summary>
         public string? DocumentReferenceNumber { get; set; }
 

@@ -42,6 +42,8 @@ namespace WsUtaSystem.Models.Views
         [Column(TypeName = "decimal(18,2)")]
         public decimal? BaseSalary { get; set; }     
         public DateTime HireDate { get; set; }
+        /// <summary>Empleado sintético de QA (HR.tbl_Employees.IsTestData); oculto salvo <c>TestData:Visible</c>.</summary>
+        public bool IsTestData { get; set; }
         // Propiedades calculadas
         [NotMapped]
         public string FullName => $"{LastName} {FirstName}";

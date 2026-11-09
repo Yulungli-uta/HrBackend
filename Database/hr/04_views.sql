@@ -550,7 +550,8 @@ SELECT
 	d.DepartmentID,
     d.Name            AS Department,
     sh_latest.NewSalary AS BaseSalary,
-    e.HireDate
+    e.HireDate,
+    e.IsTestData
 FROM HR.tbl_People p
 JOIN HR.tbl_Employees e ON e.PersonID = p.PersonID
 LEFT JOIN HR.tbl_Departments d ON d.DepartmentID = e.DepartmentID
@@ -616,7 +617,8 @@ SELECT
     d.Name            AS Department,
     sh_latest.NewSalary AS BaseSalary,
     e.HireDate,
-    e.IsActive
+    e.IsActive,
+    e.IsTestData
 FROM HR.tbl_People p
 JOIN HR.tbl_Employees e ON e.PersonID = p.PersonID
 LEFT JOIN HR.tbl_Departments d ON d.DepartmentID = e.DepartmentID

@@ -56,6 +56,8 @@ public class VwSiiesProfesor
     // ── Vienen de tbl_Employees (tabla ancla del FROM): nunca nulas ──
     public bool EmployeeIsActive { get; set; }
     public DateOnly HireDate { get; set; }
+    /// <summary>Empleado sintético de QA (HR.tbl_Employees.IsTestData); oculto salvo <c>TestData:Visible</c>.</summary>
+    public bool IsTestData { get; set; }
 
     // ── 2026-09-11: período académico más reciente con distributivo real cargado, visible
     // directo en la vista (sin pasar por fn_SiiesProfesoresHoras). ──

@@ -44,4 +44,6 @@ public class VwSiiesFuncionario
     public decimal? ContractedHours { get; set; }
     public bool EmployeeIsActive { get; set; }
     public DateOnly HireDate { get; set; }
+    /// <summary>Empleado sintético de QA (HR.tbl_Employees.IsTestData); oculto salvo <c>TestData:Visible</c>.</summary>
+    public bool IsTestData { get; set; }
 }

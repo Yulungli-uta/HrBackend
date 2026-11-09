@@ -1,3 +1,4 @@
+using WsUtaSystem.Application.Interfaces.Services;
 using System.Text;
 using Dapper;
 using Microsoft.Data.SqlClient;
@@ -38,8 +39,11 @@ public sealed class NonTitularRosterRepository : INonTitularRosterRepository
         "WHEN ISNULL(ctP1.IsDocenteOcasional, 0) = 1 THEN ctP1.name " +
         "WHEN ISNULL(ctP2.IsDocenteOcasional, 0) = 1 THEN ctP2.name END";
 
-    public NonTitularRosterRepository(IConfiguration configuration)
+    private readonly ITestDataPolicy _testDataPolicy;
+
+    public NonTitularRosterRepository(IConfiguration configuration, ITestDataPolicy testDataPolicy)
     {
+        _testDataPolicy = testDataPolicy ?? throw new ArgumentNullException(nameof(testDataPolicy));
         _connectionString = configuration.GetConnectionString("SqlServerConn")
             ?? throw new InvalidOperationException("Missing connection string: SqlServerConn");
     }
@@ -91,11 +95,12 @@ public sealed class NonTitularRosterRepository : INonTitularRosterRepository
     /// Arma el CTE <c>NRows</c> con los filtros aplicados. Solo se concatenan fragmentos fijos;
     /// todo valor del usuario viaja como parámetro.
     /// </summary>
-    private static (string Cte, DynamicParameters Parameters) BuildBase(
+    private (string Cte, DynamicParameters Parameters) BuildBase(
         NonTitularRosterQuery q, bool includeSalary, NonTitularRosterIgnore ignore)
     {
         var p = new DynamicParameters();
         p.Add("includeSalary", includeSalary ? 1 : 0);
+        p.Add("includeTestData", _testDataPolicy.IncludeTestData ? 1 : 0);
 
         var where = new StringBuilder();
 
@@ -136,6 +141,7 @@ public sealed class NonTitularRosterRepository : INonTitularRosterRepository
                 FROM HR.tbl_Employees e
                 CROSS APPLY HR.fn_SiiesDocenteOcasionalContract(e.PersonID) f
                 WHERE e.IsDeleted = 0
+                  AND (@includeTestData = 1 OR e.IsTestData = 0)
             ),
             St AS (
                 SELECT x.*,

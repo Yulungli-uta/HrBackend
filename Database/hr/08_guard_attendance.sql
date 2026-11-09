@@ -184,7 +184,11 @@ BEGIN
         ROW_NUMBER() OVER (ORDER BY PlanningId) AS RowNum
     INTO #GuardShifts
     FROM WithNeighbors
-    WHERE WorkDate = @WorkDate;
+    WHERE WorkDate = @WorkDate
+    -- 2026-11-06: el optimizador estimaba hasta 2,4 GB de memoria para esta consulta (funciones de ventana sobre los
+    -- turnos de 3 dias) y en un servidor de 3 GB el reproceso fallaba (error 8657) o esperaba minutos (RESOURCE_SEMAPHORE).
+    -- Se limita la concesion; si hiciera falta mas, usa tempdb. No cambia el resultado.
+    OPTION (MAX_GRANT_PERCENT = 5);
 
     IF NOT EXISTS (SELECT 1 FROM #GuardShifts)
     BEGIN

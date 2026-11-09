@@ -89,12 +89,33 @@ public class FileManagementService : IFileManagementService
             }
 
             // 4. Preparar rutas (ResolveSafePath evita path traversal vía RelativePath)
-            int currentYear = _clock.Now.Year;
-            var relativePath = request.RelativePath.TrimStart('/').TrimEnd('/');
-            var safeRelativeBase = ResolveSafePath(effectivePhysicalPath, relativePath);
-            var folderPath = Path.Combine(safeRelativeBase, currentYear.ToString());
+            // Con carpeta y nombre indicados por la política de ubicación (contratos / acciones) no se agrega el
+            // año de la subida ni se genera un nombre con GUID; si no vienen, se conserva el comportamiento anterior.
+            var useLayout = !string.IsNullOrWhiteSpace(request.TargetRelativeFolder)
+                            && !string.IsNullOrWhiteSpace(request.TargetFileName);
 
-            var storedFileName = FileNameGenerator.Generate(originalFileName, request.DirectoryCode);
+            int currentYear = _clock.Now.Year;
+            int fileYear;
+            string relativePath;
+            string folderPath;
+            string storedFileName;
+
+            if (useLayout)
+            {
+                relativePath = request.TargetRelativeFolder!.Replace('\\', '/').Trim('/');
+                folderPath = ResolveSafePath(effectivePhysicalPath, relativePath);
+                storedFileName = Path.GetFileName(request.TargetFileName!);
+                fileYear = request.TargetYear ?? currentYear;
+            }
+            else
+            {
+                relativePath = (request.RelativePath ?? string.Empty).TrimStart('/').TrimEnd('/');
+                var safeRelativeBase = ResolveSafePath(effectivePhysicalPath, relativePath);
+                folderPath = Path.Combine(safeRelativeBase, currentYear.ToString());
+                storedFileName = FileNameGenerator.Generate(originalFileName, request.DirectoryCode);
+                fileYear = currentYear;
+            }
+
             var fullPath = Path.Combine(folderPath, storedFileName);
 
             _logger.LogDebug(
@@ -184,12 +205,26 @@ public class FileManagementService : IFileManagementService
 
                 await impersonation.RunImpersonatedAsync(username, password, domain, async () =>
                 {
-                    await SaveFileAsync(folderPath, fullPath, request.File, ct);
+                    await SaveUploadedFileAsync();
                 });
             }
             else
             {
-                await SaveFileAsync(folderPath, fullPath, request.File, ct);
+                await SaveUploadedFileAsync();
+            }
+
+            // Con la política de ubicación el nombre puede cambiar (_2, _3…) si ya existía; se recalcula la ruta completa.
+            async Task SaveUploadedFileAsync()
+            {
+                if (useLayout)
+                {
+                    storedFileName = await SaveFileUniqueAsync(folderPath, storedFileName, request.File, ct);
+                    fullPath = Path.Combine(folderPath, storedFileName);
+                }
+                else
+                {
+                    await SaveFileAsync(folderPath, fullPath, request.File, ct);
+                }
             }
 
             _logger.LogInformation(
@@ -197,7 +232,9 @@ public class FileManagementService : IFileManagementService
                 fullPath, request.File.Length);
 
             // 6. Retornar respuesta exitosa
-            var relativePathResult = $"/{relativePath}/{currentYear}/{storedFileName}";
+            var relativePathResult = useLayout
+                ? $"/{relativePath}/{storedFileName}"
+                : $"/{relativePath}/{currentYear}/{storedFileName}";
 
             return new FileUploadResponseDto
             {
@@ -207,7 +244,7 @@ public class FileManagementService : IFileManagementService
                 RelativePath = relativePathResult,
                 FileName = storedFileName,
                 FileSize = request.File.Length,
-                Year = currentYear
+                Year = fileYear
             };
         }
         catch (OperationCanceledException)
@@ -465,6 +502,39 @@ public class FileManagementService : IFileManagementService
     /// Guarda un archivo en el sistema de archivos.
     /// Crea la estructura de carpetas automáticamente si no existe.
     /// </summary>
+    /// <summary>
+    /// Guarda el archivo sin sobrescribir nunca: si <paramref name="fileName"/> ya existe en la carpeta usa
+    /// <c>nombre_2.ext</c>, <c>nombre_3.ext</c>… Devuelve el nombre con el que quedó guardado. Usa <see cref="FileMode.CreateNew"/>,
+    /// así una carrera entre dos subidas simultáneas tampoco pisa un archivo.
+    /// </summary>
+    private static async Task<string> SaveFileUniqueAsync(string folderPath, string fileName, Microsoft.AspNetCore.Http.IFormFile file, CancellationToken ct)
+    {
+        await Task.Run(() => Directory.CreateDirectory(folderPath), ct);
+
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        var extension = Path.GetExtension(fileName);
+
+        for (var attempt = 1; attempt <= 1000; attempt++)
+        {
+            var candidate = attempt == 1 ? fileName : $"{stem}_{attempt}{extension}";
+            var candidatePath = Path.Combine(folderPath, candidate);
+            if (File.Exists(candidatePath)) continue;
+
+            try
+            {
+                using var stream = new FileStream(candidatePath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, true);
+                await file.CopyToAsync(stream, ct);
+                return candidate;
+            }
+            catch (IOException) when (File.Exists(candidatePath))
+            {
+                // Otra subida creó el mismo nombre entre la comprobación y la escritura: se prueba el siguiente.
+            }
+        }
+
+        throw new IOException($"No se encontró un nombre libre para '{fileName}' en '{folderPath}'.");
+    }
+
     private static async Task SaveFileAsync(string folderPath, string fullPath, Microsoft.AspNetCore.Http.IFormFile file, CancellationToken ct)
     {
         // Crear árbol de carpetas si no existe (operación síncrona en thread pool)

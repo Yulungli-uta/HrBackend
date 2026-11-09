@@ -29,4 +29,10 @@ public interface IEmployeeLaborRegimeService
     /// Retorna null si el id no existe.
     /// </summary>
     Task<EmployeeLaborRegimeDto?> SetIngresoPorConcursoAsync(int id, EmployeeLaborRegimeIngresoPorConcursoDto dto, int? changedBy, CancellationToken ct = default);
+
+    /// <summary>
+    /// Fija o quita la relación IES manual (SIIES RELACION_IES) de un régimen existente. Retorna null si el id no existe;
+    /// lanza <c>BusinessRuleException</c> si el TypeId no pertenece a la categoría SIIES_RELACION_IES.
+    /// </summary>
+    Task<EmployeeLaborRegimeDto?> SetSiiesRelacionIesAsync(int id, EmployeeLaborRegimeSiiesRelacionIesDto dto, int? changedBy, CancellationToken ct = default);
 }

@@ -79,6 +79,7 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
             EffectiveFrom = dto.EffectiveFrom,
             IsActive = true,
             IngresoPorConcurso = dto.IngresoPorConcurso,
+            SiiesRelacionIesTypeId = await ValidateSiiesRelacionIesAsync(dto.SiiesRelacionIesTypeId, ct),
             CreatedBy = changedBy,
             CreatedAt = _clock.Now,
         };
@@ -107,6 +108,35 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
         await RecalculatePrincipalAsync(entity.EmployeeId, changedBy, ct);
 
         return (await ToDtosAsync([entity], ct)).Single();
+    }
+
+    public async Task<EmployeeLaborRegimeDto?> SetSiiesRelacionIesAsync(int id, EmployeeLaborRegimeSiiesRelacionIesDto dto, int? changedBy, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+
+        var entity = await _db.EmployeeLaborRegimes.FirstOrDefaultAsync(r => r.Id == id, ct);
+        if (entity is null) return null;
+
+        entity.SiiesRelacionIesTypeId = await ValidateSiiesRelacionIesAsync(dto.SiiesRelacionIesTypeId, ct);
+        entity.UpdatedBy = changedBy;
+        entity.UpdatedAt = _clock.Now;
+
+        await _db.SaveChangesAsync(ct);
+
+        return (await ToDtosAsync([entity], ct)).Single();
+    }
+
+    /// <summary>Valida que el TypeId sea de la categoría SIIES_RELACION_IES (null se acepta: quita el valor manual).</summary>
+    private async Task<int?> ValidateSiiesRelacionIesAsync(int? typeId, CancellationToken ct)
+    {
+        if (!typeId.HasValue) return null;
+
+        var valid = await _db.RefTypes.AsNoTracking()
+            .AnyAsync(t => t.TypeId == typeId.Value && t.Category == "SIIES_RELACION_IES", ct);
+        if (!valid)
+            throw new BusinessRuleException("La relación IES indicada no existe en el catálogo SIIES_RELACION_IES.");
+
+        return typeId;
     }
 
     public async Task<EmployeeLaborRegimeDto?> SetIngresoPorConcursoAsync(int id, EmployeeLaborRegimeIngresoPorConcursoDto dto, int? changedBy, CancellationToken ct = default)
@@ -184,6 +214,13 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
             .Where(r => regimeIds.Contains(r.TypeId))
             .ToDictionaryAsync(r => r.TypeId, r => r.Name, ct);
 
+        var relationIds = items.Where(i => i.SiiesRelacionIesTypeId.HasValue).Select(i => i.SiiesRelacionIesTypeId!.Value).Distinct().ToList();
+        var relationNames = relationIds.Count == 0
+            ? new Dictionary<int, string>()
+            : await _db.RefTypes.AsNoTracking()
+                .Where(r => relationIds.Contains(r.TypeId))
+                .ToDictionaryAsync(r => r.TypeId, r => r.Name, ct);
+
         var departmentNames = departmentIds.Count == 0
             ? new Dictionary<int, string>()
             : await _db.Departments.AsNoTracking()
@@ -223,6 +260,8 @@ public class EmployeeLaborRegimeService : IEmployeeLaborRegimeService
                 IsActive = i.IsActive,
                 IsPrincipal = i.IsPrincipal,
                 IngresoPorConcurso = i.IngresoPorConcurso,
+                SiiesRelacionIesTypeId = i.SiiesRelacionIesTypeId,
+                SiiesRelacionIesName = i.SiiesRelacionIesTypeId.HasValue && relationNames.TryGetValue(i.SiiesRelacionIesTypeId.Value, out var rn) ? rn : null,
             };
         }).ToList();
     }

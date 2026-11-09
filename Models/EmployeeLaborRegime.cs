@@ -50,6 +50,10 @@ public class EmployeeLaborRegime : IAuditable
     /// <summary>SIIES INGRESO_POR_CONCURSO. NULL = sin clasificar (no confundir con NO); se completa hacia adelante.</summary>
     public bool? IngresoPorConcurso { get; set; }
 
+    /// <summary>SIIES RELACION_IES manual (FK -> ref_Types, Category='SIIES_RELACION_IES'). Si tiene valor manda sobre la relación
+    /// derivada del tipo de contrato/acción en los reportes SIIES; NULL = se deriva del documento.</summary>
+    public int? SiiesRelacionIesTypeId { get; set; }
+
     /// <summary>
     /// Calculado automáticamente por <see cref="Application.Interfaces.Services.IEmployeeLaborRegimeService"/>:
     /// gana el régimen con nombramiento (IsIndefinite); si ninguno es nombramiento, gana LOSEP.

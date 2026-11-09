@@ -1,3 +1,4 @@
+using WsUtaSystem.Application.Interfaces.Services;
 using System.Data;
 using Dapper;
 using Microsoft.AspNetCore.Http;
@@ -40,6 +41,7 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
 {
     private readonly AppDbContext _db;
     private readonly ILogger<SiiesFuncionariosReportSource> _logger;
+    private readonly ITestDataPolicy _testDataPolicy;
 
     private const string DocenteLoesLabel = "DOCENTE LOES";
     private const string IndigenaLabel = "INDIGENA";
@@ -49,10 +51,11 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
 
     public ReportType ReportType => ReportType.SiiesFuncionarios;
 
-    public SiiesFuncionariosReportSource(AppDbContext db, ILogger<SiiesFuncionariosReportSource> logger)
+    public SiiesFuncionariosReportSource(AppDbContext db, ILogger<SiiesFuncionariosReportSource> logger, ITestDataPolicy testDataPolicy)
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _testDataPolicy = testDataPolicy ?? throw new ArgumentNullException(nameof(testDataPolicy));
     }
 
     public async Task<ReportDefinition> BuildAsync(ReportFilterDto filter, HttpContext context)
@@ -204,9 +207,9 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                 p.[DisabilityPercentage],
                 p.[CONADISCard],
                 e.[Email]                      AS [InstitutionalEmail],
-                d.[Name]                       AS [DepartmentName],
-                j.[Description]                AS [JobDescription],
-                ISNULL(j.[PuestoJerarquicoSuperior], 0) AS [PuestoJerarquicoSuperior],
+                COALESCE(dr.[Name], d.[Name])  AS [DepartmentName],
+                COALESCE(jr.[Description], j.[Description]) AS [JobDescription],
+                ISNULL(COALESCE(jr.[PuestoJerarquicoSuperior], j.[PuestoJerarquicoSuperior]), 0) AS [PuestoJerarquicoSuperior],
                 -- Igual que la vista, pero DepartmentAuthorities se evalua contra el rango
                 -- (StartDate/EndDate), no contra GETDATE().
                 CASE
@@ -235,7 +238,7 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                     CASE WHEN ctrFallback.[ContractID] IS NOT NULL THEN 'CONTRACT'
                          WHEN paFallback.[ActionID] IS NOT NULL THEN 'PERSONNEL_ACTION' END) END        AS [RegimeDocumentType],
                 lrEff.[Name]                    AS [LaborRegimeName],
-                COALESCE(aptRel.[SiiesLabel], ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel]) AS [RelacionIesSiiesLabel],
+                COALESCE(elrRel.[SiiesLabel], aptRel.[SiiesLabel], ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel]) AS [RelacionIesSiiesLabel],
                 COALESCE(ctr.[ContractedHours], ctrFallback.[ContractedHours]) AS [ContractedHours],
                 e.[IsActive]                    AS [EmployeeIsActive],
                 e.[HireDate]
@@ -254,14 +257,27 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             LEFT JOIN [HR].[ref_Types] cdl       ON cdl.[TypeID] = e.[CategoriaDocenteLoesTypeId]
             -- Regimen laboral: en vez de "el mas reciente activo/principal" (vista), el que se
             -- solapa con el rango, priorizando el principal y luego el mas reciente dentro de el.
+            -- 2026-11-06: ya NO es TOP 1. Una persona con varios contratos, adendums, renovaciones o nombramientos en el rango sale
+            -- en una fila por cada documento (un mismo numero de documento no se repite: queda la fila del principal / la mas reciente).
             OUTER APPLY (
-                SELECT TOP 1 r.*
-                FROM [HR].[tbl_EmployeeLaborRegime] r
-                WHERE r.[EmployeeId] = e.[EmployeeID]
-                  AND r.[EffectiveFrom] <= @FechaHasta
-                  AND (r.[EffectiveTo] IS NULL OR r.[EffectiveTo] >= @FechaDesde)
-                ORDER BY CASE WHEN r.[IsPrincipal] = 1 THEN 0 ELSE 1 END, r.[EffectiveFrom] DESC
+                SELECT x.*
+                FROM (
+                    SELECT r.*,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY ISNULL(r.[DocumentNumber], CONCAT(N'#', r.[Id]))
+                               ORDER BY CASE WHEN r.[IsPrincipal] = 1 THEN 0 ELSE 1 END, r.[EffectiveFrom] DESC, r.[Id] DESC) AS [rn]
+                    FROM [HR].[tbl_EmployeeLaborRegime] r
+                    WHERE r.[EmployeeId] = e.[EmployeeID]
+                      AND r.[EffectiveFrom] <= @FechaHasta
+                      AND (r.[EffectiveTo] IS NULL OR r.[EffectiveTo] >= @FechaDesde)
+                ) x
+                WHERE x.[rn] = 1
             ) elr
+            -- RELACION_IES manual por régimen (tbl_EmployeeLaborRegime.SiiesRelacionIesTypeId, 35_laborregime_siies_relacion.sql): manda sobre la derivación.
+            LEFT JOIN [HR].[ref_Types] elrRel             ON elrRel.[TypeID] = elr.[SiiesRelacionIesTypeId]
+            -- Cargo y dependencia propios del regimen/documento de la fila (si los tiene)
+            LEFT JOIN [HR].[tbl_jobs] jr                  ON jr.[JobID] = elr.[JobId]
+            LEFT JOIN [HR].[tbl_Departments] dr           ON dr.[DepartmentID] = elr.[DepartmentId]
             LEFT JOIN [HR].[tbl_Contracts] ctr           ON elr.[DocumentType] = 'CONTRACT' AND ctr.[ContractID] = elr.[SourceContractId]
             LEFT JOIN [HR].[tbl_contract_type] ct        ON ct.[ContractTypeID] = ctr.[ContractTypeID]
             LEFT JOIN [HR].[ref_Types] ctRel             ON ctRel.[TypeID] = ct.[SiiesRelacionIesTypeId]
@@ -310,6 +326,9 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                     WHERE ap.[EmployeeID] = e.[EmployeeID] AND ap.[HasLaterExit] = 0 AND ap.[AppointmentDate] > @FechaHasta
                       AND ap.[FirstPermanentDate] <= @FechaHasta
                 ) x
+                -- Con varias filas por persona, el nombramiento ganador solo reemplaza al documento de la fila del regimen
+                -- principal (o de quien no tiene ninguna fila de regimen); los demas documentos conservan el suyo.
+                WHERE (elr.[Id] IS NULL OR elr.[IsPrincipal] = 1)
                 ORDER BY x.[Pri]
             ) apt
             LEFT JOIN [HR].[tbl_PersonnelActions] aptPa           ON aptPa.[ActionID] = apt.[ActionId]
@@ -341,9 +360,24 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
               AND NOT EXISTS (SELECT 1 FROM [HR].[tbl_TeacherStructure] ts WHERE ts.[EmployeeID] = e.[EmployeeID])
               -- 2026-10-14: igual que la vista — los profesores ocasionales/tecnicos docentes van a
               -- vw_SiiesProfesores; sin esta exclusion se colaban aqui (557-727 filas segun el rango).
-              AND NOT EXISTS (SELECT 1 FROM [HR].[fn_SiiesDocenteOcasionalContract](p.[PersonID]))
+              -- Igual que la vista: el contrato ocasional solo excluye sin un régimen principal LOSEP/Código de Trabajo
+              -- que se solape con el rango (doble régimen: Funcionario por el principal, Profesores por la delegación).
+              AND (
+                    NOT EXISTS (SELECT 1 FROM [HR].[fn_SiiesDocenteOcasionalContract](p.[PersonID]))
+                    OR EXISTS (SELECT 1 FROM [HR].[tbl_EmployeeLaborRegime] pr
+                               WHERE pr.[EmployeeId] = e.[EmployeeID] AND pr.[IsPrincipal] = 1
+                                 AND pr.[LaborRegimeId] IN (57, 59)
+                                 AND pr.[EffectiveFrom] <= @FechaHasta
+                                 AND (pr.[EffectiveTo] IS NULL OR pr.[EffectiveTo] >= @FechaDesde))
+                  )
               AND (it.[Name] = @IdentTypeName OR (@IdentTypeName = N'TODOS' AND it.[Name] IN (N'CEDULA', N'PASAPORTE')))
               AND (@Identification IS NULL OR p.[IDCard] = @Identification)
+              -- Personal de Codigo de Trabajo (obrero): va en su propio archivo, no en SIIES Funcionarios.
+              AND ISNULL(lrEff.[Name], N'') <> N'Código Trabajo'
+              -- Doble regimen: la delegacion docente (LOES) de quien es docente ocasional sale en Profesores, no aqui.
+              AND NOT (lrEff.[Name] = N'LOES' AND EXISTS (SELECT 1 FROM [HR].[fn_SiiesDocenteOcasionalContract](p.[PersonID])))
+              -- Empleados de prueba (IsTestData): fuera salvo TestData:Visible (ver ITestDataPolicy).
+              AND (@IncludeTestData = 1 OR e.[IsTestData] = 0)
               -- A diferencia de la vista (que siempre devuelve 1 fila por empleado activo,
               -- vigente o no), aqui se excluye a quien no tuvo NINGUN origen de vigencia
               -- (regimen/contrato/accion) solapado con el rango - sin esto quedarian filas
@@ -361,7 +395,8 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             FechaDesde = fechaDesde,
             FechaHasta = fechaHasta,
             IdentTypeName = identTypeName,
-            Identification = identification
+            Identification = identification,
+            IncludeTestData = _testDataPolicy.IncludeTestData
         };
 
         var connection = _db.Database.GetDbConnection();

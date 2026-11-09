@@ -34,6 +34,10 @@ public class Employees : IAuditable, ISoftDeletable
     public string? Email { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; } = false;
+
+    /// <summary>Empleado sintético de QA (HR.tbl_Employees.IsTestData). Oculto en reportes y listados salvo que
+    /// <c>ITestDataPolicy.IncludeTestData</c> sea true (solo Development).</summary>
+    public bool IsTestData { get; set; } = false;
     public int? CreatedBy { get; set; }
     public DateTime? CreatedAt { get; set; }
     public int? UpdatedBy { get; set; }

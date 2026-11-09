@@ -29,6 +29,12 @@ public class EmployeeLaborRegimeDto
 
     /// <summary>SIIES INGRESO_POR_CONCURSO. Null = sin clasificar todavía.</summary>
     public bool? IngresoPorConcurso { get; set; }
+
+    /// <summary>SIIES RELACION_IES manual (ref_Types SIIES_RELACION_IES). Null = se deriva del documento que respalda el régimen.</summary>
+    public int? SiiesRelacionIesTypeId { get; set; }
+
+    /// <summary>Nombre de la relación manual (para mostrar), si existe.</summary>
+    public string? SiiesRelacionIesName { get; set; }
 }
 
 public class EmployeeLaborRegimeCreateDto
@@ -46,6 +52,9 @@ public class EmployeeLaborRegimeCreateDto
 
     /// <summary>SIIES INGRESO_POR_CONCURSO. Opcional al crear; puede completarse después con SetIngresoPorConcursoAsync.</summary>
     public bool? IngresoPorConcurso { get; set; }
+
+    /// <summary>SIIES RELACION_IES manual. Opcional al crear; puede completarse después con SetSiiesRelacionIesAsync.</summary>
+    public int? SiiesRelacionIesTypeId { get; set; }
 }
 
 /// <summary>Cierra un régimen activo (renuncia, vencimiento, cambio de asignación).</summary>
@@ -58,4 +67,11 @@ public class EmployeeLaborRegimeCloseDto
 public class EmployeeLaborRegimeIngresoPorConcursoDto
 {
     public bool IngresoPorConcurso { get; set; }
+}
+
+/// <summary>Fija (o quita, con null) la relación IES manual de un régimen ya existente.</summary>
+public class EmployeeLaborRegimeSiiesRelacionIesDto
+{
+    /// <summary>TypeId de ref_Types (Category='SIIES_RELACION_IES'); null quita el valor manual y vuelve a derivarse del documento.</summary>
+    public int? SiiesRelacionIesTypeId { get; set; }
 }

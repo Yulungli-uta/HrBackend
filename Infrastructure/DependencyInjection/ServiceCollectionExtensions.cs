@@ -1248,6 +1248,14 @@ public static class ServiceCollectionExtensions
             connectionString += ";Integrated Security=False;Authentication=SqlPassword;";
         }
 
+        // Visibilidad de datos de prueba (HR.tbl_Employees.IsTestData): el AppDbContext la consulta en su filtro global
+        services.Configure<WsUtaSystem.Application.Common.Options.TestDataOptions>(configuration.GetSection("TestData"));
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITestDataPolicy, WsUtaSystem.Infrastructure.Services.TestDataPolicy>();
+
+        // Ubicación física de los archivos de contratos y acciones (firmado, anexos, anulación, renuncia)
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEntityDocumentInfoRepository, WsUtaSystem.Infrastructure.Repositories.EntityDocumentInfoRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IEntityDocumentLayoutPolicy, WsUtaSystem.Application.Services.EntityDocumentLayoutPolicy>();
+
         // Los interceptores deben registrarse ANTES del DbContext para poder resolverlos
         services.AddScoped<AuditSaveChangesInterceptor>();
         services.AddScoped<SqlErrorLoggingInterceptor>();

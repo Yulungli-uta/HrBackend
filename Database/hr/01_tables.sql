@@ -862,7 +862,8 @@ CREATE TABLE [HR].[tbl_Employees] (
     [UpdatedAt] DATETIME2 NULL,
     [RowVersion] TIMESTAMP NOT NULL,
     [JobID] INT NULL,
-    [IsDeleted] BIT DEFAULT ((0)) NOT NULL
+    [IsDeleted] BIT DEFAULT ((0)) NOT NULL,
+    [IsTestData] BIT DEFAULT ((0)) NOT NULL -- empleado sintético de QA; oculto de reportes/listados (ver 34_test_data_flag.sql)
 );
 GO
 

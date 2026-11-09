@@ -17,7 +17,18 @@ namespace WsUtaSystem.Data;
 /// </summary>
 public class AppDbContext : DbContext
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+    private readonly WsUtaSystem.Application.Interfaces.Services.ITestDataPolicy _testDataPolicy;
+
+    public AppDbContext(
+        DbContextOptions<AppDbContext> options,
+        WsUtaSystem.Application.Interfaces.Services.ITestDataPolicy testDataPolicy) : base(options)
+    {
+        _testDataPolicy = testDataPolicy ?? throw new ArgumentNullException(nameof(testDataPolicy));
+    }
+
+    // Leídas por el filtro global de Employees (EF las parametriza por instancia del contexto).
+    private bool IncludeTestData => _testDataPolicy.IncludeTestData;
+    private int? OwnEmployeeId => _testDataPolicy.CurrentEmployeeId;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Convenciones globales de tipos
@@ -269,5 +280,32 @@ public class AppDbContext : DbContext
 
             modelBuilder.Entity(entityType.ClrType).HasQueryFilter(lambda);
         }
+
+        // Datos de prueba: los empleados con IsTestData=1 quedan fuera de toda consulta EF (y, por la relación,
+        // de lo que cuelga de ellos) salvo que ITestDataPolicy lo permita (solo Development). Un empleado de
+        // prueba siempre ve su propio registro para poder iniciar sesión y usar /perfil. Reemplaza el filtro de
+        // soft-delete anterior de Employees (EF admite un solo filtro por entidad), por eso repite !IsDeleted.
+        // Quien necesite ver todo (por ejemplo los procesos de cálculo) usa IgnoreQueryFilters() y vuelve a
+        // filtrar IsDeleted a mano. No aplica a SQL/Dapper crudo: ahí se filtra con @IncludeTestData.
+        modelBuilder.Entity<Employees>().HasQueryFilter(e =>
+            !e.IsDeleted && (IncludeTestData || !e.IsTestData || e.EmployeeId == OwnEmployeeId));
+
+        // Contratos y acciones de personal guardan la persona (PersonID), no el empleado: se ocultan los de una persona
+        // con un empleado de prueba distinto del usuario actual (el propio empleado de prueba conserva sus registros,
+        // p. ej. para Liquidaciones). Repiten !IsDeleted porque reemplazan el filtro de soft-delete de la sección anterior.
+        modelBuilder.Entity<Contracts>().HasQueryFilter(c =>
+            !c.IsDeleted && (IncludeTestData ||
+                !Set<Employees>().IgnoreQueryFilters().Any(e => e.PersonID == c.PersonID && e.IsTestData && e.EmployeeId != OwnEmployeeId)));
+        modelBuilder.Entity<PersonnelAction>().HasQueryFilter(a =>
+            !a.IsDeleted && (IncludeTestData ||
+                !Set<Employees>().IgnoreQueryFilters().Any(e => e.PersonID == a.PersonId && e.IsTestData && e.EmployeeId != OwnEmployeeId)));
+
+        // Mismas reglas para las vistas de empleado (exponen IsTestData). Alcanza también a FromSqlRaw sobre ellas.
+        modelBuilder.Entity<VwEmployeeDetails>().HasQueryFilter(v =>
+            IncludeTestData || !v.IsTestData || v.EmployeeID == OwnEmployeeId);
+        modelBuilder.Entity<VwSiiesFuncionario>().HasQueryFilter(v =>
+            IncludeTestData || !v.IsTestData || v.EmployeeID == OwnEmployeeId);
+        modelBuilder.Entity<VwSiiesProfesor>().HasQueryFilter(v =>
+            IncludeTestData || !v.IsTestData || v.EmployeeID == OwnEmployeeId);
     }
 }

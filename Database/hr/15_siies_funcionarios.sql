@@ -277,7 +277,7 @@ SELECT
         CASE WHEN ctrFallback.[ContractID] IS NOT NULL THEN 'CONTRACT'
              WHEN paFallback.[ActionID] IS NOT NULL THEN 'PERSONNEL_ACTION' END) END        AS [RegimeDocumentType],
     lr.[Name]                       AS [LaborRegimeName],
-    COALESCE(aptRel.[SiiesLabel], ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel]) AS [RelacionIesSiiesLabel],
+    COALESCE(elrRel.[SiiesLabel], aptRel.[SiiesLabel], ctRel.[SiiesLabel], patRel.[SiiesLabel], ctRelFallback.[SiiesLabel], patRelFallback.[SiiesLabel]) AS [RelacionIesSiiesLabel],
     -- 2026-10-27: horas laborables por semana (HORAS_LABORABLES_SEMANA). Antes solo se leia ContractedHours del contrato, que
     -- solo existe en los contratos LOES: 1.474 de 2.133 filas quedaban en NULL (el reporte las mostraba como 0) y 248 en 0.
     -- Cascada: 1) ContractedHours del contrato (un 0 es "sin dato", no una jornada real); 2) LOES sin dato queda NULL (sus
@@ -293,7 +293,8 @@ SELECT
                   WHERE prm.[Name] = N'SIIES_HORAS_SEMANA_DEFECTO' AND prm.[IsActive] = 1)
     END AS [ContractedHours],
     e.[IsActive]                    AS [EmployeeIsActive],
-    e.[HireDate]
+    e.[HireDate],
+    e.[IsTestData]
 FROM [HR].[tbl_Employees] e
 JOIN [HR].[tbl_People] p            ON p.[PersonID] = e.[PersonID]
 LEFT JOIN [HR].[ref_Types] it        ON it.[TypeID] = p.[IdentType]
@@ -316,6 +317,8 @@ OUTER APPLY (
     ORDER BY CASE WHEN r.[IsPrincipal] = 1 AND r.[IsActive] = 1 THEN 0 ELSE 1 END, r.[EffectiveFrom] DESC
 ) elr
 LEFT JOIN [HR].[ref_Types] lr                ON lr.[TypeID] = elr.[LaborRegimeId]
+-- RELACION_IES manual por régimen (tbl_EmployeeLaborRegime.SiiesRelacionIesTypeId, 35_laborregime_siies_relacion.sql): manda sobre la derivación.
+LEFT JOIN [HR].[ref_Types] elrRel             ON elrRel.[TypeID] = elr.[SiiesRelacionIesTypeId]
 LEFT JOIN [HR].[tbl_Contracts] ctr           ON elr.[DocumentType] = 'CONTRACT' AND ctr.[ContractID] = elr.[SourceContractId]
 LEFT JOIN [HR].[tbl_contract_type] ct        ON ct.[ContractTypeID] = ctr.[ContractTypeID]
 LEFT JOIN [HR].[ref_Types] ctRel             ON ctRel.[TypeID] = ct.[SiiesRelacionIesTypeId]
@@ -379,12 +382,24 @@ LEFT JOIN [HR].[ref_Types] aptRel                     ON aptRel.[TypeID] = aptPa
 -- Excluye escalafón docente titular (va a HR.vw_SiiesProfesores) por patrón de cargo y por
 -- tbl_TeacherStructure (casos con el mismo título de cargo pero sin carga horaria activa).
 WHERE e.[IsDeleted] = 0
+  -- 2026-11-06: el personal de Código de Trabajo (obrero) va en su propio archivo, no en SIIES Funcionarios.
+  AND ISNULL(lr.[Name], N'') <> N'Código Trabajo'
   AND ISNULL(j.[Description], '') NOT LIKE 'PROFESOR TITULAR%'
   AND NOT EXISTS (SELECT 1 FROM [HR].[tbl_TeacherStructure] ts WHERE ts.[EmployeeID] = e.[EmployeeID])
   -- Excluye profesores ocasionales (van a vw_SiiesProfesores) con el mismo criterio exacto, para que los dos
   -- reportes queden mutuamente excluyentes. Los técnicos docentes y de laboratorio (tipo docente LOES 2139/2140) NO se
   -- excluyen: la función no los trata como docentes ocasionales, así que quedan aquí y fuera de Profesores/Formación.
-  AND NOT EXISTS (SELECT 1 FROM [HR].[fn_SiiesDocenteOcasionalContract](p.[PersonID]));
+  -- 2026-11-06: el contrato ocasional solo excluye si la persona NO tiene un régimen principal vigente LOSEP (57) o Código de
+  -- Trabajo (59): un funcionario administrativo con una delegación docente (doble régimen) es Funcionario por su vínculo
+  -- principal y la delegación sigue saliendo en Profesores. Un LOSEP principal con vigencia terminada (EffectiveTo pasado,
+  -- IsActive que quedó en 1) no cuenta, para no rescatar a quien hoy solo tiene vínculo ocasional.
+  AND (
+        NOT EXISTS (SELECT 1 FROM [HR].[fn_SiiesDocenteOcasionalContract](p.[PersonID]))
+        OR EXISTS (SELECT 1 FROM [HR].[tbl_EmployeeLaborRegime] pr
+                   WHERE pr.[EmployeeId] = e.[EmployeeID] AND pr.[IsActive] = 1 AND pr.[IsPrincipal] = 1
+                     AND pr.[LaborRegimeId] IN (57, 59)
+                     AND (pr.[EffectiveTo] IS NULL OR pr.[EffectiveTo] >= CAST(GETDATE() AS DATE)))
+      );
 GO
 
 -- 13.1) tbl_contract_type.IsDocenteOcasional + HR.fn_SiiesDocenteOcasionalContract ---------
@@ -444,4 +459,9 @@ WHERE [ContractTypeID] IN (18, 30) AND [SiiesRelacionIesTypeId] IS NULL;
 -- 'Nombramiento Provisional' ya estaba clasificado, no se toca de nuevo.
 UPDATE [HR].[tbl_personnel_action_type] SET [SiiesRelacionIesTypeId] = 2131
 WHERE [PersonnelActionTypeId] IN (3, 17) AND [SiiesRelacionIesTypeId] IS NULL;
+
+-- 2026-11-06: Homologación de Puesto (16) y Reintegro al Cargo (14) también respaldan un Nombramiento (verificado: las 13 filas
+-- de Funcionarios que dependían de ellos son LOSEP/ADMINISTRATIVO y salían con RELACION_IES vacía; el Excel pone NOMBRAMIENTO).
+UPDATE [HR].[tbl_personnel_action_type] SET [SiiesRelacionIesTypeId] = 2131
+WHERE [PersonnelActionTypeId] IN (14, 16) AND [SiiesRelacionIesTypeId] IS NULL;
 GO

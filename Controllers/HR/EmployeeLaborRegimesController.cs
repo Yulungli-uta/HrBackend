@@ -60,4 +60,13 @@ public class EmployeeLaborRegimesController : ControllerBase
         var updated = await _svc.SetIngresoPorConcursoAsync(id, dto, _currentUser.EmployeeId, ct);
         return updated is null ? NotFound(new { message = "No existe." }) : Ok(updated);
     }
+
+    /// <summary>Fija o quita la relación IES (SIIES RELACION_IES) manual de un régimen existente.</summary>
+    [HttpPost("{id:int}/siies-relacion-ies")]
+    [RequirePermission("EMPLOYEES.UPDATE")]
+    public async Task<IActionResult> SetSiiesRelacionIes(int id, [FromBody] EmployeeLaborRegimeSiiesRelacionIesDto dto, CancellationToken ct)
+    {
+        var updated = await _svc.SetSiiesRelacionIesAsync(id, dto, _currentUser.EmployeeId, ct);
+        return updated is null ? NotFound(new { message = "No existe." }) : Ok(updated);
+    }
 }
