@@ -6,7 +6,9 @@ namespace WsUtaSystem.Application.Interfaces.Repositories;
 /// <summary>Documento de resolución al que pertenece un archivo del proyecto.</summary>
 public enum ResearchDocumentKind { Approval, Extension, Completion }
 
-public sealed record ResearchProjectListRow(int Id, string Name, DateOnly StartDate, DateOnly EndDate, bool HasExtension, int ParticipantsCount);
+public sealed record ResearchProjectListRow(
+    int Id, string? ProjectCode, int? DepartmentId, string? DepartmentName, string Name,
+    DateOnly StartDate, DateOnly EndDate, bool HasExtension, int ParticipantsCount);
 
 public sealed record ResearchRefTypeLite(int Id, string Category, string Name, string? Description);
 
@@ -48,4 +50,10 @@ public interface IResearchProjectsRepository
     Task<IReadOnlyDictionary<int, ResearchPersonInfo>> GetPeopleAsync(IEnumerable<int> personIds, CancellationToken ct = default);
 
     Task<IReadOnlyList<ResearchPersonLookupDto>> SearchPeopleAsync(string term, int take, CancellationToken ct = default);
+
+    /// <summary>true si otro proyecto no eliminado (distinto de <paramref name="excludeProjectId"/>) ya usa ese código.</summary>
+    Task<bool> ProjectCodeExistsAsync(string code, int? excludeProjectId, CancellationToken ct = default);
+
+    /// <summary>Nombres de las dependencias pedidas (solo las que existen).</summary>
+    Task<IReadOnlyDictionary<int, string>> GetDepartmentNamesAsync(IEnumerable<int> departmentIds, CancellationToken ct = default);
 }

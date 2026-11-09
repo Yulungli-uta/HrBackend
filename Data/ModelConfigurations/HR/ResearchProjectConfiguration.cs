@@ -11,6 +11,8 @@ public sealed class ResearchProjectConfiguration : IEntityTypeConfiguration<Rese
         e.ToTable("tbl_ResearchProjects", "HR");
         e.HasKey(x => x.ResearchProjectId);
         e.Property(x => x.ResearchProjectId).HasColumnName("ResearchProjectID").UseIdentityColumn();
+        e.Property(x => x.ProjectCode).HasMaxLength(50);
+        e.Property(x => x.DepartmentId).HasColumnName("DepartmentID");
         e.Property(x => x.Name).HasMaxLength(500).IsRequired();
         e.Property(x => x.ApprovalResolutionNumber).HasMaxLength(100).IsRequired();
         e.Property(x => x.ExtensionResolutionNumber).HasMaxLength(100);

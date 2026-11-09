@@ -62,7 +62,7 @@ public sealed class ResearchProjectsService : IResearchProjectsService
         var (rows, total) = await _repository.SearchAsync(search, from, to, page, pageSize, ct);
         return new PagedResult<ResearchProjectListItemDto>
         {
-            Items = rows.Select(r => new ResearchProjectListItemDto(r.Id, ProjectCode(r.Id), r.Name, r.StartDate, r.EndDate, r.HasExtension, r.ParticipantsCount)).ToList(),
+            Items = rows.Select(r => new ResearchProjectListItemDto(r.Id, ProjectCode(r.ProjectCode, r.Id), r.DepartmentId, r.DepartmentName, r.Name, r.StartDate, r.EndDate, r.HasExtension, r.ParticipantsCount)).ToList(),
             Page = page,
             PageSize = pageSize,
             TotalCount = total,
@@ -150,6 +150,7 @@ public sealed class ResearchProjectsService : IResearchProjectsService
 
         var refTypes = await _repository.GetRefTypesAsync([RoleCategory], ct);
         ValidateProjectData(dto);
+        await ValidateCodeAndDepartmentAsync(dto, id, ct);
         await ValidateParticipationsAsync(dto, refTypes, ct);
 
         // 1) Archivos físicos primero (NAS, no transaccional): si la BD falla se borran.
@@ -162,6 +163,8 @@ public sealed class ResearchProjectsService : IResearchProjectsService
             if (completionFile is not null) uploaded[ResearchDocumentKind.Completion] = await UploadAsync(completionFile, folder, ct);
 
             // 2) Datos del proyecto
+            project.ProjectCode = dto.ProjectCode.Trim();
+            project.DepartmentId = dto.DepartmentId;
             project.Name = dto.Name.Trim();
             project.StartDate = dto.StartDate;
             project.EndDate = dto.EndDate;
@@ -233,6 +236,19 @@ public sealed class ResearchProjectsService : IResearchProjectsService
         }
 
         if (dto.Participations.Count == 0) throw new BusinessRuleException("Debe registrar al menos un participante.");
+    }
+
+    private async Task ValidateCodeAndDepartmentAsync(ResearchProjectUpsertDto dto, int? projectId, CancellationToken ct)
+    {
+        var code = dto.ProjectCode?.Trim() ?? "";
+        if (code.Length == 0) throw new BusinessRuleException("El código del proyecto es obligatorio.");
+        if (code.Length > 50) throw new BusinessRuleException("El código del proyecto no puede superar los 50 caracteres.");
+        if (await _repository.ProjectCodeExistsAsync(code, projectId, ct))
+            throw new BusinessRuleException($"Ya existe un proyecto con el código \"{code}\".");
+
+        if (!dto.DepartmentId.HasValue) throw new BusinessRuleException("La dependencia del proyecto es obligatoria.");
+        var departments = await _repository.GetDepartmentNamesAsync([dto.DepartmentId.Value], ct);
+        if (!departments.ContainsKey(dto.DepartmentId.Value)) throw new BusinessRuleException("La dependencia seleccionada no existe.");
     }
 
     /// <summary>Fecha de hoy según el reloj del servidor (hora de Ecuador), sin hora.</summary>
@@ -367,6 +383,7 @@ public sealed class ResearchProjectsService : IResearchProjectsService
         var refTypes = (await _repository.GetRefTypesAsync([RoleCategory], ct)).ToDictionary(r => r.Id);
         var personIds = projects.SelectMany(p => p.Participations).Where(x => !x.IsExternal && x.PersonId.HasValue).Select(x => x.PersonId!.Value);
         var people = await _repository.GetPeopleAsync(personIds, ct);
+        var departments = await _repository.GetDepartmentNamesAsync(projects.Where(p => p.DepartmentId.HasValue).Select(p => p.DepartmentId!.Value), ct);
 
         ResearchResolutionDto Resolution(string number, int? fileId)
         {
@@ -406,7 +423,9 @@ public sealed class ResearchProjectsService : IResearchProjectsService
                 .ToList();
 
             return new ResearchProjectDto(
-                p.ResearchProjectId, ProjectCode(p.ResearchProjectId), p.Name, p.StartDate, p.EndDate,
+                p.ResearchProjectId, ProjectCode(p.ProjectCode, p.ResearchProjectId), p.DepartmentId,
+                p.DepartmentId.HasValue && departments.TryGetValue(p.DepartmentId.Value, out var departmentName) ? departmentName : null,
+                p.Name, p.StartDate, p.EndDate,
                 ResearchDuration.Between(p.StartDate, p.EndDate),
                 Resolution(p.ApprovalResolutionNumber, p.ApprovalFileId),
                 p.HasExtension, extension,
@@ -415,7 +434,8 @@ public sealed class ResearchProjectsService : IResearchProjectsService
         }).ToList();
     }
 
-    private static string ProjectCode(int id) => $"PRJ-{id:D4}";
+    /// <summary>Código registrado; los proyectos anteriores a este dato conservan el código automático PRJ-####.</summary>
+    private static string ProjectCode(string? code, int id) => string.IsNullOrWhiteSpace(code) ? $"PRJ-{id:D4}" : code;
 
     /// <summary>URL del documento, generada por el sistema; se descarga con la misma sesión/token del servicio.</summary>
     private string DocumentUrl(Guid fileGuid)

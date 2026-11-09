@@ -27,7 +27,10 @@ public sealed class ResearchProjectsRepository : IResearchProjectsRepository
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = $"%{search.Trim()}%";
-            query = query.Where(p => EF.Functions.Like(p.Name, term) || EF.Functions.Like(p.ApprovalResolutionNumber, term));
+            query = query.Where(p => EF.Functions.Like(p.Name, term)
+                || EF.Functions.Like(p.ApprovalResolutionNumber, term)
+                || (p.ProjectCode != null && EF.Functions.Like(p.ProjectCode, term))
+                || _db.Departments.Any(d => d.DepartmentId == p.DepartmentId && EF.Functions.Like(d.Name, term)));
         }
 
         // Rango de fechas: el período del proyecto (inicio a fin) se cruza con el rango pedido.
@@ -41,7 +44,9 @@ public sealed class ResearchProjectsRepository : IResearchProjectsRepository
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(p => new ResearchProjectListRow(
-                p.ResearchProjectId, p.Name, p.StartDate, p.EndDate, p.HasExtension,
+                p.ResearchProjectId, p.ProjectCode, p.DepartmentId,
+                _db.Departments.Where(d => d.DepartmentId == p.DepartmentId).Select(d => d.Name).FirstOrDefault(),
+                p.Name, p.StartDate, p.EndDate, p.HasExtension,
                 p.Participations.Count(x => !x.IsDeleted)))
             .ToListAsync(ct);
 
@@ -132,6 +137,19 @@ public sealed class ResearchProjectsRepository : IResearchProjectsRepository
                 throw;
             }
         });
+    }
+
+    public async Task<bool> ProjectCodeExistsAsync(string code, int? excludeProjectId, CancellationToken ct = default)
+        => await _db.ResearchProjects.AsNoTracking()
+            .AnyAsync(p => !p.IsDeleted && p.ProjectCode == code && (!excludeProjectId.HasValue || p.ResearchProjectId != excludeProjectId.Value), ct);
+
+    public async Task<IReadOnlyDictionary<int, string>> GetDepartmentNamesAsync(IEnumerable<int> departmentIds, CancellationToken ct = default)
+    {
+        var ids = departmentIds.Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<int, string>();
+        return await _db.Departments.AsNoTracking()
+            .Where(d => ids.Contains(d.DepartmentId))
+            .ToDictionaryAsync(d => d.DepartmentId, d => d.Name, ct);
     }
 
     public async Task SoftDeleteAsync(int id, CancellationToken ct = default)

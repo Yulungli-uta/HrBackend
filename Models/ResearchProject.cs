@@ -6,6 +6,10 @@ namespace WsUtaSystem.Models;
 public class ResearchProject : IAuditable
 {
     public int ResearchProjectId { get; set; }
+    /// <summary>Código del proyecto (único entre los no eliminados). Nulo solo en proyectos anteriores a este dato.</summary>
+    public string? ProjectCode { get; set; }
+    /// <summary>Dependencia (facultad/unidad) a la que pertenece el proyecto.</summary>
+    public int? DepartmentId { get; set; }
     public string Name { get; set; } = null!;
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }

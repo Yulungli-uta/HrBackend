@@ -56,6 +56,25 @@ BEGIN
 END
 GO
 
+-- 1c) Código del proyecto (único entre los no eliminados) y dependencia (facultad/unidad a la que pertenece).
+-- Las columnas son NULL en BD porque hay proyectos anteriores sin estos datos; el servicio los exige al registrar o editar. Idempotente.
+IF COL_LENGTH('HR.tbl_ResearchProjects', 'ProjectCode') IS NULL
+    ALTER TABLE HR.tbl_ResearchProjects ADD ProjectCode NVARCHAR(50) NULL;
+GO
+IF COL_LENGTH('HR.tbl_ResearchProjects', 'DepartmentID') IS NULL
+    ALTER TABLE HR.tbl_ResearchProjects ADD DepartmentID INT NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_ResearchProjects_Department')
+    ALTER TABLE HR.tbl_ResearchProjects ADD CONSTRAINT FK_ResearchProjects_Department
+        FOREIGN KEY (DepartmentID) REFERENCES HR.tbl_Departments (DepartmentID);
+GO
+SET QUOTED_IDENTIFIER ON; -- requerido para índices filtrados cuando se ejecuta con sqlcmd
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_ResearchProjects_ProjectCode' AND object_id = OBJECT_ID('HR.tbl_ResearchProjects'))
+    CREATE UNIQUE INDEX UX_ResearchProjects_ProjectCode ON HR.tbl_ResearchProjects (ProjectCode)
+        WHERE ProjectCode IS NOT NULL AND IsDeleted = 0;
+GO
+
 -- 2) Participaciones ---------------------------------------------------------
 IF OBJECT_ID('HR.tbl_ResearchProjectParticipations', 'U') IS NULL
 BEGIN

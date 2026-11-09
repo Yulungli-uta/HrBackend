@@ -31,6 +31,8 @@ public sealed record ResearchParticipationDto(
 public sealed record ResearchProjectDto(
     int Id,
     string Code,
+    int? DepartmentId,
+    string? DepartmentName,
     string Name,
     DateOnly StartDate,
     DateOnly EndDate,
@@ -44,6 +46,8 @@ public sealed record ResearchProjectDto(
 public sealed record ResearchProjectListItemDto(
     int Id,
     string Code,
+    int? DepartmentId,
+    string? DepartmentName,
     string Name,
     DateOnly StartDate,
     DateOnly EndDate,
@@ -80,6 +84,10 @@ public sealed class ResearchProjectFormDto
 /// <summary>Datos del proyecto recibidos del formulario (JSON dentro del multipart).</summary>
 public sealed class ResearchProjectUpsertDto
 {
+    /// <summary>Código del proyecto (obligatorio, único entre los proyectos no eliminados).</summary>
+    public string ProjectCode { get; set; } = "";
+    /// <summary>Dependencia (facultad/unidad) a la que pertenece el proyecto (obligatoria).</summary>
+    public int? DepartmentId { get; set; }
     public string Name { get; set; } = "";
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
