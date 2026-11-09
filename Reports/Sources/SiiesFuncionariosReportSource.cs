@@ -89,7 +89,7 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                 : esPasaporte ? "SIIES - Funcionario Pasaporte" : "SIIES - Funcionarios (Cédula)",
             FilePrefix = esTodos ? "SIIES_Funcionarios_Todos"
                 : esPasaporte ? "SIIES_Funcionario_Pasaporte" : "SIIES_Funcionarios_Cedula",
-            Subtitle = $"Total registros: {rows.Count}",
+            Subtitle = SiiesReportSubtitle.ForEmployees(filter, rows.Count),
             GeneratedBy = context.User.Identity?.Name ?? "anonymous",
             GeneratedAt = DateTime.Now,
             Columns = esPasaporte ? PasaporteColumns : CedulaColumns,

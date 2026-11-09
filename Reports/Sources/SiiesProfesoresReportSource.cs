@@ -361,7 +361,7 @@ public sealed class SiiesProfesoresReportSource : SiiesProfesoresReportSourceBas
                 : esPasaporte ? "SIIES - Profesores Pasaporte" : "SIIES - Profesores (Cédula)",
             FilePrefix = esTodos ? "SIIES_Profesores_Todos"
                 : esPasaporte ? "SIIES_Profesores_Pasaporte" : "SIIES_Profesores_Cedula",
-            Subtitle = $"Total registros: {rows.Count}",
+            Subtitle = await SiiesReportSubtitle.ForTeachersAsync(_db, filter, rows.Count, context.RequestAborted),
             GeneratedBy = context.User.Identity?.Name ?? "anonymous",
             GeneratedAt = DateTime.Now,
             Columns = esPasaporte ? PasaporteColumns : CedulaColumns,

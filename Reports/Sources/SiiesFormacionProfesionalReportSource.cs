@@ -128,7 +128,7 @@ public sealed class SiiesFormacionProfesionalReportSource : IReportSource
         {
             Title = "SIIES - Formación Profesional (Terminado)",
             FilePrefix = "SIIES_Formacion_Profesional",
-            Subtitle = $"Total registros: {rows.Count}",
+            Subtitle = await SiiesReportSubtitle.ForTeachersAsync(_db, filter, rows.Count, context.RequestAborted),
             GeneratedBy = context.User.Identity?.Name ?? "anonymous",
             GeneratedAt = DateTime.Now,
             Columns =
