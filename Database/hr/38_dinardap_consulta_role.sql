@@ -4,11 +4,10 @@
 -- que consulta, ver Dinardap:ForwardUserToken). Un rol por paquete, para asignar según la necesidad:
 --   R_DINARDAP_REGISTRO_CIVIL  -> DINARDAP.REGISTRO_CIVIL.READ  (alta de personas y cargas familiares; se asigna a RR.HH.)
 --   R_DINARDAP_TITULOS         -> DINARDAP.TITULOS.READ          (formación académica / SENESCYT)
--- La sincronización SENESCYT de la hoja de vida NO usa el token del empleado: HrBackend comprueba que sea su propia persona
--- (EMPLOYEE_PROFILE.CREATE + dueño) y consulta con la cuenta de servicio. Por eso R_EMPLOYEE NO tiene DINARDAP.TITULOS.READ
--- (si lo tuviera, un empleado podría llamar a DINARDAP directo por la cédula de otra persona). TCE no se otorga a nadie.
+-- Además DINARDAP.TITULOS.READ se otorga al rol R_EMPLOYEE (decisión del usuario 2026-11-10: la sincronización SENESCYT desde pantalla
+-- usa el token del propio empleado; HrBackend limita a que solo consulte su propia persona). TCE (sufragio) no se otorga a nadie.
 -- No sustituye a R_DINARDAP_LEGACY (confianza por red de la DLL antigua), que no se toca. La cuenta de servicio de los procesos en
--- segundo plano (y la sincronización SENESCYT) debe tener R_DINARDAP_TITULOS o R_DINARDAP_LEGACY.
+-- segundo plano debe tener R_DINARDAP_TITULOS (o R_DINARDAP_LEGACY).
 -- Reemplaza al rol R_DINARDAP_CONSULTA de una primera versión de este script (se retira si no tiene usuarios). Idempotente.
 -- ============================================================================
 
@@ -36,17 +35,13 @@ INSERT INTO auth.tbl_RolePermissions (RoleId, PermissionId, GrantedAt)
 SELECT r.Id, p.Id, SYSDATETIME()
 FROM (VALUES
     (N'R_DINARDAP_REGISTRO_CIVIL', N'DINARDAP.REGISTRO_CIVIL.READ'),
-    (N'R_DINARDAP_TITULOS',        N'DINARDAP.TITULOS.READ')
+    (N'R_DINARDAP_TITULOS',        N'DINARDAP.TITULOS.READ'),
+    (N'R_EMPLOYEE',                N'DINARDAP.TITULOS.READ')
 ) AS g (RoleName, PermissionName)
 JOIN auth.tbl_Roles r ON r.Name = g.RoleName AND r.IsDeleted = 0
 JOIN auth.tbl_Permissions p ON p.Name = g.PermissionName AND p.IsDeleted = 0
 WHERE NOT EXISTS (SELECT 1 FROM auth.tbl_RolePermissions rp WHERE rp.RoleId = r.Id AND rp.PermissionId = p.Id);
 
--- Retira el permiso que una versión anterior de este script dio a R_EMPLOYEE.
-DELETE rp
-FROM auth.tbl_RolePermissions rp
-JOIN auth.tbl_Roles r ON r.Id = rp.RoleId AND r.Name = N'R_EMPLOYEE'
-JOIN auth.tbl_Permissions p ON p.Id = rp.PermissionId AND p.Name = N'DINARDAP.TITULOS.READ';
 GO
 
 -- 3) Asignación a RR.HH. (quienes hoy tienen DINARDAP_HR.READ; se excluyen cuentas de prueba @test.local) ----------
@@ -66,15 +61,25 @@ BEGIN
     JOIN auth.tbl_Permissions p ON p.Id = rp.PermissionId AND p.Name = N'DINARDAP_HR.READ' AND p.IsDeleted = 0
     WHERE u.IsActive = 1 AND u.Email NOT LIKE N'%@test.local';
 
+    -- Reactiva asignaciones que una versión anterior de este script dio de baja (la clave es UserId+RoleId).
+    UPDATE x SET IsDeleted = 0
+    FROM auth.tbl_UserRoles x
+    JOIN @Holders h ON h.UserId = x.UserId
+    WHERE x.RoleId IN (@RcId, @TitId) AND x.IsDeleted = 1 AND x.Reason = N'Consulta DINARDAP con token del usuario (script 38)'
+      AND NOT (x.RoleId = @TitId AND EXISTS (SELECT 1 FROM auth.tbl_UserRoles y JOIN auth.tbl_Roles rr ON rr.Id = y.RoleId
+                                             WHERE y.UserId = x.UserId AND y.IsDeleted = 0 AND rr.Name = N'R_EMPLOYEE'));
+
     -- Registro Civil: todo RR.HH.
     INSERT INTO auth.tbl_UserRoles (UserId, RoleId, AssignedAt, Reason, IsDeleted)
     SELECT h.UserId, @RcId, SYSDATETIME(), N'Consulta DINARDAP con token del usuario (script 38)', 0
     FROM @Holders h
-    WHERE NOT EXISTS (SELECT 1 FROM auth.tbl_UserRoles x WHERE x.UserId = h.UserId AND x.RoleId = @RcId AND x.IsDeleted = 0);
+    WHERE NOT EXISTS (SELECT 1 FROM auth.tbl_UserRoles x WHERE x.UserId = h.UserId AND x.RoleId = @RcId);
 
-    -- Retira el rol de títulos que una versión anterior asignó a RR.HH. (ya no se usa con token de usuario).
-    UPDATE x SET IsDeleted = 1
-    FROM auth.tbl_UserRoles x
-    WHERE x.RoleId = @TitId AND x.IsDeleted = 0 AND x.Reason = N'Consulta DINARDAP con token del usuario (script 38)';
+    -- Títulos: solo a quien de RR.HH. no tenga ya el permiso por R_EMPLOYEE.
+    INSERT INTO auth.tbl_UserRoles (UserId, RoleId, AssignedAt, Reason, IsDeleted)
+    SELECT h.UserId, @TitId, SYSDATETIME(), N'Consulta DINARDAP con token del usuario (script 38)', 0
+    FROM @Holders h
+    WHERE NOT EXISTS (SELECT 1 FROM auth.tbl_UserRoles x JOIN auth.tbl_Roles rr ON rr.Id = x.RoleId
+                      WHERE x.UserId = h.UserId AND x.IsDeleted = 0 AND rr.Name IN (N'R_EMPLOYEE', N'R_DINARDAP_TITULOS'));
 END
 GO

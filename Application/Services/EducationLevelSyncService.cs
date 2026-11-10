@@ -58,7 +58,7 @@ public sealed class EducationLevelSyncService : IEducationLevelSyncService
     {
         var result = await _dinardap.ConsultarTitulosConResultadoAsync(identificacion, identity, ct);
         if (result.Status == DinardapLookupStatus.Forbidden)
-            throw new DinardapForbiddenException("No tiene permiso para consultar Títulos (DINARDAP). La cuenta de servicio requiere el rol R_DINARDAP_TITULOS.");
+            throw new DinardapForbiddenException("No tiene permiso para consultar Títulos (DINARDAP). Solicite el rol R_DINARDAP_TITULOS (todo empleado lo tiene por R_EMPLOYEE).");
 
         if (failIfUnavailable && result.Status != DinardapLookupStatus.Ok)
             throw new DinardapUnavailableException("SENESCYT no está disponible en este momento. Intente de nuevo más tarde.");
@@ -71,8 +71,9 @@ public sealed class EducationLevelSyncService : IEducationLevelSyncService
         var persona = await _people.GetByIdAsync(personId, ct)
             ?? throw new KeyNotFoundException($"Persona {personId} no encontrada.");
 
-        // El control de "solo la propia persona" ya lo hizo el controller; los títulos se consultan con la cuenta de servicio.
-        var titulos = await QueryTitulosAsync(persona.IdCard, DinardapIdentity.Service, failIfUnavailable: true, ct);
+        // Pantalla: la consulta va con el token de quien la pide (rol/permiso DINARDAP.TITULOS.READ). El control de "solo la propia
+        // persona" ya lo hizo el controller.
+        var titulos = await QueryTitulosAsync(persona.IdCard, DinardapIdentity.CurrentUser, failIfUnavailable: true, ct);
         _cache.Set(PreviewCacheKey(personId), titulos, TimeSpan.FromMinutes(PreviewCacheMinutes));
         var existentes = await ExistingRegistrationNumbersAsync(personId, ct);
 
@@ -98,7 +99,7 @@ public sealed class EducationLevelSyncService : IEducationLevelSyncService
         var persona = await _people.GetByIdAsync(personId, ct)
             ?? throw new KeyNotFoundException($"Persona {personId} no encontrada.");
 
-        var (creados, omitidos, revision) = await SyncPersonAsync(personId, persona.IdCard, DinardapIdentity.Service, failIfUnavailable: true, ct);
+        var (creados, omitidos, revision) = await SyncPersonAsync(personId, persona.IdCard, DinardapIdentity.CurrentUser, failIfUnavailable: true, ct);
         return new TituloSyncResultDto(personId, creados, omitidos, revision);
     }
 
