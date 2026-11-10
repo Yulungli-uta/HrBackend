@@ -34,9 +34,12 @@ public class EducationLevelsController : ControllerBase
     /// títulos hay, cuántos ya están registrados y cuántos se crearían. No persiste nada.
     /// </summary>
     [HttpGet("person/{personId:int}/senescyt-sync/preview")]
-    [RequirePermission("DINARDAP_HR.READ")]
+    [RequirePermission("EMPLOYEE_PROFILE.CREATE")]
     public async Task<IActionResult> PreviewSenescytSync([FromRoute] int personId, CancellationToken ct)
     {
+        if (!ElevatedRoles.Any(User.IsInRole) && await _currentUser.GetPersonIdAsync(ct) != personId)
+            return Forbid403("No puede sincronizar la formación académica de otra persona.");
+
         try
         {
             return Ok(await _sync.PreviewAsync(personId, ct));
@@ -49,9 +52,12 @@ public class EducationLevelsController : ControllerBase
 
     /// <summary>Confirma la sincronización: crea únicamente los títulos que no existían todavía.</summary>
     [HttpPost("person/{personId:int}/senescyt-sync/confirm")]
-    [RequirePermission("DINARDAP_HR.READ")]
+    [RequirePermission("EMPLOYEE_PROFILE.CREATE")]
     public async Task<IActionResult> ConfirmSenescytSync([FromRoute] int personId, CancellationToken ct)
     {
+        if (!ElevatedRoles.Any(User.IsInRole) && await _currentUser.GetPersonIdAsync(ct) != personId)
+            return Forbid403("No puede sincronizar la formación académica de otra persona.");
+
         try
         {
             return Ok(await _sync.ConfirmAsync(personId, ct));

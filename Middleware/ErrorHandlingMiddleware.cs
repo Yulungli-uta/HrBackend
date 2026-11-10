@@ -46,6 +46,12 @@ public class ErrorHandlingMiddleware
         // un turno cancelado") — es el tipo de excepción que se lanza en toda la aplicación
         // para este propósito. Sin este caso caía al genérico y salía como 500 en vez de un
         // mensaje claro (hallazgo real: reasignación de guardias 2026-09-07).
+        // El usuario no tiene el rol de consulta de DINARDAP: 403 con mensaje claro (no un 409/500 genérico).
+        if (ex is WsUtaSystem.Application.Common.DinardapForbiddenException dfex)
+            return new ProblemDetails { Title = "Sin permiso para consultar DINARDAP", Detail = dfex.Message, Status = StatusCodes.Status403Forbidden };
+        // DINARDAP/SENESCYT no respondió: 503 con mensaje claro (una lista vacía parecería "sin títulos").
+        if (ex is WsUtaSystem.Application.Common.DinardapUnavailableException duex)
+            return new ProblemDetails { Title = "DINARDAP no disponible", Detail = duex.Message, Status = StatusCodes.Status503ServiceUnavailable };
         if (ex is InvalidOperationException ioex)
             return new ProblemDetails { Title = "No se puede completar la operación", Detail = ioex.Message, Status = StatusCodes.Status409Conflict };
         // BusinessRuleException hereda de Exception (no de InvalidOperationException), así que

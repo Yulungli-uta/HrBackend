@@ -1,5 +1,6 @@
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using WsUtaSystem.Application.DTOs.Dinardap;
 using WsUtaSystem.Application.DTOs.People;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Infrastructure.Security;
@@ -34,10 +35,15 @@ public class PeopleController : ControllerBase
     [RequirePermission("DINARDAP_HR.READ")]
     public async Task<IActionResult> DinardapLookup([FromRoute] string cedula, CancellationToken ct)
     {
-        var data = await _dinardap.ConsultarRegistroCivilAsync(cedula, ct);
-        return data is null
-            ? StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "DINARDAP no disponible en este momento." })
-            : Ok(data);
+        // Pantalla: la consulta va con el token de quien la pide (rol R_DINARDAP_REGISTRO_CIVIL en DINARDAP).
+        var result = await _dinardap.ConsultarRegistroCivilConResultadoAsync(cedula, DinardapIdentity.CurrentUser, ct);
+        return result.Status switch
+        {
+            DinardapLookupStatus.Ok when result.Data is not null => Ok(result.Data),
+            DinardapLookupStatus.Forbidden => StatusCode(StatusCodes.Status403Forbidden,
+                new { message = "No tiene permiso para consultar Registro Civil (DINARDAP). Solicite el rol R_DINARDAP_REGISTRO_CIVIL." }),
+            _ => StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "DINARDAP no disponible en este momento." }),
+        };
     }
 
     /// <summary>Lista todos los registros de People.</summary>

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.DTOs.Dinardap;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -47,12 +48,31 @@ public sealed class EducationLevelSyncService : IEducationLevelSyncService
         _logger = logger;
     }
 
+    /// <summary>
+    /// Consulta los títulos en DINARDAP. Si el usuario no tiene el permiso se lanza <see cref="DinardapForbiddenException"/>: devolver una
+    /// lista vacía haría creer que la persona no tiene títulos. Con <paramref name="failIfUnavailable"/> (pantalla de una persona) un servicio no
+    /// disponible lanza <see cref="DinardapUnavailableException"/> por la misma razón; el lote masivo lo deja en false y conserva la lista vacía.
+    /// </summary>
+    private async Task<IReadOnlyList<DinardapTituloDto>> QueryTitulosAsync(
+        string identificacion, DinardapIdentity identity, bool failIfUnavailable, CancellationToken ct)
+    {
+        var result = await _dinardap.ConsultarTitulosConResultadoAsync(identificacion, identity, ct);
+        if (result.Status == DinardapLookupStatus.Forbidden)
+            throw new DinardapForbiddenException("No tiene permiso para consultar Títulos (DINARDAP). La cuenta de servicio requiere el rol R_DINARDAP_TITULOS.");
+
+        if (failIfUnavailable && result.Status != DinardapLookupStatus.Ok)
+            throw new DinardapUnavailableException("SENESCYT no está disponible en este momento. Intente de nuevo más tarde.");
+
+        return result.Data ?? new List<DinardapTituloDto>();
+    }
+
     public async Task<TituloSyncPreviewDto> PreviewAsync(int personId, CancellationToken ct = default)
     {
         var persona = await _people.GetByIdAsync(personId, ct)
             ?? throw new KeyNotFoundException($"Persona {personId} no encontrada.");
 
-        var titulos = await _dinardap.ConsultarTitulosAsync(persona.IdCard, ct);
+        // El control de "solo la propia persona" ya lo hizo el controller; los títulos se consultan con la cuenta de servicio.
+        var titulos = await QueryTitulosAsync(persona.IdCard, DinardapIdentity.Service, failIfUnavailable: true, ct);
         _cache.Set(PreviewCacheKey(personId), titulos, TimeSpan.FromMinutes(PreviewCacheMinutes));
         var existentes = await ExistingRegistrationNumbersAsync(personId, ct);
 
@@ -78,7 +98,7 @@ public sealed class EducationLevelSyncService : IEducationLevelSyncService
         var persona = await _people.GetByIdAsync(personId, ct)
             ?? throw new KeyNotFoundException($"Persona {personId} no encontrada.");
 
-        var (creados, omitidos, revision) = await SyncPersonAsync(personId, persona.IdCard, ct);
+        var (creados, omitidos, revision) = await SyncPersonAsync(personId, persona.IdCard, DinardapIdentity.Service, failIfUnavailable: true, ct);
         return new TituloSyncResultDto(personId, creados, omitidos, revision);
     }
 
@@ -104,7 +124,8 @@ public sealed class EducationLevelSyncService : IEducationLevelSyncService
                     continue;
                 }
 
-                var (creados, omitidos, _) = await SyncPersonAsync(personId, persona.IdCard, ct);
+                // El lote masivo siempre usa la cuenta de servicio: no debe depender del rol de quien lo dispare.
+                var (creados, omitidos, _) = await SyncPersonAsync(personId, persona.IdCard, DinardapIdentity.Service, failIfUnavailable: false, ct);
                 creadosTotal += creados;
                 omitidosTotal += omitidos;
                 procesadas++;
@@ -122,7 +143,7 @@ public sealed class EducationLevelSyncService : IEducationLevelSyncService
     }
 
     private async Task<(int Creados, int Omitidos, int RequierenRevision)> SyncPersonAsync(
-        int personId, string identificacion, CancellationToken ct)
+        int personId, string identificacion, DinardapIdentity identity, bool failIfUnavailable, CancellationToken ct)
     {
         // Reusa el preview cacheado si Confirm llega poco después (flujo normal del diálogo);
         // si no hay nada cacheado (llamado directo, cache expirado, o el job masivo — que nunca
@@ -136,7 +157,7 @@ public sealed class EducationLevelSyncService : IEducationLevelSyncService
         }
         else
         {
-            titulos = await _dinardap.ConsultarTitulosAsync(identificacion, ct);
+            titulos = await QueryTitulosAsync(identificacion, identity, failIfUnavailable, ct);
         }
 
         if (titulos.Count == 0) return (0, 0, 0);

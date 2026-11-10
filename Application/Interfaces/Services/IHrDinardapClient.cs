@@ -23,4 +23,15 @@ public interface IHrDinardapClient
 
     /// <summary>Nunca null — lista vacía si la persona no tiene títulos o el servicio falla.</summary>
     Task<IReadOnlyList<DinardapTituloDto>> ConsultarTitulosAsync(string identificacion, CancellationToken ct = default);
+
+    /// <summary>
+    /// Igual que <see cref="ConsultarRegistroCivilAsync"/> pero informa por qué no hay datos (servicio no disponible o usuario sin
+    /// permiso) y permite elegir la identidad: <see cref="DinardapIdentity.CurrentUser"/> reenvía el token del usuario de la solicitud.
+    /// </summary>
+    Task<DinardapLookupResult<DinardapRegistroCivilDto>> ConsultarRegistroCivilConResultadoAsync(
+        string identificacion, DinardapIdentity identity = DinardapIdentity.CurrentUser, CancellationToken ct = default);
+
+    /// <summary>Igual que <see cref="ConsultarTitulosAsync"/> pero informa por qué no hay datos y permite elegir la identidad.</summary>
+    Task<DinardapLookupResult<IReadOnlyList<DinardapTituloDto>>> ConsultarTitulosConResultadoAsync(
+        string identificacion, DinardapIdentity identity = DinardapIdentity.CurrentUser, CancellationToken ct = default);
 }

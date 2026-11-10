@@ -9,6 +9,7 @@ using WsUtaSystem.Infrastructure.ExternalServices.Dinardap;
 using WsUtaSystem.Infrastructure.ExternalServices.Provisioning;
 using WsUtaSystem.Infrastructure.ExternalServices.Orcid;
 using WsUtaSystem.Infrastructure.ExternalServices.Scopus;
+using WsUtaSystem.Infrastructure.Services;
 
 namespace WsUtaSystem.Infrastructure.ExternalServices;
 
@@ -34,6 +35,7 @@ public static class ExternalServicesExtensions
 
         // DINARDAP (WsUtaDinardap.Api). La URL vive en el parámetro DINARDAP_API_URL (HR.tbl_Parameters). Envía el JWT de la
         // cuenta de servicio, así que no se siguen redirecciones y el host se valida como institucional (anti-SSRF).
+        services.AddScoped<IDinardapQueryAuditService, DinardapQueryAuditService>();
         services.AddHttpClient<IHrDinardapClient, HrDinardapClient>(client => client.Timeout = DefaultTimeout)
             .AddHttpMessageHandler(sp => LoggingHandler("DINARDAP", sp))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
