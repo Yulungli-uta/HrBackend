@@ -32,6 +32,24 @@ public sealed class PersonnelActionType : IAuditable
     /// <summary>Último número de secuencia emitido para el año actual.</summary>
     public int NumberingLastSequence { get; set; } = 0;
 
+    /// <summary>
+    /// Formato del número del documento. <c>null</c> = formato por defecto "{prefijo}-{año}-{secuencia:D3}".
+    /// Tokens admitidos: {PREFIX}, {SEQ}, {YEAR} (ej: "DTH-UTA-{PREFIX}-{SEQ}-{YEAR}" → "DTH-UTA-LPE-2057-2026").
+    /// </summary>
+    public string? NumberingFormat { get; set; }
+
+    /// <summary>
+    /// Si es true (por defecto) la secuencia vuelve a 1 al cambiar de año. Si es false la secuencia es acumulada
+    /// (series del legado como LPE/LCR, donde el año es solo un sufijo del número).
+    /// </summary>
+    public bool NumberingResetsYearly { get; set; } = true;
+
+    /// <summary>
+    /// FK al tipo padre (un solo nivel). Un tipo con hijos funciona como grupo (ej: "Licencia") y las acciones
+    /// nuevas se registran contra uno de sus hijos, que son las series con prefijo propio. <c>null</c> = tipo raíz.
+    /// </summary>
+    public int? ParentTypeId { get; set; }
+
     /// <summary>FK a la plantilla documental (DocumentTemplate.TemplateId) usada por defecto para este tipo de acción.</summary>
     public int? DefaultTemplateId { get; set; }
 

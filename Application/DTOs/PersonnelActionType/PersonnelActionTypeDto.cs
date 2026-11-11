@@ -15,5 +15,9 @@ public sealed record PersonnelActionTypeDto(
     bool RequiresAdGroupAssignment,
     string? ActionCategory,
     bool ReachesVigente,
-    int? SiiesRelacionIesTypeId = null
+    int? SiiesRelacionIesTypeId = null,
+    // 2026-11-11: tipos padre/hijos (series con prefijo propio) y numeración por tipo
+    int? ParentTypeId = null,
+    string? NumberingFormat = null,
+    bool NumberingResetsYearly = true
 );

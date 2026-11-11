@@ -116,9 +116,7 @@ public sealed class PersonnelActionTypeController : ControllerBase
         [FromBody] PersonnelActionTypeCreateDto dto, CancellationToken ct)
     {
         var entity = _mapper.Map<PersonnelActionType>(dto);
-        entity.NumberingYear = _clock.Now.Year;
-        entity.NumberingLastSequence = 0;
-        var created = await _svc.CreateAsync(entity, ct);
+        var created = await _svc.CreateTypeAsync(entity, ct);
         return CreatedAtAction(nameof(GetById),
             new { id = created.PersonnelActionTypeId },
             _mapper.Map<PersonnelActionTypeDto>(created));
@@ -132,8 +130,7 @@ public sealed class PersonnelActionTypeController : ControllerBase
     public async Task<IActionResult> Update(
         [FromRoute] int id, [FromBody] PersonnelActionTypeUpdateDto dto, CancellationToken ct)
     {
-        var entity = _mapper.Map<PersonnelActionType>(dto);
-        await _svc.UpdateAsync(id, entity, ct);
+        await _svc.UpdateTypeAsync(id, dto, ct);
         return NoContent();
     }
 

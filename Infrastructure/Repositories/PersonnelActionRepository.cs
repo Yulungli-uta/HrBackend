@@ -44,7 +44,9 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             query = query.Where(x => x.action.EmployeeId == filter.EmployeeId.Value);
 
         if (filter.ActionTypeId.HasValue)
-            query = query.Where(x => x.action.ActionTypeId == filter.ActionTypeId.Value);
+            // Filtrar por un tipo general (ej. "Licencia") incluye las acciones de sus series hijas.
+            query = query.Where(x => x.action.ActionTypeId == filter.ActionTypeId.Value
+                                  || x.actionType.ParentTypeId == filter.ActionTypeId.Value);
 
         if (!string.IsNullOrWhiteSpace(filter.Status))
             query = query.Where(x => x.action.Status == filter.Status);
@@ -302,6 +304,29 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 .FirstOrDefaultAsync(ct)
             : null;
 
+        // 2026-11-11: grupo del tipo (ej. "Licencia"), motivo de la licencia y tipo de documento de identidad,
+        // este último por NOMBRE desde ref_Types (CEDULA / PASAPORTE).
+        var actionTypeParentName = result.actionType.ParentTypeId.HasValue
+            ? await _db.PersonnelActionTypes.AsNoTracking()
+                .Where(t => t.PersonnelActionTypeId == result.actionType.ParentTypeId.Value)
+                .Select(t => t.Name)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var leaveReasonName = result.action.LeaveReasonId.HasValue
+            ? await _db.RefTypes.AsNoTracking()
+                .Where(r => r.TypeId == result.action.LeaveReasonId.Value)
+                .Select(r => r.Name)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var identTypeName = result.person.IdentType.HasValue
+            ? await _db.RefTypes.AsNoTracking()
+                .Where(r => r.TypeId == result.person.IdentType.Value)
+                .Select(r => r.Name)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
         return new PersonnelActionDetailDto(
             result.action.ActionId,
             result.action.EmployeeId ?? 0,
@@ -381,7 +406,18 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             result.action.OriginManagementLevel,
             originMgmtLevelName,
             result.action.OriginBudgetProgramCode,
-            result.action.DestinationBudgetProgramCode
+            result.action.DestinationBudgetProgramCode,
+            result.actionType.ParentTypeId,
+            actionTypeParentName,
+            result.action.LeaveReasonId,
+            leaveReasonName,
+            result.action.NotificationEnabled,
+            result.action.NotificationDate,
+            result.action.NotificationTime,
+            result.action.EmployeeSignatureDate,
+            result.action.EmployeeSignatureTime,
+            identTypeName,
+            result.action.PossessionEnabled
         );
     }
 

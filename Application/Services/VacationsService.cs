@@ -191,12 +191,16 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
         // distinto al que realmente se reserva. Ahora ambos usan la misma resolución.
         var available = await _balanceAdjustment.GetEmployeePrincipalBalanceAsync(entity.EmployeeId, TimeBalanceField.Vacation, ct);
 
+        // Guardias: pueden planificar vacaciones con saldo negativo hasta que se regularice su saldo real
+        // (pedido del usuario 2026-11-11). Solo aplica dentro del flujo de planes de Guardias.
+        var allowNegative = _guardFlow.IsActive;
+
         _logger.LogInformation(
             "VAC CREATE pre-check: EmpId={EmpId} From={Start} To={End} DaysTaken={DaysTaken} WorkMinDay={WorkMinDay} RequestedMin={RequestedMin} AvailableMin={AvailableMin}",
             entity.EmployeeId, entity.StartDate, entity.EndDate, days, workMinutesPerDay, requestedMinutes, available
         );
 
-        if (requestedMinutes > available)
+        if (!allowNegative && requestedMinutes > available)
             throw new BusinessRuleException($"Saldo insuficiente. Disponible: {available} min. Solicitado: {requestedMinutes} min.");
 
         var strategy = _db.Database.CreateExecutionStrategy();
@@ -234,8 +238,10 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
                 minutes: requestedMinutes,
                 sourceModule: "VACATION_RESERVE",
                 sourceId: reserveSourceId,
-                note: $"Reserva vacaciones. Rango={created.StartDate:yyyy-MM-dd} a {created.EndDate:yyyy-MM-dd} DiasCobrados={days} MinCobrados={requestedMinutes}",
+                note: $"Reserva vacaciones. Rango={created.StartDate:yyyy-MM-dd} a {created.EndDate:yyyy-MM-dd} DiasCobrados={days} MinCobrados={requestedMinutes}"
+                      + (allowNegative && requestedMinutes > available ? " [saldo negativo autorizado: Guardias]" : string.Empty),
                 performedByEmpId: created.EmployeeId,
+                allowNegativeResult: allowNegative,
                 ct: ct
             );
 
@@ -387,6 +393,7 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
                     sourceId: NewVacationReserveSourceId(id),
                     note: $"Reserva vacaciones (re-planificada). Rango={updated.StartDate:yyyy-MM-dd} a {updated.EndDate:yyyy-MM-dd} MinCobrados={rePlannedMinutes}",
                     performedByEmpId: updated.EmployeeId,
+                    allowNegativeResult: _guardFlow.IsActive,
                     ct: ct
                 );
 
@@ -442,6 +449,7 @@ public class VacationsService : Service<Vacations, int>, IVacationsService
                     sourceId: NewVacationReserveSourceId(id),
                     note: $"Reserva vacaciones (recalculada por cambio de fechas). Rango={updated.StartDate:yyyy-MM-dd} a {updated.EndDate:yyyy-MM-dd} MinCobrados={recalculatedMinutes}",
                     performedByEmpId: updated.EmployeeId,
+                    allowNegativeResult: _guardFlow.IsActive,
                     ct: ct
                 );
 

@@ -17,4 +17,16 @@ public interface IPersonnelActionTypeService : IService<PersonnelActionType, int
 
     /// <summary>Actualiza únicamente la plantilla predeterminada de un tipo de acción, sin afectar el resto de campos.</summary>
     Task SetDefaultTemplateAsync(int personnelActionTypeId, int? templateId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Crea un tipo de acción validando el padre (un solo nivel) y el formato de numeración. Un hijo hereda del padre
+    /// categoría, plantilla y homologación SIIES cuando no se indican.
+    /// </summary>
+    Task<PersonnelActionType> CreateTypeAsync(PersonnelActionType entity, CancellationToken ct = default);
+
+    /// <summary>
+    /// Actualiza un tipo de acción modificando solo los campos del formulario: no toca el contador de numeración
+    /// ni <c>ReachesVigente</c>, y los campos nuevos (padre, formato, reinicio) solo se aplican cuando vienen.
+    /// </summary>
+    Task UpdateTypeAsync(int personnelActionTypeId, PersonnelActionTypeUpdateDto dto, CancellationToken ct = default);
 }

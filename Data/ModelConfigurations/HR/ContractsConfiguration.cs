@@ -105,6 +105,9 @@ public sealed class PersonnelActionTypeConfiguration : IEntityTypeConfiguration<
         e.Property(x => x.NumberingLastSequence).HasDefaultValue(0);
         e.Property(x => x.IsActive).HasDefaultValue(true);
         e.Property(x => x.ActionCategory).HasMaxLength(30);
+        e.Property(x => x.NumberingFormat).HasMaxLength(60);
+        // Sin HasDefaultValue: con bool, EF omitiría el valor false (default CLR) y la BD pondría 1.
+        e.Property(x => x.NumberingResetsYearly);
         e.HasIndex(x => x.Code).IsUnique();
         e.HasOne(x => x.DefaultTemplate)
             .WithMany()
@@ -279,6 +282,9 @@ public sealed class PersonnelActionConfiguration : IEntityTypeConfiguration<Pers
         e.Property(x => x.ReviewerId).HasColumnName("ReviewerID");
         e.Property(x => x.RegistrarId).HasColumnName("RegistrarID");
         e.Property(x => x.EmployeeTypeId).HasColumnName("EmployeeTypeId").IsRequired(false);
+        e.Property(x => x.LeaveReasonId).HasColumnName("LeaveReasonId");
+        e.Property(x => x.NotificationTime).HasColumnType("time(0)");
+        e.Property(x => x.EmployeeSignatureTime).HasColumnType("time(0)");
 
         e.HasIndex(x => new { x.EmployeeId, x.ActionDate });
         // PersonId cubre nuevos ingresos donde EmployeeId aún es NULL

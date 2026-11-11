@@ -112,6 +112,34 @@ public sealed class PersonnelAction : IAuditable, ISoftDeletable
     /// <summary>Indica si el empleado presentó declaración juramentada de no nepotismo.</summary>
     public bool SwornDeclaration { get; set; }
 
+    /// <summary>
+    /// Si es true, el documento imprime en "POSESIÓN DEL PUESTO" el nombre y la identificación del servidor de la acción
+    /// (no se vuelven a ingresar). Si es false, esas líneas quedan en blanco para llenarlas a mano.
+    /// </summary>
+    public bool PossessionEnabled { get; set; }
+
+    /// <summary>
+    /// FK a ref_Types (Category = 'PERSONNEL_ACTION_LEAVE_REASON'). Motivo de la licencia; solo aplica a los tipos de
+    /// licencia genéricos (con/sin remuneración), cuyo catálogo de motivos se define en <c>Metadata.types</c>.
+    /// </summary>
+    public int? LeaveReasonId { get; set; }
+
+    // ── Notificación y firma del servidor (se imprime en el documento cuando está activo) ──
+    /// <summary>Si es true, la acción registra la comunicación electrónica y la firma del servidor.</summary>
+    public bool NotificationEnabled { get; set; }
+
+    /// <summary>Fecha de la comunicación electrónica. Va en pareja con <see cref="NotificationTime"/>.</summary>
+    public DateOnly? NotificationDate { get; set; }
+
+    /// <summary>Hora de la comunicación electrónica (hora de Ecuador, la elige el usuario).</summary>
+    public TimeOnly? NotificationTime { get; set; }
+
+    /// <summary>Fecha de la firma del servidor. Va en pareja con <see cref="EmployeeSignatureTime"/>.</summary>
+    public DateOnly? EmployeeSignatureDate { get; set; }
+
+    /// <summary>Hora de la firma del servidor (hora de Ecuador, la elige el usuario).</summary>
+    public TimeOnly? EmployeeSignatureTime { get; set; }
+
     /// <summary>FK a ref_Types (Category = 'AP_PROCESO_INSTITUCIONAL'). Proceso institucional de la acción.</summary>
     public int? InstitutionalProcess { get; set; }
 

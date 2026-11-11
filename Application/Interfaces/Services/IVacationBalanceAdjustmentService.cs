@@ -34,13 +34,15 @@ public interface IVacationBalanceAdjustmentService
     /// <summary>
     /// Reserva (descuenta) minutos del régimen laboral principal activo del empleado —
     /// reemplaza a HR.sp_hr_ReserveVacationBalance/sp_hr_ReservePermissionBalance.
-    /// Bloquea siempre si el saldo resultante quedaría negativo (allowNegativeResult=false,
-    /// no configurable — una reserva nunca debe sobregirar). Idempotente por sourceId: si ya
+    /// Por defecto bloquea si el saldo resultante quedaría negativo. Solo el flujo de vacaciones de
+    /// Guardias pasa <paramref name="allowNegativeResult"/> = true (los guardias tienen saldo negativo
+    /// hasta que se regularice el saldo real). Idempotente por sourceId: si ya
     /// existe una reserva con ese identificador, lanza BusinessRuleException.
     /// </summary>
     Task<VacationBalanceAdjustmentResultDto> ReserveAsync(
         int employeeId, DTOs.TimeBalances.TimeBalanceField field, int minutes,
-        string sourceModule, string sourceId, string note, int? performedByEmpId, CancellationToken ct = default);
+        string sourceModule, string sourceId, string note, int? performedByEmpId,
+        bool allowNegativeResult = false, CancellationToken ct = default);
 
     /// <summary>
     /// Libera (devuelve) una reserva previa por su sourceId — reemplaza a

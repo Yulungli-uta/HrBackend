@@ -18,7 +18,6 @@ public class GuardVacationService : IGuardVacationService
     private readonly IGuardVacationRequestRepository _requestRepo;
     private readonly AppDbContext _db;
     private readonly ICurrentUserService _currentUser;
-    private readonly IHrBalanceService _balanceService;
     private readonly IVacationsService _vacationsService;
     private readonly GuardVacationFlowContext _guardFlow;
 
@@ -29,7 +28,6 @@ public class GuardVacationService : IGuardVacationService
         IGuardVacationRequestRepository requestRepo,
         AppDbContext db,
         ICurrentUserService currentUser,
-        IHrBalanceService balanceService,
         IVacationsService vacationsService,
         GuardVacationFlowContext guardFlow,
         IAppClock clock)
@@ -39,7 +37,6 @@ public class GuardVacationService : IGuardVacationService
         _requestRepo = requestRepo;
         _db = db;
         _currentUser = currentUser;
-        _balanceService = balanceService;
         _vacationsService = vacationsService;
         _guardFlow = guardFlow;
     }
@@ -112,7 +109,7 @@ public class GuardVacationService : IGuardVacationService
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede crear planes de vacaciones.");
 
-        await ValidateWithinVacationBalanceAsync(dto.EmployeeId, dto.PlannedStartDate, dto.PlannedEndDate, ct);
+        ValidatePlanDateRange(dto.PlannedStartDate, dto.PlannedEndDate);
 
         var plannedStatusId = await GetRefTypeIdAsync("GUARD_VACATION_PLAN_STATUS", "PLANNED", ct);
 
@@ -148,7 +145,7 @@ public class GuardVacationService : IGuardVacationService
         if (entity.StatusType?.Name != "PLANNED")
             throw new InvalidOperationException($"Solo se pueden editar planes en estado PLANNED. Estado actual: {entity.StatusType?.Name}");
 
-        await ValidateWithinVacationBalanceAsync(entity.EmployeeId, dto.PlannedStartDate, dto.PlannedEndDate, ct);
+        ValidatePlanDateRange(dto.PlannedStartDate, dto.PlannedEndDate);
 
         entity.PlannedStartDate = dto.PlannedStartDate;
         entity.PlannedEndDate = dto.PlannedEndDate;
@@ -793,21 +790,12 @@ public class GuardVacationService : IGuardVacationService
         return id;
     }
 
-    // Reutiliza el saldo real de vacaciones del empleado (el mismo que usa el módulo general
-    // de Vacaciones vía IHrBalanceService -- ya resuelve régimen LOSEP/LOES vs Código de
-    // Trabajo, antigüedad y acumulación) en vez de un tope fijo propio de Guardias
-    // (pedido del usuario 2026-10-05, QA obs. 40).
-    private async Task ValidateWithinVacationBalanceAsync(int employeeId, DateOnly startDate, DateOnly endDate, CancellationToken ct)
+    // 2026-11-11: los planes de vacaciones de guardias ya no se bloquean por saldo (todos los guardias
+    // tienen saldo negativo hasta que se regularice el saldo real). Solo se valida el rango de fechas.
+    private static void ValidatePlanDateRange(DateOnly startDate, DateOnly endDate)
     {
-        var requestedDays = endDate.DayNumber - startDate.DayNumber + 1;
-        if (requestedDays <= 0)
+        if (endDate.DayNumber - startDate.DayNumber + 1 <= 0)
             throw new InvalidOperationException("La fecha final del plan debe ser posterior o igual a la fecha de inicio.");
-
-        var (balance, _) = await _balanceService.GetBalancesAsync(employeeId);
-
-        if (requestedDays > balance.VacationDays)
-            throw new InvalidOperationException(
-                $"El empleado solicita {requestedDays} día(s) de vacaciones, pero su saldo disponible es de {balance.VacationDays:F1} día(s).");
     }
 
     private static GuardVacationPlanDto MapPlanToDto(GuardVacationPlan p) =>

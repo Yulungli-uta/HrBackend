@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.DTOs.PersonnelActionType;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Infrastructure.Common;
 using WsUtaSystem.Models;
@@ -36,15 +37,18 @@ public sealed class PersonnelActionTypeRepository
         // UPDATE atómico con OUTPUT: evita el bug de entity tracker + HasDefaultValue
         // + MARS que causaba duplicados en UQ_PersonnelActions_ActionNumber.
         // No requiere transacción explícita: el UPDATE de una sola fila es atómico en SQL Server.
+        // 2026-11-11: NumberingResetsYearly = 0 (series de licencia del legado) hace la secuencia acumulada:
+        // el año solo es un sufijo del número y no la reinicia. Con el valor por defecto (1) el comportamiento
+        // es el de siempre.
         const string sql = """
             UPDATE HR.tbl_Personnel_Action_Type
             SET   NumberingLastSequence = CASE
-                      WHEN NumberingYear = @year THEN NumberingLastSequence + 1
+                      WHEN NumberingResetsYearly = 0 OR NumberingYear = @year THEN NumberingLastSequence + 1
                       ELSE 1
                   END,
                   NumberingYear = @year,
-                  UpdatedAt     = GETDATE()
-            OUTPUT INSERTED.NumberingPrefix, INSERTED.NumberingLastSequence
+                  UpdatedAt     = SYSDATETIME()
+            OUTPUT INSERTED.NumberingPrefix, INSERTED.NumberingLastSequence, INSERTED.NumberingFormat
             WHERE  PersonnelActionTypeID = @id
             """;
 
@@ -65,11 +69,130 @@ public sealed class PersonnelActionTypeRepository
 
             var prefix   = reader.GetString(0);
             var sequence = reader.GetInt32(1);
-            return ($"{prefix}-{year}-{sequence:D3}", year, sequence);
+            var format   = reader.IsDBNull(2) ? null : reader.GetString(2);
+            return (FormatDocumentNumber(prefix, year, sequence, format), year, sequence);
         }
         finally
         {
             if (opened) conn.Close();
+        }
+    }
+
+    /// <summary>
+    /// Arma el número del documento. Sin formato: "{prefijo}-{año}-{secuencia:D3}" (ej. DAP-2026-001).
+    /// Con formato: reemplaza los tokens {PREFIX}, {SEQ} (sin ceros a la izquierda) y {YEAR}
+    /// (ej. "DTH-UTA-{PREFIX}-{SEQ}-{YEAR}" da "DTH-UTA-LPE-2057-2026").
+    /// </summary>
+    public static string FormatDocumentNumber(string prefix, int year, int sequence, string? format)
+    {
+        if (string.IsNullOrWhiteSpace(format))
+            return $"{prefix}-{year}-{sequence:D3}";
+
+        return format
+            .Replace("{PREFIX}", prefix, StringComparison.Ordinal)
+            .Replace("{SEQ}", sequence.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace("{YEAR}", year.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+    }
+
+    public async Task<bool> HasChildrenAsync(int personnelActionTypeId, CancellationToken ct = default)
+        => await _db.Set<PersonnelActionType>()
+            .AsNoTracking()
+            .AnyAsync(x => x.ParentTypeId == personnelActionTypeId, ct);
+
+    public async Task<int?> GetRootTypeIdAsync(int personnelActionTypeId, CancellationToken ct = default)
+    {
+        var row = await _db.Set<PersonnelActionType>()
+            .AsNoTracking()
+            .Where(x => x.PersonnelActionTypeId == personnelActionTypeId)
+            .Select(x => new { x.PersonnelActionTypeId, x.ParentTypeId })
+            .FirstOrDefaultAsync(ct);
+
+        return row is null ? null : row.ParentTypeId ?? row.PersonnelActionTypeId;
+    }
+
+    public async Task UpdateSettingsAsync(
+        int personnelActionTypeId, Action<PersonnelActionType> apply, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(apply);
+
+        var entity = await _db.Set<PersonnelActionType>()
+            .FirstOrDefaultAsync(x => x.PersonnelActionTypeId == personnelActionTypeId, ct)
+            ?? throw new KeyNotFoundException($"PersonnelActionType id={personnelActionTypeId} no existe.");
+
+        apply(entity);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<LeaveActionContext> GetLeaveContextAsync(
+        int personnelActionTypeId, int? leaveReasonId, CancellationToken ct = default)
+    {
+        var type = await _db.Set<PersonnelActionType>()
+            .AsNoTracking()
+            .Where(x => x.PersonnelActionTypeId == personnelActionTypeId)
+            .Select(x => new { x.IsActive, x.Code, x.NumberingPrefix, x.ParentTypeId })
+            .FirstOrDefaultAsync(ct);
+
+        if (type is null)
+            return LeaveActionContext.NotFound;
+
+        // Solo cuentan los hijos ACTIVOS: mientras las series estén inactivas (antes del corte con el legado) el tipo
+        // general sigue admitiendo acciones nuevas, como hasta ahora.
+        var hasChildren = await _db.Set<PersonnelActionType>()
+            .AsNoTracking()
+            .AnyAsync(x => x.ParentTypeId == personnelActionTypeId && x.IsActive, ct);
+
+        // Los motivos activos de la serie del tipo: el catálogo declara en Metadata.types a qué series aplica.
+        var reasons = await _db.Set<RefTypes>()
+            .AsNoTracking()
+            .Where(r => r.Category == LeaveReasonCategory && r.IsActive)
+            .Select(r => new { r.TypeId, r.Metadata })
+            .ToListAsync(ct);
+
+        var reasonIds = reasons
+            .Where(r => ReasonAppliesToSeries(r.Metadata, type.NumberingPrefix))
+            .Select(r => r.TypeId)
+            .ToHashSet();
+
+        return new LeaveActionContext(
+            TypeExists: true,
+            TypeIsActive: type.IsActive,
+            TypeHasChildren: hasChildren,
+            ParentTypeId: type.ParentTypeId,
+            TypeCode: type.Code,
+            ReasonsAvailable: reasonIds.Count > 0,
+            ReasonProvided: leaveReasonId.HasValue,
+            ReasonValid: leaveReasonId.HasValue && reasonIds.Contains(leaveReasonId.Value));
+    }
+
+    /// <summary>Categoría de ref_Types con los motivos de licencia.</summary>
+    internal const string LeaveReasonCategory = "PERSONNEL_ACTION_LEAVE_REASON";
+
+    /// <summary>
+    /// Indica si un motivo aplica a la serie (prefijo) dada, según el arreglo "types" de su Metadata JSON
+    /// (ej. {"types":["LCR","LCRA"]}). Un Metadata ausente o ilegible no aplica a ninguna serie.
+    /// </summary>
+    internal static bool ReasonAppliesToSeries(string? metadata, string? seriesPrefix)
+    {
+        if (string.IsNullOrWhiteSpace(metadata) || string.IsNullOrWhiteSpace(seriesPrefix))
+            return false;
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(metadata);
+            if (!doc.RootElement.TryGetProperty("types", out var types)
+                || types.ValueKind != System.Text.Json.JsonValueKind.Array)
+                return false;
+
+            foreach (var item in types.EnumerateArray())
+                if (item.ValueKind == System.Text.Json.JsonValueKind.String
+                    && string.Equals(item.GetString(), seriesPrefix, StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+            return false;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
         }
     }
 }

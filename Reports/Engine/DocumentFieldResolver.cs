@@ -154,6 +154,19 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
                 .FirstOrDefaultAsync(ct);
         }
 
+        // Tipo de documento de identidad por NOMBRE desde ref_Types (130 = CEDULA, 131 = PASAPORTE): el IdentType de
+        // la persona es el TypeID del catálogo (IDENTITY), no un código fijo 1/2/3 como se comparaba antes.
+        string? identTypeName = null;
+        if (employee?.People?.IdentType is { } identTypeId
+            && fields.Any(f => f.FieldName.Equals("ID_TYPE", StringComparison.OrdinalIgnoreCase)))
+        {
+            identTypeName = await _db.RefTypes
+                .AsNoTracking()
+                .Where(r => r.TypeId == identTypeId)
+                .Select(r => r.Name)
+                .FirstOrDefaultAsync(ct);
+        }
+
         // ── Cargar movimiento de personal (si aplica) ────────────────────────────
         // FieldSourceType es enum real → comparar directamente (no usar ToString())
         PersonnelMovements? movement = null;
@@ -187,7 +200,7 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
             if (field.SourceType == FieldSourceType.System)
                 resolved = ResolveSystemField(field.FieldName, authorities);
             else if (employee is not null)
-                resolved = ResolveField(field, employee, contract, contractType, department, job, movement, workModalityName);
+                resolved = ResolveField(field, employee, contract, contractType, department, job, movement, workModalityName, identTypeName);
 
             // 3. Fallback al valor por defecto de la plantilla
             result[field.FieldName] = resolved ?? field.DefaultValue ?? string.Empty;
@@ -210,11 +223,12 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
         Departments? department,
         Job? job,
         PersonnelMovements? movement,
-        string? workModalityName)
+        string? workModalityName,
+        string? identTypeName)
     {
         return field.SourceType switch
         {
-            FieldSourceType.Employee => ResolveEmployeeField(field.FieldName, employee),
+            FieldSourceType.Employee => ResolveEmployeeField(field.FieldName, employee, identTypeName),
             FieldSourceType.Contract => ResolveContractField(field.FieldName, contract, contractType, department, job, workModalityName),
             FieldSourceType.Movement => ResolveMovementField(field.FieldName, movement),
             FieldSourceType.Manual   => null,
@@ -222,18 +236,17 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
         };
     }
 
-    private static string? ResolveEmployeeField(string fieldName, Employees employee)
+    private static string? ResolveEmployeeField(string fieldName, Employees employee, string? identTypeName)
     {
         var p = employee.People;
 
-        // Mapear IdentType (int) al texto del documento de identidad
-        static string? IdentTypeLabel(int? v) => v switch
+        // Etiqueta del documento de identidad a partir del NOMBRE del catálogo (CEDULA -> CÉDULA).
+        static string? IdentTypeLabel(string? name)
         {
-            1 => "CÉDULA",
-            2 => "PASAPORTE",
-            3 => "RUC",
-            _ => null
-        };
+            if (string.IsNullOrWhiteSpace(name)) return null;
+            var upper = name.Trim().ToUpperInvariant();
+            return upper == "CEDULA" ? "CÉDULA" : upper;
+        }
 
         return fieldName.ToUpperInvariant() switch
         {
@@ -247,7 +260,7 @@ public sealed class DocumentFieldResolver : IDocumentFieldResolver
             "EMPLOYEE_ADDRESS"   => p?.Address,
             "EMPLOYEE_BIRTHDATE" => p?.BirthDate?.ToString("dd/MM/yyyy"),
             "EMPLOYEE_HIREDATE"  => employee.HireDate.ToString("dd/MM/yyyy"),
-            "ID_TYPE"            => IdentTypeLabel(p?.IdentType),
+            "ID_TYPE"            => IdentTypeLabel(identTypeName),
             _                    => null
         };
     }

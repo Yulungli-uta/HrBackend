@@ -154,7 +154,40 @@ public sealed record PersonnelActionDetailDto(
     int? OriginManagementLevel,
     string? OriginManagementLevelName,
     string? OriginBudgetProgramCode,
-    string? DestinationBudgetProgramCode
+    string? DestinationBudgetProgramCode,
+
+    // 2026-11-11: licencias con series por prefijo. ActionTypeParentId/Name = grupo del tipo (ej. "Licencia"),
+    // null si el tipo es raíz; LeaveReasonId/Name = motivo (solo tipos de licencia genéricos).
+    int? ActionTypeParentId,
+    string? ActionTypeParentName,
+    int? LeaveReasonId,
+    string? LeaveReasonName,
+
+    // 2026-11-11: bloque de comunicación electrónica y firma del servidor (se imprime en el documento).
+    bool NotificationEnabled,
+    DateOnly? NotificationDate,
+    TimeOnly? NotificationTime,
+    DateOnly? EmployeeSignatureDate,
+    TimeOnly? EmployeeSignatureTime,
+
+    // 2026-11-11: nombre del tipo de documento de identidad (CEDULA / PASAPORTE), resuelto por nombre desde ref_Types.
+    string? EmployeeIdentTypeName,
+
+    // 2026-11-11: la acción incluye posesión del puesto (se imprime nombre e identificación del servidor).
+    bool PossessionEnabled
+);
+
+/// <summary>
+/// Bloque de comunicación electrónica y firma del servidor. En las solicitudes de actualización, un valor
+/// <c>null</c> del bloque completo significa "conservar lo guardado"; si viene, reemplaza todo el bloque
+/// (con <see cref="Enabled"/> = false se borra).
+/// </summary>
+public sealed record PersonnelActionNotificationDto(
+    bool Enabled,
+    DateOnly? NotificationDate,
+    TimeOnly? NotificationTime,
+    DateOnly? EmployeeSignatureDate,
+    TimeOnly? EmployeeSignatureTime
 );
 
 // ── Solicitudes ──────────────────────────────────────────────────────────────────
@@ -219,7 +252,14 @@ public sealed record CreatePersonnelActionRequest(
 
     /// <summary>true solo desde "Ingresar Histórico": exige que ActionDate/EffectiveDate/EndDate
     /// (si no es el centinela de indefinido) sean anteriores a hoy.</summary>
-    bool IsHistoricalEntry = false
+    bool IsHistoricalEntry = false,
+
+    // 2026-11-11: motivo de la licencia (tipos con motivos en el catálogo) y bloque de notificación/firma.
+    int? LeaveReasonId = null,
+    PersonnelActionNotificationDto? Notification = null,
+
+    // 2026-11-11: incluye posesión del puesto (imprime nombre e identificación del servidor de la acción).
+    bool PossessionEnabled = false
 );
 
 /// <summary>Solicitud para actualizar una acción de personal existente.</summary>
@@ -266,7 +306,20 @@ public sealed record UpdatePersonnelActionRequest(
     int? AuthorityNominatorId,
     int? ElaboratorId,
     int? ReviewerId,
-    int? RegistrarId
+    int? RegistrarId,
+
+    // 2026-11-11: motivo de la licencia (null = conservar lo guardado; 0 = borrar) y bloque de
+    // notificación/firma (null = conservar lo guardado; presente = reemplaza el bloque completo).
+    int? LeaveReasonId = null,
+    PersonnelActionNotificationDto? Notification = null,
+
+    // 2026-11-11: solo se aplica en CorrectAsync. Reclasifica la acción a otro tipo de su misma familia
+    // (ej. de "Licencia" a una de sus series). null o igual al actual = sin cambio.
+    int? ActionTypeId = null,
+
+    // 2026-11-11: incluye posesión del puesto. null = conservar lo guardado (un cliente anterior que no lo envía no
+    // debe apagarlo).
+    bool? PossessionEnabled = null
 );
 
 /// <summary>

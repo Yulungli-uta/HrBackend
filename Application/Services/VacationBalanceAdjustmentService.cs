@@ -377,7 +377,8 @@ public class VacationBalanceAdjustmentService : IVacationBalanceAdjustmentServic
     /// <inheritdoc/>
     public async Task<VacationBalanceAdjustmentResultDto> ReserveAsync(
         int employeeId, TimeBalanceField field, int minutes,
-        string sourceModule, string sourceId, string note, int? performedByEmpId, CancellationToken ct = default)
+        string sourceModule, string sourceId, string note, int? performedByEmpId,
+        bool allowNegativeResult = false, CancellationToken ct = default)
     {
         if (minutes <= 0)
             throw new BusinessRuleException("Los minutos a reservar deben ser mayores a 0.");
@@ -396,7 +397,7 @@ public class VacationBalanceAdjustmentService : IVacationBalanceAdjustmentServic
             field: field,
             mode: VacationBalanceAdjustmentMode.Increment,
             valueMinutes: -minutes,
-            allowNegativeResult: false, // reservar SIEMPRE bloquea si no alcanza el saldo
+            allowNegativeResult: allowNegativeResult, // por defecto bloquea si no alcanza el saldo; solo Guardias lo permite
             sourceModule: sourceModule,
             sourceId: sourceId,
             note: note,

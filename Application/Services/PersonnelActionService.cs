@@ -148,6 +148,14 @@ public sealed class PersonnelActionService : IPersonnelActionService
                 throw new ArgumentException("Un registro histórico debe tener fecha de fin anterior a hoy.");
         }
 
+        // 2026-11-11: tipo/motivo de licencia y bloque de notificación se validan ANTES de reservar el número:
+        // si fallan no se consume (ni se quema) una secuencia. En un histórico el tipo puede ser el grupo
+        // (las licencias antiguas no traen serie ni motivo).
+        var leaveReasonId = await ResolveLeaveReasonAsync(
+            request.ActionTypeId, request.LeaveReasonId is > 0 ? request.LeaveReasonId : null,
+            requireReason: !request.IsHistoricalEntry, enforceNewActionType: !request.IsHistoricalEntry, ct);
+        var notification = ValidateNotification(request.Notification, request.ActionDate);
+
         int personId = request.personId;
         var employee = await _employeesRepository.GetByPersonIdAsync(personId, includeInactive: false, ct);
 
@@ -190,6 +198,8 @@ public sealed class PersonnelActionService : IPersonnelActionService
             MovementId              = request.MovementId,
             EmployeeTypeId          = request.EmployeeTypeId is > 0 ? request.EmployeeTypeId : null,
             SwornDeclaration        = request.SwornDeclaration,
+            PossessionEnabled       = request.PossessionEnabled,
+            LeaveReasonId           = leaveReasonId,
             InstitutionalProcess    = request.InstitutionalProcess,
             ManagementLevel        = request.ManagementLevel,
             OriginInstitutionalProcess   = request.OriginInstitutionalProcess is > 0 ? request.OriginInstitutionalProcess : null,
@@ -206,6 +216,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
             CreatedAt               = _clock.Now,
             CreatedBy               = createdBy
         };
+        ApplyNotification(action, notification);
 
         // Creación normal (no histórico): el origen de proceso/nivel se toma de la situación
         // vigente del empleado (lo que quedó como PROPUESTA en su acción anterior). En un
@@ -262,6 +273,13 @@ public sealed class PersonnelActionService : IPersonnelActionService
             throw new InvalidOperationException(
                 $"Solo se puede editar en estado BORRADOR o GENERADO. Estado actual: '{action.Status}'.");
 
+        // 2026-11-11: motivo (null = conservar; 0 = borrar) y bloque de notificación (null = conservar).
+        // El tipo no cambia en la edición normal, así que no se vuelve a exigir un tipo hijo.
+        action.LeaveReasonId = await ResolveLeaveReasonAsync(
+            action.ActionTypeId, MergeOptionalId(request.LeaveReasonId, action.LeaveReasonId),
+            requireReason: true, enforceNewActionType: false, ct);
+        ApplyNotification(action, ValidateNotification(request.Notification, request.ActionDate));
+
         action.ActionNumber            = request.ActionNumber?.Trim();
         action.ActionDate              = request.ActionDate;
         action.EffectiveDate           = request.EffectiveDate;
@@ -278,6 +296,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         action.Reason                  = request.Reason?.Trim();
         action.Observations            = request.Observations?.Trim();
         action.SwornDeclaration        = request.SwornDeclaration;
+        if (request.PossessionEnabled.HasValue) action.PossessionEnabled = request.PossessionEnabled.Value;
         action.InstitutionalProcess    = request.InstitutionalProcess;
         action.ManagementLevel         = request.ManagementLevel;
         // Campos de origen nuevos: null = conservar lo guardado (un cliente anterior que no los
@@ -353,6 +372,102 @@ public sealed class PersonnelActionService : IPersonnelActionService
     }
 
     /// <summary>
+    /// Valida el tipo de acción y el motivo de licencia y devuelve el motivo a guardar.
+    /// <list type="bullet">
+    /// <item>El tipo debe existir. Con <paramref name="enforceNewActionType"/> (acción nueva, no histórica) no se admite
+    /// un tipo que es grupo con hijos (hay que elegir la serie) ni una serie todavía inactiva.</item>
+    /// <item>Si la serie del tipo no tiene motivos en el catálogo, el motivo se descarta (null).</item>
+    /// <item>Si los tiene: es obligatorio con <paramref name="requireReason"/> y, si viene, debe corresponder a la serie.</item>
+    /// </list>
+    /// </summary>
+    private async Task<int?> ResolveLeaveReasonAsync(
+        int actionTypeId, int? reasonId, bool requireReason, bool enforceNewActionType, CancellationToken ct)
+    {
+        var context = await _personnelActionType.GetLeaveContextAsync(actionTypeId, reasonId, ct);
+        if (!context.TypeExists)
+            throw new BusinessRuleException($"El tipo de acción {actionTypeId} no existe.");
+
+        if (enforceNewActionType)
+        {
+            if (context.TypeHasChildren)
+                throw new BusinessRuleException(
+                    "Seleccione el tipo específico: el tipo elegido es un grupo con tipos hijos (por ejemplo, el tipo de licencia).");
+            if (context.ParentTypeId.HasValue && !context.TypeIsActive)
+                throw new BusinessRuleException("El tipo de acción seleccionado todavía no está habilitado.");
+        }
+
+        if (!context.ReasonsAvailable)
+            return null;
+
+        if (reasonId is null)
+        {
+            if (requireReason)
+                throw new BusinessRuleException("Seleccione el motivo de la licencia.");
+            return null;
+        }
+
+        if (!context.ReasonValid)
+            throw new BusinessRuleException("El motivo seleccionado no corresponde a este tipo de licencia.");
+
+        return reasonId;
+    }
+
+    /// <summary>
+    /// Reclasifica una acción a otro tipo de la MISMA familia (mismo padre, el propio padre o un hijo suyo).
+    /// Impide convertir, por ejemplo, una licencia en un nombramiento, que dispararía otros efectos (vigencia, AD).
+    /// </summary>
+    private async Task ChangeActionTypeWithinFamilyAsync(PersonnelAction action, int newTypeId, CancellationToken ct)
+    {
+        var currentRoot = await _personnelActionType.GetRootTypeIdAsync(action.ActionTypeId, ct);
+        var newRoot = await _personnelActionType.GetRootTypeIdAsync(newTypeId, ct)
+            ?? throw new BusinessRuleException($"El tipo de acción {newTypeId} no existe.");
+
+        if (currentRoot != newRoot)
+            throw new BusinessRuleException(
+                "La corrección solo permite cambiar el tipo dentro de su misma familia (por ejemplo, a una serie de licencia).");
+
+        action.ActionTypeId = newTypeId;
+    }
+
+    /// <summary>
+    /// Valida el bloque de notificación/firma: fecha y hora van en pareja, ninguna fecha es anterior a la de la acción
+    /// (fecha y hora van en pareja). <c>null</c> = el cliente no envió el bloque (se conserva lo guardado);
+    /// con <c>Enabled = false</c> el bloque se limpia.
+    /// </summary>
+    private static PersonnelActionNotificationDto? ValidateNotification(
+        PersonnelActionNotificationDto? notification, DateOnly actionDate)
+    {
+        if (notification is null) return null;
+
+        if (!notification.Enabled)
+            return new PersonnelActionNotificationDto(false, null, null, null, null);
+
+        if (notification.NotificationDate.HasValue != notification.NotificationTime.HasValue)
+            throw new BusinessRuleException("La fecha y la hora de la comunicación electrónica deben registrarse juntas.");
+        if (notification.EmployeeSignatureDate.HasValue != notification.EmployeeSignatureTime.HasValue)
+            throw new BusinessRuleException("La fecha y la hora de la firma del servidor deben registrarse juntas.");
+
+        if (notification.NotificationDate is { } nd && nd < actionDate)
+            throw new BusinessRuleException("La fecha de la comunicación electrónica no puede ser anterior a la fecha de la acción.");
+        if (notification.EmployeeSignatureDate is { } sd && sd < actionDate)
+            throw new BusinessRuleException("La fecha de la firma del servidor no puede ser anterior a la fecha de la acción.");
+
+        return notification;
+    }
+
+    /// <summary>Copia el bloque ya validado a la acción; si no hay bloque (null) conserva lo guardado.</summary>
+    private static void ApplyNotification(PersonnelAction action, PersonnelActionNotificationDto? notification)
+    {
+        if (notification is null) return;
+
+        action.NotificationEnabled      = notification.Enabled;
+        action.NotificationDate         = notification.NotificationDate;
+        action.NotificationTime         = notification.NotificationTime;
+        action.EmployeeSignatureDate    = notification.EmployeeSignatureDate;
+        action.EmployeeSignatureTime    = notification.EmployeeSignatureTime;
+    }
+
+    /// <summary>
     /// ActionNumber ya está respaldado por índice único (UQ_PersonnelActions_ActionNumber),
     /// pero se valida aquí antes para dar un mensaje claro en vez del 409 genérico de
     /// violación de índice — relevante ahora que la corrección permite editarlo.
@@ -396,6 +511,17 @@ public sealed class PersonnelActionService : IPersonnelActionService
         // hoy) -- UpdateAsync (edición normal) no toca este campo a propósito.
         if (request.EmployeeId is > 0)
             action.EmployeeId = request.EmployeeId.Value;
+
+        // 2026-11-11: la corrección puede reclasificar el tipo dentro de su misma familia (ej. de "Licencia" a
+        // una de sus series), fijar el motivo (null = conservar; 0 = borrar) y el bloque de notificación.
+        // No se exige motivo: las acciones históricas no lo traen.
+        if (request.ActionTypeId is > 0 && request.ActionTypeId.Value != action.ActionTypeId)
+            await ChangeActionTypeWithinFamilyAsync(action, request.ActionTypeId.Value, ct);
+        action.LeaveReasonId = await ResolveLeaveReasonAsync(
+            action.ActionTypeId, MergeOptionalId(request.LeaveReasonId, action.LeaveReasonId),
+            requireReason: false, enforceNewActionType: false, ct);
+        ApplyNotification(action, ValidateNotification(request.Notification, request.ActionDate));
+
         action.ActionNumber            = newActionNumber;
         action.ActionDate              = request.ActionDate;
         action.EffectiveDate           = request.EffectiveDate;
@@ -412,6 +538,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         action.Reason                  = request.Reason?.Trim();
         action.Observations            = request.Observations?.Trim();
         action.SwornDeclaration        = request.SwornDeclaration;
+        if (request.PossessionEnabled.HasValue) action.PossessionEnabled = request.PossessionEnabled.Value;
         action.InstitutionalProcess    = request.InstitutionalProcess;
         action.ManagementLevel         = request.ManagementLevel;
         // Campos de origen nuevos: null = conservar lo guardado (un cliente anterior que no los
@@ -1034,10 +1161,32 @@ public sealed class PersonnelActionService : IPersonnelActionService
         if (!showsProposedFields)
         {
             r["PROPOSED_FIELDS_DISPLAY"] = "none";
-            Set(r, "PROPOSED_ACTION_LABEL", d.ActionTypeName);
+            // Una licencia con serie y motivo imprime, por ejemplo, "Licencia con remuneración: Calamidad doméstica".
+            Set(r, "PROPOSED_ACTION_LABEL", string.IsNullOrWhiteSpace(d.LeaveReasonName)
+                ? d.ActionTypeName
+                : $"{d.ActionTypeName}: {d.LeaveReasonName}");
         }
         Set(r, "EMPLOYEE_FULLNAME",  d.EmployeeFullName);
         Set(r, "EMPLOYEE_IDCARD",    d.EmployeeIdCard);
+        // Tipo de documento de identidad por NOMBRE desde ref_Types (130 = CEDULA, 131 = PASAPORTE), no por ID fijo.
+        Set(r, "ID_TYPE", IdentTypeLabel(d.EmployeeIdentTypeName));
+
+        // Posesión del puesto: solo si la acción la incluye se imprimen el nombre y la identificación del servidor (los de la
+        // propia acción, sin volver a ingresarlos); sin la opción las líneas quedan en blanco para llenarlas a mano.
+        if (d.PossessionEnabled)
+        {
+            Set(r, "POSSESSION_NAME",   d.EmployeeFullName);
+            Set(r, "POSSESSION_IDCARD", d.EmployeeIdCard);
+        }
+
+        // Comunicación electrónica y firma del servidor: solo cuando el bloque está activo en la acción.
+        if (d.NotificationEnabled)
+        {
+            Set(r, "NOTIFICATION_DATE",       d.NotificationDate?.ToString("dd-MM-yyyy"));
+            Set(r, "NOTIFICATION_HOUR",       d.NotificationTime?.ToString("HH:mm"));
+            Set(r, "EMPLOYEE_SIGNATURE_DATE", d.EmployeeSignatureDate?.ToString("dd-MM-yyyy"));
+            Set(r, "EMPLOYEE_SIGNATURE_HOUR", d.EmployeeSignatureTime?.ToString("HH:mm"));
+        }
 
         // Clasificación de la acción
         // SwornDeclaration=true → presentó la declaración (marca en SI); false → marca en NO APLICA.
@@ -1071,7 +1220,8 @@ public sealed class PersonnelActionService : IPersonnelActionService
         Set(r, "REGISTRAR_NAME",           d.RegistrarName);
         Set(r, "REGISTRAR_TITLE",          d.RegistrarTitle);
 
-        var cb = MapActionTypeToCheckbox(d.ActionTypeName);
+        // Un tipo hijo (serie de licencia) marca la casilla de su grupo: se usa el nombre del padre cuando lo tiene.
+        var cb = MapActionTypeToCheckbox(string.IsNullOrWhiteSpace(d.ActionTypeParentName) ? d.ActionTypeName : d.ActionTypeParentName);
         if (cb is not null) r[cb] = "X";
 
         // El formulario oficial UTA tiene dos casillas "REINGRESO" en filas distintas;
@@ -1098,6 +1248,14 @@ public sealed class PersonnelActionService : IPersonnelActionService
         {
             if (value is not null) dict[key] = value;
         }
+    }
+
+    /// <summary>Etiqueta impresa del tipo de documento de identidad (ref_Types: CEDULA/PASAPORTE).</summary>
+    private static string? IdentTypeLabel(string? identTypeName)
+    {
+        if (string.IsNullOrWhiteSpace(identTypeName)) return null;
+        var name = identTypeName.Trim().ToUpperInvariant();
+        return name == "CEDULA" ? "CÉDULA" : name;
     }
 
     private static string? MapActionTypeToCheckbox(string? actionTypeName)
@@ -1607,7 +1765,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
                && (!end.HasValue   || a.ActionDate <= end.Value)
                && (string.IsNullOrEmpty(filter.Status) || a.Status == filter.Status)
                && (!filter.EmployeeId.HasValue  || a.EmployeeId == filter.EmployeeId.Value || a.PersonId == filter.EmployeeId.Value)
-               && (!filter.ActionTypeId.HasValue || a.ActionTypeId == filter.ActionTypeId.Value)
+               && (!filter.ActionTypeId.HasValue || a.ActionTypeId == filter.ActionTypeId.Value || pat.ParentTypeId == filter.ActionTypeId.Value)
                && (categories == null || categories.Count == 0 || categories.Contains(pat.ActionCategory))
                // 2026-10-06: faltaban DepartmentId y LaborRegimeId pese a que el frontend los
                // anuncia (reports.ts 'personnel-actions'/'active-personnel-actions') — mismo

@@ -13,4 +13,13 @@ public sealed class PersonnelActionTypeCreateDto
     public bool RequiresAdGroupAssignment { get; set; } = false;
     public string? ActionCategory { get; set; }
     public int? SiiesRelacionIesTypeId { get; set; }
+
+    /// <summary>Tipo padre (un solo nivel). Null = tipo raíz.</summary>
+    public int? ParentTypeId { get; set; }
+
+    /// <summary>Formato del número con tokens {PREFIX}, {SEQ}, {YEAR}. Null = formato por defecto.</summary>
+    public string? NumberingFormat { get; set; }
+
+    /// <summary>true = la secuencia se reinicia cada año; false = acumulada.</summary>
+    public bool NumberingResetsYearly { get; set; } = true;
 }
