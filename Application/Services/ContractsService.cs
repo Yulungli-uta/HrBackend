@@ -1202,17 +1202,21 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         // en vez de hardcodear nombres/resoluciones.
         if (contract.IsDelegation && contract.AuthorityNominatorId.HasValue)
         {
-            var today = _clock.Today;
+            // La autoridad se resuelve a la fecha del contrato (suscripción, o inicio si no hay),
+            // no a la fecha de hoy: un contrato histórico debe mostrar al delegado y el cargo
+            // que tenía entonces. Una autoridad sin fecha de fin solo cuenta si sigue activa;
+            // las históricas (con fecha de fin) cuentan aunque estén inactivas.
+            var referenceDate = DateOnly.FromDateTime(contract.AuthorizationDate ?? contract.StartDate);
             var delegateAuthority = await _db.DepartmentAuthorities
                 .AsNoTracking()
                 .Include(a => a.Employee).ThenInclude(e => e!.People)
                 .Include(a => a.Department)
                 .Include(a => a.AuthorityType)
                 .Where(a => a.EmployeeId == contract.AuthorityNominatorId.Value
-                         && a.IsActive
-                         && a.StartDate <= today
-                         && (a.EndDate == null || a.EndDate >= today))
-                .OrderByDescending(a => a.StartDate)
+                         && a.StartDate <= referenceDate
+                         && (a.EndDate == null ? a.IsActive : a.EndDate >= referenceDate))
+                .OrderByDescending(a => a.IsActive)
+                .ThenByDescending(a => a.StartDate)
                 .FirstOrDefaultAsync(ct);
 
             if (delegateAuthority is not null)
@@ -1241,6 +1245,25 @@ public class ContractsService : Service<Contracts, int>, IContractsService
                 SetOv(mergedOverrides, "FACULTY_NAME",          facultyName ?? delegateAuthority.Department?.Name);
                 SetOv(mergedOverrides, "DELEGATION_RESOLUTION", delegateAuthority.ResolutionCode);
                 SetOv(mergedOverrides, "DELEGATION_DATE",       SpanishTextHelper.ShortDate(delegateAuthority.StartDate.ToDateTime(TimeOnly.MinValue)));
+            }
+            else
+            {
+                // Sin registro de autoridad a esa fecha: el delegado sigue siendo un empleado, así que
+                // se muestra quién es (nombre y cédula) con el cargo que tenía según sus acciones de personal.
+                var (fbName, fbIdCard, fbJobTitle) = await ResolveDelegateFallbackAsync(
+                    contract.AuthorityNominatorId.Value, referenceDate, ct);
+
+                SetOv(mergedOverrides, "AUTHORITY_NAME",     fbName);
+                SetOv(mergedOverrides, "AUTHORITY_FULLNAME", fbName);
+                SetOv(mergedOverrides, "AUTHORITY_TITLE",    fbJobTitle);
+                SetOv(mergedOverrides, "AUTHORITY_ID",       fbIdCard);
+                SetOv(mergedOverrides, "AUTHORITY_IDCARD",   fbIdCard);
+                SetOv(mergedOverrides, "AUTHORITY_ROLE",     fbJobTitle);
+
+                _logger.LogWarning(
+                    "Contrato {ContractId}: sin autoridad registrada para el empleado {EmployeeId} a la fecha {Date}; " +
+                    "se usó el empleado con el cargo de sus acciones de personal.",
+                    contract.ContractID, contract.AuthorityNominatorId.Value, referenceDate);
             }
 
             // Si además se adjuntó la resolución/acta de delegación específica para este contrato
@@ -1843,6 +1866,40 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         var jobTitle = !string.IsNullOrWhiteSpace(authorityDenomination) ? authorityDenomination : row.JobTitle;
 
         return (name, jobTitle);
+    }
+
+    /// <summary>
+    /// Respaldo cuando el delegado no tiene autoridad registrada a la fecha del contrato:
+    /// devuelve su nombre, cédula y el cargo de su última acción de personal anterior a esa fecha.
+    /// </summary>
+    /// <param name="employeeId">Empleado designado como delegado (<c>AuthorityNominatorId</c>).</param>
+    /// <param name="referenceDate">Fecha del contrato contra la que se busca el cargo.</param>
+    /// <param name="ct">Token de cancelación.</param>
+    /// <returns>Nombre, cédula y cargo; cada valor es <c>null</c> si no se pudo resolver.</returns>
+    private async Task<(string? Name, string? IdCard, string? JobTitle)> ResolveDelegateFallbackAsync(
+        int employeeId, DateOnly referenceDate, CancellationToken ct)
+    {
+        var person = await (
+            from emp in _db.Employees.AsNoTracking()
+            join p in _db.People.AsNoTracking() on emp.PersonID equals p.PersonId
+            where emp.EmployeeId == employeeId
+            select new { p.FirstName, p.LastName, p.IdCard }
+        ).FirstOrDefaultAsync(ct);
+
+        if (person is null) return (null, null, null);
+
+        var jobTitle = await (
+            from a in _db.PersonnelActions.AsNoTracking()
+            join j in _db.Jobs.AsNoTracking() on a.DestinationJobId equals j.JobID
+            where a.EmployeeId == employeeId
+                && !a.IsDeleted
+                && a.EffectiveDate != null
+                && a.EffectiveDate <= referenceDate
+            orderby a.EffectiveDate descending
+            select j.Description
+        ).FirstOrDefaultAsync(ct);
+
+        return ($"{person.FirstName} {person.LastName}".Trim(), person.IdCard, jobTitle);
     }
 
     /// <summary>
