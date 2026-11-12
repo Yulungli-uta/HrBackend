@@ -233,7 +233,7 @@ Escoja una opción (según lo estipulado en el artículo 21 del Reglamento Gener
 <span class="action-clean-option"><span class="cb {{CB_INGRESO}}">{{CB_INGRESO}}</span><span class="lbl {{CB_INGRESO}}">INGRESO</span></span>
 <span class="action-clean-option"><span class="cb {{CB_REINGRESO}}">{{CB_REINGRESO}}</span><span class="lbl {{CB_REINGRESO}}">REINGRESO</span></span>
 <span class="action-clean-option"><span class="cb {{CB_RESTITUCION}}">{{CB_RESTITUCION}}</span><span class="lbl {{CB_RESTITUCION}}">RESTITUCIÓN</span></span>
-<span class="action-clean-option"><span class="cb {{CB_REINGRESO2}}">{{CB_REINGRESO2}}</span><span class="lbl {{CB_REINGRESO2}}">REINGRESO</span></span>
+<span class="action-clean-option"><span class="cb {{CB_REINTEGRO}}">{{CB_REINTEGRO}}</span><span class="lbl {{CB_REINTEGRO}}">REINTEGRO AL CARGO</span></span>
 <span class="action-clean-option"><span class="cb {{CB_ASCENSO}}">{{CB_ASCENSO}}</span><span class="lbl {{CB_ASCENSO}}">ASCENSO</span></span>
 <span class="action-clean-option"><span class="cb {{CB_TRASLADO}}">{{CB_TRASLADO}}</span><span class="lbl {{CB_TRASLADO}}">TRASLADO</span></span>
 </td>
@@ -482,7 +482,7 @@ Escoja una opción (según lo estipulado en el artículo 21 del Reglamento Gener
     (@TemplateID, 'CB_INTERCAMBIO',     'Checkbox: Intercambio Voluntario','TEXT',   0, 'MANUAL',   NULL,                          NULL,           180, GETDATE(), NULL),
     (@TemplateID, 'CB_ENCARGO',         'Checkbox: Encargo',             'TEXT',     0, 'MANUAL',   NULL,                          NULL,           190, GETDATE(), NULL),
     (@TemplateID, 'ACTION_ENCARGO_DETAIL','Detalle del encargo (ej: Nombramiento Provisional A)','TEXT',0,'MANUAL',NULL,           NULL,           195, GETDATE(), NULL),
-    (@TemplateID, 'CB_REINGRESO2',      'Checkbox: Reingreso (2da fila)','TEXT',     0, 'MANUAL',   NULL,                          NULL,           200, GETDATE(), NULL),
+    (@TemplateID, 'CB_REINTEGRO',       'Checkbox: Reintegro al cargo'   ,'TEXT',     0, 'MANUAL',   NULL,                          NULL,           200, GETDATE(), NULL),
     (@TemplateID, 'CB_LICENCIA',        'Checkbox: Licencia',            'TEXT',     0, 'MANUAL',   NULL,                          NULL,           210, GETDATE(), NULL),
     (@TemplateID, 'CB_CESACION',        'Checkbox: CesaciÃ³n de Funciones','TEXT',    0, 'MANUAL',   NULL,                          NULL,           220, GETDATE(), NULL),
     (@TemplateID, 'CB_ASCENSO',         'Checkbox: Ascenso',             'TEXT',     0, 'MANUAL',   NULL,                          NULL,           230, GETDATE(), NULL),

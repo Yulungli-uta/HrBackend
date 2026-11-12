@@ -121,33 +121,146 @@ public abstract class SiiesProfesoresReportSourceBase
     {
         var periodCodes = await SiiesAcademicPeriodHelper.GetOverlappingPeriodCodesAsync(_db, filter.StartDate!.Value, filter.EndDate!.Value, ct);
 
+        // 2026-11-12: con una identificacion el filtro se envia a la consulta de cada periodo (antes se traian todos los profesores del
+        // periodo, ~19 s por periodo, y recien despues se filtraba en memoria).
+        var identificationFilter = string.IsNullOrWhiteSpace(filter.Identification) ? null : filter.Identification.Trim();
+
         var byEmployee = new Dictionary<int, VwSiiesProfesor>();
         foreach (var periodCode in periodCodes)
         {
             var periodRows = await _db.vwSiiesProfesores
                 .FromSqlInterpolated($"SELECT * FROM HR.fn_SiiesProfesoresHoras({periodCode})")
                 .AsNoTracking()
-                .Where(v => identTypeName == AllIdentTypes
+                .Where(v => (identTypeName == AllIdentTypes
                     ? (v.IdentTypeName == "CEDULA" || v.IdentTypeName == "PASAPORTE")
                     : v.IdentTypeName == identTypeName)
+                    && (identificationFilter == null || v.IDCard == identificationFilter))
                 .ToListAsync(ct);
 
             foreach (var row in periodRows)
                 byEmployee.TryAdd(row.EmployeeID, row); // primer periodo visto para este empleado = el mas reciente
         }
 
-        IEnumerable<VwSiiesProfesor> results = byEmployee.Values;
+        IEnumerable<VwSiiesProfesor> selected = byEmployee.Values;
 
         if (!string.IsNullOrWhiteSpace(filter.Identification))
         {
             var identification = filter.Identification.Trim();
-            results = results.Where(v => v.IDCard == identification);
+            selected = selected.Where(v => v.IDCard == identification);
         }
+
+        // 2026-11-12: una fila por documento (contrato/accion) del rango, no una sola por profesor con el documento actual.
+        // Se expande DESPUES de filtrar por identificacion para no consultar los documentos de todos los profesores.
+        IEnumerable<VwSiiesProfesor> results = await ExpandByDocumentsAsync(selected.ToList(), filter.StartDate!.Value, filter.EndDate!.Value, ct);
 
         // "Todos": agrupado por tipo (cédula, luego pasaporte) y por apellido, igual que SIIES Funcionarios.
         return identTypeName == AllIdentTypes
             ? results.OrderBy(v => v.IdentTypeName, StringComparer.Ordinal).ThenBy(v => v.LastName, StringComparer.CurrentCulture).ThenBy(v => v.FirstName, StringComparer.CurrentCulture).ToList()
             : results.ToList();
+    }
+
+    private static readonly System.Reflection.MethodInfo ShallowCloneMethod =
+        typeof(object).GetMethod("MemberwiseClone", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+
+    private static VwSiiesProfesor CloneRow(VwSiiesProfesor source) => (VwSiiesProfesor)ShallowCloneMethod.Invoke(source, null)!;
+
+    /// <summary>
+    /// 2026-11-12: <see cref="HR.fn_SiiesProfesoresHoras"/> devuelve UNA fila por profesor con el documento vigente hoy (o el más reciente), así que
+    /// un docente con contratos en varias facultades o con cambios de dependencia dentro del rango salía con una sola dependencia, y para
+    /// períodos pasados con el documento de hoy. Aquí cada profesor se expande a una fila por documento del régimen que se solapa con el rango
+    /// (sin contratos ni acciones ANULADOS; un mismo número de documento no se repite: queda el principal / el más reciente).
+    /// Cada fila conserva los datos personales, de escalafón y las horas del distributivo; cambian el documento, sus fechas, la dependencia,
+    /// la relación IES y las horas contratadas propias de cada contrato. Sin documentos en el rango se conserva la fila original.
+    /// </summary>
+    private async Task<List<VwSiiesProfesor>> ExpandByDocumentsAsync(List<VwSiiesProfesor> baseRows, DateTime desdeValue, DateTime hastaValue, CancellationToken ct)
+    {
+        if (baseRows.Count == 0) return baseRows;
+        var desde = DateOnly.FromDateTime(desdeValue);
+        var hasta = DateOnly.FromDateTime(hastaValue);
+        var employeeIds = baseRows.Select(r => r.EmployeeID).Distinct().ToList();
+
+        var rawDocuments = await (
+            from r in _db.EmployeeLaborRegimes.AsNoTracking()
+            where employeeIds.Contains(r.EmployeeId)
+                  && r.EffectiveFrom <= hasta && (r.EffectiveTo == null || r.EffectiveTo >= desde)
+            join d in _db.Departments.AsNoTracking() on r.DepartmentId equals (int?)d.DepartmentId into dj
+            from d in dj.DefaultIfEmpty()
+            join c in _db.Contracts.AsNoTracking() on r.SourceContractId equals (int?)c.ContractID into cj
+            from c in cj.DefaultIfEmpty()
+            join ctype in _db.ContractType.AsNoTracking() on (c != null ? (int?)c.ContractTypeID : null) equals (int?)ctype.ContractTypeId into ctj
+            from ctype in ctj.DefaultIfEmpty()
+            join rel1 in _db.RefTypes.AsNoTracking() on r.SiiesRelacionIesTypeId equals (int?)rel1.TypeId into rel1j
+            from rel1 in rel1j.DefaultIfEmpty()
+            join rel2 in _db.RefTypes.AsNoTracking() on (ctype != null ? ctype.SiiesRelacionIesTypeId : null) equals (int?)rel2.TypeId into rel2j
+            from rel2 in rel2j.DefaultIfEmpty()
+            select new
+            {
+                r.EmployeeId,
+                r.Id,
+                r.DocumentNumber,
+                r.DocumentType,
+                r.EffectiveFrom,
+                r.EffectiveTo,
+                r.IsPrincipal,
+                r.IngresoPorConcurso,
+                r.SourcePersonnelActionId,
+                ContractVoid = c != null && (c.Status == 208 || c.IsDeleted),
+                DepartmentName = d != null ? d.Name : null,
+                Hours = c != null ? c.ContractedHours : null,
+                Relacion = rel1 != null && rel1.SiiesLabel != null ? rel1.SiiesLabel : (rel2 != null ? rel2.SiiesLabel : null)
+            }).ToListAsync(ct);
+
+        // Acciones de origen anuladas o eliminadas: se resuelven en una consulta aparte (sin subconsultas correlacionadas).
+        var actionIds = rawDocuments.Where(x => x.SourcePersonnelActionId != null).Select(x => x.SourcePersonnelActionId!.Value).Distinct().ToList();
+        var voidActionIds = actionIds.Count == 0
+            ? new HashSet<int>()
+            : (await _db.PersonnelActions.AsNoTracking()
+                .Where(a => actionIds.Contains(a.ActionId) && (a.Status == "ANULADO" || a.IsDeleted))
+                .Select(a => a.ActionId)
+                .ToListAsync(ct)).ToHashSet();
+
+        var documents = rawDocuments
+            .Where(x => !x.ContractVoid && !(x.SourcePersonnelActionId != null && voidActionIds.Contains(x.SourcePersonnelActionId.Value)))
+            .ToList();
+
+        var byEmployee = documents
+            .GroupBy(x => x.EmployeeId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.GroupBy(x => string.IsNullOrWhiteSpace(x.DocumentNumber) ? "#" + x.Id : x.DocumentNumber!.Trim().ToUpperInvariant())
+                      .Select(dg => dg.OrderByDescending(x => x.IsPrincipal).ThenByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Id).First())
+                      .OrderBy(x => x.EffectiveFrom).ThenBy(x => x.Id)
+                      .ToList());
+
+        var expanded = new List<VwSiiesProfesor>();
+        foreach (var baseRow in baseRows)
+        {
+            if (!byEmployee.TryGetValue(baseRow.EmployeeID, out var docs) || docs.Count == 0)
+            {
+                expanded.Add(baseRow);
+                continue;
+            }
+
+            foreach (var doc in docs)
+            {
+                var sameAsBase = !string.IsNullOrWhiteSpace(baseRow.DocumentNumber) && !string.IsNullOrWhiteSpace(doc.DocumentNumber)
+                                 && string.Equals(baseRow.DocumentNumber.Trim(), doc.DocumentNumber.Trim(), StringComparison.OrdinalIgnoreCase);
+                var row = CloneRow(baseRow);
+                if (!sameAsBase)
+                {
+                    row.DocumentNumber = doc.DocumentNumber;
+                    row.RegimeDocumentType = doc.DocumentType;
+                    row.EffectiveFrom = doc.EffectiveFrom;
+                    row.EffectiveTo = doc.EffectiveTo;
+                    row.IngresoPorConcurso = doc.IngresoPorConcurso ?? baseRow.IngresoPorConcurso;
+                    if (!string.IsNullOrWhiteSpace(doc.DepartmentName)) row.DepartmentName = doc.DepartmentName;
+                    if (!string.IsNullOrWhiteSpace(doc.Relacion)) row.RelacionIesSiiesLabel = doc.Relacion;
+                    if (doc.Hours is > 0) row.ContractedHours = doc.Hours;
+                }
+                expanded.Add(row);
+            }
+        }
+        return expanded;
     }
 
     private static string HomologateTipoDocumento(string? regimeDocumentType) => regimeDocumentType switch

@@ -6,6 +6,10 @@ namespace WsUtaSystem.Application.Interfaces.Services;
 
 public interface IPersonnelActionTypeService : IService<PersonnelActionType, int>
 {
+    /// <summary>Listado jerárquico paginado por tipo general (con sus subtipos) y búsqueda en el servidor.</summary>
+    Task<DTOs.Common.PagedResult<PersonnelActionTypeFamily>> GetFamiliesPagedAsync(
+        string? search, int page, int pageSize, CancellationToken ct = default);
+
     /// <summary>Obtiene todos los tipos activos.</summary>
     Task<List<PersonnelActionType>> GetAllActiveAsync(CancellationToken ct = default);
 

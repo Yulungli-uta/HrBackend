@@ -274,7 +274,10 @@ public sealed class PersonnelActionService : IPersonnelActionService
                 $"Solo se puede editar en estado BORRADOR o GENERADO. Estado actual: '{action.Status}'.");
 
         // 2026-11-11: motivo (null = conservar; 0 = borrar) y bloque de notificación (null = conservar).
-        // El tipo no cambia en la edición normal, así que no se vuelve a exigir un tipo hijo.
+        // 2026-11-12: la edición también permite elegir el subtipo (otro tipo de la MISMA familia, ej. de "Licencia" a una
+        // de sus series); sin ActionTypeId se conserva el tipo. Solo se exige motivo si el tipo resultante lo requiere.
+        if (request.ActionTypeId is > 0 && request.ActionTypeId.Value != action.ActionTypeId)
+            await ChangeActionTypeWithinFamilyAsync(action, request.ActionTypeId.Value, ct);
         action.LeaveReasonId = await ResolveLeaveReasonAsync(
             action.ActionTypeId, MergeOptionalId(request.LeaveReasonId, action.LeaveReasonId),
             requireReason: true, enforceNewActionType: false, ct);
@@ -1224,10 +1227,6 @@ public sealed class PersonnelActionService : IPersonnelActionService
         var cb = MapActionTypeToCheckbox(string.IsNullOrWhiteSpace(d.ActionTypeParentName) ? d.ActionTypeName : d.ActionTypeParentName);
         if (cb is not null) r[cb] = "X";
 
-        // El formulario oficial UTA tiene dos casillas "REINGRESO" en filas distintas;
-        // mientras no exista una subclasificación que las diferencie, se marcan ambas juntas.
-        if (cb == "CB_REINGRESO") r["CB_REINGRESO2"] = "X";
-
         // Detalle libre solo cuando corresponde a la casilla marcada (reutiliza Observations).
         if (cb == "CB_OTRO")
         {
@@ -1272,7 +1271,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         // ingreso nuevo a la institución en el sentido del formulario RGLOSEP.
         if (n.Contains("NOMBRAMIENTO"))                        return "CB_OTRO";           // Nombramiento / Nombramiento Provisional
         if (n.Contains("PROMOCI"))                             return "CB_ASCENSO";        // Promoción en Categoría y Nivel
-        if (n.Contains("REINTEGRO"))                           return "CB_RESTITUCION";    // Reintegro al Cargo
+        if (n.Contains("REINTEGRO"))                           return "CB_REINTEGRO";      // Reintegro al Cargo (2026-11-12: casilla propia; antes marcaba RESTITUCIÓN)
         if (n.Contains("RENUNCIA") || n.Contains("JUBILACI"))  return "CB_CESACION";       // Renuncia o Jubilación
         if (n.Contains("HOMOLOGACI"))                          return "CB_REVISION_CLASI"; // Homologación de Puesto
         if (n.Contains("SUELDO"))                              return "CB_INCREMENTO_RMU"; // Cambio de Sueldo

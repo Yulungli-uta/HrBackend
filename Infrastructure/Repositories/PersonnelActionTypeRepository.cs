@@ -19,6 +19,77 @@ public sealed class PersonnelActionTypeRepository
             .OrderBy(x => x.Name)
             .ToListAsync(ct);
 
+    /// <inheritdoc/>
+    public async Task<Application.DTOs.Common.PagedResult<PersonnelActionTypeFamily>> GetFamiliesPagedAsync(
+        string? search, int page, int pageSize, CancellationToken ct = default)
+    {
+        const string Collation = "Latin1_General_100_CI_AI"; // sin distinguir mayúsculas ni acentos
+        var all = _db.Set<PersonnelActionType>().AsNoTracking();
+
+        // Tipos que coinciden con la búsqueda: cada palabra debe aparecer en nombre, código, prefijo o descripción.
+        var terms = (search ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        IQueryable<PersonnelActionType> matched = all;
+        foreach (var raw in terms)
+        {
+            var term = raw;
+            matched = matched.Where(t =>
+                EF.Functions.Collate(t.Name, Collation).Contains(term) ||
+                EF.Functions.Collate(t.Code, Collation).Contains(term) ||
+                EF.Functions.Collate(t.NumberingPrefix, Collation).Contains(term) ||
+                (t.Description != null && EF.Functions.Collate(t.Description, Collation).Contains(term)));
+        }
+        var matchedIds = matched.Select(t => t.PersonnelActionTypeId);
+
+        // Tipos generales (sin padre) que coinciden o con algún subtipo que coincide.
+        var roots = all.Where(t => t.ParentTypeId == null);
+        if (terms.Length > 0)
+            roots = roots.Where(t =>
+                matchedIds.Contains(t.PersonnelActionTypeId) ||
+                all.Any(c => c.ParentTypeId == t.PersonnelActionTypeId && matchedIds.Contains(c.PersonnelActionTypeId)));
+
+        var total = await roots.LongCountAsync(ct);
+        if (total == 0)
+            return Application.DTOs.Common.PagedResult<PersonnelActionTypeFamily>.Empty(page, pageSize);
+
+        var pageRoots = await roots
+            .OrderBy(t => t.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(ct);
+        var rootIds = pageRoots.Select(r => r.PersonnelActionTypeId).ToList();
+
+        var children = await all
+            .Where(c => c.ParentTypeId != null && rootIds.Contains(c.ParentTypeId.Value))
+            .OrderBy(c => c.Name)
+            .ToListAsync(ct);
+
+        // Ids que coinciden con la búsqueda dentro de esta página (para decidir qué subtipos mostrar).
+        HashSet<int> matchedInPage = [];
+        if (terms.Length > 0)
+        {
+            var pageIds = rootIds.Concat(children.Select(c => c.PersonnelActionTypeId)).ToList();
+            matchedInPage = (await matchedIds.Where(id => pageIds.Contains(id)).ToListAsync(ct)).ToHashSet();
+        }
+
+        var childrenByParent = children.GroupBy(c => c.ParentTypeId!.Value).ToDictionary(g => g.Key, g => g.ToList());
+        var families = pageRoots.Select(root =>
+        {
+            var kids = childrenByParent.GetValueOrDefault(root.PersonnelActionTypeId) ?? [];
+            var visible = terms.Length == 0 || matchedInPage.Contains(root.PersonnelActionTypeId)
+                ? kids
+                : kids.Where(k => matchedInPage.Contains(k.PersonnelActionTypeId)).ToList();
+            return new PersonnelActionTypeFamily(root, visible, kids.Count);
+        }).ToList();
+
+        return new Application.DTOs.Common.PagedResult<PersonnelActionTypeFamily>
+        {
+            Items = families,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = total
+        };
+    }
+
     public async Task SetDefaultTemplateAsync(int personnelActionTypeId, int? templateId, CancellationToken ct = default)
     {
         var entity = await _db.Set<PersonnelActionType>()

@@ -28,6 +28,15 @@ public sealed class PersonnelActionTypeService
     public Task<List<PersonnelActionType>> GetAllActiveAsync(CancellationToken ct = default)
         => _repo.GetAllActiveAsync(ct);
 
+    public Task<Application.DTOs.Common.PagedResult<PersonnelActionTypeFamily>> GetFamiliesPagedAsync(
+        string? search, int page, int pageSize, CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 20;
+        if (pageSize > 200) pageSize = 200;
+        return _repo.GetFamiliesPagedAsync(search?.Trim(), page, pageSize, ct);
+    }
+
     public Task SetDefaultTemplateAsync(int personnelActionTypeId, int? templateId, CancellationToken ct = default)
         => _repo.SetDefaultTemplateAsync(personnelActionTypeId, templateId, ct);
 

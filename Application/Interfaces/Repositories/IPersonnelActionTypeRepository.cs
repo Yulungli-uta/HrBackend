@@ -20,6 +20,14 @@ public interface IPersonnelActionTypeRepository : IRepository<PersonnelActionTyp
     /// <summary>Actualiza únicamente la plantilla predeterminada de un tipo de acción, sin afectar el resto de campos.</summary>
     Task SetDefaultTemplateAsync(int personnelActionTypeId, int? templateId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Listado jerárquico paginado POR TIPO GENERAL: cada elemento es un tipo sin padre con sus subtipos. La búsqueda
+    /// (todas las palabras en nombre, código, prefijo o descripción, sin distinguir mayúsculas ni acentos) deja los tipos
+    /// generales que coinciden o que tienen algún subtipo que coincide; ordena por nombre.
+    /// </summary>
+    Task<DTOs.Common.PagedResult<DTOs.PersonnelActionType.PersonnelActionTypeFamily>> GetFamiliesPagedAsync(
+        string? search, int page, int pageSize, CancellationToken ct = default);
+
     /// <summary>Indica si el tipo tiene tipos hijos (es un grupo, ej. "Licencia").</summary>
     Task<bool> HasChildrenAsync(int personnelActionTypeId, CancellationToken ct = default);
 

@@ -96,6 +96,39 @@ public sealed class PersonnelActionTypeController : ControllerBase
     }
 
     /// <summary>
+    /// Listado jerárquico paginado por tipo general: cada elemento trae el tipo general con sus subtipos. La búsqueda
+    /// (todas las palabras en nombre, código, prefijo o descripción, sin distinguir mayúsculas ni acentos) deja los
+    /// tipos generales que coinciden o que tienen algún subtipo que coincide.
+    /// </summary>
+    /// <param name="page">Número de página (base 1).</param>
+    /// <param name="pageSize">Tipos generales por página. Máximo 200.</param>
+    /// <param name="search">Texto de búsqueda.</param>
+    [HttpGet("tree")]
+    public async Task<IActionResult> GetTree(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null,
+        CancellationToken ct = default)
+    {
+        var result = await _svc.GetFamiliesPagedAsync(search, page, pageSize, ct);
+        var items = result.Items.Select(f => new PersonnelActionTypeFamilyDto(
+            _mapper.Map<PersonnelActionTypeDto>(f.Root),
+            _mapper.Map<List<PersonnelActionTypeDto>>(f.Children),
+            f.TotalChildren)).ToList();
+
+        return Ok(new
+        {
+            items,
+            page = result.Page,
+            pageSize = result.PageSize,
+            totalCount = result.TotalCount,
+            totalPages = result.TotalPages,
+            hasPreviousPage = result.HasPreviousPage,
+            hasNextPage = result.HasNextPage
+        });
+    }
+
+    /// <summary>
     /// Genera y reserva el siguiente número de documento para el tipo indicado.
     /// El número tiene el formato {prefix}-{year}-{seq:D3} (ej: DAP-2026-001).
     /// </summary>

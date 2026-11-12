@@ -16,7 +16,9 @@ public sealed record PersonnelActionSummaryDto(
     DateOnly? EndDate,
     string Status,
     int? GeneratedDocumentId,
-    DateTime? CreatedAt
+    DateTime? CreatedAt,
+    // 2026-11-12: tipo general cuando ActionTypeName es una serie (p. ej. Licencia > Licencia por enfermedad); null si el tipo es raíz.
+    string? ActionTypeParentName = null
 );
 
 /// <summary>DTO completo de acción de personal con todos los datos del formulario.</summary>

@@ -103,7 +103,10 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 x.action.EndDate,
                 x.action.Status,
                 x.action.GeneratedDocumentId,
-                x.action.CreatedAt
+                x.action.CreatedAt,
+                _db.PersonnelActionTypes
+                    .Where(p => p.PersonnelActionTypeId == x.actionType.ParentTypeId)
+                    .Select(p => p.Name).FirstOrDefault()
             ))
             .ToListAsync(ct);
 
@@ -453,7 +456,10 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 action.EndDate,
                 action.Status,
                 action.GeneratedDocumentId,
-                action.CreatedAt
+                action.CreatedAt,
+                _db.PersonnelActionTypes
+                    .Where(p => p.PersonnelActionTypeId == actionType.ParentTypeId)
+                    .Select(p => p.Name).FirstOrDefault()
             )
         ).ToListAsync(ct);
     }

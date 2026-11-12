@@ -69,6 +69,7 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
 
         var (codigoIes, codigoMatriz) = await GetInstitutionalParametersAsync(context.RequestAborted);
         var employees = await GetEmployeesAsync(identType, filter, context.RequestAborted);
+        await ApplyReportDefaultsAsync(employees, context.RequestAborted);
 
         _logger.LogInformation(
             "SiiesFuncionariosReportSource: IdentType={IdentType}, {Count} registros.",
@@ -125,6 +126,61 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
         return row;
     }
 
+    /// <summary>Horas laborables por semana que se asumen para el personal LOSEP cuando el documento no las trae.</summary>
+    private const decimal LosepDefaultWeeklyHours = 40m;
+
+    /// <summary>
+    /// Completa datos vacíos de la fila antes de armar el reporte (aplica por igual a la consulta con rango de fechas y a la
+    /// vista sin fechas):
+    /// <list type="bullet">
+    /// <item>HORAS_LABORABLES_SEMANA vacías (o 0) en régimen LOSEP: 40 horas.</item>
+    /// <item>CARGO y UNIDAD_ACADEMICA vacíos: se toman del cargo y la dependencia de destino de la acción de personal que respalda la
+    /// fila (la que muestra DocumentNumber), porque una corrección de la acción no actualiza al empleado ni a su régimen.</item>
+    /// </list>
+    /// Solo se rellena lo que está vacío: nunca se pisa un dato existente.
+    /// </summary>
+    private async Task ApplyReportDefaultsAsync(List<VwSiiesFuncionario> employees, CancellationToken ct)
+    {
+        foreach (var v in employees)
+        {
+            if ((v.ContractedHours is null or <= 0) &&
+                string.Equals(v.LaborRegimeName, "LOSEP", StringComparison.OrdinalIgnoreCase))
+                v.ContractedHours = LosepDefaultWeeklyHours;
+        }
+
+        var documentNumbers = employees
+            .Where(v => (string.IsNullOrWhiteSpace(v.DepartmentName) || string.IsNullOrWhiteSpace(v.JobDescription))
+                        && !string.IsNullOrWhiteSpace(v.DocumentNumber))
+            .Select(v => v.DocumentNumber!)
+            .Distinct()
+            .ToList();
+        if (documentNumbers.Count == 0) return;
+
+        var fromActions = await (
+            from a in _db.PersonnelActions.AsNoTracking()
+            where !a.IsDeleted && a.ActionNumber != null && documentNumbers.Contains(a.ActionNumber)
+            join d in _db.Departments.AsNoTracking() on a.DestinationDepartmentId equals (int?)d.DepartmentId into dj
+            from d in dj.DefaultIfEmpty()
+            join j in _db.Jobs.AsNoTracking() on a.DestinationJobId equals (int?)j.JobID into jj
+            from j in jj.DefaultIfEmpty()
+            select new { a.ActionNumber, a.Status, DepartmentName = d != null ? d.Name : null, JobDescription = j != null ? j.Description : null })
+            .ToListAsync(ct);
+
+        // Una acción vigente gana sobre una anulada si el número se repitiera.
+        var byNumber = fromActions
+            .GroupBy(x => x.ActionNumber!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Status == "ANULADO" ? 1 : 0).First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var v in employees)
+        {
+            if (string.IsNullOrWhiteSpace(v.DocumentNumber) || !byNumber.TryGetValue(v.DocumentNumber, out var action)) continue;
+            if (string.IsNullOrWhiteSpace(v.DepartmentName) && !string.IsNullOrWhiteSpace(action.DepartmentName))
+                v.DepartmentName = action.DepartmentName;
+            if (string.IsNullOrWhiteSpace(v.JobDescription) && !string.IsNullOrWhiteSpace(action.JobDescription))
+                v.JobDescription = action.JobDescription;
+        }
+    }
+
     private IReadOnlyDictionary<string, object?> BuildCedulaRow(VwSiiesFuncionario v, string codigoIes, string codigoMatriz) =>
         BuildCommonRow(v, codigoIes, codigoMatriz);
 
@@ -177,6 +233,103 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
     /// objeto SQL nuevo, a costa de mantener la cascada en dos lugares).
     /// </summary>
     private async Task<List<VwSiiesFuncionario>> GetEmployeesVigentesEnRangoAsync(string identTypeName, ReportFilterDto filter, CancellationToken ct)
+    {
+        var rows = await GetEmployeesVigentesEnRangoBaseAsync(identTypeName, filter, ct);
+        return await AddMovementActionRowsAsync(rows, filter.StartDate!.Value, filter.EndDate!.Value, ct);
+    }
+
+    private static readonly System.Reflection.MethodInfo ShallowCloneMethod =
+        typeof(object).GetMethod("MemberwiseClone", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+
+    private static VwSiiesFuncionario CloneRow(VwSiiesFuncionario source) => (VwSiiesFuncionario)ShallowCloneMethod.Invoke(source, null)!;
+
+    private static string NormalizeName(string value) =>
+        new string(value.Normalize(System.Text.NormalizationForm.FormD)
+            .Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
+            .ToArray()).Trim().ToUpperInvariant();
+
+    /// <summary>Distinto solo cuando AMBOS lados tienen dato y difieren: un vacío no es un cambio.</summary>
+    private static bool Differs(string? current, string? previous) =>
+        !string.IsNullOrWhiteSpace(current) && !string.IsNullOrWhiteSpace(previous) && NormalizeName(current) != NormalizeName(previous);
+
+    /// <summary>
+    /// 2026-11-12: además de una fila por documento del régimen (contrato/acción), el reporte con fechas agrega una fila por cada acción de
+    /// personal que EMPIEZA dentro del rango y cambia el cargo o la dependencia respecto al registro anterior de la misma persona
+    /// (ingreso, nombramiento, traslado, cambio administrativo, reintegro, ubicación...; no encargo/subrogación, que son temporales).
+    /// La comparación es contra el último documento que empezó antes, y solo con datos conocidos de ambos lados.
+    /// La acción que ya es el documento de una fila no se repite. El documento anterior termina el día previo al cambio.
+    /// </summary>
+    private async Task<List<VwSiiesFuncionario>> AddMovementActionRowsAsync(List<VwSiiesFuncionario> rows, DateTime desdeValue, DateTime hastaValue, CancellationToken ct)
+    {
+        if (rows.Count == 0) return rows;
+        var desde = DateOnly.FromDateTime(desdeValue);
+        var hasta = DateOnly.FromDateTime(hastaValue);
+        var employeeIds = rows.Select(r => r.EmployeeID).Distinct().ToList();
+        var knownDocuments = rows
+            .Where(r => !string.IsNullOrWhiteSpace(r.DocumentNumber))
+            .Select(r => (r.EmployeeID, r.DocumentNumber!.Trim().ToUpperInvariant()))
+            .ToHashSet();
+
+        var actions = await (
+            from a in _db.PersonnelActions.AsNoTracking()
+            join t in _db.PersonnelActionTypes.AsNoTracking() on a.ActionTypeId equals t.PersonnelActionTypeId
+            join pt in _db.PersonnelActionTypes.AsNoTracking() on t.ParentTypeId equals (int?)pt.PersonnelActionTypeId into ptj
+            from pt in ptj.DefaultIfEmpty()
+            join d in _db.Departments.AsNoTracking() on a.DestinationDepartmentId equals (int?)d.DepartmentId into dj
+            from d in dj.DefaultIfEmpty()
+            join j in _db.Jobs.AsNoTracking() on a.DestinationJobId equals (int?)j.JobID into jj
+            from j in jj.DefaultIfEmpty()
+            where !a.IsDeleted && a.EmployeeId != null && employeeIds.Contains(a.EmployeeId.Value)
+                  && (a.Status == "VIGENTE" || a.Status == "FINALIZADO")
+                  && a.EffectiveDate != null && a.EffectiveDate >= desde && a.EffectiveDate <= hasta
+                  && (a.DestinationDepartmentId != null || a.DestinationJobId != null)
+                  && (t.ActionCategory == "MOVEMENT" || t.ActionCategory == "ENTRY" || t.ActionCategory == "SALARY_CHANGE")
+                  && t.Code != "ENCARGO" && (pt == null || pt.Code != "ENCARGO")
+            select new
+            {
+                EmployeeId = a.EmployeeId!.Value,
+                a.ActionNumber,
+                EffectiveDate = a.EffectiveDate!.Value,
+                a.EndDate,
+                DepartmentName = d != null ? d.Name : null,
+                JobDescription = j != null ? j.Description : null
+            }).ToListAsync(ct);
+
+        if (actions.Count == 0) return rows;
+
+        var result = new List<VwSiiesFuncionario>(rows);
+        foreach (var act in actions.OrderBy(a => a.EmployeeId).ThenBy(a => a.EffectiveDate).ThenBy(a => a.ActionNumber))
+        {
+            if (string.IsNullOrWhiteSpace(act.ActionNumber)) continue;
+            var number = act.ActionNumber.Trim();
+            if (knownDocuments.Contains((act.EmployeeId, number.ToUpperInvariant()))) continue;
+
+            var previous = result
+                .Where(r => r.EmployeeID == act.EmployeeId && r.EffectiveFrom is { } from && from < act.EffectiveDate)
+                .OrderByDescending(r => r.EffectiveFrom)
+                .FirstOrDefault();
+            if (previous is null) continue;
+            if (!Differs(act.DepartmentName, previous.DepartmentName) && !Differs(act.JobDescription, previous.JobDescription)) continue;
+
+            var row = CloneRow(previous);
+            row.DocumentNumber = number;
+            row.EffectiveFrom = act.EffectiveDate;
+            row.EffectiveTo = act.EndDate is { Year: >= 9999 } ? null : act.EndDate;
+            row.RegimeDocumentType = "PERSONNEL_ACTION";
+            if (!string.IsNullOrWhiteSpace(act.DepartmentName)) row.DepartmentName = act.DepartmentName;
+            if (!string.IsNullOrWhiteSpace(act.JobDescription)) row.JobDescription = act.JobDescription;
+
+            if (previous.EffectiveTo is null || previous.EffectiveTo >= act.EffectiveDate)
+                previous.EffectiveTo = act.EffectiveDate.AddDays(-1);
+
+            var lastIndex = result.FindLastIndex(r => r.EmployeeID == act.EmployeeId);
+            result.Insert(lastIndex + 1, row);
+            knownDocuments.Add((act.EmployeeId, number.ToUpperInvariant()));
+        }
+        return result;
+    }
+
+    private async Task<List<VwSiiesFuncionario>> GetEmployeesVigentesEnRangoBaseAsync(string identTypeName, ReportFilterDto filter, CancellationToken ct)
     {
         // DateOnly como parametro de Dapper falla en runtime ("cannot be used as a parameter
         // value" - esta version de Dapper no lo soporta sin un ITypeHandler registrado, que
@@ -270,6 +423,11 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                     WHERE r.[EmployeeId] = e.[EmployeeID]
                       AND r.[EffectiveFrom] <= @FechaHasta
                       AND (r.[EffectiveTo] IS NULL OR r.[EffectiveTo] >= @FechaDesde)
+                      -- 2026-11-12: un regimen cuyo contrato (CONTRACT_STATUS 208 = ANULADO) o accion de origen esta anulado no es un documento valido.
+                      AND NOT EXISTS (SELECT 1 FROM [HR].[tbl_Contracts] c0
+                                      WHERE c0.[ContractID] = r.[SourceContractId] AND (c0.[Status] = 208 OR c0.[IsDeleted] = 1))
+                      AND NOT EXISTS (SELECT 1 FROM [HR].[tbl_PersonnelActions] a0
+                                      WHERE a0.[ActionID] = r.[SourcePersonnelActionId] AND (a0.[Status] = 'ANULADO' OR a0.[IsDeleted] = 1))
                 ) x
                 WHERE x.[rn] = 1
             ) elr
@@ -303,7 +461,11 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                 FROM [HR].[tbl_PersonnelActions] pa2
                 WHERE pa2.[EmployeeID] = e.[EmployeeID] AND pa2.[IsDeleted] = 0
                   AND pa2.[Status] IN ('VIGENTE', 'FINALIZADO')
-                  AND pa2.[EffectiveDate] <= @FechaHasta AND (pa2.[EndDate] IS NULL OR pa2.[EndDate] >= @FechaDesde)
+                  AND pa2.[EffectiveDate] <= @FechaHasta
+                  -- 2026-11-12: una accion FINALIZADO sin fecha de fin NO es vigente para siempre (antes colaba a personas que dejaron de
+                  -- laborar hace anos): solo cuenta si empezo dentro del rango. Sin fecha de fin solo es abierta si esta VIGENTE.
+                  AND (pa2.[EndDate] >= @FechaDesde
+                       OR (pa2.[EndDate] IS NULL AND (pa2.[Status] = 'VIGENTE' OR pa2.[EffectiveDate] >= @FechaDesde)))
                   AND elr.[DocumentNumber] IS NULL AND ctr.[ContractCode] IS NULL AND pa.[ActionNumber] IS NULL
                   AND ctrFallback.[ContractID] IS NULL
                 ORDER BY CASE WHEN pa2.[Status] = 'VIGENTE' THEN 0 ELSE 1 END, pa2.[ActionDate] DESC
