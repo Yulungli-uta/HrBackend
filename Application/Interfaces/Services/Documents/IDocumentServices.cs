@@ -127,6 +127,9 @@ public interface IPersonnelActionService
     /// <summary>Obtiene todas las acciones de un empleado.</summary>
     Task<IReadOnlyList<PersonnelActionSummaryDto>> GetByEmployeeIdAsync(int employeeId, CancellationToken ct = default);
 
+    /// <summary>Proceso Institucional y Nivel de Gestión vigentes del empleado (los que quedaron como propuesta en su acción más reciente).</summary>
+    Task<EmployeeCurrentClassificationDto> GetCurrentClassificationAsync(int employeeId, CancellationToken ct = default);
+
     /// <summary>
     /// Crea una nueva acción de personal.
     /// Si <c>GenerateDocument = true</c>, genera automáticamente el PDF.

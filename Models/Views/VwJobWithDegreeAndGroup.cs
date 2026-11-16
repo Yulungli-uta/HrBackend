@@ -11,5 +11,7 @@
         public int? DegreeID { get; set; }
         public string? Degree { get; set; }
         public bool? DegreeIsActive { get; set; }
+        /// <summary>Clasificación adicional (Escala UEP) del grupo ocupacional; nula si el grupo no la tiene.</summary>
+        public string? UepScaleName { get; set; }
     }
 }

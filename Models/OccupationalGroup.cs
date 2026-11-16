@@ -16,6 +16,11 @@ namespace WsUtaSystem.Models
         /// Servidor Público/Directivo/Nivel Jerárquico Superior ya existentes.
         /// </summary>
         public int? UepScaleTypeId { get; set; }
+        /// <summary>
+        /// Familia del grupo (ref_Types.Category=OCCUPATIONAL_GROUP_FAMILY), p. ej. "Personal Académico Titular".
+        /// Opcional: los grupos de la escala LOSEP no la tienen. Dentro de una familia no se repite el grado (índice único filtrado).
+        /// </summary>
+        public int? FamilyTypeId { get; set; }
         public bool IsActive { get; set; } = true;
         public DateTime? CreatedAt { get; set; }
         public int? CreatedBy { get; set; }

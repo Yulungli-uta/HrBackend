@@ -130,6 +130,13 @@ public sealed class PersonnelActionService : IPersonnelActionService
         => await _actionRepository.GetByEmployeeIdAsync(employeeId, ct);
 
     /// <inheritdoc />
+    public async Task<EmployeeCurrentClassificationDto> GetCurrentClassificationAsync(int employeeId, CancellationToken ct = default)
+    {
+        var (process, level, workplace) = await GetPreviousClassificationAsync(employeeId, ct);
+        return new EmployeeCurrentClassificationDto(process, level, workplace);
+    }
+
+    /// <inheritdoc />
     public async Task<CreatePersonnelActionResponse> CreateAsync(
         CreatePersonnelActionRequest request,
         int createdBy,
@@ -204,6 +211,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
             ManagementLevel        = request.ManagementLevel,
             OriginInstitutionalProcess   = request.OriginInstitutionalProcess is > 0 ? request.OriginInstitutionalProcess : null,
             OriginManagementLevel        = request.OriginManagementLevel is > 0 ? request.OriginManagementLevel : null,
+            OriginWorkplace              = request.OriginWorkplace is > 0 ? request.OriginWorkplace : null,
             OriginBudgetProgramCode      = NormalizeText(request.OriginBudgetProgramCode),
             DestinationBudgetProgramCode = NormalizeText(request.DestinationBudgetProgramCode),
             Workplace               = request.Workplace,
@@ -306,6 +314,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         // envía no debe borrarlos); 0 / "" = borrar el valor.
         action.OriginInstitutionalProcess   = MergeOptionalId(request.OriginInstitutionalProcess, action.OriginInstitutionalProcess);
         action.OriginManagementLevel        = MergeOptionalId(request.OriginManagementLevel, action.OriginManagementLevel);
+        action.OriginWorkplace              = MergeOptionalId(request.OriginWorkplace, action.OriginWorkplace);
         action.OriginBudgetProgramCode      = MergeOptionalText(request.OriginBudgetProgramCode, action.OriginBudgetProgramCode);
         action.DestinationBudgetProgramCode = MergeOptionalText(request.DestinationBudgetProgramCode, action.DestinationBudgetProgramCode);
         action.Workplace               = request.Workplace;
@@ -339,22 +348,36 @@ public sealed class PersonnelActionService : IPersonnelActionService
     /// </summary>
     private async Task FillOriginClassificationFromPreviousActionAsync(PersonnelAction action, CancellationToken ct)
     {
-        if (action.OriginInstitutionalProcess.HasValue && action.OriginManagementLevel.HasValue) return;
+        if (action.OriginInstitutionalProcess.HasValue && action.OriginManagementLevel.HasValue && action.OriginWorkplace.HasValue) return;
 
-        var employeeId = action.EmployeeId!.Value;
-        if (!action.OriginInstitutionalProcess.HasValue)
-            action.OriginInstitutionalProcess = await _db.PersonnelActions.AsNoTracking()
-                .Where(a => a.EmployeeId == employeeId && a.InstitutionalProcess != null)
-                .OrderByDescending(a => a.ActionDate).ThenByDescending(a => a.ActionId)
-                .Select(a => a.InstitutionalProcess)
-                .FirstOrDefaultAsync(ct);
+        var (process, level, workplace) = await GetPreviousClassificationAsync(action.EmployeeId!.Value, ct);
+        action.OriginInstitutionalProcess ??= process;
+        action.OriginManagementLevel ??= level;
+        action.OriginWorkplace ??= workplace;
+    }
 
-        if (!action.OriginManagementLevel.HasValue)
-            action.OriginManagementLevel = await _db.PersonnelActions.AsNoTracking()
-                .Where(a => a.EmployeeId == employeeId && a.ManagementLevel != null)
-                .OrderByDescending(a => a.ActionDate).ThenByDescending(a => a.ActionId)
-                .Select(a => a.ManagementLevel)
-                .FirstOrDefaultAsync(ct);
+    /// <summary>Último Proceso Institucional, Nivel de Gestión y Lugar de trabajo propuestos en las acciones del empleado (cada uno por separado).</summary>
+    private async Task<(int? Process, int? Level, int? Workplace)> GetPreviousClassificationAsync(int employeeId, CancellationToken ct)
+    {
+        var process = await _db.PersonnelActions.AsNoTracking()
+            .Where(a => a.EmployeeId == employeeId && a.InstitutionalProcess != null)
+            .OrderByDescending(a => a.ActionDate).ThenByDescending(a => a.ActionId)
+            .Select(a => a.InstitutionalProcess)
+            .FirstOrDefaultAsync(ct);
+
+        var level = await _db.PersonnelActions.AsNoTracking()
+            .Where(a => a.EmployeeId == employeeId && a.ManagementLevel != null)
+            .OrderByDescending(a => a.ActionDate).ThenByDescending(a => a.ActionId)
+            .Select(a => a.ManagementLevel)
+            .FirstOrDefaultAsync(ct);
+
+        var workplace = await _db.PersonnelActions.AsNoTracking()
+            .Where(a => a.EmployeeId == employeeId && a.Workplace != null)
+            .OrderByDescending(a => a.ActionDate).ThenByDescending(a => a.ActionId)
+            .Select(a => a.Workplace)
+            .FirstOrDefaultAsync(ct);
+
+        return (process, level, workplace);
     }
 
     /// <summary>
@@ -548,6 +571,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         // envía no debe borrarlos); 0 / "" = borrar el valor.
         action.OriginInstitutionalProcess   = MergeOptionalId(request.OriginInstitutionalProcess, action.OriginInstitutionalProcess);
         action.OriginManagementLevel        = MergeOptionalId(request.OriginManagementLevel, action.OriginManagementLevel);
+        action.OriginWorkplace              = MergeOptionalId(request.OriginWorkplace, action.OriginWorkplace);
         action.OriginBudgetProgramCode      = MergeOptionalText(request.OriginBudgetProgramCode, action.OriginBudgetProgramCode);
         action.DestinationBudgetProgramCode = MergeOptionalText(request.DestinationBudgetProgramCode, action.DestinationBudgetProgramCode);
         action.Workplace               = request.Workplace;
@@ -1144,7 +1168,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
         // Lugar de Trabajo: mismo patrón que Proceso Institucional/Nivel de Gestión — la
         // PROPUESTA es lo que el usuario eligió manualmente en esta acción; la ACTUAL es lo
         // que quedó como propuesta en la acción anterior del empleado.
-        Set(r, "CURRENT_WORKPLACE",  d.PreviousWorkplaceName);
+        Set(r, "CURRENT_WORKPLACE",  d.OriginWorkplaceName ?? d.PreviousWorkplaceName);
         Set(r, "PROPOSED_WORKPLACE",d.WorkplaceName);
 
         // 2026-08-24: la decisión de colapsar SITUACIÓN PROPUESTA a solo el nombre de la

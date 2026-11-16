@@ -779,12 +779,14 @@ SELECT
     og.RMU,
     d.DegreeID,
     d.Description                          AS Degree,
-    d.IsActive                             AS DegreeIsActive
+    d.IsActive                             AS DegreeIsActive,
+    rt_uep.Name                            AS UepScaleName
 FROM HR.tbl_jobs j
 LEFT JOIN HR.ref_Types rt_type   ON j.JobTypeID     = rt_type.TypeID
 LEFT JOIN HR.ref_Types rt_regime ON j.LaborRegimeID = rt_regime.TypeID
 LEFT JOIN HR.tbl_Occupational_Groups og ON j.GroupID  = og.GroupID
-LEFT JOIN HR.tbl_Degrees d              ON og.DegreeID = d.DegreeID;
+LEFT JOIN HR.tbl_Degrees d              ON og.DegreeID = d.DegreeID
+LEFT JOIN HR.ref_Types rt_uep           ON og.UepScaleTypeId = rt_uep.TypeID;
 GO
 
 -- [vw_LeaveWindows]

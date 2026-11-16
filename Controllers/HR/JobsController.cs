@@ -1,4 +1,7 @@
 ﻿using AutoMapper;
+using WsUtaSystem.Application.Common;
+using System.Linq.Expressions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Jobs;
@@ -13,11 +16,13 @@ namespace WsUtaSystem.Controllers.HR
     public class JobsController : ControllerBase
     {
         private readonly IJobService _svc;
+        private readonly IOccupationalGroupService _groups;
         private readonly IMapper _mapper;
 
-        public JobsController(IJobService svc, IMapper mapper)
+        public JobsController(IJobService svc, IOccupationalGroupService groups, IMapper mapper)
         {
             _svc = svc;
+            _groups = groups;
             _mapper = mapper;
         }
 
@@ -48,24 +53,37 @@ namespace WsUtaSystem.Controllers.HR
             [FromQuery] string? search = null,
             [FromQuery] string? sortBy = null,
             [FromQuery] string? sortDirection = "asc",
+            [FromQuery] bool? isActive = null,
+            [FromQuery] int? groupId = null,
+            [FromQuery] int? jobTypeId = null,
+            [FromQuery] int? uepScaleTypeId = null,
             CancellationToken ct = default)
         {
-            if (page < 1) page = 1;
-            if (pageSize < 1 || pageSize > 200) pageSize = 20;
+            (page, pageSize) = CatalogPredicates.NormalizePaging(page, pageSize);
 
-            System.Linq.Expressions.Expression<Func<Job, bool>>? predicate = null;
-
-            if (!string.IsNullOrWhiteSpace(search))
+            // Busca por palabras sin importar mayúsculas ni tildes; filtros opcionales por estado, grupo ocupacional y tipo (régimen).
+            var predicate = CatalogPredicates.ByWords<Job>(search,
+                w => j => j.Description != null && EF.Functions.Collate(j.Description, CatalogPredicates.Collation).Contains(w));
+            Expression<Func<Job, bool>>? byState = isActive.HasValue ? j => j.IsActive == isActive.Value : null;
+            Expression<Func<Job, bool>>? byGroup = groupId.HasValue ? j => j.GroupId == groupId.Value : null;
+            Expression<Func<Job, bool>>? byType = jobTypeId.HasValue ? j => j.JobTypeId == jobTypeId.Value : null;
+            // Clasificación adicional (Escala UEP): la tiene el grupo ocupacional, así que se buscan los grupos con esa clasificación
+            // (catálogo corto) y se filtran los cargos que usan alguno de ellos.
+            Expression<Func<Job, bool>>? byUep = null;
+            if (uepScaleTypeId.HasValue)
             {
-                var term = search.Trim().ToLower();
-
-                predicate = j =>
-                    j.Description != null && j.Description.Contains(term);
+                var uepGroups = await _groups.GetPagedAsync(g => g.UepScaleTypeId == uepScaleTypeId.Value, 1, 200, ct);
+                var groupIds = uepGroups.Items.Select(g => (int?)g.GroupId).ToList();
+                byUep = j => groupIds.Contains(j.GroupId);
             }
+            var filter = predicate.And(byState).And(byGroup).And(byType).And(byUep);
 
-            var pagedEntities = predicate is not null
-                ? await _svc.GetPagedAsync(predicate, page, pageSize, ct)
-                : await _svc.GetPagedAsync(page, pageSize, ct);
+            // Orden por descripción solo si se pide (sortBy=description); sin sortBy se conserva el orden previo del endpoint.
+            var byDescription = string.Equals(sortBy, "description", StringComparison.OrdinalIgnoreCase);
+            var ascending = !string.Equals(sortDirection, "desc", StringComparison.OrdinalIgnoreCase);
+            var pagedEntities = byDescription
+                ? await _svc.GetPagedAsync(filter, page, pageSize, ct, orderBy: j => j.Description!, ascending: ascending)
+                : await _svc.GetPagedAsync(filter, page, pageSize, ct);
 
             var dtoItems = _mapper.Map<List<JobDto>>(pagedEntities.Items);
 

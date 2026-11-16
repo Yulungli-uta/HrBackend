@@ -161,6 +161,9 @@ public sealed class PersonnelAction : IAuditable, ISoftDeletable
     /// <summary>FK a ref_Types (Category = 'AP_LUGAR_TRABAJO'). Lugar de trabajo propuesto de la acción.</summary>
     public int? Workplace { get; set; }
 
+    /// <summary>FK a ref_Types (Category = 'AP_LUGAR_TRABAJO'). Lugar de trabajo de la situación de ORIGEN (actual) de la acción.</summary>
+    public int? OriginWorkplace { get; set; }
+
     // ── Responsables del documento ───────────────────────────────────────────────
     /// <summary>FK al empleado que actúa como Director de Talento Humano.</summary>
     public int? DthDirectorId { get; set; }

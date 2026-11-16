@@ -155,6 +155,24 @@ public sealed class PersonnelActionsController : ControllerBase
         return Ok(actions);
     }
 
+    /// <summary>
+    /// Proceso Institucional y Nivel de Gestión vigentes del empleado (de su acción más reciente), para precargar la
+    /// situación actual al crear una acción nueva. Mismo control de acceso que la lista de acciones del empleado.
+    /// </summary>
+    [HttpGet("by-employee/{employeeId:int}/current-classification")]
+    [RequirePermission("PERSONNEL_ACTIONS.READ")]
+    [ProducesResponseType(typeof(EmployeeCurrentClassificationDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCurrentClassification([FromRoute] int employeeId, CancellationToken ct)
+    {
+        if (_currentUser.EmployeeId != employeeId)
+        {
+            try { await _accessGuard.EnsureEmployeeRecordIfDepartmentKnownAsync(employeeId, "PERSONNEL_ACTIONS", ct); }
+            catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+        }
+
+        return Ok(await _personnelActionService.GetCurrentClassificationAsync(employeeId, ct));
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // CREACIÓN Y MODIFICACIÓN
     // ──────────────────────────────────────────────────────────────────────────

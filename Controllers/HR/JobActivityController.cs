@@ -1,4 +1,5 @@
 using AutoMapper;
+using WsUtaSystem.Application.Common;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -19,9 +20,18 @@ public class JobActivityController : ControllerBase
     public JobActivityController(IJobActivityService svc, IMapper mapper) { _svc = svc; _mapper = mapper; }
 
     /// <summary>Lista todos los registros de JobActivity.</summary>
+    /// <param name="jobId">Si se indica, devuelve solo las actividades asignadas a ese cargo.</param>
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct) =>
-        Ok(_mapper.Map<List<JobActivityDto>>(await _svc.GetAllAsync(ct)));
+    public async Task<IActionResult> GetAll([FromQuery] int? jobId, CancellationToken ct)
+    {
+        if (jobId.HasValue)
+        {
+            var id = jobId.Value;
+            var byJob = await _svc.GetPagedAsync(x => x.JobID == id, 1, CatalogPredicates.MaxPageSize, ct);
+            return Ok(_mapper.Map<List<JobActivityDto>>(byJob.Items));
+        }
+        return Ok(_mapper.Map<List<JobActivityDto>>(await _svc.GetAllAsync(ct)));
+    }
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>

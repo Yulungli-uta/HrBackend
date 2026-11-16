@@ -1,4 +1,7 @@
 using AutoMapper;
+using WsUtaSystem.Application.Common;
+using System.Linq.Expressions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -22,6 +25,29 @@ public class DegreeController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<DegreeDto>>(await _svc.GetAllAsync(ct)));
+
+    /// <summary>
+    /// Listado paginado de grados. Busca por palabras sin importar mayúsculas ni tildes y permite filtrar por estado.
+    /// </summary>
+    [HttpGet("paged")]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        [FromQuery] bool? isActive = null,
+        [FromQuery] string? sortDirection = "asc",
+        CancellationToken ct = default)
+    {
+        (page, pageSize) = CatalogPredicates.NormalizePaging(page, pageSize);
+
+        var predicate = CatalogPredicates.ByWords<Degree>(search,
+            w => d => EF.Functions.Collate(d.Description, CatalogPredicates.Collation).Contains(w));
+        Expression<Func<Degree, bool>>? byState = isActive.HasValue ? d => d.IsActive == isActive.Value : null;
+
+        var paged = await _svc.GetPagedAsync(predicate.And(byState), page, pageSize, ct,
+            orderBy: d => d.Description, ascending: !string.Equals(sortDirection, "desc", StringComparison.OrdinalIgnoreCase));
+        return Ok(CatalogPredicates.ToResponse(paged, _mapper.Map<List<DegreeDto>>(paged.Items)));
+    }
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>

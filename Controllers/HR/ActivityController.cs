@@ -1,4 +1,7 @@
 using AutoMapper;
+using WsUtaSystem.Application.Common;
+using System.Linq.Expressions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -22,6 +25,34 @@ public class ActivityController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<ActivityDto>>(await _svc.GetAllAsync(ct)));
+
+    /// <summary>
+    /// Listado paginado de actividades. Busca por palabras sin importar mayúsculas ni tildes y permite filtrar por estado y tipo
+    /// (LABORAL / ADICIONAL).
+    /// </summary>
+    [HttpGet("paged")]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        [FromQuery] bool? isActive = null,
+        [FromQuery] string? type = null,
+        [FromQuery] string? sortDirection = "asc",
+        CancellationToken ct = default)
+    {
+        (page, pageSize) = CatalogPredicates.NormalizePaging(page, pageSize);
+
+        // Description es columna text (heredada): se compara/ordena sobre su inicio porque text no admite ORDER BY ni COLLATE.
+        var predicate = CatalogPredicates.ByWords<Activity>(search,
+            w => a => a.Description != null && EF.Functions.Collate(a.Description.Substring(0, 4000), CatalogPredicates.Collation).Contains(w));
+        Expression<Func<Activity, bool>>? byState = isActive.HasValue ? a => a.IsActive == isActive.Value : null;
+        var typeValue = string.IsNullOrWhiteSpace(type) ? null : type.Trim().ToUpperInvariant();
+        Expression<Func<Activity, bool>>? byType = typeValue is null ? null : a => a.ActivitiesType == typeValue;
+
+        var paged = await _svc.GetPagedAsync(predicate.And(byState).And(byType), page, pageSize, ct,
+            orderBy: a => a.Description!.Substring(0, 400), ascending: !string.Equals(sortDirection, "desc", StringComparison.OrdinalIgnoreCase));
+        return Ok(CatalogPredicates.ToResponse(paged, _mapper.Map<List<ActivityDto>>(paged.Items)));
+    }
 
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>

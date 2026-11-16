@@ -21,6 +21,12 @@ public sealed record PersonnelActionSummaryDto(
     string? ActionTypeParentName = null
 );
 
+/// <summary>
+/// Clasificación vigente del empleado (Proceso Institucional, Nivel de Gestión y Lugar de trabajo) según su acción más reciente;
+/// es lo que se imprime como situación actual cuando el usuario no elige otra.
+/// </summary>
+public sealed record EmployeeCurrentClassificationDto(int? InstitutionalProcess, int? ManagementLevel, int? Workplace = null);
+
 /// <summary>DTO completo de acción de personal con todos los datos del formulario.</summary>
 public sealed record PersonnelActionDetailDto(
     int ActionId,
@@ -176,7 +182,11 @@ public sealed record PersonnelActionDetailDto(
     string? EmployeeIdentTypeName,
 
     // 2026-11-11: la acción incluye posesión del puesto (se imprime nombre e identificación del servidor).
-    bool PossessionEnabled
+    bool PossessionEnabled,
+
+    // 2026-11-16: lugar de trabajo de la situación de ORIGEN guardado en la acción (PreviousWorkplaceName queda como respaldo).
+    int? OriginWorkplace = null,
+    string? OriginWorkplaceName = null
 );
 
 /// <summary>
@@ -261,7 +271,10 @@ public sealed record CreatePersonnelActionRequest(
     PersonnelActionNotificationDto? Notification = null,
 
     // 2026-11-11: incluye posesión del puesto (imprime nombre e identificación del servidor de la acción).
-    bool PossessionEnabled = false
+    bool PossessionEnabled = false,
+
+    // 2026-11-16: lugar de trabajo de la situación de ORIGEN (vacío en una acción nueva = se toma de la acción previa del empleado).
+    int? OriginWorkplace = null
 );
 
 /// <summary>Solicitud para actualizar una acción de personal existente.</summary>
@@ -321,7 +334,10 @@ public sealed record UpdatePersonnelActionRequest(
 
     // 2026-11-11: incluye posesión del puesto. null = conservar lo guardado (un cliente anterior que no lo envía no
     // debe apagarlo).
-    bool? PossessionEnabled = null
+    bool? PossessionEnabled = null,
+
+    // 2026-11-16: lugar de trabajo de la situación de ORIGEN. null = conservar lo guardado; 0 = borrar.
+    int? OriginWorkplace = null
 );
 
 /// <summary>

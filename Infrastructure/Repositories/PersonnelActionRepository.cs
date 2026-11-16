@@ -234,7 +234,15 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 join dg in _db.Degree.AsNoTracking() on og.DegreeId equals dg.DegreeId into dgJoin
                 from dg in dgJoin.DefaultIfEmpty()
                 where j.JobID == result.action.OriginJobId.Value
-                select new { og.Description, GradeDescription = dg != null ? dg.Description : null }
+                select new
+                {
+                    og.Description,
+                    GradeDescription = dg != null ? dg.Description : null,
+                    // Clasificación adicional (Escala UEP) del grupo, si la tiene.
+                    UepName = og.UepScaleTypeId != null
+                        ? _db.RefTypes.Where(rt => rt.TypeId == og.UepScaleTypeId).Select(rt => rt.Name).FirstOrDefault()
+                        : null
+                }
             ).FirstOrDefaultAsync(ct)
             : null;
 
@@ -246,7 +254,15 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 join dg in _db.Degree.AsNoTracking() on og.DegreeId equals dg.DegreeId into dgJoin
                 from dg in dgJoin.DefaultIfEmpty()
                 where j.JobID == result.action.DestinationJobId.Value
-                select new { og.Description, GradeDescription = dg != null ? dg.Description : null }
+                select new
+                {
+                    og.Description,
+                    GradeDescription = dg != null ? dg.Description : null,
+                    // Clasificación adicional (Escala UEP) del grupo, si la tiene.
+                    UepName = og.UepScaleTypeId != null
+                        ? _db.RefTypes.Where(rt => rt.TypeId == og.UepScaleTypeId).Select(rt => rt.Name).FirstOrDefault()
+                        : null
+                }
             ).FirstOrDefaultAsync(ct)
             : null;
 
@@ -296,6 +312,13 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
         var workplaceName = result.action.Workplace.HasValue
             ? await _db.RefTypes.AsNoTracking()
                 .Where(r => r.TypeId == result.action.Workplace.Value)
+                .Select(r => r.Name)
+                .FirstOrDefaultAsync(ct)
+            : null;
+
+        var originWorkplaceName = result.action.OriginWorkplace.HasValue
+            ? await _db.RefTypes.AsNoTracking()
+                .Where(r => r.TypeId == result.action.OriginWorkplace.Value)
                 .Select(r => r.Name)
                 .FirstOrDefaultAsync(ct)
             : null;
@@ -400,9 +423,9 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             workplaceName,
             previousWorkplaceName,
             result.actionType.ActionCategory,
-            originGroupGrade?.Description,
+            WithUep(originGroupGrade?.Description, originGroupGrade?.UepName),
             originGroupGrade?.GradeDescription,
-            destGroupGrade?.Description,
+            WithUep(destGroupGrade?.Description, destGroupGrade?.UepName),
             destGroupGrade?.GradeDescription,
             result.action.OriginInstitutionalProcess,
             originInstProcessName,
@@ -420,7 +443,9 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             result.action.EmployeeSignatureDate,
             result.action.EmployeeSignatureTime,
             identTypeName,
-            result.action.PossessionEnabled
+            result.action.PossessionEnabled,
+            result.action.OriginWorkplace,
+            originWorkplaceName
         );
     }
 
@@ -562,6 +587,18 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
                 h.ChangedBy,
                 h.ChangedAt))
             .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Texto del grupo ocupacional para el documento: si el grupo tiene clasificación adicional (Escala UEP),
+    /// se muestra junto al nombre, p. ej. "Servidor Público 3 (UEP Nivel Profesional B3)". Si el nombre del grupo ya
+    /// dice UEP (p. ej. "UEP NIVEL OCUPACIONAL B3") no se repite. La misma regla está en el frontend (groupWithUep).
+    /// </summary>
+    private static string? WithUep(string? group, string? uepName)
+    {
+        if (string.IsNullOrWhiteSpace(group) || string.IsNullOrWhiteSpace(uepName)) return group;
+        if (group.Contains("UEP", StringComparison.OrdinalIgnoreCase)) return group;
+        return $"{group} ({uepName})";
     }
 
     private async Task<(string? Name, string? JobTitle)> ResolveEmployeeAsync(int? employeeId, CancellationToken ct)
