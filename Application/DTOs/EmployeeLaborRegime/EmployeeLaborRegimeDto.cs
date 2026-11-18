@@ -50,6 +50,9 @@ public class EmployeeLaborRegimeCreateDto
     public int? SourcePersonnelActionId { get; set; }
     public DateOnly EffectiveFrom { get; set; }
 
+    /// <summary>Fin del documento (contrato con fecha de fin). Null = abierto. Lo usa <c>RegisterDocumentAsync</c>.</summary>
+    public DateOnly? EffectiveTo { get; set; }
+
     /// <summary>SIIES INGRESO_POR_CONCURSO. Opcional al crear; puede completarse después con SetIngresoPorConcursoAsync.</summary>
     public bool? IngresoPorConcurso { get; set; }
 
@@ -75,3 +78,28 @@ public class EmployeeLaborRegimeSiiesRelacionIesDto
     /// <summary>TypeId de ref_Types (Category='SIIES_RELACION_IES'); null quita el valor manual y vuelve a derivarse del documento.</summary>
     public int? SiiesRelacionIesTypeId { get; set; }
 }
+
+/// <summary>Qué hizo la sincronización de la posición (departamento/cargo) de una acción de personal con su régimen laboral.</summary>
+public enum LaborRegimeSyncOutcome
+{
+    /// <summary>La acción no aplica (estado distinto de VIGENTE/FINALIZADO, sin empleado o sin departamento/cargo de destino).</summary>
+    NotApplicable,
+    /// <summary>El régimen ya tenía el departamento y el cargo de destino, o no hay cambio de posición que registrar.</summary>
+    NoChange,
+    /// <summary>Se actualizó el departamento/cargo del régimen que nació de la acción.</summary>
+    Updated,
+    /// <summary>La acción no tenía régimen y se creó uno por cambio de departamento o cargo.</summary>
+    Created,
+    /// <summary>Se omitió: el empleado tiene una acción posterior con otro departamento o cargo.</summary>
+    SkippedLaterMovement,
+    /// <summary>Se omitió la creación: la acción no indica el tipo de empleado/régimen.</summary>
+    SkippedNoRegimeType,
+    /// <summary>Se omitió la creación: el empleado ya tiene ese régimen activo respaldado por otro documento.</summary>
+    SkippedActiveRegimeExists,
+}
+
+/// <summary>Resultado de <c>SyncPositionFromPersonnelActionAsync</c>.</summary>
+/// <param name="Outcome">Qué ocurrió.</param>
+/// <param name="RegimeId">Régimen actualizado o creado (null si no se tocó ninguno).</param>
+/// <param name="Message">Texto para bitácora/historial.</param>
+public sealed record LaborRegimeSyncResult(LaborRegimeSyncOutcome Outcome, int? RegimeId, string Message);

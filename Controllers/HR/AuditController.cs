@@ -33,6 +33,7 @@ public class AuditController : ControllerBase
     public async Task<IActionResult> Search(
         [FromQuery] string? tableName,
         [FromQuery] string? recordId,
+        [FromQuery] string? search,
         [FromQuery] string? userName,
         [FromQuery] DateTime? dateFrom,
         [FromQuery] DateTime? dateTo,
@@ -43,25 +44,12 @@ public class AuditController : ControllerBase
         if (page < 1) page = 1;
         if (pageSize < 1 || pageSize > 200) pageSize = 20;
 
-        var hasTable = !string.IsNullOrWhiteSpace(tableName);
-        var hasRecord = !string.IsNullOrWhiteSpace(recordId);
-        var hasUser = !string.IsNullOrWhiteSpace(userName);
-
-        System.Linq.Expressions.Expression<Func<Audit, bool>> predicate = a =>
-            a.Action == "CORRECTION" &&
-            (!hasTable || a.TableName == tableName) &&
-            (!hasRecord || a.RecordId == recordId) &&
-            (!hasUser || a.UserName.Contains(userName!)) &&
-            (!dateFrom.HasValue || a.DateTime >= dateFrom.Value) &&
-            (!dateTo.HasValue || a.DateTime <= dateTo.Value);
-
-        var paged = await _svc.GetPagedAsync(
-            predicate, page, pageSize, ct,
-            orderBy: a => (object)a.DateTime, ascending: false);
+        var paged = await _svc.SearchCorrectionsAsync(
+            tableName, recordId, search, userName, dateFrom, dateTo, page, pageSize, ct);
 
         return Ok(new
         {
-            items = _mapper.Map<List<AuditDto>>(paged.Items),
+            items = paged.Items,
             page = paged.Page,
             pageSize = paged.PageSize,
             totalCount = paged.TotalCount,

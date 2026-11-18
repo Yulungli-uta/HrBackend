@@ -528,6 +528,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
             ?? throw new KeyNotFoundException($"Acción de personal {actionId} no encontrada.");
 
         var before = AuditSnapshotHelper.Snapshot(action);
+        var previousActionNumber = action.ActionNumber;
 
         // A diferencia de UpdateAsync, la corrección se permite en cualquier estado (incluido
         // VIGENTE/FINALIZADO) — exige motivo obligatorio y queda auditada en HR.Audit.
@@ -596,9 +597,38 @@ public sealed class PersonnelActionService : IPersonnelActionService
             _db, "PersonnelActions", actionId.ToString(), reason, before, after,
             _currentUser.UserName ?? _currentUser.Email, ct);
 
+        await SyncLaborRegimeAfterCorrectionAsync(action, correctedBy, previousActionNumber, ct);
+
         _logger.LogInformation(
             "PersonnelActionService: acción {ActionId} CORREGIDA por EmployeeId={UserId}. Motivo: {Reason}",
             actionId, correctedBy, reason);
+    }
+
+    /// <summary>
+    /// Tras corregir una acción VIGENTE/FINALIZADA, replica su departamento y cargo de destino en el régimen laboral
+    /// (el reporte SIIES prioriza el departamento del régimen). Defensivo: un fallo aquí no revierte la corrección, que ya
+    /// quedó auditada; el resultado se deja en el historial de la acción para que sea visible.
+    /// </summary>
+    private async Task SyncLaborRegimeAfterCorrectionAsync(PersonnelAction action, int correctedBy, string? previousActionNumber, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _laborRegimeService.SyncPositionFromPersonnelActionAsync(action.ActionId, correctedBy, previousActionNumber, ct);
+            if (result.Outcome is DTOs.EmployeeLaborRegime.LaborRegimeSyncOutcome.NotApplicable
+                or DTOs.EmployeeLaborRegime.LaborRegimeSyncOutcome.NoChange)
+            {
+                return;
+            }
+
+            await WriteHistoryAsync(action.ActionId, action.Status, action.Status, $"[RÉGIMEN LABORAL] {result.Message}", correctedBy, ct);
+            _logger.LogInformation(
+                "[LABOR-REGIME] Sincronización tras corrección de ActionId={ActionId}: {Outcome} (régimen {RegimeId}).",
+                action.ActionId, result.Outcome, result.RegimeId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[LABOR-REGIME] ERROR sincronizando el régimen laboral tras corregir ActionId={ActionId}.", action.ActionId);
+        }
     }
 
     /// <inheritdoc />
@@ -747,14 +777,15 @@ public sealed class PersonnelActionService : IPersonnelActionService
             // nombramiento LOSEP + contrato ocasional LOES) y esta separación solo afecta a uno.
             // Se ejecuta ANTES del chequeo de bloqueo de cuenta de abajo, para que ese chequeo
             // vea ya el estado actualizado de los regímenes activos restantes.
-            if (actionType?.Code == ResignationRetirementActionTypeCode)
+            var isResignationRetirement = await IsResignationRetirementFamilyAsync(actionType, ct);
+            if (isResignationRetirement)
                 await CloseLaborRegimeForSeparationAsync(action, updatedBy, ct);
 
             // Renuncia/Jubilación: si la acción tiene un contrato asociado, cerrarlo a RENUNCIA.
             // Comparación por Code (no un flag de catálogo nuevo) a propósito — evita un cambio
             // de esquema no solicitado; ver PersonnelActionType.RequiresAdUserDisable para el
             // efecto de bloqueo de cuenta, que es universal para este tipo y no depende de esto.
-            if (actionType?.Code == ResignationRetirementActionTypeCode && action.ContractId.HasValue)
+            if (isResignationRetirement && action.ContractId.HasValue)
                 await TriggerContractSeparationAsync(actionId, action.ContractId.Value, updatedBy, ct);
 
             // Va después del cierre de régimen de arriba: el chequeo de "otro régimen activo"
@@ -764,8 +795,14 @@ public sealed class PersonnelActionService : IPersonnelActionService
         }
         else
         {
+            // Cerrar el régimen es un efecto sobre datos propios (fecha de fin del régimen), no sobre sistemas externos:
+            // sin esto, una renuncia cargada como histórica deja el régimen abierto y la persona sigue saliendo en SIIES.
+            // Se omiten el aprovisionamiento/bloqueo de AD y la separación del contrato.
+            if (await IsResignationRetirementFamilyAsync(actionType, ct))
+                await CloseLaborRegimeForSeparationAsync(action, updatedBy, ct);
+
             _logger.LogInformation(
-                "PersonnelActionService: acción {ActionId} cargada como histórica — se omiten aprovisionamiento/bloqueo AD y cierre de régimen por separación.",
+                "PersonnelActionService: acción {ActionId} cargada como histórica — se omiten aprovisionamiento/bloqueo AD y separación de contrato; el régimen laboral se cierra si es renuncia/jubilación.",
                 actionId);
         }
 
@@ -1498,6 +1535,17 @@ public sealed class PersonnelActionService : IPersonnelActionService
         var effectiveFrom = action.EffectiveDate ?? action.ActionDate;
         var actionType = await _personnelActionType.GetByIdAsync(action.ActionTypeId, ct);
 
+        // Licencias, dedicación, vacaciones, disciplinarias y salidas no tienen situación propuesta: aunque el dato traiga un
+        // departamento destino de relleno, no son un movimiento ni originan un régimen laboral.
+        if (!PositionChangeRules.CanChangePosition(actionType?.ActionCategory)
+            || !PositionChangeRules.HasProposedSituation(action.DestinationDepartmentId, action.DestinationJobId))
+        {
+            _logger.LogInformation(
+                "[MOVEMENT] Registro omitido: la acción no tiene situación propuesta (tipo {Category}). ActionId={ActionId}.",
+                actionType?.ActionCategory, actionId);
+            return;
+        }
+
         try
         {
             if (action.DestinationJobId.HasValue && action.DestinationDepartmentId.HasValue)
@@ -1563,9 +1611,18 @@ public sealed class PersonnelActionService : IPersonnelActionService
 
         if (!action.EmployeeTypeId.HasValue) return;
 
+        // Una Designación de quien ya tiene un contrato activo del mismo régimen es una función que se suma al contrato.
+        if (PositionChangeRules.IsConcurrentDesignation(
+                actionType?.Code, await _laborRegimeService.HasActiveContractRegimeAsync(action.EmployeeId!.Value, action.EmployeeTypeId.Value, ct)))
+        {
+            _logger.LogInformation(
+                "[LABOR-REGIME] Registro omitido para ActionId={ActionId}: designación de quien ya tiene un contrato activo del mismo régimen.", actionId);
+            return;
+        }
+
         try
         {
-            await _laborRegimeService.CreateAsync(new DTOs.EmployeeLaborRegime.EmployeeLaborRegimeCreateDto
+            await _laborRegimeService.RegisterDocumentAsync(new DTOs.EmployeeLaborRegime.EmployeeLaborRegimeCreateDto
             {
                 EmployeeId = action.EmployeeId!.Value,
                 LaborRegimeId = action.EmployeeTypeId.Value,
@@ -1649,6 +1706,21 @@ public sealed class PersonnelActionService : IPersonnelActionService
             _logger.LogError(ex,
                 "[ACTION][DISABLE] ERROR al deshabilitar cuenta. ActionId={ActionId}", actionId);
         }
+    }
+
+    /// <summary>
+    /// true si el tipo es "Renuncia o Jubilación" o uno de sus hijos (Renuncia, Insubsistencia). Las acciones nuevas se
+    /// guardan con el tipo hijo, así que comparar solo contra el código del padre dejaba de cerrar el régimen y de separar
+    /// el contrato.
+    /// </summary>
+    private async Task<bool> IsResignationRetirementFamilyAsync(PersonnelActionType? actionType, CancellationToken ct)
+    {
+        if (actionType is null) return false;
+        if (actionType.Code == ResignationRetirementActionTypeCode) return true;
+        if (!actionType.ParentTypeId.HasValue) return false;
+
+        var parent = await _personnelActionType.GetByIdAsync(actionType.ParentTypeId.Value, ct);
+        return parent?.Code == ResignationRetirementActionTypeCode;
     }
 
     /// <summary>

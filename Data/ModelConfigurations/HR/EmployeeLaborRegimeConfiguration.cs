@@ -8,7 +8,9 @@ public sealed class EmployeeLaborRegimeConfiguration : IEntityTypeConfiguration<
 {
     public void Configure(EntityTypeBuilder<EmployeeLaborRegime> e)
     {
-        e.ToTable("tbl_EmployeeLaborRegime", "HR");
+        // La tabla tiene un trigger que mantiene Employees.EmployeeType; EF debe saberlo porque RowVersion hace que
+        // use OUTPUT en el UPDATE/INSERT, y SQL Server lo rechaza (error 334) si la tabla tiene triggers no declarados.
+        e.ToTable("tbl_EmployeeLaborRegime", "HR", tb => tb.HasTrigger("trg_EmployeeLaborRegime_SyncEmployeeType"));
         e.HasKey(x => x.Id);
 
         e.Property(x => x.DocumentType).HasMaxLength(20).IsRequired();

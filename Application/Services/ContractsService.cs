@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore;
@@ -210,6 +210,8 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             throw new ArgumentException("ContractID del body no coincide con el id de la ruta.");
 
         var strategy = _db.Database.CreateExecutionStrategy();
+        DateTime? previousEndDate = null;
+        string? previousContractCode = null;
 
         await strategy.ExecuteAsync(async () =>
         {
@@ -219,6 +221,8 @@ public class ContractsService : Service<Contracts, int>, IContractsService
                 ?? throw new KeyNotFoundException($"Contracts con id={id} no existe.");
 
             var before = AuditSnapshotHelper.Snapshot(current);
+            previousEndDate = current.EndDate;
+            previousContractCode = current.ContractCode;
 
             // A diferencia de UpdateAsync, la corrección se permite en cualquier estado
             // (incluido VIGENTE) — exige motivo obligatorio y queda auditada en HR.Audit.
@@ -240,6 +244,19 @@ public class ContractsService : Service<Contracts, int>, IContractsService
 
             await tx.CommitAsync(ct);
         });
+
+        // Ya confirmada la corrección: se replica en el régimen laboral que nació de este contrato. Un fallo aquí no
+        // revierte la corrección (ya auditada); queda en el log.
+        try
+        {
+            var sync = await _laborRegimeService.SyncFromContractAsync(id, previousEndDate, _currentUser.EmployeeId, previousContractCode, ct);
+            if (sync.Outcome == DTOs.EmployeeLaborRegime.LaborRegimeSyncOutcome.Updated)
+                _logger.LogInformation("[LABOR-REGIME] Contrato {ContractId} corregido: {Message}", id, sync.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[LABOR-REGIME] ERROR sincronizando el régimen laboral tras corregir el contrato {ContractId}.", id);
+        }
     }
 
     /// <inheritdoc />
@@ -383,7 +400,8 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         });
 
         // Registrar el régimen laboral del contrato (no bloquea la creación del contrato si falla).
-        if (isRootContract && created is not null && created.LaborRegimeID.HasValue)
+        // Contratos raíz y adendums/prórrogas: cada uno es un documento de relación laboral con su propia fila.
+        if (created is not null && created.LaborRegimeID.HasValue)
             await RegisterLaborRegimeFromContractAsync(created, ct);
 
         // Registrar el movimiento (aplica a raíz y adendum) si cambia de departamento.
@@ -474,6 +492,37 @@ public class ContractsService : Service<Contracts, int>, IContractsService
     /// de un contrato raíz recién creado. No crea cuenta AD ni empleado nuevo: si el empleado
     /// activo aún no existe (aprovisionamiento pendiente por otro flujo), se omite en silencio.
     /// </summary>
+    /// <summary>
+    /// Un adendum o prórroga no tiene relación con la IES propia en el catálogo: hereda la del contrato del que cuelga
+    /// (se sube por <c>ParentID</c>, hasta 3 niveles). Si el tipo del contrato ya la define, devuelve null y se deriva del tipo.
+    /// </summary>
+    private async Task<int?> ResolveInheritedSiiesRelationAsync(Contracts contract, CancellationToken ct)
+    {
+        var ownRelation = await _db.ContractType.AsNoTracking()
+            .Where(t => t.ContractTypeId == contract.ContractTypeID)
+            .Select(t => t.SiiesRelacionIesTypeId)
+            .FirstOrDefaultAsync(ct);
+        if (ownRelation.HasValue || contract.ParentID is null) return null;
+
+        var parentId = contract.ParentID;
+        for (var level = 0; level < 3 && parentId.HasValue; level++)
+        {
+            var parent = await _db.Contracts.IgnoreQueryFilters().AsNoTracking()
+                .Where(c => c.ContractID == parentId.Value)
+                .Select(c => new { c.ParentID, c.ContractTypeID })
+                .FirstOrDefaultAsync(ct);
+            if (parent is null) break;
+
+            var relation = await _db.ContractType.AsNoTracking()
+                .Where(t => t.ContractTypeId == parent.ContractTypeID)
+                .Select(t => t.SiiesRelacionIesTypeId)
+                .FirstOrDefaultAsync(ct);
+            if (relation.HasValue) return relation;
+            parentId = parent.ParentID;
+        }
+        return null;
+    }
+
     private async Task RegisterLaborRegimeFromContractAsync(Contracts contract, CancellationToken ct)
     {
         try
@@ -492,7 +541,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
                 return;
             }
 
-            await _laborRegimeService.CreateAsync(new DTOs.EmployeeLaborRegime.EmployeeLaborRegimeCreateDto
+            await _laborRegimeService.RegisterDocumentAsync(new DTOs.EmployeeLaborRegime.EmployeeLaborRegimeCreateDto
             {
                 EmployeeId = employeeId,
                 LaborRegimeId = contract.LaborRegimeID!.Value,
@@ -503,6 +552,8 @@ public class ContractsService : Service<Contracts, int>, IContractsService
                 DocumentNumber = contract.ContractCode,
                 SourceContractId = contract.ContractID,
                 EffectiveFrom = DateOnly.FromDateTime(contract.StartDate),
+                EffectiveTo = contract.EndDate.Year < 9999 ? DateOnly.FromDateTime(contract.EndDate) : null,
+                SiiesRelacionIesTypeId = await ResolveInheritedSiiesRelationAsync(contract, ct),
             }, _currentUser.EmployeeId, ct);
         }
         catch (InvalidOperationException ex)
