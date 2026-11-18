@@ -30,6 +30,13 @@ public class AppDbContext : DbContext
     private bool IncludeTestData => _testDataPolicy.IncludeTestData;
     private int? OwnEmployeeId => _testDataPolicy.CurrentEmployeeId;
 
+    /// <summary>
+    /// Misma regla de visibilidad de datos de prueba que el filtro global de las vistas de empleado, para aplicarla en memoria
+    /// cuando el predicado en SQL cambia el plan de ejecución (ver SiiesProfesoresReportSource).
+    /// </summary>
+    public bool IsVisibleUnderTestDataPolicy(bool isTestData, int employeeId) =>
+        IncludeTestData || !isTestData || employeeId == OwnEmployeeId;
+
     // ─────────────────────────────────────────────────────────────────────────
     // Convenciones globales de tipos
     // ─────────────────────────────────────────────────────────────────────────

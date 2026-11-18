@@ -51,6 +51,20 @@ public sealed class ReportDefinition
     public string Subtitle { get; init; } = string.Empty;
 
     /// <summary>
+    /// Inicio del período (rango de fechas) que cubre el reporte. Si <see cref="PeriodStart"/> y <see cref="PeriodEnd"/> traen
+    /// valor, los renderizadores (PDF y Excel) lo muestran destacado debajo del título. Null en los reportes sin rango.
+    /// </summary>
+    public DateTime? PeriodStart { get; init; }
+
+    /// <summary>Fin del período que cubre el reporte. Ver <see cref="PeriodStart"/>.</summary>
+    public DateTime? PeriodEnd { get; init; }
+
+    /// <summary>Texto del período ("Período del reporte: del dd/MM/yyyy al dd/MM/yyyy") o null si el reporte no tiene rango.</summary>
+    public string? PeriodText => PeriodStart.HasValue && PeriodEnd.HasValue
+        ? $"Período del reporte: del {PeriodStart.Value:dd/MM/yyyy} al {PeriodEnd.Value:dd/MM/yyyy}"
+        : null;
+
+    /// <summary>
     /// Nombre del usuario que generó el reporte, usado en el pie de página.
     /// </summary>
     public string GeneratedBy { get; init; } = string.Empty;

@@ -91,6 +91,8 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             FilePrefix = esTodos ? "SIIES_Funcionarios_Todos"
                 : esPasaporte ? "SIIES_Funcionario_Pasaporte" : "SIIES_Funcionarios_Cedula",
             Subtitle = SiiesReportSubtitle.ForEmployees(filter, rows.Count),
+            PeriodStart = filter.StartDate.HasValue && filter.EndDate.HasValue ? filter.StartDate : null,
+            PeriodEnd = filter.StartDate.HasValue && filter.EndDate.HasValue ? filter.EndDate : null,
             GeneratedBy = context.User.Identity?.Name ?? "anonymous",
             GeneratedAt = DateTime.Now,
             Columns = esPasaporte ? PasaporteColumns : CedulaColumns,
@@ -265,6 +267,17 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
         var desde = DateOnly.FromDateTime(desdeValue);
         var hasta = DateOnly.FromDateTime(hastaValue);
         var employeeIds = rows.Select(r => r.EmployeeID).Distinct().ToList();
+        // 2026-11-17: las acciones de un docente (su docencia LOES) se reportan en Profesores; aqui solo salen las filas LOSEP de la consulta
+        // base. No se le agregan filas de movimientos.
+        var teacherIds = await _db.TeacherStructures.AsNoTracking()
+            .Where(t => employeeIds.Contains(t.EmployeeId)).Select(t => t.EmployeeId).Distinct().ToListAsync(ct);
+        var titularIds = await (from e in _db.Employees.AsNoTracking()
+                                join jb in _db.Jobs.AsNoTracking() on e.JobId equals (int?)jb.JobID
+                                where employeeIds.Contains(e.EmployeeId) && jb.Description != null && jb.Description.StartsWith("PROFESOR TITULAR")
+                                select e.EmployeeId).Distinct().ToListAsync(ct);
+        var excludedFromMovements = teacherIds.Concat(titularIds).ToHashSet();
+        employeeIds = employeeIds.Where(id => !excludedFromMovements.Contains(id)).ToList();
+        if (employeeIds.Count == 0) return rows;
         var knownDocuments = rows
             .Where(r => !string.IsNullOrWhiteSpace(r.DocumentNumber))
             .Select(r => (r.EmployeeID, r.DocumentNumber!.Trim().ToUpperInvariant()))
@@ -368,7 +381,9 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                 CASE
                     WHEN EXISTS (
                         SELECT 1 FROM [HR].[tbl_DepartmentAuthorities] da
-                        WHERE da.[EmployeeId] = e.[EmployeeID] AND da.[IsActive] = 1
+                        WHERE da.[EmployeeId] = e.[EmployeeID]
+                          -- 2026-11-17: tambien el historial (inactivo con fecha de fin real); un director anterior sigue siendo DIRECTIVO en su periodo.
+                          AND (da.[IsActive] = 1 OR (da.[EndDate] IS NOT NULL AND da.[EndDate] > da.[StartDate]))
                           AND da.[StartDate] <= @FechaHasta
                           AND (da.[EndDate] IS NULL OR da.[EndDate] >= @FechaDesde)
                     ) THEN N'DIRECTIVO'
@@ -379,15 +394,15 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                 END                             AS [TipoFuncionarioSiiesLabel],
                 tdl.[SiiesLabel]                AS [TipoDocenteLoesSiiesLabel],
                 cdl.[SiiesLabel]                AS [CategoriaDocenteLoesSiiesLabel],
-                COALESCE(apt.[ActionNumber], elr.[DocumentNumber], ctr.[ContractCode], pa.[ActionNumber], ctrFallback.[ContractCode], paFallback.[ActionNumber]) AS [DocumentNumber],
+                COALESCE(CASE WHEN aptx.[Ok] = 1 THEN apt.[ActionNumber] END, elr.[DocumentNumber], ctr.[ContractCode], pa.[ActionNumber], ctrFallback.[ContractCode], paFallback.[ActionNumber]) AS [DocumentNumber],
                 -- 2026-10-14: igual que la vista — FECHA_INICIO = inicio del contrato/accion que respalda el
                 -- regimen (ctr/pa); EffectiveFrom del regimen solo como respaldo y HireDate como ultimo recurso.
-                COALESCE(CAST(apt.[ActionDate] AS DATE), CAST(ctr.[startdate] AS DATE), CAST(pa.[EffectiveDate] AS DATE), elr.[EffectiveFrom],
+                COALESCE(CAST(CASE WHEN aptx.[Ok] = 1 THEN apt.[ActionDate] END AS DATE), CAST(ctr.[startdate] AS DATE), CAST(pa.[EffectiveDate] AS DATE), elr.[EffectiveFrom],
                          CAST(ctrFallback.[startdate] AS DATE), paFallback.[EffectiveDate], e.[HireDate])   AS [EffectiveFrom],
                 COALESCE(elr.[EffectiveTo], CAST(ctrFallback.[enddate] AS DATE), paFallback.[EndDate])             AS [EffectiveTo],
                 elr.[IsActive]                  AS [RegimeIsActive],
                 elr.[IngresoPorConcurso],
-                CASE WHEN apt.[ActionId] IS NOT NULL THEN 'PERSONNEL_ACTION' ELSE COALESCE(elr.[DocumentType],
+                CASE WHEN aptx.[Ok] = 1 THEN 'PERSONNEL_ACTION' ELSE COALESCE(elr.[DocumentType],
                     CASE WHEN ctrFallback.[ContractID] IS NOT NULL THEN 'CONTRACT'
                          WHEN paFallback.[ActionID] IS NOT NULL THEN 'PERSONNEL_ACTION' END) END        AS [RegimeDocumentType],
                 lrEff.[Name]                    AS [LaborRegimeName],
@@ -412,6 +427,13 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             -- solapa con el rango, priorizando el principal y luego el mas reciente dentro de el.
             -- 2026-11-06: ya NO es TOP 1. Una persona con varios contratos, adendums, renovaciones o nombramientos en el rango sale
             -- en una fila por cada documento (un mismo numero de documento no se repite: queda la fila del principal / la mas reciente).
+            -- 2026-11-17: tch = la persona es docente (estructura docente o cargo "Profesor titular"). Un docente NO sale aqui por su
+            -- docencia (LOES, va en Profesores): solo por sus filas de regimen LOSEP (doble regimen real, p. ej. un cargo directivo).
+            OUTER APPLY (
+                SELECT CASE WHEN ISNULL(j.[Description], '') LIKE 'PROFESOR TITULAR%'
+                              OR EXISTS (SELECT 1 FROM [HR].[tbl_TeacherStructure] ts0 WHERE ts0.[EmployeeID] = e.[EmployeeID])
+                            THEN 1 ELSE 0 END AS [v]
+            ) tch
             OUTER APPLY (
                 SELECT x.*
                 FROM (
@@ -423,6 +445,8 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                     WHERE r.[EmployeeId] = e.[EmployeeID]
                       AND r.[EffectiveFrom] <= @FechaHasta
                       AND (r.[EffectiveTo] IS NULL OR r.[EffectiveTo] >= @FechaDesde)
+                      -- 2026-11-17: de un docente solo cuentan sus filas LOSEP.
+                      AND (tch.[v] = 0 OR r.[LaborRegimeId] = 57)
                       -- 2026-11-12: un regimen cuyo contrato (CONTRACT_STATUS 208 = ANULADO) o accion de origen esta anulado no es un documento valido.
                       AND NOT EXISTS (SELECT 1 FROM [HR].[tbl_Contracts] c0
                                       WHERE c0.[ContractID] = r.[SourceContractId] AND (c0.[Status] = 208 OR c0.[IsDeleted] = 1))
@@ -451,6 +475,7 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                   AND c.[Status] IN (274, 276) -- VIGENTE, VENCIDO (ref_Types CONTRACT_STATUS)
                   AND c.[startdate] <= @FechaHasta AND c.[enddate] >= @FechaDesde
                   AND elr.[DocumentNumber] IS NULL AND ctr.[ContractCode] IS NULL AND pa.[ActionNumber] IS NULL
+                  AND tch.[v] = 0
                 ORDER BY CASE WHEN c.[Status] = 274 THEN 0 ELSE 1 END, c.[startdate] DESC
             ) ctrFallback
             LEFT JOIN [HR].[tbl_contract_type] ctFallback ON ctFallback.[ContractTypeID] = ctrFallback.[ContractTypeID]
@@ -468,6 +493,7 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                        OR (pa2.[EndDate] IS NULL AND (pa2.[Status] = 'VIGENTE' OR pa2.[EffectiveDate] >= @FechaDesde)))
                   AND elr.[DocumentNumber] IS NULL AND ctr.[ContractCode] IS NULL AND pa.[ActionNumber] IS NULL
                   AND ctrFallback.[ContractID] IS NULL
+                  AND tch.[v] = 0
                 ORDER BY CASE WHEN pa2.[Status] = 'VIGENTE' THEN 0 ELSE 1 END, pa2.[ActionDate] DESC
             ) paFallback
             LEFT JOIN [HR].[tbl_personnel_action_type] patFallback ON patFallback.[PersonnelActionTypeId] = paFallback.[ActionTypeID]
@@ -489,7 +515,18 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                 WHERE ap.[HasLaterExit] = 0
                   AND (ap.[AppointmentDate] <= @FechaHasta
                        OR (ap.[AppointmentDate] > @FechaHasta AND ap.[FirstPermanentDate] <= @FechaHasta))
-            ) apt ON apt.[EmployeeID] = e.[EmployeeID] AND (elr.[Id] IS NULL OR elr.[IsPrincipal] = 1)
+            ) apt ON apt.[EmployeeID] = e.[EmployeeID] AND (elr.[Id] IS NULL OR elr.[IsPrincipal] = 1) AND tch.[v] = 0
+            -- Con historial por documento, el nombramiento ganador ya puede tener su propia fila: en ese caso NO reemplaza el
+            -- documento de la fila principal (repetiria su numero y su fecha de inicio). Sigue aportando su relacion con la IES.
+            OUTER APPLY (
+                SELECT CASE WHEN apt.[ActionId] IS NOT NULL
+                             AND (elr.[Id] IS NULL
+                                  OR NOT EXISTS (SELECT 1 FROM [HR].[tbl_EmployeeLaborRegime] rx
+                                                 WHERE rx.[EmployeeId] = e.[EmployeeID]
+                                                   AND rx.[SourcePersonnelActionId] = apt.[ActionId]
+                                                   AND rx.[Id] <> elr.[Id]))
+                            THEN 1 ELSE 0 END AS [Ok]
+            ) aptx
             LEFT JOIN [HR].[tbl_PersonnelActions] aptPa           ON aptPa.[ActionID] = apt.[ActionId]
             LEFT JOIN [HR].[tbl_personnel_action_type] aptPat     ON aptPat.[PersonnelActionTypeId] = aptPa.[ActionTypeID]
             LEFT JOIN [HR].[ref_Types] aptRel                     ON aptRel.[TypeID] = aptPat.[SiiesRelacionIesTypeId]
@@ -515,14 +552,17 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                 CASE WHEN paFallback.[EmployeeTypeId] IN (57, 58, 59) THEN paFallback.[EmployeeTypeId] END,
                 curReg.[LaborRegimeId])
             WHERE e.[IsDeleted] = 0
-              AND ISNULL(j.[Description], '') NOT LIKE 'PROFESOR TITULAR%'
-              AND NOT EXISTS (SELECT 1 FROM [HR].[tbl_TeacherStructure] ts WHERE ts.[EmployeeID] = e.[EmployeeID])
+              -- 2026-11-17: antes se excluia a todo docente. Ahora un docente entra solo con una fila de regimen LOSEP que se solape con el
+              -- rango (elr ya viene limitada a LOSEP para docentes); su docencia LOES sale en Profesores.
+              AND (tch.[v] = 0 OR elr.[Id] IS NOT NULL)
               -- 2026-10-14: igual que la vista — los profesores ocasionales/tecnicos docentes van a
               -- vw_SiiesProfesores; sin esta exclusion se colaban aqui (557-727 filas segun el rango).
               -- Igual que la vista: el contrato ocasional solo excluye sin un régimen principal LOSEP/Código de Trabajo
               -- que se solape con el rango (doble régimen: Funcionario por el principal, Profesores por la delegación).
               AND (
                     NOT EXISTS (SELECT 1 FROM [HR].[fn_SiiesDocenteOcasionalContract](p.[PersonID]))
+                    -- 2026-11-17: un docente con fila LOSEP (ya exigida arriba) sale por ella aunque su principal sea la docencia LOES.
+                    OR tch.[v] = 1
                     OR EXISTS (SELECT 1 FROM [HR].[tbl_EmployeeLaborRegime] pr
                                WHERE pr.[EmployeeId] = e.[EmployeeID] AND pr.[IsPrincipal] = 1
                                  AND pr.[LaborRegimeId] IN (57, 59)

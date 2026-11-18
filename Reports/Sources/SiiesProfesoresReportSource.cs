@@ -80,9 +80,11 @@ public abstract class SiiesProfesoresReportSourceBase
         // académico. Toda la lógica de unión/período vive en la función SQL; aquí solo se
         // reenvía el parámetro que llega del filtro del reporte. NULL = período más reciente
         // disponible por profesor (mismo comportamiento por defecto de siempre).
+        _db.Database.SetCommandTimeout(SiiesAcademicPeriodHelper.ReportCommandTimeoutSeconds);
         var periodCode = string.IsNullOrWhiteSpace(filter.PeriodCode) ? null : filter.PeriodCode.Trim();
         var query = _db.vwSiiesProfesores
-            .FromSqlInterpolated($"SELECT * FROM HR.fn_SiiesProfesoresHoras({periodCode})")
+            .FromSqlRaw(SiiesAcademicPeriodHelper.BuildTableFunctionSql("HR.fn_SiiesProfesoresHoras", periodCode))
+            .IgnoreQueryFilters() // ver GetTeachersVigentesEnRangoAsync: la regla de datos de prueba se aplica en memoria
             .AsNoTracking()
             .Where(v => identTypeName == AllIdentTypes
                 ? (v.IdentTypeName == "CEDULA" || v.IdentTypeName == "PASAPORTE")
@@ -103,7 +105,8 @@ public abstract class SiiesProfesoresReportSourceBase
         if (identTypeName == AllIdentTypes)
             query = query.OrderBy(v => v.IdentTypeName).ThenBy(v => v.LastName).ThenBy(v => v.FirstName);
 
-        return await query.ToListAsync(ct);
+        var rows = await query.ToListAsync(ct);
+        return rows.Where(r => _db.IsVisibleUnderTestDataPolicy(r.IsTestData, r.EmployeeID)).ToList();
     }
 
     /// <summary>
@@ -119,17 +122,22 @@ public abstract class SiiesProfesoresReportSourceBase
     /// </summary>
     private async Task<List<VwSiiesProfesor>> GetTeachersVigentesEnRangoAsync(string identTypeName, ReportFilterDto filter, CancellationToken ct)
     {
+        _db.Database.SetCommandTimeout(SiiesAcademicPeriodHelper.ReportCommandTimeoutSeconds);
         var periodCodes = await SiiesAcademicPeriodHelper.GetOverlappingPeriodCodesAsync(_db, filter.StartDate!.Value, filter.EndDate!.Value, ct);
 
         // 2026-11-12: con una identificacion el filtro se envia a la consulta de cada periodo (antes se traian todos los profesores del
         // periodo, ~19 s por periodo, y recien despues se filtraba en memoria).
         var identificationFilter = string.IsNullOrWhiteSpace(filter.Identification) ? null : filter.Identification.Trim();
 
+        // 2026-11-17: el filtro global de datos de prueba (IsTestData/OwnEmployeeId) junto con el de tipo de identificacion hacia que SQL Server
+        // eligiera un plan malo para la funcion (~19 s por periodo contra ~2 s sin el predicado), con timeouts de 30 s bajo carga. Se consulta
+        // sin ese predicado y la misma regla se aplica en memoria (~700 filas).
         var byEmployee = new Dictionary<int, VwSiiesProfesor>();
         foreach (var periodCode in periodCodes)
         {
             var periodRows = await _db.vwSiiesProfesores
-                .FromSqlInterpolated($"SELECT * FROM HR.fn_SiiesProfesoresHoras({periodCode})")
+                .FromSqlRaw(SiiesAcademicPeriodHelper.BuildTableFunctionSql("HR.fn_SiiesProfesoresHoras", periodCode))
+                .IgnoreQueryFilters() // visibilidad de datos de prueba se aplica en memoria (ver abajo)
                 .AsNoTracking()
                 .Where(v => (identTypeName == AllIdentTypes
                     ? (v.IdentTypeName == "CEDULA" || v.IdentTypeName == "PASAPORTE")
@@ -137,7 +145,7 @@ public abstract class SiiesProfesoresReportSourceBase
                     && (identificationFilter == null || v.IDCard == identificationFilter))
                 .ToListAsync(ct);
 
-            foreach (var row in periodRows)
+            foreach (var row in periodRows.Where(r => _db.IsVisibleUnderTestDataPolicy(r.IsTestData, r.EmployeeID)))
                 byEmployee.TryAdd(row.EmployeeID, row); // primer periodo visto para este empleado = el mas reciente
         }
 
@@ -204,6 +212,7 @@ public abstract class SiiesProfesoresReportSourceBase
                 r.IsPrincipal,
                 r.IngresoPorConcurso,
                 r.SourcePersonnelActionId,
+                r.LaborRegimeId,
                 ContractVoid = c != null && (c.Status == 208 || c.IsDeleted),
                 DepartmentName = d != null ? d.Name : null,
                 Hours = c != null ? c.ContractedHours : null,
@@ -219,9 +228,17 @@ public abstract class SiiesProfesoresReportSourceBase
                 .Select(a => a.ActionId)
                 .ToListAsync(ct)).ToHashSet();
 
-        var documents = rawDocuments
+        var validDocuments = rawDocuments
             .Where(x => !x.ContractVoid && !(x.SourcePersonnelActionId != null && voidActionIds.Contains(x.SourcePersonnelActionId.Value)))
             .ToList();
+
+        // 2026-11-17: doble régimen. Un docente con un cargo LOSEP (p. ej. director) tiene una fila LOES (su docencia) y otra LOSEP (el cargo);
+        // aquí solo cuentan las filas que NO son LOSEP (la fila LOSEP sale en Funcionarios). Si en el rango solo tiene filas LOSEP, no estuvo
+        // en docencia LOES y no se repite como profesor.
+        const int losepRegimeId = 57;
+        var losepOnlyEmployees = validDocuments.GroupBy(x => x.EmployeeId)
+            .Where(g => g.All(x => x.LaborRegimeId == losepRegimeId)).Select(g => g.Key).ToHashSet();
+        var documents = validDocuments.Where(x => x.LaborRegimeId != losepRegimeId).ToList();
 
         var byEmployee = documents
             .GroupBy(x => x.EmployeeId)
@@ -237,6 +254,7 @@ public abstract class SiiesProfesoresReportSourceBase
         {
             if (!byEmployee.TryGetValue(baseRow.EmployeeID, out var docs) || docs.Count == 0)
             {
+                if (losepOnlyEmployees.Contains(baseRow.EmployeeID)) continue; // solo cargo LOSEP en el rango: no es docencia
                 expanded.Add(baseRow);
                 continue;
             }
@@ -475,6 +493,8 @@ public sealed class SiiesProfesoresReportSource : SiiesProfesoresReportSourceBas
             FilePrefix = esTodos ? "SIIES_Profesores_Todos"
                 : esPasaporte ? "SIIES_Profesores_Pasaporte" : "SIIES_Profesores_Cedula",
             Subtitle = await SiiesReportSubtitle.ForTeachersAsync(_db, filter, rows.Count, context.RequestAborted),
+            PeriodStart = filter.StartDate.HasValue && filter.EndDate.HasValue ? filter.StartDate : null,
+            PeriodEnd = filter.StartDate.HasValue && filter.EndDate.HasValue ? filter.EndDate : null,
             GeneratedBy = context.User.Identity?.Name ?? "anonymous",
             GeneratedAt = DateTime.Now,
             Columns = esPasaporte ? PasaporteColumns : CedulaColumns,

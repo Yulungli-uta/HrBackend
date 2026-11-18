@@ -18,6 +18,25 @@ namespace WsUtaSystem.Reports.Sources;
 internal static class SiiesAcademicPeriodHelper
 {
     /// <summary>
+    /// [2026-11-17] Timeout (segundos) para las consultas de HR.fn_SiiesProfesoresHoras / fn_SiiesFormacionProfesional:
+    /// cada periodo tarda ~19 s con todas las columnas y con la base ocupada superaba los 30 s por defecto (TaskCanceledException / HTTP 500).
+    /// </summary>
+    public const int ReportCommandTimeoutSeconds = 300;
+
+    /// <summary>
+    /// [2026-11-17] SELECT * de una función de tabla con el código de período como literal (validado), no como parámetro.
+    /// HR.fn_SiiesProfesoresHoras usa "@PeriodCode IS NULL OR ..."; con el período como parámetro SQL Server reutiliza un plan que tarda ~19 s
+    /// (con literal ~2 s, 0,7 s sin filtros). El código solo admite letras, dígitos, guion y guion bajo: no hay inyección posible.
+    /// </summary>
+    public static string BuildTableFunctionSql(string functionName, string? periodCode)
+    {
+        if (periodCode is null) return $"SELECT * FROM {functionName}(NULL)";
+        if (!System.Text.RegularExpressions.Regex.IsMatch(periodCode, "^[A-Za-z0-9_-]{1,10}$"))
+            throw new ArgumentException("Código de período académico inválido.", nameof(periodCode));
+        return $"SELECT * FROM {functionName}('{periodCode}')";
+    }
+
+    /// <summary>
     /// Periodos de HR.tbl_AcademicHoursDistribution cuyo [PeriodStart, PeriodEnd] se solapa con
     /// [desde, hasta], ordenados del mas reciente al mas antiguo (PeriodEnd DESC) - el orden
     /// importa para que el llamador pueda quedarse con "el periodo mas reciente que califica"
@@ -34,10 +53,9 @@ internal static class SiiesAcademicPeriodHelper
             .AsNoTracking()
             .Where(a => a.PeriodStart != null && a.PeriodEnd != null
                      && a.PeriodStart <= fechaHasta && a.PeriodEnd >= fechaDesde)
-            .Select(a => new { a.PeriodCode, a.PeriodEnd })
-            .Distinct()
-            .OrderByDescending(a => a.PeriodEnd)
-            .Select(a => a.PeriodCode)
+            .GroupBy(a => a.PeriodCode)
+            .OrderByDescending(g => g.Max(a => a.PeriodEnd))
+            .Select(g => g.Key)
             .ToListAsync(ct);
     }
 }

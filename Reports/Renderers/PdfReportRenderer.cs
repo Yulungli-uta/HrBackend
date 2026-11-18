@@ -139,6 +139,13 @@ public sealed class PdfReportRenderer : IReportRenderer
                     .Text(definition.Title)
                     .FontSize(16).Bold().FontColor(_config.Colors.Primary);
 
+                if (definition.PeriodText is { } periodText)
+                {
+                    col.Item().PaddingTop(3)
+                        .Text(periodText)
+                        .FontSize(11).Bold().FontColor(_config.Colors.Primary);
+                }
+
                 if (!string.IsNullOrWhiteSpace(definition.Subtitle))
                 {
                     col.Item().PaddingTop(3)

@@ -129,6 +129,8 @@ public sealed class SiiesFormacionProfesionalReportSource : IReportSource
             Title = "SIIES - Formación Profesional (Terminado)",
             FilePrefix = "SIIES_Formacion_Profesional",
             Subtitle = await SiiesReportSubtitle.ForTeachersAsync(_db, filter, rows.Count, context.RequestAborted),
+            PeriodStart = filter.StartDate.HasValue && filter.EndDate.HasValue ? filter.StartDate : null,
+            PeriodEnd = filter.StartDate.HasValue && filter.EndDate.HasValue ? filter.EndDate : null,
             GeneratedBy = context.User.Identity?.Name ?? "anonymous",
             GeneratedAt = DateTime.Now,
             Columns =
@@ -166,6 +168,7 @@ public sealed class SiiesFormacionProfesionalReportSource : IReportSource
     /// </summary>
     private async Task<List<VwSiiesFormacionProfesional>> GetTitulosVigentesEnRangoAsync(ReportFilterDto filter, CancellationToken ct)
     {
+        _db.Database.SetCommandTimeout(SiiesAcademicPeriodHelper.ReportCommandTimeoutSeconds);
         var periodCodes = await SiiesAcademicPeriodHelper.GetOverlappingPeriodCodesAsync(_db, filter.StartDate!.Value, filter.EndDate!.Value, ct);
 
         var seen = new HashSet<(int EmployeeID, string? NombreTitulo, DateOnly? FechaObtuvoTitulo)>();

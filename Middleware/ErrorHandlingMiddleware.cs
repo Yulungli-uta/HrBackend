@@ -21,7 +21,12 @@ public class ErrorHandlingMiddleware
 
     private async Task HandleAsync(HttpContext ctx, Exception ex)
     {
-        var problem = ToProblem(ex);
+        // Timeout de comando SQL: SqlException -2, o cancelación de EF sin que el cliente haya abortado la petición (el timeout llega como TaskCanceledException).
+        var isSqlTimeout = ex is SqlException { Number: -2 }
+            || (ex is OperationCanceledException && !ctx.RequestAborted.IsCancellationRequested);
+        var problem = isSqlTimeout
+            ? new ProblemDetails { Title = "La consulta tardó demasiado", Detail = "La base de datos no respondió dentro del tiempo máximo permitido. Intente nuevamente en unos minutos o reduzca el rango de fechas del reporte.", Status = StatusCodes.Status504GatewayTimeout }
+            : ToProblem(ex);
         problem.Extensions["traceId"] = ctx.TraceIdentifier;
         _logger.LogError(ex, "Error en {Method} {Path}. TraceId={TraceId}", ctx.Request?.Method, ctx.Request?.Path.Value, ctx.TraceIdentifier);
         ctx.Response.ContentType = "application/problem+json";

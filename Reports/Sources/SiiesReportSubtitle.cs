@@ -22,11 +22,11 @@ internal static class SiiesReportSubtitle
     {
         ArgumentNullException.ThrowIfNull(filter);
 
-        var scope = filter.StartDate.HasValue && filter.EndDate.HasValue
-            ? RangeText(filter.StartDate.Value, filter.EndDate.Value)
-            : $"Personal vigente al {DateTime.Now.ToString(DateFormat, CultureInfo.InvariantCulture)}";
+        // Con rango, las fechas salen destacadas bajo el título (ReportDefinition.PeriodText); el subtítulo solo lleva el total.
+        if (filter.StartDate.HasValue && filter.EndDate.HasValue)
+            return $"Total registros: {totalRows}";
 
-        return $"{scope} | Total registros: {totalRows}";
+        return $"Personal vigente al {DateTime.Now.ToString(DateFormat, CultureInfo.InvariantCulture)} | Total registros: {totalRows}";
     }
 
     /// <summary>
@@ -41,12 +41,13 @@ internal static class SiiesReportSubtitle
         string scope;
         if (filter.StartDate.HasValue && filter.EndDate.HasValue)
         {
-            scope = RangeText(filter.StartDate.Value, filter.EndDate.Value);
+            // Las fechas del rango salen destacadas bajo el título (ReportDefinition.PeriodText); aquí solo los períodos académicos.
+            scope = string.Empty;
             var codes = await SiiesAcademicPeriodHelper.GetOverlappingPeriodCodesAsync(db, filter.StartDate.Value, filter.EndDate.Value, ct);
             if (codes.Count > 0)
             {
                 var listed = string.Join(", ", codes.Take(MaxCodesListed));
-                scope += codes.Count > MaxCodesListed ? $" (períodos académicos: {listed}…)" : $" (períodos académicos: {listed})";
+                scope = codes.Count > MaxCodesListed ? $"Períodos académicos: {listed}…" : $"Períodos académicos: {listed}";
             }
         }
         else if (!string.IsNullOrWhiteSpace(filter.PeriodCode))
@@ -68,9 +69,6 @@ internal static class SiiesReportSubtitle
             scope = "Período académico más reciente de cada docente";
         }
 
-        return $"{scope} | Total registros: {totalRows}";
+        return string.IsNullOrEmpty(scope) ? $"Total registros: {totalRows}" : $"{scope} | Total registros: {totalRows}";
     }
-
-    private static string RangeText(DateTime start, DateTime end) =>
-        $"Rango: {start.ToString(DateFormat, CultureInfo.InvariantCulture)} — {end.ToString(DateFormat, CultureInfo.InvariantCulture)}";
 }

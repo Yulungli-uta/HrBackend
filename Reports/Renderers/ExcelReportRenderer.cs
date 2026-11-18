@@ -116,6 +116,16 @@ public sealed class ExcelReportRenderer : IReportRenderer
         titleCell.Style.Font.FontSize = 14;
         row++;
 
+        // Período del reporte (rango de fechas): destacado, para que no se confunda con el subtítulo gris
+        if (definition.PeriodText is { } periodText)
+        {
+            var periodCell = worksheet.Cell(row, 1);
+            periodCell.Value = periodText;
+            periodCell.Style.Font.Bold = true;
+            periodCell.Style.Font.FontSize = 11;
+            row++;
+        }
+
         // Subtítulo (filtros aplicados)
         if (!string.IsNullOrWhiteSpace(definition.Subtitle))
         {
