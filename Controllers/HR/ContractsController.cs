@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.ContractRequest;
 using WsUtaSystem.Application.DTOs.Contracts;
+using WsUtaSystem.Application.DTOs.StoredFileVersions;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Infrastructure.Security;
@@ -356,6 +357,45 @@ public class ContractsController : ControllerBase
             await _service.CorrectAsync(id, request.Data, request.Reason, ct);
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Versiones del documento firmado del contrato (la vigente y las anteriores, con quién, cuándo y motivo).
+    /// Alcance por departamento igual que el detalle del contrato.
+    /// </summary>
+    [HttpGet("{id:int}/signed-document/versions")]
+    public async Task<IActionResult> GetSignedDocumentVersions(int id, CancellationToken ct)
+    {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
+        return Ok(await _service.GetSignedDocumentVersionsAsync(id, ct));
+    }
+
+    /// <summary>
+    /// Corrección: registra o reemplaza el documento firmado en CUALQUIER estado, como una versión nueva
+    /// (la anterior queda inactiva y archivada). No cambia el estado ni dispara efectos. Motivo obligatorio si ya
+    /// había un firmado. Requiere el permiso elevado CONTRACTS.MANAGE.
+    /// </summary>
+    [HttpPut("{id:int}/signed-document")]
+    [RequirePermission("CONTRACTS.MANAGE")]
+    public async Task<IActionResult> ReplaceSignedDocument(int id, [FromBody] ReplaceSignedDocumentRequest request, CancellationToken ct)
+    {
+        // Sin guard de departamento a propósito: ver comentario en Correct().
+        if (await _service.GetByIdAsync(id, ct) is null) return NotFound();
+
+        try
+        {
+            await _service.ReplaceSignedDocumentAsync(id, request.StoredFileId, request.Reason, _currentUser.EmployeeId ?? 0, ct);
+        }
+        catch (Exception ex) when (ex is ArgumentException or KeyNotFoundException)
         {
             return BadRequest(new { message = ex.Message });
         }

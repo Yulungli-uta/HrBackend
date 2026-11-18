@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.Documents;
 using WsUtaSystem.Application.DTOs.FileManagement;
@@ -42,6 +43,10 @@ namespace WsUtaSystem.Application.Services
         private static readonly HashSet<string> EditableContractStatuses =
             new(StringComparer.OrdinalIgnoreCase) { "BORRADOR", "GENERADO" };
         private const string ContractStatusCategory = "CONTRACT_STATUS";
+        private const string PendingSignaturesStatus = "PENDIENTE_FIRMAS";
+
+        private static bool IsSignedRole(string? documentRole)
+            => DocumentRoles.Normalize(documentRole) == DocumentRoles.Signed;
 
         private readonly IAppClock _clock;
 
@@ -73,7 +78,7 @@ namespace WsUtaSystem.Application.Services
         /// curso" (PersonnelAction/HRCONTRACT); cualquier otro EntityType (hoja de vida, firmas,
         /// certificación financiera, etc.) no tiene esta restricción y sigue igual que antes.
         /// </summary>
-        private async Task<string?> CheckUploadBlockedAsync(string entityType, string entityId, CancellationToken ct)
+        private async Task<string?> CheckUploadBlockedAsync(string entityType, string entityId, bool isSignedDocument, CancellationToken ct)
         {
             switch (entityType)
             {
@@ -87,6 +92,8 @@ namespace WsUtaSystem.Application.Services
                         .FirstOrDefaultAsync(ct);
 
                     if (status is null || EditableActionStatuses.Contains(status)) return null;
+                    // El documento firmado final se carga justo en PENDIENTE_FIRMAS (flujo normal); los anexos no.
+                    if (isSignedDocument && string.Equals(status, PendingSignaturesStatus, StringComparison.OrdinalIgnoreCase)) return null;
                     if (await HasCorrectionPermissionAsync("PERSONNEL_ACTIONS.MANAGE", ct)) return null;
 
                     return $"No se pueden adjuntar archivos: la acción está en estado '{status}'. " +
@@ -110,6 +117,7 @@ namespace WsUtaSystem.Application.Services
                         .FirstOrDefaultAsync(ct);
 
                     if (statusName is null || EditableContractStatuses.Contains(statusName)) return null;
+                    if (isSignedDocument && string.Equals(statusName, PendingSignaturesStatus, StringComparison.OrdinalIgnoreCase)) return null;
                     if (await HasCorrectionPermissionAsync("CONTRACTS.MANAGE", ct)) return null;
 
                     return $"No se pueden adjuntar archivos: el contrato está en estado '{statusName}'. " +
@@ -151,7 +159,8 @@ namespace WsUtaSystem.Application.Services
                 };
             }
 
-            var blockedReason = await CheckUploadBlockedAsync(request.EntityType, request.EntityId, ct);
+            var blockedReason = await CheckUploadBlockedAsync(
+                request.EntityType, request.EntityId, IsSignedRole(request.DocumentRole), ct);
             if (blockedReason != null)
             {
                 return new DocumentUploadResultDto
@@ -289,7 +298,8 @@ namespace WsUtaSystem.Application.Services
                 return new DocumentUploadResultDto { Success = false, Message = validation, Total = 1 };
             }
 
-            var blockedReason = await CheckUploadBlockedAsync(request.EntityType, request.EntityId, ct);
+            var blockedReason = await CheckUploadBlockedAsync(
+                request.EntityType, request.EntityId, IsSignedRole(request.DocumentRole), ct);
             if (blockedReason != null)
             {
                 return new DocumentUploadResultDto { Success = false, Message = blockedReason, Total = 1 };
@@ -396,7 +406,8 @@ namespace WsUtaSystem.Application.Services
                 };
             }
 
-            var blockedReason = await CheckUploadBlockedAsync(request.EntityType, request.EntityId, ct);
+            var allSigned = request.Items is { Count: > 0 } && request.Items.All(i => IsSignedRole(i.DocumentRole));
+            var blockedReason = await CheckUploadBlockedAsync(request.EntityType, request.EntityId, allSigned, ct);
             if (blockedReason != null)
             {
                 return new DocumentUploadResultDto
@@ -529,6 +540,12 @@ namespace WsUtaSystem.Application.Services
         {
             var db = await _storedFileService.GetByGuidAsync(fileGuid, ct);
             if (db is null) return false;
+
+            // El documento firmado vigente no se elimina por esta vía: solo se reemplaza (versión nueva con motivo),
+            // para no dejar el puntero del registro apuntando a un archivo eliminado.
+            if (await _db.Set<StoredFileVersion>().AsNoTracking().AnyAsync(v => v.StoredFileId == db.FileId && v.IsCurrent, ct))
+                throw new InvalidOperationException(
+                    "Este archivo es el documento firmado vigente y no se puede eliminar. Use la opción de reemplazar el documento firmado.");
 
             await _storedFileService.SoftDeleteAsync(db.FileId, deletedBy, ct);
 

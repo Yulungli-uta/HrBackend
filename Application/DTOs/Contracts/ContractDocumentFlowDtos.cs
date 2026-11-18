@@ -24,7 +24,11 @@
 
     public sealed record UploadSignedContractDocumentRequest(
         int StoredFileId,
-        string? Comment
+        string? Comment,
+        // Confirmación explícita de reemplazo cuando el contrato ya tiene un firmado cargado (si no, 409).
+        bool ReplaceExisting = false,
+        // Motivo del reemplazo; obligatorio cuando ReplaceExisting es true.
+        string? ReplaceReason = null
     );
 
     public sealed record ContractDocumentCommentRequest(

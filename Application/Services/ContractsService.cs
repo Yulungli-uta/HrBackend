@@ -11,6 +11,7 @@ using WsUtaSystem.Application.DTOs.ContractStatusHistory;
 using WsUtaSystem.Application.DTOs.Provisioning;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
+using WsUtaSystem.Application.DTOs.StoredFileVersions;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.DTOs.Documents.GeneratedDocuments;
@@ -77,6 +78,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
     private readonly IPersonnelMovementsService _movementsService;
     private readonly ITramiteRequirementsService _tramiteRequirements;
     private readonly ISalaryHistoryService _salaryHistory;
+    private readonly IStoredFileVersionService _storedFileVersions;
 
     private readonly IAppClock _clock;
 
@@ -98,9 +100,11 @@ public class ContractsService : Service<Contracts, int>, IContractsService
         IPersonnelMovementsService movementsService,
         ITramiteRequirementsService tramiteRequirements,
         ISalaryHistoryService salaryHistory,
+        IStoredFileVersionService storedFileVersions,
         IAppClock clock) : base(repo)
     {
         _clock = clock;
+        _storedFileVersions        = storedFileVersions         ?? throw new ArgumentNullException(nameof(storedFileVersions));
         _repository                = repo                       ?? throw new ArgumentNullException(nameof(repo));
         _db                        = db                         ?? throw new ArgumentNullException(nameof(db));
         _emailBuilder              = emailBuilder               ?? throw new ArgumentNullException(nameof(emailBuilder));
@@ -1430,6 +1434,27 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             ct);
     }
 
+    public async Task ReplaceSignedDocumentAsync(int contractId, int storedFileId, string? reason, int correctedBy, CancellationToken ct)
+    {
+        var contract = await _db.Set<Contracts>().FirstOrDefaultAsync(x => x.ContractID == contractId, ct)
+            ?? throw new KeyNotFoundException($"Contrato id={contractId} no existe.");
+
+        // Corrección: solo mueve el puntero (versión nueva); NO cambia el estado ni dispara efectos secundarios.
+        await _storedFileVersions.AppendVersionAsync(
+            StoredFileSlots.EntityTypeContract, contractId.ToString(), StoredFileSlots.Signed,
+            storedFileId, correctedBy > 0 ? correctedBy : null, reason,
+            requireOwnership: true,
+            async c =>
+            {
+                contract.SignedDocumentStoredFileId = storedFileId;
+                await _db.SaveChangesAsync(c);
+            }, ct);
+    }
+
+    public Task<IReadOnlyList<StoredFileVersionDto>> GetSignedDocumentVersionsAsync(int contractId, CancellationToken ct)
+        => _storedFileVersions.GetVersionsAsync(
+            StoredFileSlots.EntityTypeContract, contractId.ToString(), StoredFileSlots.Signed, ct);
+
     public async Task UploadSignedDocumentAsync(
         int contractId,
         UploadSignedContractDocumentRequest request,
@@ -1443,7 +1468,30 @@ public class ContractsService : Service<Contracts, int>, IContractsService
 
         var contract = await GetContractWithGeneratedDocumentAsync(contractId, ct);
 
-        contract.SignedDocumentStoredFileId = request.StoredFileId;
+        // Control de firmado existente: no se pisa el vigente por descuido. Se exige confirmación y motivo
+        // ANTES de cualquier cambio de estado.
+        var versions = await _storedFileVersions.GetVersionsAsync(
+            StoredFileSlots.EntityTypeContract, contractId.ToString(), StoredFileSlots.Signed, ct);
+        if (contract.SignedDocumentStoredFileId.HasValue || versions.Any(v => v.IsCurrent))
+        {
+            if (!request.ReplaceExisting)
+                throw new InvalidOperationException(
+                    "El contrato ya tiene un documento firmado cargado. Confirme el reemplazo e indique el motivo.");
+            if (string.IsNullOrWhiteSpace(request.ReplaceReason))
+                throw new ArgumentException("Debe ingresar el motivo del reemplazo.");
+        }
+
+        // Única vía para mover el puntero del firmado: deja versión (quién/cuándo/motivo) y archiva el anterior.
+        // El puntero se guarda con la entidad ya rastreada (la tabla usa RowVersion; un UPDATE directo la desincronizaría).
+        await _storedFileVersions.AppendVersionAsync(
+            StoredFileSlots.EntityTypeContract, contractId.ToString(), StoredFileSlots.Signed,
+            request.StoredFileId, updatedBy > 0 ? updatedBy : null, request.ReplaceReason,
+            requireOwnership: false,
+            async c =>
+            {
+                contract.SignedDocumentStoredFileId = request.StoredFileId;
+                await _db.SaveChangesAsync(c);
+            }, ct);
 
         await UpdateContractDocumentStatusAsync(
             contract,

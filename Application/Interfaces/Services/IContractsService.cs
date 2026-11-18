@@ -64,6 +64,15 @@ public interface IContractsService : IService<Contracts, int> {
 
     Task MarkDocumentPendingSignaturesAsync(int contractId, string? comment, int updatedBy, CancellationToken ct);
     Task UploadSignedDocumentAsync(int contractId, UploadSignedContractDocumentRequest request, int updatedBy, CancellationToken ct);
+
+    /// <summary>
+    /// Corrección: registra (o reemplaza) el documento firmado del contrato en CUALQUIER estado, como una versión
+    /// nueva, sin cambiar el estado ni disparar efectos. El motivo es obligatorio si ya había un firmado.
+    /// </summary>
+    Task ReplaceSignedDocumentAsync(int contractId, int storedFileId, string? reason, int correctedBy, CancellationToken ct);
+
+    /// <summary>Versiones del documento firmado del contrato.</summary>
+    Task<IReadOnlyList<WsUtaSystem.Application.DTOs.StoredFileVersions.StoredFileVersionDto>> GetSignedDocumentVersionsAsync(int contractId, CancellationToken ct);
     Task FinalizeDocumentAsync(int contractId, string? comment, int updatedBy, CancellationToken ct);
     Task CancelDocumentAsync(int contractId, CancelContractDocumentRequest request, int updatedBy, CancellationToken ct);
 

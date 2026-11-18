@@ -9,6 +9,7 @@ using WsUtaSystem.Application.DTOs.PersonnelActions;
 using WsUtaSystem.Application.DTOs.Provisioning;
 using WsUtaSystem.Application.DTOs.Reports;
 using WsUtaSystem.Application.DTOs.Reports.Common;
+using WsUtaSystem.Application.DTOs.StoredFileVersions;
 using WsUtaSystem.Application.Interfaces.Repositories;
 using WsUtaSystem.Application.Interfaces.Repositories.Documents;
 using WsUtaSystem.Application.Interfaces.Services;
@@ -64,6 +65,7 @@ public sealed class PersonnelActionService : IPersonnelActionService
     private readonly IContractsService _contractsService;
     private readonly ICurrentUserService _currentUser;
     private readonly ISalaryHistoryService _salaryHistory;
+    private readonly IStoredFileVersionService _storedFileVersions;
 
     /// <summary>
     /// Código de PersonnelActionType cuyo efecto colateral, al cargar el documento firmado,
@@ -90,8 +92,10 @@ public sealed class PersonnelActionService : IPersonnelActionService
         IContractsService contractsService,
         ICurrentUserService currentUser,
         ISalaryHistoryService salaryHistory,
+        IStoredFileVersionService storedFileVersions,
         IAppClock clock)
     {
+        _storedFileVersions        = storedFileVersions;
         _clock = clock;
         _actionRepository          = actionRepository;
         _personnelActionType       = personnelActionType;
@@ -734,6 +738,25 @@ public sealed class PersonnelActionService : IPersonnelActionService
     }
 
     /// <inheritdoc />
+    public async Task ReplaceSignedDocumentAsync(int actionId, int storedFileId, string? reason, int correctedBy, CancellationToken ct = default)
+    {
+        _ = await _actionRepository.GetByIdAsync(actionId, ct)
+            ?? throw new KeyNotFoundException($"Acción de personal {actionId} no encontrada.");
+
+        // Corrección: solo mueve el puntero (versión nueva); NO cambia el estado ni dispara efectos secundarios.
+        await _storedFileVersions.AppendVersionAsync(
+            StoredFileSlots.EntityTypePersonnelAction, actionId.ToString(), StoredFileSlots.Signed,
+            storedFileId, correctedBy > 0 ? correctedBy : null, reason,
+            requireOwnership: true,
+            c => _actionRepository.LinkSignedDocumentAsync(actionId, storedFileId, c), ct);
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<StoredFileVersionDto>> GetSignedDocumentVersionsAsync(int actionId, CancellationToken ct = default)
+        => _storedFileVersions.GetVersionsAsync(
+            StoredFileSlots.EntityTypePersonnelAction, actionId.ToString(), StoredFileSlots.Signed, ct);
+
+    /// <inheritdoc />
     public async Task UploadSignedDocumentAsync(
         int actionId,
         UploadSignedDocumentRequest request,
@@ -745,6 +768,19 @@ public sealed class PersonnelActionService : IPersonnelActionService
         var action = await _actionRepository.GetByIdAsync(actionId, ct)
             ?? throw new KeyNotFoundException($"Acción de personal {actionId} no encontrada.");
 
+        // Control de firmado existente: no se pisa el vigente por descuido. Se exige confirmación y motivo
+        // ANTES de la transición, para no dejar el estado cambiado si se rechaza.
+        var versions = await _storedFileVersions.GetVersionsAsync(
+            StoredFileSlots.EntityTypePersonnelAction, actionId.ToString(), StoredFileSlots.Signed, ct);
+        if (action.SignedDocumentStoredFileId.HasValue || versions.Any(v => v.IsCurrent))
+        {
+            if (!request.ReplaceExisting)
+                throw new InvalidOperationException(
+                    "La acción ya tiene un documento firmado cargado. Confirme el reemplazo e indique el motivo.");
+            if (string.IsNullOrWhiteSpace(request.ReplaceReason))
+                throw new ArgumentException("Debe ingresar el motivo del reemplazo.");
+        }
+
         await TransitionStatusAsync(actionId, action.Status, "FIRMADO_CARGADO",
             request.Comment, updatedBy, ct);
 
@@ -753,7 +789,13 @@ public sealed class PersonnelActionService : IPersonnelActionService
         // una sola vez, sin importar si más abajo continúa a VIGENTE o a FINALIZADO.
         await RecordSalaryHistoryForActionAsync(action, "Acción de personal firmada y cargada.", ct);
 
-        await _actionRepository.LinkSignedDocumentAsync(actionId, request.StoredFileId, ct);
+        // Única vía para mover el puntero del firmado: deja versión (quién/cuándo/motivo) y archiva el anterior.
+        // requireOwnership=false: la renuncia/jubilación sube el archivo bajo su propia solicitud.
+        await _storedFileVersions.AppendVersionAsync(
+            StoredFileSlots.EntityTypePersonnelAction, actionId.ToString(), StoredFileSlots.Signed,
+            request.StoredFileId, updatedBy > 0 ? updatedBy : null, request.ReplaceReason,
+            requireOwnership: false,
+            c => _actionRepository.LinkSignedDocumentAsync(actionId, request.StoredFileId, c), ct);
 
         _logger.LogInformation(
             "PersonnelActionService: documento firmado StoredFileId={FileId} vinculado a acción {ActionId}.",

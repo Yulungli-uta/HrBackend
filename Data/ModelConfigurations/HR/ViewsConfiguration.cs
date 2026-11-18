@@ -93,6 +93,24 @@ public sealed class VwPunchDayConfiguration : IEntityTypeConfiguration<VwPunchDa
     }
 }
 
+public sealed class VwPersonnelActionSignedFileConfiguration : IEntityTypeConfiguration<VwPersonnelActionSignedFile>
+{
+    public void Configure(EntityTypeBuilder<VwPersonnelActionSignedFile> e)
+    {
+        e.HasNoKey();
+        e.ToView("vw_PersonnelActionSignedFile", "HR");
+    }
+}
+
+public sealed class VwContractSignedFileConfiguration : IEntityTypeConfiguration<VwContractSignedFile>
+{
+    public void Configure(EntityTypeBuilder<VwContractSignedFile> e)
+    {
+        e.HasNoKey();
+        e.ToView("vw_ContractSignedFile", "HR");
+    }
+}
+
 public sealed class VwLeaveWindowsConfiguration : IEntityTypeConfiguration<VwLeaveWindows>
 {
     public void Configure(EntityTypeBuilder<VwLeaveWindows> e)

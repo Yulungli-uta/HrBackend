@@ -254,10 +254,19 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
     private static bool Differs(string? current, string? previous) =>
         !string.IsNullOrWhiteSpace(current) && !string.IsNullOrWhiteSpace(previous) && NormalizeName(current) != NormalizeName(previous);
 
+    /// <summary>Encargo y subrogación (y sus subtipos) son movimientos temporales; las finalizaciones no.</summary>
+    private static bool IsTemporaryMovement(string typeCode, string? parentCode)
+    {
+        if (typeCode.StartsWith("FINALIZACION", StringComparison.OrdinalIgnoreCase)) return false;
+        return typeCode is "ENCARGO" or "SUBROGACION_GRUPO" || parentCode is "ENCARGO" or "SUBROGACION_GRUPO";
+    }
+
     /// <summary>
     /// 2026-11-12: además de una fila por documento del régimen (contrato/acción), el reporte con fechas agrega una fila por cada acción de
     /// personal que EMPIEZA dentro del rango y cambia el cargo o la dependencia respecto al registro anterior de la misma persona
-    /// (ingreso, nombramiento, traslado, cambio administrativo, reintegro, ubicación...; no encargo/subrogación, que son temporales).
+    /// (ingreso, nombramiento, traslado, cambio administrativo, reintegro, ubicación, encargo, subrogación...).
+    /// 2026-11-18: encargo y subrogación SÍ generan fila (son movimiento de puesto y cargo); al llegar su fecha fin se agrega una fila
+    /// de retorno al cargo titular el día siguiente, salvo que otra acción empiece ese día o antes.
     /// La comparación es contra el último documento que empezó antes, y solo con datos conocidos de ambos lados.
     /// La acción que ya es el documento de una fila no se repite. El documento anterior termina el día previo al cambio.
     /// </summary>
@@ -297,13 +306,14 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                   && a.EffectiveDate != null && a.EffectiveDate >= desde && a.EffectiveDate <= hasta
                   && (a.DestinationDepartmentId != null || a.DestinationJobId != null)
                   && (t.ActionCategory == "MOVEMENT" || t.ActionCategory == "ENTRY" || t.ActionCategory == "SALARY_CHANGE")
-                  && t.Code != "ENCARGO" && (pt == null || pt.Code != "ENCARGO")
             select new
             {
                 EmployeeId = a.EmployeeId!.Value,
                 a.ActionNumber,
                 EffectiveDate = a.EffectiveDate!.Value,
                 a.EndDate,
+                TypeCode = t.Code,
+                ParentCode = pt != null ? pt.Code : null,
                 DepartmentName = d != null ? d.Name : null,
                 JobDescription = j != null ? j.Description : null
             }).ToListAsync(ct);
@@ -311,8 +321,25 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
         if (actions.Count == 0) return rows;
 
         var result = new List<VwSiiesFuncionario>(rows);
+        // Encargo/subrogación: movimiento temporal. Al terminar (fecha fin real) se agrega una fila de retorno al cargo titular.
+        var pendingReturns = new Dictionary<int, (VwSiiesFuncionario Titular, DateOnly ReturnDate)>();
+        void FlushReturns(int employeeId, DateOnly? before)
+        {
+            if (!pendingReturns.TryGetValue(employeeId, out var pending)) return;
+            // Si otra acción empieza el mismo día del retorno (o antes), esa acción toma el relevo.
+            if (before is { } limit && pending.ReturnDate >= limit) return;
+            pendingReturns.Remove(employeeId);
+            if (pending.ReturnDate > hasta) return;
+            if (pending.Titular.EffectiveTo is { } titularEnd && titularEnd < pending.ReturnDate) return;
+            var back = CloneRow(pending.Titular);
+            back.EffectiveFrom = pending.ReturnDate;
+            var lastIdx = result.FindLastIndex(r => r.EmployeeID == employeeId);
+            result.Insert(lastIdx + 1, back);
+        }
+
         foreach (var act in actions.OrderBy(a => a.EmployeeId).ThenBy(a => a.EffectiveDate).ThenBy(a => a.ActionNumber))
         {
+            FlushReturns(act.EmployeeId, act.EffectiveDate);
             if (string.IsNullOrWhiteSpace(act.ActionNumber)) continue;
             var number = act.ActionNumber.Trim();
             if (knownDocuments.Contains((act.EmployeeId, number.ToUpperInvariant()))) continue;
@@ -332,6 +359,21 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             if (!string.IsNullOrWhiteSpace(act.DepartmentName)) row.DepartmentName = act.DepartmentName;
             if (!string.IsNullOrWhiteSpace(act.JobDescription)) row.JobDescription = act.JobDescription;
 
+            var isTemporary = IsTemporaryMovement(act.TypeCode, act.ParentCode);
+            if (isTemporary && act.EndDate is { Year: < 9999 } endDate)
+            {
+                var returnDate = endDate.AddDays(1);
+                if (pendingReturns.TryGetValue(act.EmployeeId, out var existing))
+                    pendingReturns[act.EmployeeId] = (existing.Titular, returnDate > existing.ReturnDate ? returnDate : existing.ReturnDate);
+                else
+                    pendingReturns[act.EmployeeId] = (CloneRow(previous), returnDate);
+            }
+            else if (!isTemporary)
+            {
+                // Un cambio definitivo (traslado, nombramiento...) reemplaza al titular: ya no hay retorno que restituir.
+                pendingReturns.Remove(act.EmployeeId);
+            }
+
             if (previous.EffectiveTo is null || previous.EffectiveTo >= act.EffectiveDate)
                 previous.EffectiveTo = act.EffectiveDate.AddDays(-1);
 
@@ -339,6 +381,7 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             result.Insert(lastIndex + 1, row);
             knownDocuments.Add((act.EmployeeId, number.ToUpperInvariant()));
         }
+        foreach (var employeeId in pendingReturns.Keys.ToList()) FlushReturns(employeeId, null);
         return result;
     }
 

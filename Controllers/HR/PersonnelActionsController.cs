@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Interfaces;
 using WsUtaSystem.Application.DTOs.PersonnelActions;
+using WsUtaSystem.Application.DTOs.StoredFileVersions;
 using WsUtaSystem.Application.Interfaces.Services;
 using WsUtaSystem.Application.Interfaces.Services.Documents;
 using WsUtaSystem.Infrastructure.Security;
@@ -286,6 +287,59 @@ public sealed class PersonnelActionsController : ControllerBase
         _logger.LogInformation(
             "Acción de personal Id={ActionId} CORREGIDA por EmployeeId={UserId}. Motivo: {Reason}",
             id, correctedBy, request.Reason);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Versiones del documento firmado de la acción (la vigente y las anteriores, con quién, cuándo y motivo).
+    /// Alcance por departamento igual que el detalle de la acción.
+    /// </summary>
+    [HttpGet("{id:int}/signed-document/versions")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSignedDocumentVersions([FromRoute] int id, CancellationToken ct)
+    {
+        try
+        {
+            if (await LoadWithAccessCheckAsync(id, ct) is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid403(ex.Message); }
+
+        return Ok(await _personnelActionService.GetSignedDocumentVersionsAsync(id, ct));
+    }
+
+    /// <summary>
+    /// Corrección: registra o reemplaza el documento firmado en CUALQUIER estado, como una versión nueva
+    /// (la anterior queda inactiva y archivada). No cambia el estado ni dispara efectos. Motivo obligatorio si ya
+    /// había un firmado. Requiere el permiso elevado PERSONNEL_ACTIONS.MANAGE.
+    /// </summary>
+    [HttpPut("{id:int}/signed-document")]
+    [RequirePermission("PERSONNEL_ACTIONS.MANAGE")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ReplaceSignedDocument(
+        [FromRoute] int id,
+        [FromBody] ReplaceSignedDocumentRequest request,
+        CancellationToken ct)
+    {
+        // Sin guard de departamento a propósito: ver comentario en Correct().
+        if (await _personnelActionService.GetDetailByIdAsync(id, ct) is null) return NotFound();
+
+        var correctedBy = _currentUser.EmployeeId ?? 0;
+        try
+        {
+            await _personnelActionService.ReplaceSignedDocumentAsync(id, request.StoredFileId, request.Reason, correctedBy, ct);
+        }
+        catch (Exception ex) when (ex is ArgumentException or KeyNotFoundException)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
+        _logger.LogInformation(
+            "Documento firmado de la acción Id={ActionId} registrado/reemplazado (StoredFileId={FileId}) por EmployeeId={UserId}. Motivo: {Reason}",
+            id, request.StoredFileId, correctedBy, request.Reason);
 
         return NoContent();
     }

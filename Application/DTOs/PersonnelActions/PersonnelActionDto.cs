@@ -418,7 +418,14 @@ public sealed record UploadSignedDocumentRequest(
     /// separación (no aplican a un backfill de papel), aunque el registro y el
     /// documento se guardan igual. Default false: no cambia el comportamiento normal.
     /// </summary>
-    bool IsHistoricalEntry = false
+    bool IsHistoricalEntry = false,
+    /// <summary>
+    /// Confirmación explícita de reemplazo cuando la acción ya tiene un documento firmado cargado.
+    /// Sin ella el servicio rechaza la carga (409) para no pisar el firmado vigente por descuido.
+    /// </summary>
+    bool ReplaceExisting = false,
+    /// <summary>Motivo del reemplazo; obligatorio cuando <see cref="ReplaceExisting"/> es true.</summary>
+    string? ReplaceReason = null
 );
 
 /// <summary>Solicitud para anular una acción de personal.</summary>

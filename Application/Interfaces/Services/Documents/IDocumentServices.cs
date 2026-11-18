@@ -175,6 +175,15 @@ public interface IPersonnelActionService
     Task UploadSignedDocumentAsync(int actionId, UploadSignedDocumentRequest request, int updatedBy, CancellationToken ct = default);
 
     /// <summary>
+    /// Corrección: registra (o reemplaza) el documento firmado de la acción en CUALQUIER estado, como una versión
+    /// nueva, sin cambiar el estado ni disparar efectos. El motivo es obligatorio si ya había un firmado.
+    /// </summary>
+    Task ReplaceSignedDocumentAsync(int actionId, int storedFileId, string? reason, int correctedBy, CancellationToken ct = default);
+
+    /// <summary>Versiones del documento firmado de la acción.</summary>
+    Task<IReadOnlyList<WsUtaSystem.Application.DTOs.StoredFileVersions.StoredFileVersionDto>> GetSignedDocumentVersionsAsync(int actionId, CancellationToken ct = default);
+
+    /// <summary>
     /// Transición FIRMADO_CARGADO → FINALIZADO.
     /// Cierra el ciclo de vida de la acción de personal.
     /// </summary>

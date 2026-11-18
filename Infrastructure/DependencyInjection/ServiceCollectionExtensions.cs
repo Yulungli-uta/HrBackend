@@ -697,6 +697,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IUserPreferenceRepository, WsUtaSystem.Infrastructure.Repositories.UserPreferenceRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IPunchPolicyRepository, WsUtaSystem.Infrastructure.Repositories.PunchPolicyRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IPunchAccessPolicyService, WsUtaSystem.Application.Services.PunchAccessPolicyService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.ISignedFileTrackingRepository, WsUtaSystem.Infrastructure.Repositories.SignedFileTrackingRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ISignedFileTrackingService, WsUtaSystem.Application.Services.SignedFileTrackingService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IStoredFileVersionRepository, WsUtaSystem.Infrastructure.Repositories.StoredFileVersionRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IStoredFileVersionService, WsUtaSystem.Application.Services.StoredFileVersionService>();
 
         // ── Módulo: Saldos de Horas ───────────────────────────────────────────
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IHrBalanceRepository, WsUtaSystem.Infrastructure.Repositories.HrBalanceRepository>();
@@ -1251,6 +1255,12 @@ public static class ServiceCollectionExtensions
         // Visibilidad de datos de prueba (HR.tbl_Employees.IsTestData): el AppDbContext la consulta en su filtro global
         services.Configure<WsUtaSystem.Application.Common.Options.TestDataOptions>(configuration.GetSection("TestData"));
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.ITestDataPolicy, WsUtaSystem.Infrastructure.Services.TestDataPolicy>();
+
+        // Sección FileManagement (UseImpersonation, LocalPhysicalPathOverride, credenciales). Sin este enlace
+        // IOptions<FileManagementSettings> llegaba siempre con los valores por defecto y la ruta local de
+        // desarrollo (LocalPhysicalPathOverride) nunca se aplicaba. En Production no cambia nada: UseImpersonation=false
+        // y no hay override, igual que los valores por defecto.
+        services.Configure<WsUtaSystem.Infrastructure.Configuration.FileManagementSettings>(configuration.GetSection("FileManagement"));
 
         // Ubicación física de los archivos de contratos y acciones (firmado, anexos, anulación, renuncia)
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IEntityDocumentInfoRepository, WsUtaSystem.Infrastructure.Repositories.EntityDocumentInfoRepository>();
