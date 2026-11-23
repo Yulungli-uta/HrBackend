@@ -47,7 +47,8 @@ public record GuardLocationRotationAssignmentDto(
     bool    IsFixedLocation,
     bool    IsFixedSchedule,
     string? Notes,
-    bool    IsActive
+    bool    IsActive,
+    bool    LocationIsActive = true
 );
 
 public record CreateGuardLocationRotationAssignmentDto(

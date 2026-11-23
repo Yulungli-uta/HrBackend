@@ -101,6 +101,7 @@ public class GuardEmployeeSpecialRuleService : IGuardEmployeeSpecialRuleService
         // empleado) -- bloquearlas también en Update dejaría esas filas sin poder editarse
         // hasta limpiarlas. Esto solo evita que se creen MÁS casos nuevos.
         ValidateNightShiftCoherence(dto.NoNightShift, dto.NightPriority);
+        await ValidateFixedScheduleCoherenceAsync(dto.FixedScheduleId, dto.NoNightShift, dto.NightPriority, ct);
         ValidateHasAtLeastOneParameter(dto);
         await EnsureNoOverlappingActiveRuleAsync(dto.EmployeeId, dto.ValidFrom, dto.ValidTo, ct);
 
@@ -137,6 +138,10 @@ public class GuardEmployeeSpecialRuleService : IGuardEmployeeSpecialRuleService
 
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede actualizar condiciones especiales.");
+
+        // Solo se exige coherencia si se cambia el horario o las opciones de noche (hay reglas viejas que ya la incumplen).
+        if (entity.FixedScheduleId != dto.FixedScheduleId || entity.NoNightShift != dto.NoNightShift || entity.NightPriority != dto.NightPriority)
+            await ValidateFixedScheduleCoherenceAsync(dto.FixedScheduleId, dto.NoNightShift, dto.NightPriority, ct);
 
         entity.FixedLocationId = dto.FixedLocationId;
         entity.FixedScheduleId = dto.FixedScheduleId;
@@ -186,6 +191,22 @@ public class GuardEmployeeSpecialRuleService : IGuardEmployeeSpecialRuleService
         if (noNightShift && nightPriority)
             throw new InvalidOperationException(
                 "No se puede activar 'Sin noche' y 'Prioridad noche' al mismo tiempo — son condiciones contradictorias.");
+    }
+
+    /// <summary>Con horario fijo, 'Sin noche' y 'Prioridad noche' deben ser coherentes con si ese horario es nocturno.</summary>
+    private async Task ValidateFixedScheduleCoherenceAsync(int? fixedScheduleId, bool noNightShift, bool nightPriority, CancellationToken ct)
+    {
+        if (fixedScheduleId is null || (!noNightShift && !nightPriority)) return;
+
+        var schedule = await _db.Set<WsUtaSystem.Models.Schedules>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.ScheduleId == fixedScheduleId.Value, ct);
+        var isNight = GuardShiftPlanningService.IsNightSchedule(schedule);
+
+        if (isNight && noNightShift)
+            throw new InvalidOperationException("El horario fijo elegido es nocturno, por lo que no se puede activar 'Sin noche'.");
+        if (!isNight && nightPriority)
+            throw new InvalidOperationException("El horario fijo elegido no es nocturno, por lo que no aplica 'Prioridad noche'.");
     }
 
     private static void ValidateHasAtLeastOneParameter(CreateGuardEmployeeSpecialRuleDto dto)

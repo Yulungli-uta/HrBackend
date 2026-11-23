@@ -335,7 +335,7 @@ public class FinancialCertificationService : Service<FinancialCertification, int
     {
         var statuses = await _refTypes.GetByCategoryAsync(CertCategory, ct);
         return statuses.FirstOrDefault(x => x.Name == name)?.TypeId
-            ?? throw new InvalidOperationException($"Estado '{CertCategory}/{name}' no existe en ref_Types.");
+            ?? throw new InvalidOperationException("Falta configurar un estado de la certificación en el catálogo del sistema. Contacte a soporte técnico.");
     }
 
     private async Task<int?> GetRejectionTypeIdAsync(string name, CancellationToken ct)
@@ -348,7 +348,7 @@ public class FinancialCertificationService : Service<FinancialCertification, int
     {
         var statuses = await _refTypes.GetByCategoryAsync(RequestCategory, ct);
         return statuses.FirstOrDefault(x => x.Name == name)?.TypeId
-            ?? throw new InvalidOperationException($"Estado '{RequestCategory}/{name}' no existe en ref_Types.");
+            ?? throw new InvalidOperationException("Falta configurar un estado de la solicitud en el catálogo del sistema. Contacte a soporte técnico.");
     }
 
     private async Task<IEnumerable<FinancialCertificationDto>> EnrichAsync(

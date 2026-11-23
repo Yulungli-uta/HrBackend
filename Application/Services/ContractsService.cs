@@ -639,7 +639,7 @@ public class ContractsService : Service<Contracts, int>, IContractsService
             .FirstOrDefaultAsync(ct);
 
         if (statusId <= 0)
-            throw new InvalidOperationException($"Estado '{category}/{name}' no existe en ref_Types.");
+            throw new InvalidOperationException("Falta configurar un estado del contrato en el catálogo del sistema. Contacte a soporte técnico.");
 
         return statusId;
     }

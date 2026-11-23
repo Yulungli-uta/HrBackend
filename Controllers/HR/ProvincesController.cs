@@ -22,6 +22,45 @@ public class ProvincesController : ControllerBase
     public async Task<IActionResult> GetAll(CancellationToken ct) =>
         Ok(_mapper.Map<List<ProvincesDto>>(await _svc.GetAllAsync(ct)));
 
+    /// <summary>Lista paginada de provincias con búsqueda por nombre y filtro opcional por país.</summary>
+    /// <param name="page">Número de página (1-based).</param>
+    /// <param name="pageSize">Registros por página. Máximo 200.</param>
+    /// <param name="search">Texto a buscar en el nombre.</param>
+    /// <param name="countryId">Limita a las provincias de este país.</param>
+    [HttpGet("paged")]
+    public async Task<IActionResult> GetPaged(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        [FromQuery] string? countryId = null,
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 200) pageSize = 20;
+
+        var term = string.IsNullOrWhiteSpace(search) ? null : search.Trim().ToLower();
+        var country = string.IsNullOrWhiteSpace(countryId) ? null : countryId.Trim();
+        System.Linq.Expressions.Expression<Func<Provinces, bool>>? predicate = (term, country) switch
+        {
+            (null, null) => null,
+            (not null, null) => p => p.ProvinceName.ToLower().Contains(term),
+            (null, not null) => p => p.CountryId == country,
+            _ => p => p.CountryId == country && p.ProvinceName.ToLower().Contains(term!)
+        };
+
+        var paged = await _svc.GetPagedAsync(predicate, page, pageSize, ct, p => p.ProvinceName);
+        return Ok(new
+        {
+            items = _mapper.Map<List<ProvincesDto>>(paged.Items),
+            page = paged.Page,
+            pageSize = paged.PageSize,
+            totalCount = paged.TotalCount,
+            totalPages = paged.TotalPages,
+            hasPreviousPage = paged.HasPreviousPage,
+            hasNextPage = paged.HasNextPage
+        });
+    }
+
     /// <summary>Obtiene un registro por ID.</summary>
     /// <param name="id">Identificador</param>
     [HttpGet("{id:int}")]

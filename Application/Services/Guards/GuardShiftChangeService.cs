@@ -143,6 +143,22 @@ public class GuardShiftChangeService : IGuardShiftChangeService
         if (planning.EmployeeId == dto.ReplacementEmployeeId)
             throw new InvalidOperationException("El reemplazante no puede ser el mismo empleado titular.");
 
+        if (planning.WorkDate < DateOnly.FromDateTime(_clock.Now))
+            throw new InvalidOperationException("No se puede registrar un reemplazo sobre un turno de una fecha que ya pasó.");
+
+        // No se acumulan solicitudes: un turno con un cambio pendiente o aprobado no admite otro igual.
+        var duplicateChange = await _db.GuardShiftChanges.AnyAsync(c =>
+            c.PlanningId == dto.PlanningId
+            && (c.StatusType!.Name == "PENDING" || c.StatusType.Name == "APPROVED"), ct);
+        if (duplicateChange)
+            throw new InvalidOperationException("Este turno ya tiene un cambio pendiente o aprobado. Resuélvalo o revíertalo antes de solicitar otro.");
+
+        // El tipo debe pertenecer al catálogo de tipos de cambio (antes se aceptaba cualquier TypeId, p. ej. un estado civil).
+        var validChangeType = await _db.Set<RefTypes>()
+            .AnyAsync(r => r.TypeId == dto.ChangeTypeId && r.Category == "GUARD_CHANGE_TYPE", ct);
+        if (!validChangeType)
+            throw new InvalidOperationException("El tipo de cambio indicado no es válido.");
+
         var validateReq = new ValidateGuardAssignmentRequestDto(
             dto.ReplacementEmployeeId, planning.LocationId, planning.WorkDate,
             dto.NewScheduleId ?? planning.ScheduleId, planning.PlanningId, false);

@@ -690,11 +690,58 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
         return new GuardReadinessCheckDto(isReady, items);
     }
 
+    /// <summary>
+    /// La planificación de fechas ya pasadas no se modifica. Excepción: un administrador, indicando el motivo
+    /// (queda en las notas del turno), para corregir un error real sin falsear el historial en silencio.
+    /// </summary>
+    private async Task EnsureCanModifyPastPlanningAsync(string? reason, CancellationToken ct)
+    {
+        var userId = _currentUser.UserId?.ToString();
+        // Consulta mínima (solo si existe el rol): proyectar la vista completa de roles falla por tipos de columna.
+        var isAdmin = userId is not null
+            && await _db.VwUserRoles.AsNoTracking().AnyAsync(ur => ur.UserId == userId && ur.RoleName == "Administrador", ct);
+
+        if (!isAdmin)
+            throw new InvalidOperationException(
+                "No se puede modificar un turno de una fecha que ya pasó: la planificación ejecutada no se cambia. Solo un administrador puede hacerlo, indicando el motivo.");
+        if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length < 5)
+            throw new InvalidOperationException(
+                "Para modificar un turno de una fecha que ya pasó debe indicar el motivo (mínimo 5 caracteres).");
+    }
+
     // ─── Helpers de generación ──────────────────────────────────────────────
+
+    /// <summary>Exige que cada fecha del rango esté cubierta por un período de asignación de ubicaciones activo.</summary>
+    private async Task EnsureActiveLocationPeriodCoverageAsync(DateOnly start, DateOnly end, CancellationToken ct)
+    {
+        var periods = await _db.GuardLocationRotationPeriods
+            .AsNoTracking()
+            .Where(p => p.IsActive && p.StartDate <= end && p.EndDate >= start)
+            .OrderBy(p => p.StartDate)
+            .Select(p => new { p.StartDate, p.EndDate })
+            .ToListAsync(ct);
+
+        var cursor = start;
+        foreach (var p in periods)
+        {
+            if (p.StartDate > cursor) break;
+            if (p.EndDate >= cursor) cursor = p.EndDate.AddDays(1);
+            if (cursor > end) return;
+        }
+
+        throw new InvalidOperationException(
+            $"No hay un período de asignación de ubicaciones activo que cubra el {cursor:dd/MM/yyyy}. " +
+            "Cree o active uno en Asignación de Ubicaciones antes de planificar.");
+    }
 
     private async Task<(List<GeneratePreviewItemDto> items, int restDays)> RunGenerationLogicAsync(
         GeneratePreviewRequestDto dto, bool dryRun, CancellationToken ct)
     {
+        // Sin una ubicación elegida a mano, las ubicaciones salen del período de asignación activo: si no hay uno
+        // que cubra todo el rango, la planificación quedaría con turnos sin ubicación y parecería válida sin serlo.
+        if (dto.LocationId is null)
+            await EnsureActiveLocationPeriodCoverageAsync(dto.StartDate, dto.EndDate, ct);
+
         var groups = await ResolveGroupsAsync(dto, ct);
         var items = new List<GeneratePreviewItemDto>();
         int restDays = 0;
@@ -1073,7 +1120,7 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
 
     // Determina si un horario corresponde a turno nocturno.
     // Usa el primer carácter del código (N=Noche) o la hora de entrada como fallback.
-    private static bool IsNightSchedule(Schedules? schedule)
+    internal static bool IsNightSchedule(Schedules? schedule)
     {
         if (schedule is null) return false;
         if (!string.IsNullOrEmpty(schedule.ScheduleCode))
@@ -1102,9 +1149,12 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
         if (!planning.IsActiveForAssignment)
             throw new InvalidOperationException("La planificación ya está cancelada.");
 
+        if (planning.WorkDate < DateOnly.FromDateTime(_clock.Now))
+            await EnsureCanModifyPastPlanningAsync(dto.Notes, ct);
+
         var cancelledStatusId = await GetCancelledStatusTypeIdAsync(ct);
         if (cancelledStatusId == 0)
-            throw new InvalidOperationException("No se encontró el estado CANCELLED en HR.ref_Types (Category=GUARD_PLANNING_STATUS).");
+            throw new InvalidOperationException("No se pudo cancelar: falta configurar el estado \"Cancelado\" de la planificación. Contacte a soporte técnico.");
 
         planning.StatusTypeId = cancelledStatusId;
         planning.IsActiveForAssignment = false;
@@ -1120,11 +1170,14 @@ public class GuardShiftPlanningService : IGuardShiftPlanningService
     public async Task<CancelGuardShiftPlanningResultDto> CancelPlanningRangeAsync(CancelGuardShiftPlanningRangeDto dto, CancellationToken ct)
     {
         if (dto.EndDate < dto.StartDate)
-            throw new InvalidOperationException("La fecha final no puede ser anterior a la fecha de inicio.");
+            throw new InvalidOperationException("La fecha 'Hasta' no puede ser anterior a la fecha 'Desde'.");
+
+        if (dto.StartDate < DateOnly.FromDateTime(_clock.Now))
+            await EnsureCanModifyPastPlanningAsync(dto.Notes, ct);
 
         var cancelledStatusId = await GetCancelledStatusTypeIdAsync(ct);
         if (cancelledStatusId == 0)
-            throw new InvalidOperationException("No se encontró el estado CANCELLED en HR.ref_Types (Category=GUARD_PLANNING_STATUS).");
+            throw new InvalidOperationException("No se pudo cancelar: falta configurar el estado \"Cancelado\" de la planificación. Contacte a soporte técnico.");
 
         var affected = await _db.GuardShiftPlannings
             .Where(p => (dto.GroupId == null || p.GroupId == dto.GroupId)

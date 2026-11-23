@@ -255,6 +255,8 @@ public class RotationPatternService : IRotationPatternService
         if (byDay.Values.All(rows => rows.All(r => r.IsRestDay)))
             throw new InvalidOperationException("El patrón debe tener al menos un día con un horario de trabajo real; no puede estar formado solo por días de descanso.");
 
+        await ValidateMinimumRestDaysAsync(cycleDays, byDay, ct);
+
         var scheduleIds = new List<int>();
 
         foreach (var (day, rows) in byDay)
@@ -292,6 +294,29 @@ public class RotationPatternService : IRotationPatternService
         }
 
         await ValidateRestBetweenConsecutiveDaysAsync(cycleDays, byDay, schedules, ct);
+    }
+
+    // Días libres mínimos en ciclos de más de 5 días (QA PS-030, obs. 21). Parametrizable: MINIMUM_REST_DAYS_PER_WEEK
+    // (días por cada 7 de ciclo) y MINIMUM_REST_DAYS_SEVERITY; solo bloquea cuando la severidad es BLOCKING.
+    private async Task ValidateMinimumRestDaysAsync(
+        int cycleDays, Dictionary<int, List<CreateRotationPatternDetailDto>> byDay, CancellationToken ct)
+    {
+        if (cycleDays <= 5) return;
+
+        var settings = await _db.Parameters
+            .Where(p => p.IsActive && (p.Name == "MINIMUM_REST_DAYS_PER_WEEK" || p.Name == "MINIMUM_REST_DAYS_SEVERITY"))
+            .ToDictionaryAsync(p => p.Name, p => p.Pvalues ?? "", ct);
+
+        if (!settings.TryGetValue("MINIMUM_REST_DAYS_SEVERITY", out var severity) || severity != "BLOCKING") return;
+        if (!settings.TryGetValue("MINIMUM_REST_DAYS_PER_WEEK", out var perWeekStr)
+            || !double.TryParse(perWeekStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var perWeek)
+            || perWeek <= 0) return;
+
+        var required = (int)Math.Ceiling(perWeek * cycleDays / 7.0);
+        var restDays = byDay.Values.Count(rows => rows.All(r => r.IsRestDay));
+        if (restDays < required)
+            throw new InvalidOperationException(
+                $"Un patrón de {cycleDays} días debe tener al menos {required} días libres; el patrón tiene {restDays}.");
     }
 
     // Descanso mínimo entre el último turno de un día y el primer turno del día siguiente del

@@ -110,13 +110,16 @@ public class GuardVacationService : IGuardVacationService
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede crear planes de vacaciones.");
 
         ValidatePlanDateRange(dto.PlannedStartDate, dto.PlannedEndDate);
+        ValidatePlanNotInPast(dto.PlannedStartDate);
+        await EnsureNoOverlappingPlanAsync(dto.EmployeeId, dto.PlannedStartDate, dto.PlannedEndDate, null, ct);
 
         var plannedStatusId = await GetRefTypeIdAsync("GUARD_VACATION_PLAN_STATUS", "PLANNED", ct);
 
         var entity = new GuardVacationPlan
         {
             EmployeeId = dto.EmployeeId,
-            VacationYear = dto.VacationYear,
+            // El año se deriva de la fecha de inicio: no se confía en el valor enviado por el cliente.
+            VacationYear = dto.PlannedStartDate.Year,
             PlannedStartDate = dto.PlannedStartDate,
             PlannedEndDate = dto.PlannedEndDate,
             StatusTypeId = plannedStatusId,
@@ -143,10 +146,18 @@ public class GuardVacationService : IGuardVacationService
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede actualizar planes de vacaciones.");
 
         if (entity.StatusType?.Name != "PLANNED")
-            throw new InvalidOperationException($"Solo se pueden editar planes en estado PLANNED. Estado actual: {entity.StatusType?.Name}");
+            throw new InvalidOperationException($"Solo se pueden editar planes en estado Planificado. Estado actual: {StatusLabel(entity.StatusType?.Name)}");
+
+        // Una vez iniciadas las vacaciones el plan ya no se edita: el cambio va por solicitud de cambio de fechas.
+        if (entity.PlannedStartDate < Today())
+            throw new InvalidOperationException(
+                "Este plan ya inició o su fecha ya pasó, por lo que no se puede modificar. Para ajustarlo use una solicitud de cambio de fechas.");
 
         ValidatePlanDateRange(dto.PlannedStartDate, dto.PlannedEndDate);
+        ValidatePlanNotInPast(dto.PlannedStartDate);
+        await EnsureNoOverlappingPlanAsync(entity.EmployeeId, dto.PlannedStartDate, dto.PlannedEndDate, planId, ct);
 
+        entity.VacationYear = dto.PlannedStartDate.Year;
         entity.PlannedStartDate = dto.PlannedStartDate;
         entity.PlannedEndDate = dto.PlannedEndDate;
         entity.Notes = dto.Notes;
@@ -170,7 +181,7 @@ public class GuardVacationService : IGuardVacationService
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede enviar planes a dirección.");
 
         if (entity.StatusType?.Name != "PLANNED")
-            throw new InvalidOperationException($"Solo se pueden enviar a dirección planes en estado PLANNED. Estado actual: {entity.StatusType?.Name}");
+            throw new InvalidOperationException($"Solo se pueden enviar a dirección planes en estado Planificado. Estado actual: {StatusLabel(entity.StatusType?.Name)}");
 
         var pendingStatusId = await GetRefTypeIdAsync("GUARD_VACATION_PLAN_STATUS", "PENDING_DIRECTION_APPROVAL", ct);
 
@@ -201,7 +212,7 @@ public class GuardVacationService : IGuardVacationService
             throw new InvalidOperationException("No puede aprobar su propia solicitud de vacaciones.");
 
         if (entity.StatusType?.Name != "PENDING_DIRECTION_APPROVAL")
-            throw new InvalidOperationException($"Solo se pueden aprobar planes en estado PENDING_DIRECTION_APPROVAL. Estado actual: {entity.StatusType?.Name}");
+            throw new InvalidOperationException($"Solo se pueden aprobar planes en revisión de dirección. Estado actual: {StatusLabel(entity.StatusType?.Name)}");
 
         var approvedStatusId = await GetRefTypeIdAsync("GUARD_VACATION_PLAN_STATUS", "APPROVED", ct);
 
@@ -347,7 +358,7 @@ public class GuardVacationService : IGuardVacationService
                 ?? throw new KeyNotFoundException($"Plan de vacaciones {dto.GuardVacationPlanId} no encontrado.");
 
             if (plan.StatusType?.Name != "APPROVED")
-                throw new InvalidOperationException("Solo se pueden solicitar cambios de fechas sobre planes de vacaciones APROBADOS.");
+                throw new InvalidOperationException("Solo se pueden solicitar cambios de fechas sobre planes de vacaciones aprobados.");
         }
 
         var requestTypeId = await GetRefTypeIdAsync("GUARD_VACATION_REQUEST_TYPE", "CHANGE_DATES", ct);
@@ -391,7 +402,7 @@ public class GuardVacationService : IGuardVacationService
                 ?? throw new KeyNotFoundException($"Plan de vacaciones {dto.GuardVacationPlanId} no encontrado.");
 
             if (plan.StatusType?.Name != "APPROVED")
-                throw new InvalidOperationException("Solo se pueden solicitar acumulación sobre planes de vacaciones APROBADOS.");
+                throw new InvalidOperationException("Solo se puede solicitar la acumulación sobre planes de vacaciones aprobados.");
         }
 
         var requestTypeId = await GetRefTypeIdAsync("GUARD_VACATION_REQUEST_TYPE", "ACCUMULATE_NEXT_YEAR", ct);
@@ -432,7 +443,7 @@ public class GuardVacationService : IGuardVacationService
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede enviar solicitudes a dirección.");
 
         if (entity.StatusType?.Name != "REQUESTED")
-            throw new InvalidOperationException($"Solo se pueden enviar a dirección solicitudes en estado REQUESTED. Estado actual: {entity.StatusType?.Name}");
+            throw new InvalidOperationException($"Solo se pueden enviar a dirección solicitudes en estado Solicitado. Estado actual: {StatusLabel(entity.StatusType?.Name)}");
 
         var pendingStatusId = await GetRefTypeIdAsync("GUARD_VACATION_REQUEST_STATUS", "PENDING_DIRECTION_APPROVAL", ct);
 
@@ -459,7 +470,7 @@ public class GuardVacationService : IGuardVacationService
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede aprobar solicitudes.");
 
         if (entity.StatusType?.Name != "PENDING_DIRECTION_APPROVAL")
-            throw new InvalidOperationException($"Solo se pueden aprobar solicitudes en estado PENDING_DIRECTION_APPROVAL. Estado actual: {entity.StatusType?.Name}");
+            throw new InvalidOperationException($"Solo se pueden aprobar solicitudes en revisión de dirección. Estado actual: {StatusLabel(entity.StatusType?.Name)}");
 
         var approvedStatusId = await GetRefTypeIdAsync("GUARD_VACATION_REQUEST_STATUS", "APPROVED", ct);
         var appliedStatusId = await GetRefTypeIdAsync("GUARD_VACATION_REQUEST_STATUS", "APPLIED", ct);
@@ -533,7 +544,7 @@ public class GuardVacationService : IGuardVacationService
         if (request.RequestedStartDate is not { } newStart || request.RequestedEndDate is not { } newEnd)
             throw new BusinessRuleException("La solicitud de cambio de fechas no indica las fechas nuevas.");
         if (newEnd < newStart)
-            throw new BusinessRuleException("La fecha final solicitada no puede ser anterior a la inicial.");
+            throw new BusinessRuleException("'Nueva fecha fin' no puede ser anterior a 'Nueva fecha inicio'.");
 
         var shifts = await _db.GuardShiftPlannings
             .Where(g => g.EmployeeId == plan.EmployeeId && g.IsActiveForAssignment
@@ -636,7 +647,7 @@ public class GuardVacationService : IGuardVacationService
             ?? throw new KeyNotFoundException($"Plan de vacaciones {request.GuardVacationPlanId} no encontrado.");
 
         if (plan.StatusType?.Name != "APPROVED")
-            throw new BusinessRuleException($"El plan de vacaciones ya no está aprobado (estado actual: {plan.StatusType?.Name}).");
+            throw new BusinessRuleException($"El plan de vacaciones ya no está aprobado (estado actual: {StatusLabel(plan.StatusType?.Name)}).");
 
         return plan;
     }
@@ -786,16 +797,53 @@ public class GuardVacationService : IGuardVacationService
             .Select(r => r.TypeId)
             .FirstOrDefaultAsync(ct);
 
-        if (id == 0) throw new InvalidOperationException($"RefType no encontrado: {category}/{name}");
+        if (id == 0) throw new InvalidOperationException("Falta configurar un valor del catálogo de vacaciones. Contacte a soporte técnico.");
         return id;
     }
 
     // 2026-11-11: los planes de vacaciones de guardias ya no se bloquean por saldo (todos los guardias
     // tienen saldo negativo hasta que se regularice el saldo real). Solo se valida el rango de fechas.
+    /// <summary>Nombre en español de un estado de plan/solicitud de vacaciones, para mostrarlo al usuario.</summary>
+    private static string StatusLabel(string? code) => code switch
+    {
+        "PLANNED" => "Planificado",
+        "PENDING_DIRECTION_APPROVAL" => "En revisión de dirección",
+        "APPROVED" => "Aprobado",
+        "REJECTED" => "Rechazado",
+        "REQUESTED" => "Solicitado",
+        "CANCELLED" => "Cancelado",
+        null => "desconocido",
+        _ => code
+    };
+
+    private DateOnly Today() => DateOnly.FromDateTime(_clock.Now);
+
+    /// <summary>Un guardia no puede tener dos planes vigentes (planificado, en revisión o aprobado) con fechas que se cruzan.</summary>
+    private async Task EnsureNoOverlappingPlanAsync(int employeeId, DateOnly start, DateOnly end, int? excludePlanId, CancellationToken ct)
+    {
+        var overlap = await _db.GuardVacationPlans
+            .AsNoTracking()
+            .Where(p => p.EmployeeId == employeeId
+                        && (excludePlanId == null || p.GuardVacationPlanId != excludePlanId)
+                        && p.StatusType!.Name != "REJECTED" && p.StatusType.Name != "CANCELLED"
+                        && p.PlannedStartDate <= end && p.PlannedEndDate >= start)
+            .Select(p => new { p.PlannedStartDate, p.PlannedEndDate })
+            .FirstOrDefaultAsync(ct);
+        if (overlap != null)
+            throw new InvalidOperationException(
+                $"El guardia ya tiene vacaciones planificadas del {overlap.PlannedStartDate:dd/MM/yyyy} al {overlap.PlannedEndDate:dd/MM/yyyy} que se cruzan con estas fechas.");
+    }
+
+    private void ValidatePlanNotInPast(DateOnly startDate)
+    {
+        if (startDate < Today())
+            throw new InvalidOperationException("'Inicio planificado' no puede ser anterior a hoy.");
+    }
+
     private static void ValidatePlanDateRange(DateOnly startDate, DateOnly endDate)
     {
         if (endDate.DayNumber - startDate.DayNumber + 1 <= 0)
-            throw new InvalidOperationException("La fecha final del plan debe ser posterior o igual a la fecha de inicio.");
+            throw new InvalidOperationException("'Fin planificado' no puede ser anterior a 'Inicio planificado'.");
     }
 
     private static GuardVacationPlanDto MapPlanToDto(GuardVacationPlan p) =>

@@ -452,7 +452,7 @@ public class MassVacationPlanService : IMassVacationPlanService
     {
         var match = statusTypes.FirstOrDefault(r => r.Name == name);
         if (match is null)
-            throw new InvalidOperationException($"RefType no encontrado: {StatusCategory}/{name}. Verifique el catálogo HR.ref_Types.");
+            throw new InvalidOperationException("Falta configurar un estado del plan de vacaciones en el catálogo del sistema. Contacte a soporte técnico.");
         return match.TypeId;
     }
 

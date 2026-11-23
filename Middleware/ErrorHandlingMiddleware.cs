@@ -28,7 +28,12 @@ public class ErrorHandlingMiddleware
             ? new ProblemDetails { Title = "La consulta tardó demasiado", Detail = "La base de datos no respondió dentro del tiempo máximo permitido. Intente nuevamente en unos minutos o reduzca el rango de fechas del reporte.", Status = StatusCodes.Status504GatewayTimeout }
             : ToProblem(ex);
         problem.Extensions["traceId"] = ctx.TraceIdentifier;
-        _logger.LogError(ex, "Error en {Method} {Path}. TraceId={TraceId}", ctx.Request?.Method, ctx.Request?.Path.Value, ctx.TraceIdentifier);
+        // Un rechazo de regla de negocio (4xx) es una respuesta esperada, no un fallo: se registra como aviso y sin pila.
+        if ((problem.Status ?? 500) < 500)
+            _logger.LogWarning("Solicitud rechazada en {Method} {Path} ({Status}): {Detail}. TraceId={TraceId}",
+                ctx.Request?.Method, ctx.Request?.Path.Value, problem.Status, problem.Detail, ctx.TraceIdentifier);
+        else
+            _logger.LogError(ex, "Error en {Method} {Path}. TraceId={TraceId}", ctx.Request?.Method, ctx.Request?.Path.Value, ctx.TraceIdentifier);
         ctx.Response.ContentType = "application/problem+json";
         ctx.Response.StatusCode = problem.Status ?? StatusCodes.Status500InternalServerError;
         await ctx.Response.WriteAsJsonAsync(problem);
@@ -37,7 +42,7 @@ public class ErrorHandlingMiddleware
     private static ProblemDetails ToProblem(Exception ex)
     {
         if (ex is DbUpdateException dbex && dbex.InnerException is SqlException sql && (sql.Number == 2601 || sql.Number == 2627))
-            return new ProblemDetails { Title = "Registro duplicado", Detail = "Violación de índice único.", Status = StatusCodes.Status409Conflict };
+            return new ProblemDetails { Title = "Registro duplicado", Detail = "Ya existe un registro con los mismos datos. Verifique que no esté duplicado.", Status = StatusCodes.Status409Conflict };
         if (ex is DbUpdateConcurrencyException cex)
             return new ProblemDetails { Title = "Conflicto de concurrencia", Detail = cex.Message, Status = StatusCodes.Status409Conflict };
         if (ex is FluentValidation.ValidationException vex)
@@ -57,6 +62,10 @@ public class ErrorHandlingMiddleware
         // DINARDAP/SENESCYT no respondió: 503 con mensaje claro (una lista vacía parecería "sin títulos").
         if (ex is WsUtaSystem.Application.Common.DinardapUnavailableException duex)
             return new ProblemDetails { Title = "DINARDAP no disponible", Detail = duex.Message, Status = StatusCodes.Status503ServiceUnavailable };
+        // Una InvalidOperationException lanzada por el framework (EF, ADO.NET, System.*) trae texto técnico en inglés
+        // ("An error occurred while reading a database value...") que nunca debe verse: es un fallo, no una regla de negocio.
+        if (IsFrameworkException(ex))
+            return new ProblemDetails { Title = "Error inesperado", Detail = "No se pudo completar la operación por un problema interno. Intente nuevamente; si persiste, contacte a soporte técnico.", Status = StatusCodes.Status500InternalServerError };
         if (ex is InvalidOperationException ioex)
             return new ProblemDetails { Title = "No se puede completar la operación", Detail = ioex.Message, Status = StatusCodes.Status409Conflict };
         // BusinessRuleException hereda de Exception (no de InvalidOperationException), así que
@@ -70,6 +79,18 @@ public class ErrorHandlingMiddleware
         if (ex is ArgumentException aex and not ArgumentNullException)
             return new ProblemDetails { Title = "Solicitud inválida", Detail = aex.Message.Replace($" (Parameter '{aex.ParamName}')", string.Empty), Status = StatusCodes.Status400BadRequest };
         return new ProblemDetails { Title = "Error inesperado", Detail = "Ocurrió un error inesperado en el servidor. Contacte a soporte técnico si el problema persiste.", Status = StatusCodes.Status500InternalServerError };
+    }
+
+    /// <summary>
+    /// true si la excepción nació dentro del framework (no en código de la aplicación): sus mensajes son técnicos y en inglés.
+    /// Las reglas de negocio de la aplicación se lanzan desde WsUtaSystem.*, no desde Microsoft.* ni System.*.
+    /// </summary>
+    private static bool IsFrameworkException(Exception ex)
+    {
+        if (ex is not (InvalidOperationException or ArgumentException)) return false;
+        var ns = ex.TargetSite?.DeclaringType?.Namespace ?? string.Empty;
+        return ns.StartsWith("Microsoft.", StringComparison.Ordinal) || ns.StartsWith("System.", StringComparison.Ordinal)
+            || ns == "System" || ns == "Microsoft";
     }
 
     // Traduce errores de SQL Server a mensajes en español sin exponer nombres de tabla/columna

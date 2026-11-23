@@ -212,7 +212,7 @@ public class ContractRequestService : Service<ContractRequest, int>, IContractRe
     {
         var statuses = await _refTypes.GetByCategoryAsync(StatusCategory, ct);
         return statuses.FirstOrDefault(x => x.Name == name)?.TypeId
-            ?? throw new InvalidOperationException($"Estado '{StatusCategory}/{name}' no existe en ref_Types.");
+            ?? throw new InvalidOperationException("Falta configurar un estado de la solicitud en el catálogo del sistema. Contacte a soporte técnico.");
     }
 
     private static ContractRequestDto MapToDto(ContractRequest r, Dictionary<int, string> statusMap) => new()

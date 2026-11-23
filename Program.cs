@@ -114,6 +114,15 @@ app.UseStaticFiles();
 app.UseSerilogRequestLogging(opts =>
 {
     opts.IncludeQueryInRequestPath = true;
+    // ErrorHandlingMiddleware envuelve a este middleware: la excepción de una regla de negocio llega aquí antes de
+    // convertirse en 409 y se registraba como "500 ERR". Se baja a Warning; los fallos reales siguen como Error.
+    opts.GetLevel = (httpContext, elapsed, ex) =>
+        ex is InvalidOperationException or WsUtaSystem.Application.Common.BusinessRuleException
+            or (ArgumentException and not ArgumentNullException)
+            ? Serilog.Events.LogEventLevel.Warning
+            : ex != null || httpContext.Response.StatusCode >= 500
+                ? Serilog.Events.LogEventLevel.Error
+                : Serilog.Events.LogEventLevel.Information;
 });
 
 // ── Pipeline: Routing explícito ──────────────────────────────────────────────

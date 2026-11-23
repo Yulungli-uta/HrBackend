@@ -95,9 +95,12 @@ public class GuardLocationRotationService : IGuardLocationRotationService
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede crear periodos de rotación.");
 
+        await ValidatePeriodRangeAsync(null, dto.StartDate, dto.EndDate, ct);
+
         // El periodo nuevo siempre nace activo -- desactiva cualquier otro para que nunca
         // existan 2 periodos activos a la vez (mismo criterio que AssignPatternToGroupAsync
-        // al reemplazar la asignacion de patron anterior del grupo).
+        // al reemplazar la asignacion de patron anterior del grupo). Si el activo tiene turnos
+        // planificados desde hoy, no se puede inactivar y por tanto tampoco crear otro activo.
         await DeactivateOtherActivePeriodsAsync(null, ct);
 
         var entity = new GuardLocationRotationPeriod
@@ -127,8 +130,15 @@ public class GuardLocationRotationService : IGuardLocationRotationService
         var userId = _currentUser.EmployeeId
             ?? throw new InvalidOperationException("Usuario sin EmployeeId no puede actualizar periodos.");
 
+        // Los períodos viejos ya se cruzan entre sí: el cruce solo se exige si se cambian las fechas.
+        if (dto.StartDate != entity.StartDate || dto.EndDate != entity.EndDate)
+            await ValidatePeriodRangeAsync(periodId, dto.StartDate, dto.EndDate, ct);
+        else if (dto.EndDate < dto.StartDate)
+            throw new InvalidOperationException("La fecha 'Fin' no puede ser anterior a la fecha 'Inicio'.");
+
         if (entity.IsActive && !dto.IsActive)
         {
+            await EnsureNoPlannedShiftsAsync(entity, ct);
             var otherActiveExists = await _db.GuardLocationRotationPeriods
                 .AnyAsync(p => p.LocationRotationPeriodId != periodId && p.IsActive, ct);
             if (!otherActiveExists)
@@ -161,7 +171,42 @@ public class GuardLocationRotationService : IGuardLocationRotationService
             .ToListAsync(ct);
 
         foreach (var p in others)
+        {
+            await EnsureNoPlannedShiftsAsync(p, ct);
             p.IsActive = false;
+        }
+    }
+
+    /// <summary>Valida fechas coherentes y que el rango no se cruce con otro período (activo o inactivo).</summary>
+    private async Task ValidatePeriodRangeAsync(int? periodId, DateOnly start, DateOnly end, CancellationToken ct)
+    {
+        if (end < start)
+            throw new InvalidOperationException("La fecha 'Fin' no puede ser anterior a la fecha 'Inicio'.");
+
+        var overlap = await _db.GuardLocationRotationPeriods
+            .AsNoTracking()
+            .Where(p => (periodId == null || p.LocationRotationPeriodId != periodId)
+                        && p.StartDate <= end && p.EndDate >= start)
+            .Select(p => new { p.Name, p.StartDate, p.EndDate })
+            .FirstOrDefaultAsync(ct);
+        if (overlap != null)
+            throw new InvalidOperationException(
+                $"El rango se cruza con el período '{overlap.Name}' ({overlap.StartDate:dd/MM/yyyy} a {overlap.EndDate:dd/MM/yyyy}). Ajuste las fechas para que no coincidan.");
+    }
+
+    /// <summary>Un período con turnos ya planificados (de hoy en adelante) no puede inactivarse.</summary>
+    private async Task EnsureNoPlannedShiftsAsync(GuardLocationRotationPeriod period, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(_clock.Now);
+        var from = period.StartDate > today ? period.StartDate : today;
+        if (from > period.EndDate) return;
+
+        var planned = await _db.GuardShiftPlannings
+            .AsNoTracking()
+            .CountAsync(s => s.IsActiveForAssignment && s.WorkDate >= from && s.WorkDate <= period.EndDate, ct);
+        if (planned > 0)
+            throw new InvalidOperationException(
+                $"No se puede inactivar el período '{period.Name}': tiene {planned} turnos ya planificados desde hoy. Cancele o modifique esa planificación primero.");
     }
 
     // ─── Asignaciones ─────────────────────────────────────────────────────────
@@ -397,6 +442,7 @@ public class GuardLocationRotationService : IGuardLocationRotationService
             a.IsFixedLocation,
             a.IsFixedSchedule,
             a.Notes,
-            a.IsActive
+            a.IsActive,
+            a.Location?.IsActive ?? true
         );
 }

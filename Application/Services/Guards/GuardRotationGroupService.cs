@@ -265,6 +265,14 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         if (!dto.ConfirmDuplicateColor)
             await EnsureColorNotDuplicatedAsync(groupId, dto.ColorCode, ct);
 
+        if (entity.IsActive && !dto.IsActive)
+        {
+            var planned = await CountFuturePlannedShiftsAsync(groupId, null, ct);
+            if (planned > 0)
+                throw new InvalidOperationException(
+                    $"No se puede inactivar el grupo '{entity.Name}': tiene {planned} turnos planificados desde hoy. Cancele esa planificación primero.");
+        }
+
         entity.GroupCode = dto.GroupCode;
         entity.Name = dto.Name;
         entity.Description = dto.Description;
@@ -409,6 +417,17 @@ public class GuardRotationGroupService : IGuardRotationGroupService
             .FirstOrDefaultAsync(e => e.EmployeeId == dto.EmployeeId && e.IsActive, ct)
             ?? throw new InvalidOperationException("Empleado no encontrado o inactivo.");
 
+        if (dto.ValidTo.HasValue && dto.ValidTo.Value < dto.ValidFrom)
+            throw new InvalidOperationException("La fecha 'Válido hasta' no puede ser anterior a 'Válido desde'.");
+
+        // Un guardia no puede estar dos veces en el mismo grupo con vigencias que se cruzan.
+        var alreadyInGroup = await _db.GuardRotationGroupEmployees.AnyAsync(e =>
+            e.GroupId == groupId && e.EmployeeId == dto.EmployeeId && e.IsActive
+            && e.ValidFrom <= (dto.ValidTo ?? DateOnly.MaxValue)
+            && (e.ValidTo ?? DateOnly.MaxValue) >= dto.ValidFrom, ct);
+        if (alreadyInGroup)
+            throw new InvalidOperationException("El guardia ya pertenece a este grupo en ese rango de fechas.");
+
         var entity = new GuardRotationGroupEmployee
         {
             GroupId = groupId,
@@ -432,11 +451,27 @@ public class GuardRotationGroupService : IGuardRotationGroupService
         );
     }
 
+    /// <summary>Turnos activos planificados desde hoy de un grupo (y opcionalmente de un guardia).</summary>
+    private async Task<int> CountFuturePlannedShiftsAsync(int groupId, int? employeeId, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(_clock.Now);
+        return await _db.GuardShiftPlannings
+            .AsNoTracking()
+            .CountAsync(p => p.GroupId == groupId && p.IsActiveForAssignment && p.WorkDate >= today
+                             && (employeeId == null || p.EmployeeId == employeeId), ct);
+    }
+
     public async Task RemoveEmployeeAsync(int groupId, RemoveEmployeeFromRotationGroupDto dto, CancellationToken ct)
     {
         var entry = await _db.GuardRotationGroupEmployees
             .FirstOrDefaultAsync(e => e.GroupEmployeeId == dto.GroupEmployeeId && e.GroupId == groupId, ct)
             ?? throw new KeyNotFoundException("Asignación no encontrada.");
+
+        var planned = await CountFuturePlannedShiftsAsync(groupId, entry.EmployeeId, ct);
+        if (planned > 0)
+            throw new InvalidOperationException(
+                $"No se puede retirar al guardia del grupo: tiene {planned} turnos planificados desde hoy en este grupo. Cancele o reasigne esos turnos primero.");
+
         entry.ValidTo = dto.ValidTo;
         entry.IsActive = false;
         await _db.SaveChangesAsync(ct);

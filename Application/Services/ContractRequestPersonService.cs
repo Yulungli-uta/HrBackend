@@ -291,14 +291,14 @@ public class ContractRequestPersonService
     {
         var statuses = await _refTypes.GetByCategoryAsync(PersonCategory, ct);
         return statuses.FirstOrDefault(x => x.Name == name)?.TypeId
-            ?? throw new InvalidOperationException($"Estado '{PersonCategory}/{name}' no existe en ref_Types.");
+            ?? throw new InvalidOperationException("Falta configurar un estado de la solicitud en el catálogo del sistema. Contacte a soporte técnico.");
     }
 
     private async Task<int> GetSourceIdAsync(string name, CancellationToken ct)
     {
         var sources = await _refTypes.GetByCategoryAsync(SourceCategory, ct);
         return sources.FirstOrDefault(x => x.Name == name)?.TypeId
-            ?? throw new InvalidOperationException($"Fuente '{SourceCategory}/{name}' no existe en ref_Types.");
+            ?? throw new InvalidOperationException("Falta configurar un origen de datos en el catálogo del sistema. Contacte a soporte técnico.");
     }
 
     private async Task<decimal?> GetJobRmuAsync(int jobId, CancellationToken ct)

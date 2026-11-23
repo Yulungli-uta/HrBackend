@@ -532,7 +532,7 @@ public class VacationBalanceAdjustmentService : IVacationBalanceAdjustmentServic
             .FirstOrDefaultAsync(ct);
 
         if (regimeId is null or 0)
-            throw new BusinessRuleException($"Régimen laboral '{name}' no existe en el catálogo (ref_Types.CONTRACT_TYPE).");
+            throw new BusinessRuleException($"El régimen laboral '{name}' no existe en el catálogo del sistema.");
 
         return regimeId.Value;
     }
