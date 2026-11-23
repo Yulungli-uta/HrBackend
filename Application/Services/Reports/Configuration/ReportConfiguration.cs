@@ -21,7 +21,7 @@ public class ImageSettings
 {
     public string HeaderPath { get; set; } = "wwwroot/images/reports/header.png";
     public string FooterPath { get; set; } = "wwwroot/images/reports/footer.png";
-    public string LogoPath { get; set; } = "wwwroot/images/reports/logo.png";
+    public string LogoPath { get; set; } = "wwwroot/images/institutional/logo-uta.png"; // escudo oficial (mismo archivo que usan los demás documentos)
 }
 
 public class MarginSettings
@@ -34,13 +34,13 @@ public class MarginSettings
 
 public class ColorSettings
 {
-    public string Primary { get; set; } = "#6c1313"; //"#1e3a8a";
-    public string Secondary { get; set; } = "#3b82f6";
-    public string Success { get; set; } = "#10b981";
-    public string Warning { get; set; } = "#f59e0b";
-    public string Danger { get; set; } = "#ef4444";
-    public string TextPrimary { get; set; } = "#374151";
-    public string TextSecondary { get; set; } = "#6b7280";
+    public string Primary { get; set; } = "#00345e"; // Azul institucional UTA
+    public string Secondary { get; set; } = "#ab171f"; // Rojo institucional UTA (acento y totales)
+    public string Success { get; set; } = "#19703c";
+    public string Warning { get; set; } = "#a35d05";
+    public string Danger { get; set; } = "#ab171f";
+    public string TextPrimary { get; set; } = "#1c2630";
+    public string TextSecondary { get; set; } = "#536475";
     public string Background { get; set; } = "#ffffff";
-    public string AlternateRow { get; set; } = "#f3f4f6";
+    public string AlternateRow { get; set; } = "#eef2f6";
 }

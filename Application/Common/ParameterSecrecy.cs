@@ -11,5 +11,7 @@ public static class ParameterSecrecy
 
     public static bool IsSecret(string? parameterName) =>
         !string.IsNullOrWhiteSpace(parameterName) &&
-        SecretSuffixes.Any(s => parameterName.Trim().EndsWith(s, StringComparison.OrdinalIgnoreCase));
+        (SecretSuffixes.Any(s => parameterName.Trim().EndsWith(s, StringComparison.OrdinalIgnoreCase)) ||
+         // Logos de Identidad visual: el valor es una imagen en base64 (hasta ~1,4 MB); no debe viajar en el listado de parámetros.
+         parameterName.Trim().StartsWith("BRAND_LOGO_", StringComparison.OrdinalIgnoreCase));
 }

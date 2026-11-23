@@ -143,7 +143,9 @@ public abstract class BasePdfGenerator
     /// </summary>
     protected string GetLogoImagePath()
     {
-        return Path.Combine(_env.ContentRootPath, _config.Images.LogoPath);
+        // Logo de reportes configurado en Identidad visual (App_Data/branding); si no hay, el oficial.
+        return WsUtaSystem.Infrastructure.Services.BrandingFiles.FindReportLogo(_env.ContentRootPath)
+               ?? Path.Combine(_env.ContentRootPath, _config.Images.LogoPath);
     }
 
     /// <summary>

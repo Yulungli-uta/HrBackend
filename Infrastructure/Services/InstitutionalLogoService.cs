@@ -31,9 +31,32 @@ public sealed class InstitutionalLogoService : IInstitutionalLogoService
         _dataUri  = new Lazy<string>(BuildDataUri);
     }
 
-    public string? GetLogoFilePath() => _filePath.Value;
+    // Logo de reportes personalizado (Identidad visual): si existe en App_Data/branding tiene prioridad sobre el oficial.
+    private string? _customDataUri;
+    private string? _customKey;
 
-    public string GetLogoDataUri() => _dataUri.Value;
+    public string? GetLogoFilePath() => BrandingFiles.FindReportLogo(_env.ContentRootPath) ?? _filePath.Value;
+
+    public string GetLogoDataUri()
+    {
+        var custom = BrandingFiles.FindReportLogo(_env.ContentRootPath);
+        if (custom is null) return _dataUri.Value;
+
+        var key = custom + "|" + File.GetLastWriteTimeUtc(custom).Ticks;
+        if (_customKey != key || _customDataUri is null)
+        {
+            var mime = Path.GetExtension(custom).Equals(".jpg", StringComparison.OrdinalIgnoreCase) ? "image/jpeg" : "image/png";
+            _customDataUri = $"data:{mime};base64,{Convert.ToBase64String(File.ReadAllBytes(custom))}";
+            _customKey = key;
+        }
+        return _customDataUri;
+    }
+
+    public void Invalidate()
+    {
+        _customDataUri = null;
+        _customKey = null;
+    }
 
     private string? ResolveFilePath()
     {

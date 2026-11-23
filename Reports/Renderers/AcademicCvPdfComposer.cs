@@ -20,14 +20,14 @@ public sealed class AcademicCvPdfComposer : IAcademicCvPdfComposer
     private readonly IWebHostEnvironment _env;
     private readonly IInstitutionalLogoService _logoService;
 
-    private const string ColorCurrentStatus = "#0d9488";  // teal-600   (Situación Laboral Actual)
-    private const string ColorEducation = "#0891b2";     // cyan-600   (Formación)
-    private const string ColorExperience = "#f97316";    // uta-orange (Experiencia)
-    private const string ColorPublications = "#1e40af";  // uta-blue   (Publicaciones)
-    private const string ColorBooks = "#dc2626";          // red-600    (Libros)
-    private const string ColorTrainings = "#a855f7";      // purple-500 (Capacitaciones)
-    private const string ColorLanguages = "#6366f1";      // indigo-500 (Idiomas)
-    private const string ColorKnowledgeAreas = "#16a34a"; // green-600  (Áreas de Conocimiento)
+    private const string ColorCurrentStatus = "#1b6b5f";  // cat-6 UTA   (Situación Laboral Actual)
+    private const string ColorEducation = "#1d6f86";     // cat-2 UTA   (Formación)
+    private const string ColorExperience = "#a35d05";    // cat-5 UTA   (Experiencia)
+    private const string ColorPublications = "#00345e";  // azul UTA    (Publicaciones)
+    private const string ColorBooks = "#ab171f";          // rojo UTA    (Libros)
+    private const string ColorTrainings = "#5b3a8a";      // cat-3 UTA   (Capacitaciones)
+    private const string ColorLanguages = "#3f4a8c";      // cat-7 UTA   (Idiomas)
+    private const string ColorKnowledgeAreas = "#19703c"; // éxito UTA   (Áreas de Conocimiento)
 
     private readonly IAppClock _clock;
 

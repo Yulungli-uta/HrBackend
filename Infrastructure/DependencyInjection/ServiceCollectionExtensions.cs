@@ -1032,6 +1032,7 @@ public static class ServiceCollectionExtensions
 
         // Servicios de negocio de email
         services.AddScoped<IEmailLayoutsService, EmailLayoutsService>();
+        services.AddScoped<IBrandingService, BrandingService>();
         services.AddScoped<IEmailLogsService, EmailLogsService>();
         services.AddScoped<IEmailLogAttachmentsService, EmailLogAttachmentsService>();
         services.AddScoped<IEmailSenderService, EmailSenderService>();

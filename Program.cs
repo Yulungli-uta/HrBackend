@@ -194,4 +194,12 @@ app.UseEndpoints(endpoints =>
     endpoints.MapGet("/health", () => Results.Ok(new { ok = true, time = DateTime.Now }));
 });
 
+// Logo de reportes personalizado (Identidad visual): se escribe en App_Data/branding al iniciar, porque los PDF lo leen de disco.
+app.Lifetime.ApplicationStarted.Register(() =>
+{
+    using var scope = app.Services.CreateScope();
+    scope.ServiceProvider.GetRequiredService<WsUtaSystem.Application.Interfaces.Services.IBrandingService>()
+        .MaterializeReportLogoAsync(CancellationToken.None).GetAwaiter().GetResult();
+});
+
 app.Run();

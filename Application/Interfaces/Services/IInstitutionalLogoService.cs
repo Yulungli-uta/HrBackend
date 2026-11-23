@@ -12,4 +12,7 @@ public interface IInstitutionalLogoService
 
     /// <summary>Logo como data URI base64 (data:image/png;base64,...), o cadena vacía si no existe.</summary>
     string GetLogoDataUri();
+
+    /// <summary>Descarta el caché (se llama al cambiar el logo de reportes desde Identidad visual).</summary>
+    void Invalidate();
 }

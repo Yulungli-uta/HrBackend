@@ -29,7 +29,7 @@ public sealed class InstitutionalDocumentRenderer : IDocumentRenderer
     private readonly ILogger<InstitutionalDocumentRenderer> _logger;
 
     // Colores institucionales UTA
-    private static readonly string PrimaryColor   = "#8B1A1A";  // Guinda UTA
+    private static readonly string PrimaryColor   = "#00345e";  // Azul institucional UTA
     private static readonly string SecondaryColor = "#F5F5F5";  // Gris claro
     private static readonly string BorderColor    = "#CCCCCC";
     private static readonly string TextColor      = "#1A1A1A";
