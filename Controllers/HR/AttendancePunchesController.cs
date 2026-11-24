@@ -181,6 +181,9 @@ public class AttendancePunchesController : ControllerBase
     [RequirePermission("ATTENDANCE.CREATE")]
     public async Task<IActionResult> LogClientEvent([FromBody] PunchClientEventDto dto, CancellationToken ct)
     {
+        if (dto is null)
+            return BadRequest(new { message = "Se requiere el evento." });
+
         var accepted = await _svc.LogClientEventAsync(dto.Event, dto.Detail, ct);
         return accepted ? NoContent() : BadRequest(new { message = "Evento no válido o demasiado frecuente." });
     }

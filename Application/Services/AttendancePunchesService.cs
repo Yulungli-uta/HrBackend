@@ -97,12 +97,16 @@ public class AttendancePunchesService : Service<AttendancePunches, int>, IAttend
         if (window.Count > MaxClientEventsPerMinute)
             return false;
 
-        // La IP y el navegador salen del servidor; el cliente solo aporta el evento y un detalle corto.
+        // La IP y el navegador salen del servidor; el cliente solo aporta el evento y un detalle corto. El detalle del cliente se
+        // acota a 100 caracteres para que nunca desplace al navegador (lo confiable) fuera de los 200 que admite la bitácora.
+        var clientDetail = string.IsNullOrWhiteSpace(detail) ? null : (detail.Length <= 100 ? detail : detail[..100]);
         var ua = _currentUser.GetUserAgent();
-        var text = string.IsNullOrWhiteSpace(detail) ? ua : $"{detail} | {ua}";
+        var text = clientDetail is null ? ua : $"{clientDetail} | {ua}";
+        // CancellationToken.None: estos eventos suelen llegar justo cuando la página se oculta o la conexión cae, y un
+        // cancelado de la petición no debe hacer que se pierdan.
         await _accessPolicy.LogEventAsync(employeeId.Value, _currentUser.GetRemoteIp(), _currentUser.GetForwardedForHeader(),
-            "CLIENT_" + eventName, "CLIENT", text, ct);
-        _logger.LogInformation("PUNCH_CLIENT_EVENT employee={EmployeeId} event={Event} detail={Detail}", employeeId, eventName, detail);
+            "CLIENT_" + eventName, "CLIENT", text, CancellationToken.None);
+        _logger.LogInformation("PUNCH_CLIENT_EVENT employee={EmployeeId} event={Event} detail={Detail}", employeeId, eventName, clientDetail);
         return true;
     }
 
@@ -113,7 +117,7 @@ public class AttendancePunchesService : Service<AttendancePunches, int>, IAttend
         if (employeeId is null)
         {
             // Sin empleado no hay a quién atribuir el registro en la bitácora: se deja en el log técnico.
-            _logger.LogWarning("PUNCH_RESULT result=NO_EMPLOYEE user={UserId} email={Email}", _currentUser.UserId, _currentUser.Email);
+            _logger.LogWarning("PUNCH_RESULT result=NO_EMPLOYEE user={UserId}", _currentUser.UserId);
             return new OwnPunchResult(null, "Tu usuario no tiene un empleado asociado, por lo que no puede registrar picadas.", "NO_EMPLOYEE");
         }
 
@@ -125,7 +129,7 @@ public class AttendancePunchesService : Service<AttendancePunches, int>, IAttend
         {
             _logger.LogWarning("Intento de picada a nombre de otro empleado: token={TokenEmployee} cuerpo={BodyEmployee}", employeeId, punch.EmployeeId);
             await _accessPolicy.LogEventAsync(employeeId.Value, _currentUser.GetRemoteIp(), _currentUser.GetForwardedForHeader(),
-                "SRV_REJ_NOT_OWN", "SERVER", $"cuerpo={punch.EmployeeId}", ct);
+                "SRV_REJ_NOT_OWN", "SERVER", $"cuerpo={punch.EmployeeId}", CancellationToken.None);
             return new OwnPunchResult(null, "Solo puedes registrar tu propia picada.", "NOT_OWN_PUNCH");
         }
 
@@ -146,7 +150,7 @@ public class AttendancePunchesService : Service<AttendancePunches, int>, IAttend
             {
                 _logger.LogInformation("PUNCH_RESULT employee={EmployeeId} result=TOO_SOON remaining={Remaining}", employeeId, remaining);
                 await _accessPolicy.LogEventAsync(employeeId.Value, _currentUser.GetRemoteIp(), _currentUser.GetForwardedForHeader(),
-                    "SRV_REJ_TOO_SOON", "SERVER", $"faltan {remaining}", ct);
+                    "SRV_REJ_TOO_SOON", "SERVER", $"faltan {remaining}", CancellationToken.None);
                 return new OwnPunchResult(null, PunchCooldown.Message(remaining.Value), "PUNCH_TOO_SOON");
             }
 
@@ -166,12 +170,19 @@ public class AttendancePunchesService : Service<AttendancePunches, int>, IAttend
                 _logger.LogInformation("PUNCH_RESULT employee={EmployeeId} result=CREATED punchId={PunchId}", employeeId, created.PunchId);
                 return new OwnPunchResult(created, null, null);
             }
+            catch (OperationCanceledException)
+            {
+                // El cliente cortó la petición: no es un error del servidor, se anota como cancelación y se propaga.
+                _logger.LogInformation("PUNCH_RESULT employee={EmployeeId} result=CANCELLED", employeeId);
+                throw;
+            }
             catch (Exception ex)
             {
-                // Una excepción al crear la picada es justo lo que hay que poder revisar después.
+                // Una excepción al crear la picada es justo lo que hay que poder revisar después. En la bitácora solo va el tipo de
+                // excepción (la pantalla de control la muestra a administradores); el mensaje completo queda en el log técnico.
                 _logger.LogError(ex, "PUNCH_RESULT employee={EmployeeId} result=ERROR", employeeId);
                 await _accessPolicy.LogEventAsync(employeeId.Value, _currentUser.GetRemoteIp(), _currentUser.GetForwardedForHeader(),
-                    "SRV_ERROR", "SERVER", ex.GetType().Name + ": " + ex.Message, CancellationToken.None);
+                    "SRV_ERROR", "SERVER", ex.GetType().Name + " (ver log del servidor)", CancellationToken.None);
                 throw;
             }
         }
