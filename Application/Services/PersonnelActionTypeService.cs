@@ -71,7 +71,12 @@ public sealed class PersonnelActionTypeService
 
             // Un hijo hereda del padre lo que no se indique: categoría, plantilla y homologación SIIES.
             // ReachesVigente no viene en el DTO de alta y es un concepto de nómina del grupo: se copia siempre.
-            if (string.IsNullOrWhiteSpace(entity.ActionCategory)) entity.ActionCategory = parent.ActionCategory;
+            if (string.IsNullOrWhiteSpace(entity.ActionCategory))
+            {
+                entity.ActionCategory = parent.ActionCategory;
+                // sin categoría propia ni indicación explícita, también hereda si imprime la situación propuesta
+                entity.ShowProposedSituation = parent.ShowProposedSituation;
+            }
             entity.DefaultTemplateId ??= parent.DefaultTemplateId;
             entity.SiiesRelacionIesTypeId ??= parent.SiiesRelacionIesTypeId;
             entity.ReachesVigente = parent.ReachesVigente;
@@ -124,6 +129,9 @@ public sealed class PersonnelActionTypeService
                 entity.NumberingFormat = NormalizeFormat(dto.NumberingFormat);
             if (dto.NumberingResetsYearly.HasValue)
                 entity.NumberingResetsYearly = dto.NumberingResetsYearly.Value;
+            // null = conservar lo guardado
+            if (dto.ShowProposedSituation.HasValue)
+                entity.ShowProposedSituation = dto.ShowProposedSituation.Value;
             // No se tocan NumberingYear/NumberingLastSequence (contador vivo) ni ReachesVigente.
         }, ct);
     }

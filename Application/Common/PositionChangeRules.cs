@@ -24,6 +24,13 @@ public static class PositionChangeRules
     public static bool CanChangePosition(string? actionCategory) =>
         actionCategory is null || !NonPositionCategories.Contains(actionCategory, StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Categorías que por defecto imprimen la grilla completa de Situación Propuesta en el documento.</summary>
+    public static readonly string[] ProposedSituationCategories = ["ENTRY", "MOVEMENT", "SALARY_CHANGE"];
+
+    /// <summary>Valor inicial de "mostrar situación propuesta" de un tipo nuevo, según su categoría.</summary>
+    public static bool ShowsProposedSituationByDefault(string? actionCategory) =>
+        actionCategory is not null && ProposedSituationCategories.Contains(actionCategory, StringComparer.OrdinalIgnoreCase);
+
     /// <summary>true si la acción trae situación propuesta (departamento o cargo de destino).</summary>
     public static bool HasProposedSituation(int? destinationDepartmentId, int? destinationJobId) =>
         destinationDepartmentId.HasValue || destinationJobId.HasValue;

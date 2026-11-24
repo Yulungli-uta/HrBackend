@@ -12,6 +12,9 @@ public sealed class PersonnelActionTypeCreateDto
     public bool RequiresAdUserDisable { get; set; } = false;
     public bool RequiresAdGroupAssignment { get; set; } = false;
     public string? ActionCategory { get; set; }
+
+    /// <summary>Imprimir la grilla completa de Situación Propuesta. Null = según la categoría (ENTRY, MOVEMENT y SALARY_CHANGE sí).</summary>
+    public bool? ShowProposedSituation { get; set; }
     public int? SiiesRelacionIesTypeId { get; set; }
 
     /// <summary>Tipo padre (un solo nivel). Null = tipo raíz.</summary>

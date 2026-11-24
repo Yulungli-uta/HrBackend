@@ -14,6 +14,9 @@ public sealed class PersonnelActionTypeUpdateDto
     /// <summary>Categoría funcional. Null = conservar lo guardado; cadena vacía = borrar.</summary>
     public string? ActionCategory { get; set; }
 
+    /// <summary>Imprimir la grilla completa de Situación Propuesta. Null = conservar lo guardado.</summary>
+    public bool? ShowProposedSituation { get; set; }
+
     /// <summary>Homologación SIIES. Null = conservar lo guardado; 0 = borrar.</summary>
     public int? SiiesRelacionIesTypeId { get; set; }
 

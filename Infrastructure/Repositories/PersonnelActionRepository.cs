@@ -423,6 +423,7 @@ public sealed class PersonnelActionRepository : IPersonnelActionRepository
             workplaceName,
             previousWorkplaceName,
             result.actionType.ActionCategory,
+            result.actionType.ShowProposedSituation,
             WithUep(originGroupGrade?.Description, originGroupGrade?.UepName),
             originGroupGrade?.GradeDescription,
             WithUep(destGroupGrade?.Description, destGroupGrade?.UepName),

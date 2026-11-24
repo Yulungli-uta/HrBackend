@@ -168,7 +168,10 @@ public class EntityToDtoProfile : Profile
         CreateMap<ContractType, WsUtaSystem.Application.DTOs.ContractType.ContractTypeCreateDto>().ReverseMap();
         CreateMap<ContractType, WsUtaSystem.Application.DTOs.ContractType.ContractTypeDto>().ReverseMap();
         CreateMap<ContractType, WsUtaSystem.Application.DTOs.ContractType.ContractTypeUpdateDto>().ReverseMap();
-        CreateMap<WsUtaSystem.Models.PersonnelActionType, WsUtaSystem.Application.DTOs.PersonnelActionType.PersonnelActionTypeCreateDto>().ReverseMap();
+        CreateMap<WsUtaSystem.Models.PersonnelActionType, WsUtaSystem.Application.DTOs.PersonnelActionType.PersonnelActionTypeCreateDto>()
+            .ReverseMap()
+            .ForMember(d => d.ShowProposedSituation, o => o.MapFrom(s =>
+                s.ShowProposedSituation ?? WsUtaSystem.Application.Common.PositionChangeRules.ShowsProposedSituationByDefault(s.ActionCategory)));
         CreateMap<WsUtaSystem.Models.PersonnelActionType, WsUtaSystem.Application.DTOs.PersonnelActionType.PersonnelActionTypeDto>().ReverseMap();
         CreateMap<WsUtaSystem.Models.PersonnelActionType, WsUtaSystem.Application.DTOs.PersonnelActionType.PersonnelActionTypeUpdateDto>().ReverseMap();
         CreateMap<JobActivity, WsUtaSystem.Application.DTOs.JobActivity.JobActivityCreateDto>().ReverseMap();

@@ -66,6 +66,13 @@ public sealed class PersonnelActionType : IAuditable
     public string? ActionCategory { get; set; }
 
     /// <summary>
+    /// 2026-11-24: si es true el documento de la acción imprime la grilla completa de SITUACIÓN PROPUESTA (dependencia, cargo,
+    /// sueldo, etc.); si es false imprime solo el nombre de la acción. Es independiente de <see cref="ActionCategory"/>:
+    /// la categoría sigue decidiendo movimientos, historial laboral y SIIES. Se configura en Tipos de Acción de Personal.
+    /// </summary>
+    public bool ShowProposedSituation { get; set; } = true;
+
+    /// <summary>
     /// 2026-07-06: si es true, esta acción participa en la cadena de "acción vigente"
     /// del empleado — al cargar el documento firmado, transiciona automáticamente
     /// FIRMADO_CARGADO → VIGENTE (en vez del flujo manual a FINALIZADO), y cierra a

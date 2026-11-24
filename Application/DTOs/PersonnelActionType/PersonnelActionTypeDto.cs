@@ -19,5 +19,7 @@ public sealed record PersonnelActionTypeDto(
     // 2026-11-11: tipos padre/hijos (series con prefijo propio) y numeración por tipo
     int? ParentTypeId = null,
     string? NumberingFormat = null,
-    bool NumberingResetsYearly = true
+    bool NumberingResetsYearly = true,
+    // 2026-11-24: imprimir la grilla completa de Situación Propuesta en el documento (false = solo el nombre de la acción)
+    bool ShowProposedSituation = true
 );

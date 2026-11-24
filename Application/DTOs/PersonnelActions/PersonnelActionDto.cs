@@ -146,6 +146,9 @@ public sealed record PersonnelActionDetailDto(
     // esto (ver descripción de la columna en HR.tbl_Personnel_Action_Type).
     string? ActionCategory,
 
+    // 2026-11-24: configuración del tipo de acción: imprimir la grilla completa de SITUACIÓN PROPUESTA (false = solo el nombre).
+    bool ShowProposedSituation,
+
     // 2026-08-24: Grupo Ocupacional y Grado del cargo origen/destino (Job.GroupId ->
     // OccupationalGroup -> Degree). Placeholders CURRENT/PROPOSED_OCCUPATIONAL_GROUP y
     // CURRENT/PROPOSED_GRADE existían en la plantilla pero nunca se resolvían.

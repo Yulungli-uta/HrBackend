@@ -1263,7 +1263,10 @@ public sealed class PersonnelActionService : IPersonnelActionService
         // corregido antes a pedido del usuario: eso hacía que acciones de Vacaciones con un
         // departamento destino igual al de origen (copiado por el formulario) mostraran la
         // grilla completa en vez de colapsar.
-        var showsProposedFields = d.ActionCategory is "ENTRY" or "MOVEMENT" or "SALARY_CHANGE";
+        // 2026-11-24: ahora lo decide el campo configurable del tipo de acción (Tipos de Acción de Personal > "Mostrar situación
+        // propuesta"), no la categoría: así un tipo MOVEMENT como Subrogación puede imprimir solo su nombre sin dejar de registrar
+        // movimientos ni de entrar a SIIES. Al crear un tipo el valor inicial sale de la categoría (ENTRY/MOVEMENT/SALARY_CHANGE sí).
+        var showsProposedFields = d.ShowProposedSituation;
         if (!showsProposedFields)
         {
             r["PROPOSED_FIELDS_DISPLAY"] = "none";
