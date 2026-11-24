@@ -110,6 +110,10 @@ public sealed class PunchAccessPolicyService : IPunchAccessPolicyService
         return IpNetworkMatcher.Contains(networks, ip);
     }
 
+    /// <inheritdoc />
+    public Task LogEventAsync(int employeeId, string? clientIp, string? forwardedFor, string result, string mode, string? detail, CancellationToken ct) =>
+        TryLogAsync(employeeId, clientIp, forwardedFor, Truncate(result, 30)!, Truncate(mode, 10)!, detail, ct);
+
     // Registrar nunca debe impedir la picada: un fallo de bitácora solo se anota en el log técnico.
     private async Task TryLogAsync(int employeeId, string? ip, string? forwardedFor, string result, string mode, string? detail, CancellationToken ct)
     {

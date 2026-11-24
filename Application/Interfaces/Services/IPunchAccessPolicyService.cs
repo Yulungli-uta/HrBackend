@@ -15,6 +15,12 @@ public interface IPunchAccessPolicyService
     /// </summary>
     Task<PunchAccessDecision> EvaluateAsync(int employeeId, string? clientIp, string? forwardedFor, CancellationToken ct);
 
+    /// <summary>
+    /// Registra en la bitácora de picadas un evento del flujo (rechazo del servidor, error o evento informado por la
+    /// pantalla). Nunca lanza: un fallo de bitácora no debe impedir la picada. <paramref name="mode"/> es SERVER o CLIENT.
+    /// </summary>
+    Task LogEventAsync(int employeeId, string? clientIp, string? forwardedFor, string result, string mode, string? detail, CancellationToken ct);
+
     /// <summary>Lo que el servidor ve del usuario: su IP, si está en el campus y si tiene permiso externo.</summary>
     Task<PunchAccessInfoDto> GetMyAccessAsync(int employeeId, string? clientIp, CancellationToken ct);
 

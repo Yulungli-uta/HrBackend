@@ -22,4 +22,10 @@ public interface IAttendancePunchesService : IService<AttendancePunches, int>
     /// motivo por el que se rechazó.
     /// </summary>
     Task<OwnPunchResult> RegisterOwnPunchAsync(AttendancePunches punch, CancellationToken ct);
+
+    /// <summary>
+    /// Anota un evento informado por la pantalla de picadas (CLICK, RETRY, SEND_FAILED, HIDDEN_BEFORE_RESPONSE) del
+    /// empleado autenticado. Devuelve false si el evento no es válido o se superó el límite de frecuencia.
+    /// </summary>
+    Task<bool> LogClientEventAsync(string eventName, string? detail, CancellationToken ct);
 }

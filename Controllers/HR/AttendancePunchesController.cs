@@ -173,6 +173,18 @@ public class AttendancePunchesController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<AttendancePunchesDto>(created));
     }
 
+    /// <summary>
+    /// La pantalla de picadas informa un evento (CLICK, RETRY, SEND_FAILED, HIDDEN_BEFORE_RESPONSE). Se guarda en la bitácora
+    /// de picadas para poder revisar después qué ocurrió en el dispositivo. No crea ninguna picada.
+    /// </summary>
+    [HttpPost("events")]
+    [RequirePermission("ATTENDANCE.CREATE")]
+    public async Task<IActionResult> LogClientEvent([FromBody] PunchClientEventDto dto, CancellationToken ct)
+    {
+        var accepted = await _svc.LogClientEventAsync(dto.Event, dto.Detail, ct);
+        return accepted ? NoContent() : BadRequest(new { message = "Evento no válido o demasiado frecuente." });
+    }
+
     /// <summary>Actualiza un registro existente.</summary>
     [HttpPut("{id:int}")]
     [RequirePermission("ATTENDANCE.UPDATE")]
