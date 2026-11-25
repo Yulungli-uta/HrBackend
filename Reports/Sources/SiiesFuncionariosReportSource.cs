@@ -211,7 +211,9 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             query = query.Where(v => v.IDCard == identification);
         }
 
-        return await query.ToListAsync(ct);
+        var current = await query.ToListAsync(ct);
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        return await AddTitularAuthorityRowsAsync(current, identTypeName, filter, today, today, ct);
     }
 
     /// <summary>
@@ -237,7 +239,8 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
     private async Task<List<VwSiiesFuncionario>> GetEmployeesVigentesEnRangoAsync(string identTypeName, ReportFilterDto filter, CancellationToken ct)
     {
         var rows = await GetEmployeesVigentesEnRangoBaseAsync(identTypeName, filter, ct);
-        return await AddMovementActionRowsAsync(rows, filter.StartDate!.Value, filter.EndDate!.Value, ct);
+        rows = await AddMovementActionRowsAsync(rows, filter.StartDate!.Value, filter.EndDate!.Value, ct);
+        return await AddTitularAuthorityRowsAsync(rows, identTypeName, filter, DateOnly.FromDateTime(filter.StartDate!.Value), DateOnly.FromDateTime(filter.EndDate!.Value), ct);
     }
 
     private static readonly System.Reflection.MethodInfo ShallowCloneMethod =
@@ -385,7 +388,175 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
         return result;
     }
 
-    private async Task<List<VwSiiesFuncionario>> GetEmployeesVigentesEnRangoBaseAsync(string identTypeName, ReportFilterDto filter, CancellationToken ct)
+    /// <summary>
+    /// 2026-11-26: un docente titular que además es autoridad (Decano, Director, Vicerrector...) tiene dos documentos: su nombramiento docente
+    /// (sale en Profesores) y la acción que lo designó autoridad (sale aquí). Funcionarios excluye las acciones de los docentes, así que esa
+    /// designación no salía (24 de 38 titulares con autoridad no aparecían) o salía con el número del nombramiento docente.
+    /// Por cada autoridad vigente en el rango se agrega una fila DIRECTIVO con el documento resuelto en este orden:
+    /// 1) la acción de designación (Nombramiento, Designación, Encargo y sus subtipos) cuyo destino es la dependencia (y el cargo, si la autoridad lo tiene);
+    /// 2) la última acción de personal con ese destino; 3) ninguna: la autoridad se omite y se registra una advertencia para que RRHH la complete.
+    /// No se repite un documento que el empleado ya tiene en el reporte. La fila toma los datos personales de una fila existente o, si el titular
+    /// no tiene ninguna, de la misma consulta base limitada a ese empleado.
+    /// </summary>
+    private async Task<List<VwSiiesFuncionario>> AddTitularAuthorityRowsAsync(
+        List<VwSiiesFuncionario> rows, string identTypeName, ReportFilterDto filter, DateOnly desde, DateOnly hasta, CancellationToken ct)
+    {
+        var authorities = await _db.DepartmentAuthorities.AsNoTracking()
+            .Where(a => a.StartDate <= hasta && (a.EndDate == null || a.EndDate >= desde)
+                        && (a.IsActive || (a.EndDate != null && a.EndDate > a.StartDate)))
+            .Select(a => new { a.EmployeeId, a.DepartmentId, a.JobId, a.StartDate, a.EndDate })
+            .ToListAsync(ct);
+        if (authorities.Count == 0) return rows;
+
+        var candidateIds = authorities.Select(a => a.EmployeeId).Distinct().ToList();
+        var teacherIds = await _db.TeacherStructures.AsNoTracking()
+            .Where(t => candidateIds.Contains(t.EmployeeId)).Select(t => t.EmployeeId).Distinct().ToListAsync(ct);
+        var titularIds = await (from e in _db.Employees.AsNoTracking()
+                                join jb in _db.Jobs.AsNoTracking() on e.JobId equals (int?)jb.JobID
+                                where candidateIds.Contains(e.EmployeeId) && jb.Description != null && jb.Description.StartsWith("PROFESOR TITULAR")
+                                select e.EmployeeId).Distinct().ToListAsync(ct);
+        var teachers = teacherIds.Concat(titularIds).ToHashSet();
+        authorities = authorities.Where(a => teachers.Contains(a.EmployeeId)).ToList();
+        if (authorities.Count == 0) return rows;
+
+        var employeeIds = authorities.Select(a => a.EmployeeId).Distinct().ToList();
+        var actions = await (
+            from a in _db.PersonnelActions.AsNoTracking()
+            join t in _db.PersonnelActionTypes.AsNoTracking() on a.ActionTypeId equals t.PersonnelActionTypeId
+            join pt in _db.PersonnelActionTypes.AsNoTracking() on t.ParentTypeId equals (int?)pt.PersonnelActionTypeId into ptj
+            from pt in ptj.DefaultIfEmpty()
+            where !a.IsDeleted && a.EmployeeId != null && employeeIds.Contains(a.EmployeeId.Value)
+                  && (a.Status == "VIGENTE" || a.Status == "FIRMADO_CARGADO" || a.Status == "FINALIZADO")
+                  && a.EffectiveDate != null && a.EffectiveDate <= hasta
+                  && a.DestinationDepartmentId != null && a.ActionNumber != null
+                  && !t.Code.StartsWith("FINALIZACION")
+            select new
+            {
+                EmployeeId = a.EmployeeId!.Value,
+                a.ActionNumber,
+                EffectiveDate = a.EffectiveDate!.Value,
+                a.EndDate,
+                DestinationDepartmentId = a.DestinationDepartmentId!.Value,
+                a.DestinationJobId,
+                TypeCode = t.Code,
+                ParentCode = pt != null ? pt.Code : null,
+                t.SiiesRelacionIesTypeId
+            }).ToListAsync(ct);
+
+        static bool IsDesignation(string typeCode, string? parentCode) =>
+            typeCode is "DESIGNACION" or "NOMBRAMIENTO" or "ENCARGO" || parentCode is "NOMBRAMIENTO" or "ENCARGO";
+
+        // Una entrada por (empleado, documento): varias autoridades pueden compartir la misma acción.
+        var resolved = new Dictionary<(int EmployeeId, string Document), AuthorityDocument>();
+        var withoutDocument = new List<int>();
+        foreach (var authority in authorities)
+        {
+            var matches = actions
+                .Where(x => x.EmployeeId == authority.EmployeeId && x.DestinationDepartmentId == authority.DepartmentId
+                            && (authority.JobId == null || x.DestinationJobId == authority.JobId))
+                .OrderByDescending(x => x.EffectiveDate)
+                .ToList();
+            var chosen = matches.FirstOrDefault(x => IsDesignation(x.TypeCode, x.ParentCode)) ?? matches.FirstOrDefault();
+            if (chosen is null) { withoutDocument.Add(authority.EmployeeId); continue; }
+
+            var number = chosen.ActionNumber!.Trim();
+            var key = (authority.EmployeeId, number.ToUpperInvariant());
+            var authorityEnd = authority.EndDate is { Year: < 9999 } end ? end : (DateOnly?)null;
+            if (!resolved.TryGetValue(key, out var item))
+            {
+                resolved[key] = new AuthorityDocument(authority.EmployeeId, number, chosen.EffectiveDate, authorityEnd, authority.DepartmentId,
+                    authority.JobId ?? chosen.DestinationJobId, chosen.SiiesRelacionIesTypeId);
+            }
+            else
+            {
+                // Misma acción para varias autoridades: queda abierta si alguna lo está; si no, la fecha de fin más tardía.
+                var to = item.EffectiveTo is null || authorityEnd is null ? null : (item.EffectiveTo > authorityEnd ? item.EffectiveTo : authorityEnd);
+                resolved[key] = item with { EffectiveTo = to };
+            }
+        }
+
+        if (withoutDocument.Count > 0)
+            _logger.LogWarning(
+                "SIIES Funcionarios: {Count} autoridad(es) de docentes titulares sin acción de personal que las respalde; no se agregaron al reporte. EmployeeIds: {EmployeeIds}",
+                withoutDocument.Count, string.Join(", ", withoutDocument.Distinct()));
+        if (resolved.Count == 0) return rows;
+
+        // Datos personales: de una fila existente del empleado; si no tiene ninguna, de la consulta base limitada a esos empleados.
+        var templates = rows.GroupBy(r => r.EmployeeID).ToDictionary(g => g.Key, g => g.First());
+        var missing = resolved.Values.Select(r => r.EmployeeId).Distinct().Where(id => !templates.ContainsKey(id)).ToList();
+        if (missing.Count > 0)
+        {
+            var rangeFilter = new ReportFilterDto
+            {
+                StartDate = desde.ToDateTime(TimeOnly.MinValue),
+                EndDate = hasta.ToDateTime(TimeOnly.MinValue),
+                Identification = filter.Identification
+            };
+            foreach (var template in await GetEmployeesVigentesEnRangoBaseAsync(identTypeName, rangeFilter, ct, missing))
+                templates.TryAdd(template.EmployeeID, template);
+        }
+
+        var departmentIds = resolved.Values.Select(r => r.DepartmentId).Distinct().ToList();
+        var departments = await _db.Departments.AsNoTracking().Where(d => departmentIds.Contains(d.DepartmentId))
+            .ToDictionaryAsync(d => d.DepartmentId, d => d.Name, ct);
+        var jobIds = resolved.Values.Where(r => r.JobId != null).Select(r => r.JobId!.Value).Distinct().ToList();
+        var jobs = await _db.Jobs.AsNoTracking().Where(j => jobIds.Contains(j.JobID))
+            .ToDictionaryAsync(j => j.JobID, j => new { j.Description, j.PuestoJerarquicoSuperior }, ct);
+        var relationIds = resolved.Values.Where(r => r.RelationTypeId != null).Select(r => r.RelationTypeId!.Value).Distinct().ToList();
+        var relations = await _db.RefTypes.AsNoTracking().Where(t => relationIds.Contains(t.TypeId))
+            .ToDictionaryAsync(t => t.TypeId, t => t.SiiesLabel, ct);
+
+        var result = new List<VwSiiesFuncionario>(rows);
+        var knownDocuments = rows.Where(r => !string.IsNullOrWhiteSpace(r.DocumentNumber))
+            .Select(r => (r.EmployeeID, r.DocumentNumber!.Trim().ToUpperInvariant())).ToHashSet();
+
+        foreach (var item in resolved.Values.OrderBy(r => r.EmployeeId).ThenBy(r => r.EffectiveFrom))
+        {
+            if (knownDocuments.Contains((item.EmployeeId, item.DocumentNumber.ToUpperInvariant())))
+            {
+                // El documento ya sale (p. ej. por su fila de régimen LOSEP), pero esa fila puede haberse cerrado antes de que termine la autoridad:
+                // se extiende hasta el fin de la autoridad para que el período quede cubierto.
+                var existing = result.FirstOrDefault(r => r.EmployeeID == item.EmployeeId && r.DocumentNumber is not null
+                    && string.Equals(r.DocumentNumber.Trim(), item.DocumentNumber, StringComparison.OrdinalIgnoreCase));
+                if (existing?.EffectiveTo is { } existingEnd && existingEnd < hasta && (item.EffectiveTo is null || item.EffectiveTo > existingEnd))
+                {
+                    existing.EffectiveTo = item.EffectiveTo;
+                    existing.RegimeIsActive = true;
+                }
+                continue;
+            }
+            if (!templates.TryGetValue(item.EmployeeId, out var template)) continue; // fuera del filtro (tipo de identificación, datos de prueba...)
+
+            var row = CloneRow(template);
+            row.DocumentNumber = item.DocumentNumber;
+            row.RegimeDocumentType = "PERSONNEL_ACTION";
+            row.EffectiveFrom = item.EffectiveFrom;
+            row.EffectiveTo = item.EffectiveTo;
+            row.RegimeIsActive = item.EffectiveTo is null || item.EffectiveTo >= hasta;
+            row.TipoFuncionarioSiiesLabel = "DIRECTIVO";
+            row.LaborRegimeName = "LOSEP";
+            row.ContractedHours = null; // ApplyReportDefaultsAsync completa las 40 horas del LOSEP
+            if (departments.TryGetValue(item.DepartmentId, out var departmentName)) row.DepartmentName = departmentName;
+            if (item.JobId is { } jobId && jobs.TryGetValue(jobId, out var job))
+            {
+                row.JobDescription = job.Description;
+                row.PuestoJerarquicoSuperior = job.PuestoJerarquicoSuperior;
+            }
+            if (item.RelationTypeId is { } relationId && relations.TryGetValue(relationId, out var relation) && !string.IsNullOrWhiteSpace(relation))
+                row.RelacionIesSiiesLabel = relation;
+
+            var lastIndex = result.FindLastIndex(r => r.EmployeeID == item.EmployeeId);
+            if (lastIndex >= 0) result.Insert(lastIndex + 1, row); else result.Add(row);
+            knownDocuments.Add((item.EmployeeId, item.DocumentNumber.ToUpperInvariant()));
+        }
+        return result;
+    }
+
+    /// <summary>Documento que respalda la autoridad de un docente titular (ver <see cref="AddTitularAuthorityRowsAsync"/>).</summary>
+    private sealed record AuthorityDocument(
+        int EmployeeId, string DocumentNumber, DateOnly EffectiveFrom, DateOnly? EffectiveTo, int DepartmentId, int? JobId, int? RelationTypeId);
+
+    private async Task<List<VwSiiesFuncionario>> GetEmployeesVigentesEnRangoBaseAsync(string identTypeName, ReportFilterDto filter, CancellationToken ct, IReadOnlyCollection<int>? onlyEmployeeIds = null)
     {
         // DateOnly como parametro de Dapper falla en runtime ("cannot be used as a parameter
         // value" - esta version de Dapper no lo soporta sin un ITypeHandler registrado, que
@@ -567,7 +738,11 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
                                   OR NOT EXISTS (SELECT 1 FROM [HR].[tbl_EmployeeLaborRegime] rx
                                                  WHERE rx.[EmployeeId] = e.[EmployeeID]
                                                    AND rx.[SourcePersonnelActionId] = apt.[ActionId]
-                                                   AND rx.[Id] <> elr.[Id]))
+                                                   AND rx.[Id] <> elr.[Id]
+                                                   -- 2026-11-26: solo cuenta si esa fila se solapa con el rango; un nombramiento cuya fila terminó antes del rango
+                                                   -- no sale en el reporte y, sin este filtro, dejaba de reemplazar el documento de la fila principal.
+                                                   AND rx.[EffectiveFrom] <= @FechaHasta
+                                                   AND (rx.[EffectiveTo] IS NULL OR rx.[EffectiveTo] >= @FechaDesde)))
                             THEN 1 ELSE 0 END AS [Ok]
             ) aptx
             LEFT JOIN [HR].[tbl_PersonnelActions] aptPa           ON aptPa.[ActionID] = apt.[ActionId]
@@ -632,13 +807,26 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
               AND (elr.[Id] IS NOT NULL OR ctrFallback.[ContractID] IS NOT NULL OR paFallback.[ActionID] IS NOT NULL)
             """;
 
+        // 2026-11-26: con onlyEmployeeIds la misma consulta (mismos datos personales, mismas exclusiones) se limita a esos empleados y deja de
+        // exigir un régimen/contrato/acción solapado: se usa para obtener los datos personales de un titular que solo sale por su autoridad.
+        var effectiveSql = sql;
+        if (onlyEmployeeIds is not null)
+        {
+            const string docenteMarker = "AND (tch.[v] = 0 OR elr.[Id] IS NOT NULL)";
+            const string originMarker = "AND (elr.[Id] IS NOT NULL OR ctrFallback.[ContractID] IS NOT NULL OR paFallback.[ActionID] IS NOT NULL)";
+            if (!sql.Contains(docenteMarker) || !sql.Contains(originMarker))
+                throw new InvalidOperationException("La consulta base de SIIES Funcionarios cambió: actualizar los marcadores de GetEmployeesVigentesEnRangoBaseAsync.");
+            effectiveSql = sql.Replace(docenteMarker, "AND e.[EmployeeID] IN @EmployeeIds").Replace(originMarker, string.Empty);
+        }
+
         var parameters = new
         {
             FechaDesde = fechaDesde,
             FechaHasta = fechaHasta,
             IdentTypeName = identTypeName,
             Identification = identification,
-            IncludeTestData = _testDataPolicy.IncludeTestData
+            IncludeTestData = _testDataPolicy.IncludeTestData,
+            EmployeeIds = onlyEmployeeIds?.ToArray() ?? Array.Empty<int>()
         };
 
         var connection = _db.Database.GetDbConnection();
@@ -652,7 +840,7 @@ public sealed class SiiesFuncionariosReportSource : IReportSource
             // EmployeeSelfServiceSummaryRawData.cs), se mapea a un DTO con DateTime y se
             // convierte a mano, mismo criterio ya usado en el resto del codigo.
             var rawRows = await connection.QueryAsync<RawVigenteEnRangoRow>(
-                new CommandDefinition(sql, parameters, cancellationToken: ct));
+                new CommandDefinition(effectiveSql, parameters, cancellationToken: ct));
 
             return rawRows.Select(r => new VwSiiesFuncionario
             {
