@@ -46,6 +46,8 @@ namespace WsUtaSystem.Controllers.HR
         /// <param name="search">Texto de búsqueda por título.</param>
         /// <param name="sortBy">Campo de ordenamiento (opcional).</param>
         /// <param name="sortDirection">Dirección del orden: asc | desc (opcional).</param>
+        /// <param name="familyTypeId">Grupo ocupacional (ref_Types OCCUPATIONAL_GROUP_FAMILY) de la escala del cargo.</param>
+        /// <param name="withoutGroup">true = solo cargos sin escala asignada.</param>
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged(
             [FromQuery] int page = 1,
@@ -57,6 +59,8 @@ namespace WsUtaSystem.Controllers.HR
             [FromQuery] int? groupId = null,
             [FromQuery] int? jobTypeId = null,
             [FromQuery] int? uepScaleTypeId = null,
+            [FromQuery] int? familyTypeId = null,
+            [FromQuery] bool? withoutGroup = null,
             CancellationToken ct = default)
         {
             (page, pageSize) = CatalogPredicates.NormalizePaging(page, pageSize);
@@ -76,7 +80,16 @@ namespace WsUtaSystem.Controllers.HR
                 var groupIds = uepGroups.Items.Select(g => (int?)g.GroupId).ToList();
                 byUep = j => groupIds.Contains(j.GroupId);
             }
-            var filter = predicate.And(byState).And(byGroup).And(byType).And(byUep);
+            // Grupo ocupacional (familia): cargos cuya escala pertenece a ese grupo; withoutGroup = cargos sin escala asignada.
+            Expression<Func<Job, bool>>? byFamily = null;
+            if (familyTypeId.HasValue)
+            {
+                var familyGroups = await _groups.GetPagedAsync(g => g.FamilyTypeId == familyTypeId.Value, 1, 200, ct);
+                var familyGroupIds = familyGroups.Items.Select(g => (int?)g.GroupId).ToList();
+                byFamily = j => familyGroupIds.Contains(j.GroupId);
+            }
+            Expression<Func<Job, bool>>? byUnclassified = withoutGroup == true ? j => j.GroupId == null : null;
+            var filter = predicate.And(byState).And(byGroup).And(byType).And(byUep).And(byFamily).And(byUnclassified);
 
             // Orden por descripción solo si se pide (sortBy=description); sin sortBy se conserva el orden previo del endpoint.
             var byDescription = string.Equals(sortBy, "description", StringComparison.OrdinalIgnoreCase);

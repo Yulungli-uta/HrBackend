@@ -1,3 +1,4 @@
+using WsUtaSystem.Application.Common;
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
@@ -60,6 +61,7 @@ public class RefTypesController : ControllerBase
     {
         var entityObj = _mapper.Map<RefTypes>(dto);
         entityObj.CreatedAt = _clock.Now;
+        entityObj.Metadata = RefTypeMetadata.Normalize(dto.Metadata);
         var created = await _svc.CreateAsync(entityObj, ct);
         var idVal = created?.GetType()?.GetProperties()?.FirstOrDefault(p => p.Name.Equals("Id") || p.Name.EndsWith("Id") || p.Name.EndsWith("ID"))?.GetValue(created);
         return CreatedAtAction(nameof(GetById), new { id = idVal }, _mapper.Map<RefTypesDto>(created));
@@ -84,6 +86,8 @@ public class RefTypesController : ControllerBase
         existing.Name = dto.Name;
         existing.Description = dto.Description;
         existing.IsActive = dto.IsActive;
+        // Solo se toca la metadata si el cliente la envía; las demás pantallas no la mandan y se conserva la existente
+        if (dto.Metadata is not null) existing.Metadata = RefTypeMetadata.Normalize(dto.Metadata);
 
         await _svc.UpdateAsync(id, existing, ct);
         return NoContent();

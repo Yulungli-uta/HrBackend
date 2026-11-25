@@ -129,3 +129,6 @@ CLAUDE.md
 VariablesEntorno.txt
 # Logo de reportes personalizado (Identidad visual): se genera en tiempo de ejecucion desde HR.TBL_PARAMETERS
 App_Data/
+
+# Respaldos locales con datos reales (no versionar)
+Database/backups_*/

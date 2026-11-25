@@ -14,4 +14,6 @@ public class RefTypesUpdateDto
     public DateTime CreatedAt { get; set; }
     public string? SiiesLabel { get; set; }
     public int SortOrder { get; set; }
+    /// <summary>Datos adicionales en JSON (p. ej. {"levelPrefix":"Nivel "} en los grupos ocupacionales). Opcional: si no se envía en una edición, se conserva el actual.</summary>
+    public string? Metadata { get; set; }
 }

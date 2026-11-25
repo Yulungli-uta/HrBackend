@@ -6,7 +6,8 @@ namespace WsUtaSystem.Models
     {
         public int GroupId { get; set; }
         public string Description { get; set; } = null!;
-        public decimal Rmu { get; set; }
+        /// <summary>RMU referencial de la escala (sueldo real = HR.tbl_SalaryHistory). Nulo cuando no hay un monto oficial.</summary>
+        public decimal? Rmu { get; set; }
         public int DegreeId { get; set; }
         /// <summary>
         /// Clasificación institucional "Escala UEP" (ref_Types.Category=UEP_SCALE_TYPE), cuando
@@ -18,9 +19,15 @@ namespace WsUtaSystem.Models
         public int? UepScaleTypeId { get; set; }
         /// <summary>
         /// Familia del grupo (ref_Types.Category=OCCUPATIONAL_GROUP_FAMILY), p. ej. "Personal Académico Titular".
-        /// Opcional: los grupos de la escala LOSEP no la tienen. Dentro de una familia no se repite el grado (índice único filtrado).
+        /// Hasta que RRHH defina los grados de Código de Trabajo, esas escalas no la tienen. Dentro de una familia no se repite el grado (índice único filtrado).
         /// </summary>
         public int? FamilyTypeId { get; set; }
+        /// <summary>
+        /// Nivel dentro del grupo (p. ej. Servidor Público nivel 5, Personal Académico Auxiliar nivel 1). Es distinto del grado:
+        /// el grado es el escalón del catálogo (Grado 7) y el nivel es el número que identifica la escala dentro del grupo.
+        /// Nulo cuando el grupo no usa niveles. No se repite dentro de una familia (índice único filtrado).
+        /// </summary>
+        public int? Level { get; set; }
         public bool IsActive { get; set; } = true;
         public DateTime? CreatedAt { get; set; }
         public int? CreatedBy { get; set; }
