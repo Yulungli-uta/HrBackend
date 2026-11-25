@@ -46,12 +46,15 @@ public sealed class TeacherRosterRepository : ITeacherRosterRepository
     {
         var (cte, parameters) = BuildBase(query, includeSalary, TeacherRosterIgnore.None);
 
+        // 2026-11-26: el sueldo (vista de último sueldo) se une DESPUÉS de paginar. Unido dentro de TRows el plan se volvía
+        // enorme (44 s con ~365 docentes y timeout de 30 s en la API); solo para las filas de la página tarda unos segundos.
         var sql = new StringBuilder(cte);
         sql.Append("""
 
-            SELECT r.*, COUNT(*) OVER() AS TotalCount
-            FROM TRows r
-            ORDER BY r.FullName, r.TeacherStructureId
+            , Pg AS (
+                SELECT r.*, COUNT(*) OVER() AS TotalCount
+                FROM TRows r
+                ORDER BY r.FullName, r.TeacherStructureId
             """);
 
         if (page.HasValue && pageSize.HasValue)
@@ -60,7 +63,27 @@ public sealed class TeacherRosterRepository : ITeacherRosterRepository
             parameters.Add("skip", (page.Value - 1) * pageSize.Value);
             parameters.Add("take", pageSize.Value);
         }
+        sql.Append("""
+
+            )
+            SELECT p.*,
+                   CASE WHEN @includeSalary = 1 THEN cs.NewSalary END AS Rmu,
+                   CASE WHEN @includeSalary = 1 AND cs.EmployeeID IS NOT NULL THEN
+                       CASE WHEN spa.ActionID IS NOT NULL THEN CONCAT(sty.Name, ' ', spa.ActionNumber)
+                            ELSE CONCAT('Contrato #', sh.ContractID) END
+                   END AS RmuSource,
+                   CASE WHEN @includeSalary = 1 AND cs.EmployeeID IS NOT NULL THEN cs.InForce END AS RmuInForce,
+                   CASE WHEN @includeSalary = 1 AND cs.EmployeeID IS NOT NULL
+                        THEN CASE WHEN cs.IsFallback = 1 OR cs.IsAmbiguous = 1 THEN 1 ELSE 0 END END AS RmuNeedsReview
+            FROM Pg p
+            LEFT JOIN HR.vw_EmployeeCurrentSalary cs ON cs.EmployeeID = p.EmployeeId AND @includeSalary = 1
+            LEFT JOIN HR.tbl_SalaryHistory sh ON sh.SalaryHistoryID = cs.SalaryHistoryID
+            LEFT JOIN HR.tbl_PersonnelActions spa ON spa.ActionID = sh.ActionID
+            LEFT JOIN HR.tbl_Personnel_Action_Type sty ON sty.PersonnelActionTypeID = spa.ActionTypeID
+            ORDER BY p.FullName, p.TeacherStructureId
+            """);
         sql.Append(" ").Append(QueryOptions);
+        parameters.Add("includeSalary", includeSalary ? 1 : 0);
 
         await using var conn = new SqlConnection(_connectionString);
         var rows = await conn.QueryAsync<TeacherRosterRow>(new CommandDefinition(sql.ToString(), parameters, cancellationToken: ct));
@@ -120,7 +143,6 @@ public sealed class TeacherRosterRepository : ITeacherRosterRepository
         TeacherRosterQuery q, bool includeSalary, TeacherRosterIgnore ignore)
     {
         var p = new DynamicParameters();
-        p.Add("includeSalary", includeSalary ? 1 : 0);
 
         var titularNames = AcademicCategories.TitularNames.ToArray();
         for (var i = 0; i < titularNames.Length; i++) p.Add($"tit{i}", titularNames[i]);
@@ -216,14 +238,6 @@ public sealed class TeacherRosterRepository : ITeacherRosterRepository
                     ap.AppointmentDate,
                     ap.AppointmentKind,
                     ap.AppointmentActionNumber,
-                    CASE WHEN @includeSalary = 1 THEN cs.NewSalary END AS Rmu,
-                    CASE WHEN @includeSalary = 1 AND cs.EmployeeID IS NOT NULL THEN
-                        CASE WHEN spa.ActionID IS NOT NULL THEN CONCAT(sty.Name, ' ', spa.ActionNumber)
-                             ELSE CONCAT('Contrato #', sh.ContractID) END
-                    END AS RmuSource,
-                    CASE WHEN @includeSalary = 1 AND cs.EmployeeID IS NOT NULL THEN cs.InForce END AS RmuInForce,
-                    CASE WHEN @includeSalary = 1 AND cs.EmployeeID IS NOT NULL
-                         THEN CASE WHEN cs.IsFallback = 1 OR cs.IsAmbiguous = 1 THEN 1 ELSE 0 END END AS RmuNeedsReview,
                     CASE WHEN CAST(la.EffectiveDate AS date) > CAST(t.StartDate AS date) THEN la.ActionNumber END AS PendingScaleActionNumber,
                     CASE WHEN CAST(la.EffectiveDate AS date) > CAST(t.StartDate AS date) THEN la.TypeName END AS PendingScaleActionType,
                     CASE WHEN CAST(la.EffectiveDate AS date) > CAST(t.StartDate AS date) THEN la.EffectiveDate END AS PendingScaleActionDate,
@@ -241,10 +255,6 @@ public sealed class TeacherRosterRepository : ITeacherRosterRepository
                 LEFT JOIN HR.tbl_jobs j ON j.JobID = e.JobID
                 LEFT JOIN HR.tbl_AcademicLadder jl ON jl.LadderId = j.AcademicLadderId
                 LEFT JOIN HR.vw_EmployeeAppointment ap ON ap.EmployeeID = t.EmployeeID
-                LEFT JOIN HR.vw_EmployeeCurrentSalary cs ON cs.EmployeeID = t.EmployeeID AND @includeSalary = 1
-                LEFT JOIN HR.tbl_SalaryHistory sh ON sh.SalaryHistoryID = cs.SalaryHistoryID
-                LEFT JOIN HR.tbl_PersonnelActions spa ON spa.ActionID = sh.ActionID
-                LEFT JOIN HR.tbl_Personnel_Action_Type sty ON sty.PersonnelActionTypeID = spa.ActionTypeID
                 OUTER APPLY (
                     SELECT TOP 1 pa.ActionNumber, pa.EffectiveDate, ty.Name AS TypeName
                     FROM HR.tbl_PersonnelActions pa
