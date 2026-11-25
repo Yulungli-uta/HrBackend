@@ -17,6 +17,23 @@ public class EmployeeLaborRegimeRepository : ServiceAwareEfRepository<EmployeeLa
             .Where(r => r.EmployeeId == employeeId && r.IsActive)
             .ToListAsync(ct);
 
+    public async Task<int> ApplyPositionToCurrentPrincipalAsync(int employeeId, int? jobId, int? departmentId, DateOnly today, CancellationToken ct = default)
+    {
+        if (jobId is null && departmentId is null) return 0;
+        var date = today;
+        var rows = await _db.EmployeeLaborRegimes
+            .Where(r => r.EmployeeId == employeeId && r.IsActive && r.IsPrincipal
+                        && r.EffectiveFrom <= date && (r.EffectiveTo == null || r.EffectiveTo >= date))
+            .ToListAsync(ct);
+        foreach (var row in rows)
+        {
+            if (jobId is not null) row.JobId = jobId;
+            if (departmentId is not null) row.DepartmentId = departmentId;
+        }
+        if (rows.Count > 0) await _db.SaveChangesAsync(ct);
+        return rows.Count;
+    }
+
     public async Task<List<EmployeeLaborRegime>> GetAllByEmployeeAsync(int employeeId, CancellationToken ct = default)
         => await _db.EmployeeLaborRegimes
             .AsNoTracking()

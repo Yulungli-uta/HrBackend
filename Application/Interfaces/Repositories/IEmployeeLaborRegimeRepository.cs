@@ -8,6 +8,12 @@ public interface IEmployeeLaborRegimeRepository : IRepository<EmployeeLaborRegim
     /// <summary>Filas activas de régimen laboral de un empleado.</summary>
     Task<List<EmployeeLaborRegime>> GetActiveByEmployeeAsync(int employeeId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Copia el cargo y/o la unidad editados en la ficha del empleado a su fila de régimen principal vigente, para que la lista
+    /// (HR.vw_EmployeePositions) y SIIES muestren lo que se guardó. Un valor nulo no cambia esa columna. Devuelve las filas modificadas.
+    /// </summary>
+    Task<int> ApplyPositionToCurrentPrincipalAsync(int employeeId, int? jobId, int? departmentId, DateOnly today, CancellationToken ct = default);
+
     /// <summary>Todas las filas (activas e históricas) de un empleado, más recientes primero.</summary>
     Task<List<EmployeeLaborRegime>> GetAllByEmployeeAsync(int employeeId, CancellationToken ct = default);
 

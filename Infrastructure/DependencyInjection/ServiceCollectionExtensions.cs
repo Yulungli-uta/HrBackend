@@ -724,6 +724,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVwDepartmentWithTypeService, WsUtaSystem.Application.Services.VwDepartmentWithTypeService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IVwJobWithDegreeAndGroupRepository, WsUtaSystem.Infrastructure.Repositories.VwJobWithDegreeAndGroupRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVwJobWithDegreeAndGroupService, WsUtaSystem.Application.Services.VwJobWithDegreeAndGroupService>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IVwEmployeePositionRepository, WsUtaSystem.Infrastructure.Repositories.VwEmployeePositionRepository>();
+        services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVwEmployeePositionService, WsUtaSystem.Application.Services.VwEmployeePositionService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IVwJobActivityRepository, WsUtaSystem.Infrastructure.Repositories.VwJobActivityRepository>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Services.IVwJobActivityService, WsUtaSystem.Application.Services.VwJobActivityService>();
         services.AddScoped<WsUtaSystem.Application.Interfaces.Repositories.IVwAuthorityRepository, WsUtaSystem.Infrastructure.Repositories.VwAuthorityRepository>();

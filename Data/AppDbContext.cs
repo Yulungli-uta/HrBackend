@@ -252,6 +252,7 @@ public class AppDbContext : DbContext
     public DbSet<VwEmployeeCurrentSchedule> VwEmployeeCurrentSchedules => Set<VwEmployeeCurrentSchedule>();
     public DbSet<VwDepartmentWithType> VwDepartmentWithType { get; set; }
     public DbSet<VwJobWithDegreeAndGroup> VwJobWithDegreeAndGroup { get; set; }
+    public DbSet<VwEmployeePosition> VwEmployeePositions => Set<VwEmployeePosition>();
     public DbSet<VwJobActivity> VwJobActivity { get; set; }
     public DbSet<VwAuthority> VwAuthority { get; set; }
 

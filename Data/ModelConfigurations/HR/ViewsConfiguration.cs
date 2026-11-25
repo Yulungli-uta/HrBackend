@@ -167,6 +167,16 @@ public sealed class VwJobWithDegreeAndGroupConfiguration : IEntityTypeConfigurat
     }
 }
 
+public sealed class VwEmployeePositionConfiguration : IEntityTypeConfiguration<VwEmployeePosition>
+{
+    public void Configure(EntityTypeBuilder<VwEmployeePosition> e)
+    {
+        e.HasNoKey();
+        e.ToView("vw_EmployeePositions", "HR");
+        e.Property(x => x.ContractedHours).HasPrecision(10, 2);
+    }
+}
+
 public sealed class VwJobActivityConfiguration : IEntityTypeConfiguration<VwJobActivity>
 {
     public void Configure(EntityTypeBuilder<VwJobActivity> e)
