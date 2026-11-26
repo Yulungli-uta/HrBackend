@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.DTOs.FamilyBurden;
@@ -49,6 +50,35 @@ public class FamilyBurdenService : Service<FamilyBurden, int>, IFamilyBurdenServ
         return await _repository.GetByPersonIdAsync(personId);
     }
 
+    /// <summary>Crea la carga familiar; su discapacidad debe cumplir <see cref="FamilyDisabilityRules"/>.</summary>
+    public override async Task<FamilyBurden> CreateAsync(FamilyBurden entity, CancellationToken ct)
+    {
+        ApplyDisabilityRules(entity);
+        return await base.CreateAsync(entity, ct);
+    }
+
+    /// <summary>
+    /// Actualiza la carga familiar. La discapacidad se valida solo si cambia: las cargas anteriores que ya tenían tipo sin porcentaje
+    /// no pueden corregirse desde aquí y no deben impedir guardar otros datos.
+    /// </summary>
+    public override async Task UpdateAsync(int id, FamilyBurden entity, CancellationToken ct)
+    {
+        // Se leen los valores antes de actualizar: la entidad leída es la misma instancia que el repositorio modifica al guardar.
+        var current = await _repo.GetByIdAsync(id, ct);
+        var unchanged = current is not null
+            && !FamilyDisabilityRules.HasChanged(current.DisabilityTypeId, current.DisabilityPercentage, entity.DisabilityTypeId, entity.DisabilityPercentage);
+
+        if (!unchanged) ApplyDisabilityRules(entity);
+        await base.UpdateAsync(id, entity, ct);
+    }
+
+    private static void ApplyDisabilityRules(FamilyBurden entity)
+    {
+        var (typeId, percentage) = FamilyDisabilityRules.ValidateAndNormalize(entity.DisabilityTypeId, entity.DisabilityPercentage);
+        entity.DisabilityTypeId = typeId;
+        entity.DisabilityPercentage = percentage;
+    }
+
     public async Task<(FamilyBurden entity, StoredFile? storedFile, string? error)> CreateWithDocumentAsync(
         FamilyBurden entity,
         IFormFile? file,
@@ -57,6 +87,10 @@ public class FamilyBurdenService : Service<FamilyBurden, int>, IFamilyBurdenServ
         int? disabilityDocumentTypeId,
         CancellationToken ct)
     {
+        // Antes de subir ningún archivo: si la discapacidad no cumple la regla se devuelve el mensaje y no queda nada subido.
+        try { ApplyDisabilityRules(entity); }
+        catch (BusinessRuleException ex) { return (null!, null, ex.Message); }
+
         var moduleTypeId = await ResolveRefTypeIdAsync(ModuleTypeCategory, ModuleTypeName, ct);
         if (moduleTypeId.HasValue)
         {
