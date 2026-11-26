@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WsUtaSystem.Application.Common;
 using WsUtaSystem.Application.Common.Services;
 using WsUtaSystem.Application.DTOs.Common;
 using WsUtaSystem.Application.Interfaces.Repositories;
@@ -8,6 +9,37 @@ namespace WsUtaSystem.Application.Services;
 public class PeopleService : Service<People, int>, IPeopleService
 {
     public PeopleService(IPeopleRepository repo) : base(repo) { }
+
+    /// <summary>Crea la persona; sus datos de discapacidad deben cumplir <see cref="PersonDisabilityRules"/>.</summary>
+    public override async Task<People> CreateAsync(People entity, CancellationToken ct)
+    {
+        ApplyDisabilityRules(entity);
+        return await base.CreateAsync(entity, ct);
+    }
+
+    /// <summary>
+    /// Actualiza la persona. Los datos de discapacidad se validan solo si cambian: los registros anteriores que ya estaban incompletos
+    /// (tipo sin carnet o sin porcentaje) no se pueden corregir desde aquí y no deben impedir guardar otros datos de la persona.
+    /// </summary>
+    public override async Task UpdateAsync(int id, People entity, CancellationToken ct)
+    {
+        // Se leen los valores antes de actualizar: la entidad leída es la misma instancia que el repositorio modifica al guardar.
+        var current = await _repo.GetByIdAsync(id, ct);
+        var unchanged = current is not null && !PersonDisabilityRules.HasChanged(
+            current.Disability, current.DisabilityPercentage, current.ConadisCard,
+            entity.Disability, entity.DisabilityPercentage, entity.ConadisCard);
+
+        if (!unchanged) ApplyDisabilityRules(entity);
+        await base.UpdateAsync(id, entity, ct);
+    }
+
+    private static void ApplyDisabilityRules(People entity)
+    {
+        var (type, percentage, card) = PersonDisabilityRules.ValidateAndNormalize(entity.Disability, entity.DisabilityPercentage, entity.ConadisCard);
+        entity.Disability = type;
+        entity.DisabilityPercentage = percentage;
+        entity.ConadisCard = card;
+    }
 
     /// <inheritdoc/>
     public async Task<PagedResult<People>> SearchPagedAsync(
