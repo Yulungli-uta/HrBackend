@@ -67,22 +67,50 @@ public sealed class PunchAccessController : ControllerBase
     [HttpGet("policies")]
     [RequirePermission("PUNCH_POLICY.READ", Strict = true)]
     public async Task<IActionResult> GetPolicies(
-        [FromQuery] string? search, [FromQuery] bool onlyEffective = false,
+        [FromQuery] string? search, [FromQuery] bool onlyEffective = false, [FromQuery] int? employeeId = null, [FromQuery] Guid? batchId = null,
         [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default) =>
-        Ok(await _svc.GetPoliciesAsync(search, onlyEffective, page, pageSize, ct));
+        Ok(await _svc.GetPoliciesAsync(search, onlyEffective, employeeId, batchId, page, pageSize, ct));
 
-    [HttpPut("policies/{employeeId:int}")]
+    [HttpPost("policies")]
     [RequirePermission("PUNCH_POLICY.MANAGE", Strict = true)]
-    public async Task<IActionResult> SavePolicy([FromRoute] int employeeId, [FromBody] PunchPolicySaveDto dto, CancellationToken ct)
+    public async Task<IActionResult> CreatePolicy([FromBody] PunchPolicyCreateDto dto, CancellationToken ct)
     {
-        var saved = await _svc.SavePolicyAsync(employeeId, dto, _currentUser.EmployeeId, ct);
-        return saved is null ? NotFound() : Ok(saved);
+        var created = await _svc.CreatePolicyAsync(dto, _currentUser.EmployeeId, ct);
+        return created is null ? NotFound() : Ok(created);
     }
 
-    [HttpDelete("policies/{employeeId:int}")]
+    [HttpPost("policies/global")]
     [RequirePermission("PUNCH_POLICY.MANAGE", Strict = true)]
-    public async Task<IActionResult> DeletePolicy([FromRoute] int employeeId, CancellationToken ct) =>
-        await _svc.DeletePolicyAsync(employeeId, ct) ? NoContent() : NotFound();
+    public async Task<IActionResult> CreateGlobalPolicy([FromBody] PunchPolicyGlobalDto dto, CancellationToken ct) =>
+        Ok(await _svc.CreateGlobalPolicyAsync(dto, _currentUser.EmployeeId, ct));
+
+    [HttpGet("policies/department-preview")]
+    [RequirePermission("PUNCH_POLICY.MANAGE", Strict = true)]
+    public async Task<IActionResult> PreviewDepartment(
+        [FromQuery] int departmentId, [FromQuery] bool includeChildren = false, [FromQuery] DateTime? validFrom = null, [FromQuery] DateTime? validTo = null,
+        CancellationToken ct = default) =>
+        Ok(await _svc.PreviewDepartmentPoliciesAsync(departmentId, includeChildren, validFrom, validTo, ct));
+
+    [HttpPost("policies/department")]
+    [RequirePermission("PUNCH_POLICY.MANAGE", Strict = true)]
+    public async Task<IActionResult> CreateDepartmentPolicies([FromBody] PunchPolicyDepartmentDto dto, CancellationToken ct) =>
+        Ok(await _svc.CreateDepartmentPoliciesAsync(dto, _currentUser.EmployeeId, ct));
+
+    [HttpPost("policies/{policyId:int}/revoke")]
+    [RequirePermission("PUNCH_POLICY.MANAGE", Strict = true)]
+    public async Task<IActionResult> RevokePolicy([FromRoute] int policyId, [FromBody] PunchPolicyRevokeDto dto, CancellationToken ct)
+    {
+        var revoked = await _svc.RevokePolicyAsync(policyId, dto, _currentUser.EmployeeId, ct);
+        return revoked is null ? NotFound() : Ok(revoked);
+    }
+
+    [HttpPost("policies/batch/{batchId:guid}/revoke")]
+    [RequirePermission("PUNCH_POLICY.MANAGE", Strict = true)]
+    public async Task<IActionResult> RevokeBatch([FromRoute] Guid batchId, [FromBody] PunchPolicyRevokeDto dto, CancellationToken ct)
+    {
+        var count = await _svc.RevokeBatchAsync(batchId, dto, _currentUser.EmployeeId, ct);
+        return count == 0 ? NotFound() : Ok(new { revoked = count });
+    }
 
     // ── Registro de picadas fuera del campus ────────────────────────────────
 

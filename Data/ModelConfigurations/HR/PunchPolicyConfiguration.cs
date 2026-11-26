@@ -26,7 +26,8 @@ public sealed class EmployeePunchPolicyConfiguration : IEntityTypeConfiguration<
         e.Property(x => x.Reason).HasMaxLength(300);
         e.Property(x => x.ValidFrom).HasColumnType("date");
         e.Property(x => x.ValidTo).HasColumnType("date");
-        e.HasIndex(x => x.EmployeeId).IsUnique();
+        e.Property(x => x.RevokeReason).HasMaxLength(300);
+        e.HasIndex(x => new { x.EmployeeId, x.ValidFrom, x.ValidTo });
     }
 }
 

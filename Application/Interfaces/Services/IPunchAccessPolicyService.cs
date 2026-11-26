@@ -30,9 +30,19 @@ public interface IPunchAccessPolicyService
     Task<bool> DeleteNetworkAsync(int networkId, CancellationToken ct);
     Task<PunchIpCheckDto> CheckIpAsync(string ip, CancellationToken ct);
 
-    Task<PagedResult<PunchPolicyItemDto>> GetPoliciesAsync(string? search, bool onlyEffective, int page, int pageSize, CancellationToken ct);
-    Task<PunchPolicyItemDto?> SavePolicyAsync(int employeeId, PunchPolicySaveDto dto, int? authorizedBy, CancellationToken ct);
-    Task<bool> DeletePolicyAsync(int employeeId, CancellationToken ct);
+    Task<PagedResult<PunchPolicyItemDto>> GetPoliciesAsync(string? search, bool onlyEffective, int? employeeId, Guid? batchId, int page, int pageSize, CancellationToken ct);
+    /// <summary>Crea una autorización individual (no se edita: se revoca y se crea otra). Null si el empleado no existe.</summary>
+    Task<PunchPolicyItemDto?> CreatePolicyAsync(PunchPolicyCreateDto dto, int? authorizedBy, CancellationToken ct);
+    /// <summary>Crea UNA autorización global (toda la institución, sin empleado). Exige fecha final y no se cruza con otra global.</summary>
+    Task<PunchPolicyItemDto> CreateGlobalPolicyAsync(PunchPolicyGlobalDto dto, int? authorizedBy, CancellationToken ct);
+    /// <summary>Cuántos empleados alcanzaría una autorización por departamento y a cuántos se omitiría (no escribe).</summary>
+    Task<PunchPolicyDepartmentPreviewDto> PreviewDepartmentPoliciesAsync(int departmentId, bool includeChildren, DateTime? validFrom, DateTime? validTo, CancellationToken ct);
+    /// <summary>Crea una autorización por cada empleado activo del departamento (y sus hijos si se pide), en un mismo lote.</summary>
+    Task<PunchPolicyBatchResultDto> CreateDepartmentPoliciesAsync(PunchPolicyDepartmentDto dto, int? authorizedBy, CancellationToken ct);
+    /// <summary>Revoca una autorización sin borrarla. Null si no existe.</summary>
+    Task<PunchPolicyItemDto?> RevokePolicyAsync(int policyId, PunchPolicyRevokeDto dto, int? revokedBy, CancellationToken ct);
+    /// <summary>Revoca todas las autorizaciones aún abiertas de un lote; devuelve cuántas.</summary>
+    Task<int> RevokeBatchAsync(Guid batchId, PunchPolicyRevokeDto dto, int? revokedBy, CancellationToken ct);
 
     Task<PagedResult<PunchAccessLogItemDto>> GetLogAsync(DateTime? from, DateTime? to, int? employeeId, string? result, int page, int pageSize, CancellationToken ct);
 

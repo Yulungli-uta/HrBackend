@@ -32,28 +32,81 @@ public sealed class PunchIpCheckDto
     public string? Message { get; set; }
 }
 
-/// <summary>Autorización de picada externa de un empleado (con datos para mostrar en la pantalla).</summary>
+/// <summary>Autorización de picada externa de un empleado (una fila del historial).</summary>
 public sealed class PunchPolicyItemDto
 {
-    public int EmployeeId { get; set; }
+    public int PolicyId { get; set; }
+    /// <summary>Null en la autorización global.</summary>
+    public int? EmployeeId { get; set; }
+    /// <summary>true = autoriza a toda la institución (una sola fila).</summary>
+    public bool IsGlobal { get; set; }
     public string FullName { get; set; } = string.Empty;
     public string? IdCard { get; set; }
     public string? Department { get; set; }
-    public bool AllowExternalPunch { get; set; }
     public string? Reason { get; set; }
     public DateTime? ValidFrom { get; set; }
     public DateTime? ValidTo { get; set; }
-    /// <summary>true si hoy está autorizado (activo y dentro de la vigencia).</summary>
+    /// <summary>ACTIVE | SCHEDULED (aún no inicia) | EXPIRED (venció) | REVOKED.</summary>
+    public string Status { get; set; } = "ACTIVE";
+    /// <summary>true si hoy permite picar fuera del campus (Status = ACTIVE).</summary>
     public bool IsEffective { get; set; }
-    public DateTime? UpdatedAt { get; set; }
+    public string? AuthorizedByName { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? RevokedAt { get; set; }
+    public string? RevokedByName { get; set; }
+    public string? RevokeReason { get; set; }
+    public Guid? BatchId { get; set; }
+    public string? BatchDepartmentName { get; set; }
 }
 
-public sealed class PunchPolicySaveDto
+/// <summary>Nueva autorización individual. Las autorizaciones no se editan: se revocan y se crea otra.</summary>
+public sealed class PunchPolicyCreateDto
 {
-    public bool AllowExternalPunch { get; set; }
-    [StringLength(300)] public string? Reason { get; set; }
+    [Range(1, int.MaxValue)] public int EmployeeId { get; set; }
+    [Required, StringLength(300)] public string Reason { get; set; } = string.Empty;
     public DateTime? ValidFrom { get; set; }
     public DateTime? ValidTo { get; set; }
+}
+
+/// <summary>Autorización global: una sola fila que permite picar fuera del campus a TODO el personal. La fecha final es obligatoria.</summary>
+public sealed class PunchPolicyGlobalDto
+{
+    [Required, StringLength(300)] public string Reason { get; set; } = string.Empty;
+    public DateTime? ValidFrom { get; set; }
+    [Required] public DateTime? ValidTo { get; set; }
+}
+
+/// <summary>Autorización para todo el personal activo de un departamento (una fila por empleado, mismo lote).</summary>
+public sealed class PunchPolicyDepartmentDto
+{
+    [Range(1, int.MaxValue)] public int DepartmentId { get; set; }
+    public bool IncludeChildren { get; set; }
+    [Required, StringLength(300)] public string Reason { get; set; } = string.Empty;
+    public DateTime? ValidFrom { get; set; }
+    public DateTime? ValidTo { get; set; }
+}
+
+/// <summary>Vista previa de una autorización por departamento (no escribe nada).</summary>
+public sealed class PunchPolicyDepartmentPreviewDto
+{
+    public string DepartmentName { get; set; } = string.Empty;
+    public int Departments { get; set; }
+    public int Employees { get; set; }
+    /// <summary>Se omiten los que ya tienen otra autorización vigente que se cruza con las fechas.</summary>
+    public int AlreadyAuthorized { get; set; }
+    public int ToCreate { get; set; }
+}
+
+public sealed class PunchPolicyBatchResultDto
+{
+    public Guid BatchId { get; set; }
+    public int Created { get; set; }
+    public int Skipped { get; set; }
+}
+
+public sealed class PunchPolicyRevokeDto
+{
+    [StringLength(300)] public string? Reason { get; set; }
 }
 
 public sealed class PunchAccessLogItemDto

@@ -19,7 +19,10 @@ namespace WsUtaSystem.Models
     public class EmployeePunchPolicy
     {
         public int PolicyId { get; set; }
-        public int EmployeeId { get; set; }
+        /// <summary>Null cuando la autorización es global (toda la institución).</summary>
+        public int? EmployeeId { get; set; }
+        /// <summary>Una sola fila que autoriza a todo el personal (sin empleado).</summary>
+        public bool IsGlobal { get; set; }
         public bool AllowExternalPunch { get; set; }
         public string? Reason { get; set; }
         public DateTime? ValidFrom { get; set; }
@@ -28,6 +31,13 @@ namespace WsUtaSystem.Models
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public int? UpdatedBy { get; set; }
+        /// <summary>Fecha en que se revocó (la fila nunca se borra: queda en el historial). Null = no revocada.</summary>
+        public DateTime? RevokedAt { get; set; }
+        public int? RevokedBy { get; set; }
+        public string? RevokeReason { get; set; }
+        /// <summary>Lote cuando la autorización se creó para todo un departamento (una fila por empleado).</summary>
+        public Guid? BatchId { get; set; }
+        public int? BatchDepartmentId { get; set; }
     }
 
     /// <summary>Picada fuera del campus: permitida, rechazada o que se habría rechazado (HR.tbl_PunchAccessLog).</summary>

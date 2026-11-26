@@ -63,11 +63,8 @@ public sealed class PunchAccessPolicyService : IPunchAccessPolicyService
             return new PunchAccessDecision(true, "CAMPUS", mode, null);
 
         // Fuera del campus: solo pasa con autorización vigente del empleado.
-        var policy = await _repo.GetPolicyAsync(employeeId, ct);
-        var today = _clock.Today.ToDateTime(TimeOnly.MinValue);
-        var authorized = policy is { AllowExternalPunch: true }
-            && (policy.ValidFrom is null || policy.ValidFrom.Value.Date <= today)
-            && (policy.ValidTo is null || policy.ValidTo.Value.Date >= today);
+        var policy = await _repo.GetEffectivePolicyAsync(employeeId, _clock.Today.ToDateTime(TimeOnly.MinValue), ct);
+        var authorized = policy is not null;
 
         if (authorized)
         {
@@ -89,16 +86,13 @@ public sealed class PunchAccessPolicyService : IPunchAccessPolicyService
     public async Task<PunchAccessInfoDto> GetMyAccessAsync(int employeeId, string? clientIp, CancellationToken ct)
     {
         var mode = await GetModeCachedAsync(ct);
-        var policy = await _repo.GetPolicyAsync(employeeId, ct);
-        var today = _clock.Today.ToDateTime(TimeOnly.MinValue);
+        var policy = await _repo.GetEffectivePolicyAsync(employeeId, _clock.Today.ToDateTime(TimeOnly.MinValue), ct);
         return new PunchAccessInfoDto
         {
             Ip = clientIp,
             Mode = mode,
             IsCampus = IsCampus(clientIp, await GetNetworksCachedAsync(ct)),
-            HasExternalPermission = policy is { AllowExternalPunch: true }
-                && (policy.ValidFrom is null || policy.ValidFrom.Value.Date <= today)
-                && (policy.ValidTo is null || policy.ValidTo.Value.Date >= today)
+            HasExternalPermission = policy is not null
         };
     }
 
@@ -244,40 +238,132 @@ public sealed class PunchAccessPolicyService : IPunchAccessPolicyService
         UpdatedAt = n.UpdatedAt
     };
 
-    // ── Permisos de picada externa ──────────────────────────────────────────
+    // ── Autorizaciones de picada externa (historial) ────────────────────────
 
-    public async Task<PagedResult<PunchPolicyItemDto>> GetPoliciesAsync(string? search, bool onlyEffective, int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResult<PunchPolicyItemDto>> GetPoliciesAsync(
+        string? search, bool onlyEffective, int? employeeId, Guid? batchId, int page, int pageSize, CancellationToken ct)
     {
         (page, pageSize) = NormalizePaging(page, pageSize);
-        var (items, total) = await _repo.GetPoliciesPagedAsync(search, onlyEffective, _clock.Today.ToDateTime(TimeOnly.MinValue), page, pageSize, ct);
+        var (items, total) = await _repo.GetPoliciesPagedAsync(search, onlyEffective, employeeId, batchId, TodayDate(), page, pageSize, ct);
         return new PagedResult<PunchPolicyItemDto> { Items = items, Page = page, PageSize = pageSize, TotalCount = total };
     }
 
-    public async Task<PunchPolicyItemDto?> SavePolicyAsync(int employeeId, PunchPolicySaveDto dto, int? authorizedBy, CancellationToken ct)
+    public async Task<PunchPolicyItemDto?> CreatePolicyAsync(PunchPolicyCreateDto dto, int? authorizedBy, CancellationToken ct)
     {
-        if (!await _repo.EmployeeExistsAsync(employeeId, ct)) return null;
+        if (!await _repo.EmployeeExistsAsync(dto.EmployeeId, ct)) return null;
+        var (from, to, reason) = ValidatePolicyInput(dto.ValidFrom, dto.ValidTo, dto.Reason);
 
-        if (dto.ValidFrom.HasValue && dto.ValidTo.HasValue && dto.ValidTo.Value.Date < dto.ValidFrom.Value.Date)
-            throw new ArgumentException("La fecha final no puede ser anterior a la inicial.");
-        if (dto.AllowExternalPunch && string.IsNullOrWhiteSpace(dto.Reason))
-            throw new ArgumentException("Indique el motivo de la autorización (por ejemplo, teletrabajo autorizado).");
+        var overlap = await _repo.GetEmployeesWithOverlapAsync(new[] { dto.EmployeeId }, from, to, null, ct);
+        if (overlap.Count > 0)
+            throw new BusinessRuleException("El empleado ya tiene una autorización vigente que se cruza con esas fechas. Revóquela primero o ajuste las fechas.");
 
-        var policy = await _repo.GetPolicyAsync(employeeId, ct);
-        var isNew = policy is null;
-        policy ??= new EmployeePunchPolicy { EmployeeId = employeeId, CreatedAt = _clock.Now };
-
-        policy.AllowExternalPunch = dto.AllowExternalPunch;
-        policy.Reason = string.IsNullOrWhiteSpace(dto.Reason) ? null : dto.Reason.Trim();
-        policy.ValidFrom = dto.ValidFrom?.Date;
-        policy.ValidTo = dto.ValidTo?.Date;
-        policy.AuthorizedBy = authorizedBy;
-        if (!isNew) { policy.UpdatedAt = _clock.Now; policy.UpdatedBy = authorizedBy; }
-
-        await _repo.UpsertPolicyAsync(policy, ct);
-        return await _repo.GetPolicyItemAsync(employeeId, _clock.Today.ToDateTime(TimeOnly.MinValue), ct);
+        var policy = NewPolicy(dto.EmployeeId, reason, from, to, authorizedBy, null, null);
+        await _repo.AddPoliciesAsync(new[] { policy }, ct);
+        return await _repo.GetPolicyItemAsync(policy.PolicyId, TodayDate(), ct);
     }
 
-    public Task<bool> DeletePolicyAsync(int employeeId, CancellationToken ct) => _repo.DeletePolicyAsync(employeeId, ct);
+    public async Task<PunchPolicyItemDto> CreateGlobalPolicyAsync(PunchPolicyGlobalDto dto, int? authorizedBy, CancellationToken ct)
+    {
+        var (from, to, reason) = ValidatePolicyInput(dto.ValidFrom, dto.ValidTo, dto.Reason);
+        // Autorizar a toda la institución deja sin efecto la restricción de red: debe tener fecha de fin.
+        if (to is null) throw new ArgumentException("La autorización a toda la institución debe tener fecha final.");
+        if (await _repo.HasGlobalOverlapAsync(from, to, ct))
+            throw new BusinessRuleException("Ya existe una autorización a toda la institución que se cruza con esas fechas. Revóquela primero.");
+
+        var policy = NewPolicy(null, reason, from, to, authorizedBy, null, null);
+        policy.IsGlobal = true;
+        await _repo.AddPoliciesAsync(new[] { policy }, ct);
+        _logger.LogWarning("Autorización de picada externa GLOBAL creada (policy {PolicyId}) hasta {To:yyyy-MM-dd}", policy.PolicyId, to);
+        return (await _repo.GetPolicyItemAsync(policy.PolicyId, TodayDate(), ct))!;
+    }
+
+    public async Task<PunchPolicyDepartmentPreviewDto> PreviewDepartmentPoliciesAsync(
+        int departmentId, bool includeChildren, DateTime? validFrom, DateTime? validTo, CancellationToken ct)
+    {
+        var name = await _repo.GetDepartmentNameAsync(departmentId, ct) ?? throw new ArgumentException("El departamento no existe o está inactivo.");
+        var (from, to, _) = ValidatePolicyInput(validFrom, validTo, null);
+        var (employees, departments) = await _repo.GetEmployeesOfDepartmentAsync(departmentId, includeChildren, ct);
+        var overlap = await _repo.GetEmployeesWithOverlapAsync(employees, from, to, null, ct);
+        return new PunchPolicyDepartmentPreviewDto
+        {
+            DepartmentName = name, Departments = departments, Employees = employees.Count,
+            AlreadyAuthorized = overlap.Count, ToCreate = employees.Count - overlap.Count
+        };
+    }
+
+    public async Task<PunchPolicyBatchResultDto> CreateDepartmentPoliciesAsync(PunchPolicyDepartmentDto dto, int? authorizedBy, CancellationToken ct)
+    {
+        _ = await _repo.GetDepartmentNameAsync(dto.DepartmentId, ct) ?? throw new ArgumentException("El departamento no existe o está inactivo.");
+        var (from, to, reason) = ValidatePolicyInput(dto.ValidFrom, dto.ValidTo, dto.Reason);
+        var (employees, _) = await _repo.GetEmployeesOfDepartmentAsync(dto.DepartmentId, dto.IncludeChildren, ct);
+        if (employees.Count == 0) throw new BusinessRuleException("El departamento no tiene personal activo asignado.");
+
+        // Quien ya tiene una autorización vigente que se cruza se omite (no se duplica ni se pisa).
+        var overlap = await _repo.GetEmployeesWithOverlapAsync(employees, from, to, null, ct);
+        var batchId = Guid.NewGuid();
+        var policies = employees.Where(id => !overlap.Contains(id))
+            .Select(id => NewPolicy(id, reason, from, to, authorizedBy, batchId, dto.DepartmentId)).ToList();
+        if (policies.Count == 0) throw new BusinessRuleException("Todo el personal del departamento ya tiene una autorización vigente en esas fechas.");
+
+        await _repo.AddPoliciesAsync(policies, ct);
+        _logger.LogWarning("Autorización de picada externa por departamento {DepartmentId}: {Created} creadas, {Skipped} omitidas (lote {BatchId})",
+            dto.DepartmentId, policies.Count, overlap.Count, batchId);
+        return new PunchPolicyBatchResultDto { BatchId = batchId, Created = policies.Count, Skipped = overlap.Count };
+    }
+
+    public async Task<PunchPolicyItemDto?> RevokePolicyAsync(int policyId, PunchPolicyRevokeDto dto, int? revokedBy, CancellationToken ct)
+    {
+        var policy = await _repo.GetPolicyAsync(policyId, ct);
+        if (policy is null) return null;
+        if (policy.RevokedAt is null)
+        {
+            MarkRevoked(policy, dto.Reason, revokedBy);
+            await _repo.SavePoliciesAsync(ct);
+        }
+        return await _repo.GetPolicyItemAsync(policyId, TodayDate(), ct);
+    }
+
+    public async Task<int> RevokeBatchAsync(Guid batchId, PunchPolicyRevokeDto dto, int? revokedBy, CancellationToken ct)
+    {
+        var open = await _repo.GetOpenPoliciesOfBatchAsync(batchId, ct);
+        foreach (var p in open) MarkRevoked(p, dto.Reason, revokedBy);
+        if (open.Count > 0) await _repo.SavePoliciesAsync(ct);
+        return open.Count;
+    }
+
+    private void MarkRevoked(EmployeePunchPolicy policy, string? reason, int? revokedBy)
+    {
+        policy.AllowExternalPunch = false;   // compatibilidad: el código anterior también ve la fila como desactivada
+        policy.RevokedAt = _clock.Now;
+        policy.RevokedBy = revokedBy;
+        policy.RevokeReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        policy.UpdatedAt = _clock.Now;
+        policy.UpdatedBy = revokedBy;
+    }
+
+    private EmployeePunchPolicy NewPolicy(int? employeeId, string reason, DateTime? from, DateTime? to, int? authorizedBy, Guid? batchId, int? departmentId) => new()
+    {
+        EmployeeId = employeeId,
+        AllowExternalPunch = true,
+        Reason = reason,
+        ValidFrom = from,
+        ValidTo = to,
+        AuthorizedBy = authorizedBy,
+        CreatedAt = _clock.Now,
+        BatchId = batchId,
+        BatchDepartmentId = departmentId
+    };
+
+    private DateTime TodayDate() => _clock.Today.ToDateTime(TimeOnly.MinValue);
+
+    private static (DateTime? From, DateTime? To, string Reason) ValidatePolicyInput(DateTime? from, DateTime? to, string? reason)
+    {
+        if (from.HasValue && to.HasValue && to.Value.Date < from.Value.Date)
+            throw new ArgumentException("La fecha final no puede ser anterior a la inicial.");
+        if (reason is not null && string.IsNullOrWhiteSpace(reason))
+            throw new ArgumentException("Indique el motivo de la autorización (por ejemplo, teletrabajo autorizado).");
+        return (from?.Date, to?.Date, reason?.Trim() ?? string.Empty);
+    }
 
     // ── Registro ────────────────────────────────────────────────────────────
 
